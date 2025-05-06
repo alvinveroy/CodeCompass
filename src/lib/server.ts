@@ -217,9 +217,8 @@ ${s.summary}
     resetMetrics();
     const metrics = getMetrics();
     
-    // Format the response in a more readable way
-    const formattedResponse = `
-# Metrics Reset
+    // Format the response as clean markdown
+    const formattedResponse = `# Metrics Reset
 
 Metrics have been reset successfully.
 
@@ -228,12 +227,11 @@ Metrics have been reset successfully.
 Uptime: ${metrics.uptime}ms
 Counters: ${Object.keys(metrics.counters).length} (all reset to 0)
 Timings: ${Object.keys(metrics.timings).length} (all reset)
-\`\`\`
-`;
+\`\`\``;
     
     return {
       content: [{
-        type: "text",
+        type: "markdown",
         text: formattedResponse,
       }],
     };
@@ -284,9 +282,8 @@ Ensure the suggestion is concise, practical, and leverages the repository's exis
       `;
       const suggestion = await generateSuggestion(prompt);
       
-      // Format the response in a more readable way
-      const formattedResponse = `
-# Code Suggestion for: "${query}"
+      // Format the response as clean markdown
+      const formattedResponse = `# Code Suggestion for: "${query}"
 
 ## Suggestion
 ${suggestion}
@@ -305,12 +302,11 @@ ${c.snippet}
 ## Recent Changes
 \`\`\`
 ${diff}
-\`\`\`
-`;
+\`\`\``;
       
       return {
         content: [{
-          type: "text",
+          type: "markdown",
           text: formattedResponse,
         }],
       };
@@ -354,9 +350,8 @@ ${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Rele
 Provide a concise summary of the context for "${query}" based on the repository files and recent changes. Highlight key information relevant to the query, referencing specific files or snippets where applicable.
       `);
       
-      // Format the response in a more readable way
-      const formattedResponse = `
-# Repository Context Summary
+      // Format the response as clean markdown
+      const formattedResponse = `# Repository Context Summary
 
 ## Summary
 ${summary}
@@ -375,12 +370,11 @@ ${c.snippet}
 ## Recent Changes
 \`\`\`
 ${diff}
-\`\`\`
-`;
+\`\`\``;
       
       return {
         content: [{
-          type: "text",
+          type: "markdown",
           text: formattedResponse,
         }],
       };
