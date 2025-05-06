@@ -112,7 +112,27 @@ async function registerTools(
       logger.error("Failed to parse params as JSON", { message: error.message });
       throw new Error("Invalid input format: params must be a valid JSON object or string");
     }
-    const { query } = SearchCodeSchema.parse(normalizedParams);
+    // Log the normalized parameters to debug
+    logger.info("Normalized params for search_code", { normalizedParams });
+    
+    // Handle the case where the query might be directly in the params object
+    let parsedParams;
+    if (typeof normalizedParams === 'object' && normalizedParams !== null) {
+      if ('query' in normalizedParams) {
+        parsedParams = normalizedParams;
+      } else {
+        // If no query property exists but we have an object, use the entire object as the query
+        parsedParams = { query: JSON.stringify(normalizedParams) };
+      }
+    } else {
+      // If it's a string or other primitive, use it as the query
+      parsedParams = { query: String(normalizedParams) };
+    }
+    
+    const { query } = SearchCodeSchema.parse(parsedParams);
+    
+    // Log the extracted query to confirm it's working
+    logger.info("Extracted query for search_code", { query });
     const embedding = await generateEmbedding(query);
     const isGitRepo = await validateGitRepository(repoPath);
     const files = isGitRepo
@@ -156,7 +176,27 @@ async function registerTools(
         logger.error("Failed to parse params as JSON", { message: error.message });
         throw new Error("Invalid input format: params must be a valid JSON object or string");
       }
-      const { query } = GenerateSuggestionSchema.parse(normalizedParams);
+      // Log the normalized parameters to debug
+      logger.info("Normalized params for generate_suggestion", { normalizedParams });
+      
+      // Handle the case where the query might be directly in the params object
+      let parsedParams;
+      if (typeof normalizedParams === 'object' && normalizedParams !== null) {
+        if ('query' in normalizedParams) {
+          parsedParams = normalizedParams;
+        } else {
+          // If no query property exists but we have an object, use the entire object as the query
+          parsedParams = { query: JSON.stringify(normalizedParams) };
+        }
+      } else {
+        // If it's a string or other primitive, use it as the query
+        parsedParams = { query: String(normalizedParams) };
+      }
+      
+      const { query } = GenerateSuggestionSchema.parse(parsedParams);
+      
+      // Log the extracted query to confirm it's working
+      logger.info("Extracted query for generate_suggestion", { query });
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
