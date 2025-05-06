@@ -185,9 +185,8 @@ async function registerTools(
       relevance: result.score,
     })));
     
-    // Format the response in a more readable way
-    const formattedResponse = `
-# Search Results for: "${query}"
+    // Format the response as clean markdown
+    const formattedResponse = `# Search Results for: "${query}"
 
 ${summaries.map(s => `
 ## ${s.filepath}
@@ -201,12 +200,11 @@ ${s.snippet}
 
 ### Summary
 ${s.summary}
-`).join('\n')}
-`;
+`).join('\n')}`;
     
     return {
       content: [{
-        type: "text",
+        type: "markdown",
         text: formattedResponse,
       }],
     };
