@@ -13,12 +13,16 @@ export const MAX_SNIPPET_LENGTH = 500;
 
 // Setup Winston logger
 export const logger = winston.createLogger({
-  level: "info",
+  level: process.env.NODE_ENV === "test" ? "error" : "info",
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
   ),
   transports: [
     new winston.transports.File({ filename: "codecompass.log" }),
+    new winston.transports.Console({
+      format: winston.format.simple(),
+      silent: process.env.NODE_ENV === "test"
+    }),
   ],
 });

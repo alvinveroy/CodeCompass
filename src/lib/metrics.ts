@@ -77,7 +77,9 @@ export function resetMetrics(): void {
 
 // Log current metrics
 export function logMetrics(): void {
-  logger.info("Current metrics", getMetrics());
+  const metrics = getMetrics();
+  logger.info("Current metrics", metrics);
+  return metrics;
 }
 
 // Schedule periodic metrics logging
