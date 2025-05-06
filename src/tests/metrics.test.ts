@@ -183,20 +183,15 @@ describe('Metrics Module', () => {
 
   describe('logMetrics', () => {
     it('should log the current metrics', () => {
-      // Create a mock logger object
-      const mockInfo = vi.fn();
-      const mockLogger = { info: mockInfo };
-      
-      // Replace the logger in the module
-      const originalLogger = metricsModule.logger;
-      (metricsModule as any).logger = mockLogger;
+      // Spy on the logger's info method instead of replacing the logger
+      const infoSpy = vi.spyOn(metricsModule.logger, 'info');
       
       incrementCounter('test_counter');
       recordTiming('test_timing', 100);
       
       logMetrics();
       
-      expect(mockInfo).toHaveBeenCalledWith('Current metrics', expect.objectContaining({
+      expect(infoSpy).toHaveBeenCalledWith('Current metrics', expect.objectContaining({
         counters: expect.objectContaining({ test_counter: 1 }),
         timings: expect.objectContaining({ 
           test_timing: expect.objectContaining({ count: 1, totalMs: 100 }) 
@@ -204,20 +199,15 @@ describe('Metrics Module', () => {
         uptime: expect.any(Number)
       }));
       
-      // Restore the original logger
-      (metricsModule as any).logger = originalLogger;
+      // Restore the original implementation
+      infoSpy.mockRestore();
     });
   });
 
   describe('startMetricsLogging', () => {
     it('should start a timer that logs metrics at the specified interval', () => {
-      // Create a mock logger object
-      const mockInfo = vi.fn();
-      const mockLogger = { info: mockInfo };
-      
-      // Replace the logger in the module
-      const originalLogger = metricsModule.logger;
-      (metricsModule as any).logger = mockLogger;
+      // Spy on the logger's info method instead of replacing the logger
+      const infoSpy = vi.spyOn(metricsModule.logger, 'info');
       
       // Spy on logMetrics function
       const logMetricsSpy = vi.spyOn(metricsModule, 'logMetrics');
@@ -228,7 +218,7 @@ describe('Metrics Module', () => {
       const interval = 60000; // 1 minute
       const timer = startMetricsLogging(interval);
       
-      expect(mockInfo).toHaveBeenCalledWith(`Starting metrics logging every ${interval}ms`);
+      expect(infoSpy).toHaveBeenCalledWith(`Starting metrics logging every ${interval}ms`);
       expect(global.setInterval).toHaveBeenCalledWith(expect.any(Function), interval);
       
       // Fast-forward time to trigger the interval
@@ -239,8 +229,8 @@ describe('Metrics Module', () => {
       // Clean up
       clearInterval(timer);
       
-      // Restore the original logger
-      (metricsModule as any).logger = originalLogger;
+      // Restore the original implementation
+      infoSpy.mockRestore();
     });
 
     it('should use the default interval if none is specified', () => {
