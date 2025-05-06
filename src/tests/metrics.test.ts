@@ -183,23 +183,15 @@ describe('Metrics Module', () => {
 
   describe('logMetrics', () => {
     it('should log the current metrics', () => {
-      // Create a mock logger
-      const mockLogger = { info: vi.fn() };
-      
-      // Replace the logger in the module
-      const originalLogger = metricsModule.logger;
-      // Need to directly modify the exported logger
-      Object.defineProperty(metricsModule, 'logger', {
-        value: mockLogger,
-        writable: true
-      });
+      // Mock the logger directly in the metrics module
+      vi.spyOn(metricsModule, 'logger', 'get').mockReturnValue({ info: vi.fn() });
       
       incrementCounter('test_counter');
       recordTiming('test_timing', 100);
       
       logMetrics();
       
-      expect(mockLogger.info).toHaveBeenCalledWith('Current metrics', expect.objectContaining({
+      expect(metricsModule.logger.info).toHaveBeenCalledWith('Current metrics', expect.objectContaining({
         counters: expect.objectContaining({ test_counter: 1 }),
         timings: expect.objectContaining({ 
           test_timing: expect.objectContaining({ count: 1, totalMs: 100 }) 
@@ -208,25 +200,14 @@ describe('Metrics Module', () => {
       }));
       
       // Restore the original logger
-      Object.defineProperty(metricsModule, 'logger', {
-        value: originalLogger,
-        writable: true
-      });
+      vi.restoreAllMocks();
     });
   });
 
   describe('startMetricsLogging', () => {
     it('should start a timer that logs metrics at the specified interval', () => {
-      // Create a mock logger
-      const mockLogger = { info: vi.fn() };
-      
-      // Replace the logger in the module
-      const originalLogger = metricsModule.logger;
-      // Need to directly modify the exported logger
-      Object.defineProperty(metricsModule, 'logger', {
-        value: mockLogger,
-        writable: true
-      });
+      // Mock the logger directly in the metrics module
+      vi.spyOn(metricsModule, 'logger', 'get').mockReturnValue({ info: vi.fn() });
       
       // Spy on logMetrics function
       const logMetricsSpy = vi.spyOn(metricsModule, 'logMetrics');
@@ -237,7 +218,7 @@ describe('Metrics Module', () => {
       const interval = 60000; // 1 minute
       const timer = startMetricsLogging(interval);
       
-      expect(mockLogger.info).toHaveBeenCalledWith(`Starting metrics logging every ${interval}ms`);
+      expect(metricsModule.logger.info).toHaveBeenCalledWith(`Starting metrics logging every ${interval}ms`);
       expect(global.setInterval).toHaveBeenCalledWith(expect.any(Function), interval);
       
       // Fast-forward time to trigger the interval
@@ -248,11 +229,8 @@ describe('Metrics Module', () => {
       // Clean up
       clearInterval(timer);
       
-      // Restore the original logger
-      Object.defineProperty(metricsModule, 'logger', {
-        value: originalLogger,
-        writable: true
-      });
+      // Restore all mocks
+      vi.restoreAllMocks();
     });
 
     it('should use the default interval if none is specified', () => {
