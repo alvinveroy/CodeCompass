@@ -221,9 +221,15 @@ Ensure the suggestion is concise, practical, and leverages the repository's exis
       // Handle the case where the query might be directly in the params object
       let parsedParams;
       if (typeof normalizedParams === 'object' && normalizedParams !== null) {
-        parsedParams = normalizedParams;
+        if ('query' in normalizedParams) {
+          parsedParams = normalizedParams;
+        } else {
+          // If no query property exists but we have an object, use the entire object as the query
+          parsedParams = { query: JSON.stringify(normalizedParams) };
+        }
       } else {
-        parsedParams = { query: normalizedParams };
+        // If it's a string or other primitive, use it as the query
+        parsedParams = { query: String(normalizedParams) };
       }
       
       const { query } = GetRepositoryContextSchema.parse(parsedParams);
