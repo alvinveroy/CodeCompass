@@ -91,11 +91,12 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 // Generate Suggestion
 export async function generateSuggestion(prompt: string): Promise<string> {
   try {
+    logger.info(`Generating suggestion for prompt (length: ${prompt.length})`);
     const response = await withRetry(async () => {
       const res = await axios.post<OllamaGenerateResponse>(
         `${OLLAMA_HOST}/api/generate`,
         { model: SUGGESTION_MODEL, prompt, stream: false },
-        { timeout: 10000 }
+        { timeout: 60000 } // Increased timeout to 60 seconds for complex prompts
       );
       return res.data;
     });
@@ -103,14 +104,17 @@ export async function generateSuggestion(prompt: string): Promise<string> {
   } catch (error: any) {
     logger.error("Ollama suggestion error", {
       message: error.message,
+      code: error.code,
       response: error.response
         ? {
             status: error.response.status,
             data: error.response.data,
           }
         : null,
+      promptLength: prompt.length,
+      promptSnippet: prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '')
     });
-    throw new Error("Failed to generate suggestion");
+    throw new Error("Failed to generate suggestion: " + (error.message || "Unknown error"));
   }
 }
 
