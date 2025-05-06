@@ -215,7 +215,21 @@ Ensure the suggestion is concise, practical, and leverages the repository's exis
         logger.error("Failed to parse params as JSON", { message: error.message });
         throw new Error("Invalid input format: params must be a valid JSON object or string");
       }
-      const { query } = GetRepositoryContextSchema.parse(normalizedParams);
+      // Log the normalized parameters to debug
+      logger.info("Normalized params for get_repository_context", { normalizedParams });
+      
+      // Handle the case where the query might be directly in the params object
+      let parsedParams;
+      if (typeof normalizedParams === 'object' && normalizedParams !== null) {
+        parsedParams = normalizedParams;
+      } else {
+        parsedParams = { query: normalizedParams };
+      }
+      
+      const { query } = GetRepositoryContextSchema.parse(parsedParams);
+      
+      // Log the extracted query to confirm it's working
+      logger.info("Extracted query for repository context", { query });
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
