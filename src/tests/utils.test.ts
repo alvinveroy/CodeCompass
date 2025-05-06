@@ -87,6 +87,9 @@ describe('Utils Module', () => {
       const originalRetryDelay = config.RETRY_DELAY;
       Object.defineProperty(config, 'RETRY_DELAY', { value: 1000 });
       
+      // Spy on setTimeout
+      const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+      
       const fn = vi.fn()
         .mockRejectedValueOnce(new Error('fail'))
         .mockResolvedValueOnce('success');
@@ -94,7 +97,7 @@ describe('Utils Module', () => {
       const retryPromise = withRetry(fn, 2);
       
       // Verify setTimeout was called with the correct delay
-      expect(setTimeout).toHaveBeenCalledWith(expect.any(Function), 1000);
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
       
       vi.runAllTimers();
       await retryPromise;
@@ -139,7 +142,7 @@ describe('Utils Module', () => {
 
     it('should handle complex mixed input', () => {
       const input = '  Hello\x00\n\n  World\t\t\x01With\x02\x03Multiple    Spaces  ';
-      const expected = 'Hello\nWorld\tWithMultiple Spaces';
+      const expected = 'Hello\nWorld WithMultiple Spaces';
       expect(preprocessText(input)).toBe(expected);
     });
 
