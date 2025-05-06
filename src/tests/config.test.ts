@@ -82,9 +82,10 @@ describe('Config Module', () => {
       
       // We need to re-import the module to see the environment variable effect
       vi.resetModules();
-      const freshConfig = require('../lib/config');
-      
-      expect(freshConfig.OLLAMA_HOST).toBe(testUrl);
+      // Use dynamic import instead of require for TypeScript modules
+      return import('../lib/config').then(freshConfig => {
+        expect(freshConfig.OLLAMA_HOST).toBe(testUrl);
+      });
     });
     
     it('should respect QDRANT_HOST environment variable if set', () => {
@@ -92,9 +93,10 @@ describe('Config Module', () => {
       process.env.QDRANT_HOST = testUrl;
       
       vi.resetModules();
-      const freshConfig = require('../lib/config');
-      
-      expect(freshConfig.QDRANT_HOST).toBe(testUrl);
+      // Use dynamic import instead of require for TypeScript modules
+      return import('../lib/config').then(freshConfig => {
+        expect(freshConfig.QDRANT_HOST).toBe(testUrl);
+      });
     });
     
     it('should respect custom model configurations if set', () => {
@@ -103,10 +105,11 @@ describe('Config Module', () => {
       process.env.SUGGESTION_MODEL = testModel;
       
       vi.resetModules();
-      const freshConfig = require('../lib/config');
-      
-      expect(freshConfig.EMBEDDING_MODEL).toBe(testModel);
-      expect(freshConfig.SUGGESTION_MODEL).toBe(testModel);
+      // Use dynamic import instead of require for TypeScript modules
+      return import('../lib/config').then(freshConfig => {
+        expect(freshConfig.EMBEDDING_MODEL).toBe(testModel);
+        expect(freshConfig.SUGGESTION_MODEL).toBe(testModel);
+      });
     });
   });
 });
