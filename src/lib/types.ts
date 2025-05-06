@@ -17,7 +17,9 @@ export const GenerateSuggestionSchema = z.object({
 
 export const GetRepositoryContextSchema = z.object({ 
   query: z.string().min(1, "Query is required") 
-});
+}).or(
+  z.string().min(1, "Query is required").transform(query => ({ query }))
+);
 
 // Types
 export interface OllamaEmbeddingResponse { 
