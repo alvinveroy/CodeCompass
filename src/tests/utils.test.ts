@@ -128,7 +128,7 @@ describe('Utils Module', () => {
       await Promise.resolve();
       
       // Now verify setTimeout was called with the correct delay
-      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
+      expect(setTimeoutSpy).toHaveBeenLastCalledWith(expect.any(Function), 1000);
       
       vi.runAllTimers();
       await retryPromise;
