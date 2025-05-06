@@ -292,19 +292,35 @@ ${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Rele
 **Instruction**:
 Provide a concise summary of the context for "${query}" based on the repository files and recent changes. Highlight key information relevant to the query, referencing specific files or snippets where applicable.
       `);
+      
+      // Format the response in a more readable way
+      const formattedResponse = `
+# Repository Context Summary
+
+## Summary
+${summary}
+
+## Relevant Files
+${context.map(c => `
+### ${c.filepath}
+- Last modified: ${c.last_modified}
+- Relevance: ${c.relevance.toFixed(2)}
+
+\`\`\`
+${c.snippet}
+\`\`\`
+`).join('\n')}
+
+## Recent Changes
+\`\`\`
+${diff}
+\`\`\`
+`;
+      
       return {
         content: [{
           type: "text",
-          text: JSON.stringify({
-            summary,
-            files: context.map(c => ({
-              filepath: c.filepath,
-              snippet: c.snippet,
-              last_modified: c.last_modified,
-              relevance: c.relevance,
-            })),
-            recent_changes: diff,
-          }, null, 2),
+          text: formattedResponse,
         }],
       };
     });
