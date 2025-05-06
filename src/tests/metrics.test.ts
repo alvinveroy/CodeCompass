@@ -6,7 +6,8 @@ import {
   getMetrics, 
   resetMetrics,
   logMetrics,
-  startMetricsLogging
+  startMetricsLogging,
+  logger
 } from '../lib/metrics';
 
 describe('Metrics Module', () => {
@@ -182,9 +183,8 @@ describe('Metrics Module', () => {
 
   describe('logMetrics', () => {
     it('should log the current metrics', () => {
-      // Import the logger directly from metrics module
-      const metricsModule = require('../lib/metrics');
-      const loggerSpy = vi.spyOn(metricsModule.logger, 'info');
+      // Spy on the logger that's imported directly
+      const loggerSpy = vi.spyOn(logger, 'info');
       
       incrementCounter('test_counter');
       recordTiming('test_timing', 100);
@@ -203,12 +203,11 @@ describe('Metrics Module', () => {
 
   describe('startMetricsLogging', () => {
     it('should start a timer that logs metrics at the specified interval', () => {
-      // Import the logger directly from metrics module
-      const metricsModule = require('../lib/metrics');
-      const loggerSpy = vi.spyOn(metricsModule.logger, 'info');
+      // Spy on the logger that's imported directly
+      const loggerSpy = vi.spyOn(logger, 'info');
       
       // Spy on logMetrics function
-      const logMetricsSpy = vi.spyOn(metricsModule, 'logMetrics');
+      const logMetricsSpy = vi.spyOn({ logMetrics }, 'logMetrics');
       
       // Mock setInterval
       vi.spyOn(global, 'setInterval');
