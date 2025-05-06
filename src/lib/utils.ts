@@ -20,7 +20,6 @@ export function preprocessText(text: string): string {
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
   text = text.replace(/\s+/g, (match) => {
     if (match.includes("\n")) return "\n";
-    if (match.includes("\t")) return "\t";
     return " ";
   });
   return text.trim();
