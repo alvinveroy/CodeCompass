@@ -28,6 +28,8 @@ describe('Utils Module', () => {
         .mockResolvedValueOnce('success');
       
       const retryPromise = withRetry(fn, 2);
+      // First attempt fails, then setTimeout is called
+      await Promise.resolve();
       vi.runAllTimers(); // Fast-forward through delay
       const result = await retryPromise;
       
@@ -43,9 +45,20 @@ describe('Utils Module', () => {
         .mockResolvedValueOnce('success');
       
       const retryPromise = withRetry(fn, 4);
+      
+      // First attempt fails
+      await Promise.resolve();
       vi.runAllTimers(); // Run for first delay
+      
+      // Second attempt fails
+      await Promise.resolve();
       vi.runAllTimers(); // Run for second delay
+      
+      // Third attempt fails
+      await Promise.resolve();
       vi.runAllTimers(); // Run for third delay
+      
+      // Fourth attempt succeeds
       const result = await retryPromise;
       
       expect(result).toBe('success');
@@ -57,8 +70,17 @@ describe('Utils Module', () => {
       const fn = vi.fn().mockRejectedValue(error);
       
       const retryPromise = withRetry(fn, 3);
+      
+      // First attempt fails
+      await Promise.resolve();
       vi.runAllTimers(); // Run for first delay
+      
+      // Second attempt fails
+      await Promise.resolve();
       vi.runAllTimers(); // Run for second delay
+      
+      // Third attempt fails and throws
+      await Promise.resolve();
       
       await expect(retryPromise).rejects.toThrow('persistent failure');
       expect(fn).toHaveBeenCalledTimes(3);
@@ -72,8 +94,14 @@ describe('Utils Module', () => {
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
       
       const retryPromise = withRetry(fn); // No retry count provided
+      
+      // First attempt fails
+      await Promise.resolve();
+      
+      // Run through each retry
       for (let i = 0; i < config.MAX_RETRIES - 1; i++) {
         vi.runAllTimers();
+        await Promise.resolve();
       }
       
       await expect(retryPromise).rejects.toThrow('fail');
