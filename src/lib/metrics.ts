@@ -87,5 +87,7 @@ export function logMetrics(): void {
 // Schedule periodic metrics logging
 export function startMetricsLogging(intervalMs = 300000): NodeJS.Timeout {
   logger.info(`Starting metrics logging every ${intervalMs}ms`);
+  // Log metrics immediately on start
+  logMetrics();
   return setInterval(logMetrics, intervalMs);
 }
