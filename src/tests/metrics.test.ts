@@ -182,13 +182,24 @@ describe('Metrics Module', () => {
 
   describe('logMetrics', () => {
     it('should log the current metrics', () => {
-      // Mock the logger
-      const loggerSpy = vi.spyOn(require('../lib/metrics').logger, 'info');
+      // Create a mock logger
+      const mockLogger = { info: vi.fn() };
+      
+      // Mock the logger in the metrics module
+      vi.mock('../lib/metrics', async (importOriginal) => {
+        const actual = await importOriginal();
+        return {
+          ...actual,
+          logger: mockLogger
+        };
+      }, { virtual: true });
       
       incrementCounter('test_counter');
       recordTiming('test_timing', 100);
       
       logMetrics();
+      
+      // Check if the mock logger was called
       
       expect(loggerSpy).toHaveBeenCalledWith('Current metrics', expect.objectContaining({
         counters: expect.objectContaining({ test_counter: 1 }),
@@ -202,8 +213,20 @@ describe('Metrics Module', () => {
 
   describe('startMetricsLogging', () => {
     it('should start a timer that logs metrics at the specified interval', () => {
-      const loggerSpy = vi.spyOn(require('../lib/metrics').logger, 'info');
-      const logMetricsSpy = vi.spyOn(require('../lib/metrics'), 'logMetrics');
+      // Create a mock logger
+      const mockLogger = { info: vi.fn() };
+      
+      // Mock the logger in the metrics module
+      vi.mock('../lib/metrics', async (importOriginal) => {
+        const actual = await importOriginal();
+        return {
+          ...actual,
+          logger: mockLogger
+        };
+      }, { virtual: true });
+      
+      // Spy on logMetrics function
+      const logMetricsSpy = vi.spyOn({ logMetrics }, 'logMetrics');
       
       // Mock setInterval
       vi.spyOn(global, 'setInterval');
@@ -211,7 +234,7 @@ describe('Metrics Module', () => {
       const interval = 60000; // 1 minute
       const timer = startMetricsLogging(interval);
       
-      expect(loggerSpy).toHaveBeenCalledWith(`Starting metrics logging every ${interval}ms`);
+      expect(mockLogger.info).toHaveBeenCalledWith(`Starting metrics logging every ${interval}ms`);
       expect(setInterval).toHaveBeenCalledWith(expect.any(Function), interval);
       
       // Fast-forward time to trigger the interval
