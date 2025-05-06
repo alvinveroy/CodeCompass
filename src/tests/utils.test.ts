@@ -124,13 +124,17 @@ describe('Utils Module', () => {
       
       const retryPromise = withRetry(fn, 2);
       
-      // Run the first attempt which will fail and trigger setTimeout
+      // First attempt fails
       await Promise.resolve();
       
-      // Now verify setTimeout was called with the correct delay
-      expect(setTimeoutSpy).toHaveBeenLastCalledWith(expect.any(Function), 1000);
+      // Ensure all microtasks are processed
+      await vi.runAllTimersAsync();
       
-      vi.runAllTimers();
+      // Now verify setTimeout was called with the correct delay
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
+      
+      // Complete the retry
+      await vi.runAllTimersAsync();
       await retryPromise;
       
       // Restore original
