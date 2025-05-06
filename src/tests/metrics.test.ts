@@ -188,7 +188,11 @@ describe('Metrics Module', () => {
       
       // Replace the logger in the module
       const originalLogger = metricsModule.logger;
-      metricsModule.logger = mockLogger;
+      // Need to directly modify the exported logger
+      Object.defineProperty(metricsModule, 'logger', {
+        value: mockLogger,
+        writable: true
+      });
       
       incrementCounter('test_counter');
       recordTiming('test_timing', 100);
@@ -204,7 +208,10 @@ describe('Metrics Module', () => {
       }));
       
       // Restore the original logger
-      metricsModule.logger = originalLogger;
+      Object.defineProperty(metricsModule, 'logger', {
+        value: originalLogger,
+        writable: true
+      });
     });
   });
 
@@ -215,7 +222,11 @@ describe('Metrics Module', () => {
       
       // Replace the logger in the module
       const originalLogger = metricsModule.logger;
-      metricsModule.logger = mockLogger;
+      // Need to directly modify the exported logger
+      Object.defineProperty(metricsModule, 'logger', {
+        value: mockLogger,
+        writable: true
+      });
       
       // Spy on logMetrics function
       const logMetricsSpy = vi.spyOn(metricsModule, 'logMetrics');
@@ -238,7 +249,10 @@ describe('Metrics Module', () => {
       clearInterval(timer);
       
       // Restore the original logger
-      metricsModule.logger = originalLogger;
+      Object.defineProperty(metricsModule, 'logger', {
+        value: originalLogger,
+        writable: true
+      });
     });
 
     it('should use the default interval if none is specified', () => {
