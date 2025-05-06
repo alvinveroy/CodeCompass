@@ -12,7 +12,7 @@ import { validateGitRepository, indexRepository, getRepositoryDiff } from "./rep
 import { getMetrics, resetMetrics, startMetricsLogging } from "./metrics";
 
 // Normalize tool parameters to handle various input formats
-function normalizeToolParams(params: unknown): Record<string, any> {
+export function normalizeToolParams(params: unknown): Record<string, any> {
   try {
     // Handle stringified JSON input
     if (typeof params === "string") {
