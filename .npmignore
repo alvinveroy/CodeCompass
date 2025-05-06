@@ -1,0 +1,10 @@
+src/
+node_modules/
+.git/
+.github/
+.vscode/
+.idea/
+*.log
+.gitignore
+.npmrc
+.aider*
