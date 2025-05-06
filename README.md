@@ -22,7 +22,7 @@ A local Git repository
 Option 1: Clone and Install
 
 Clone the Repository:
-git clone <https://github.com/your-username/codecompass.git>
+git clone <https://github.com/alvinveroy/codecompass.git>
 cd codecompass
 
 Install Dependencies:
@@ -33,7 +33,7 @@ npm run build
 
 Option 2: Install and Run with npx
 Run CodeCompass directly using npx:
-npx @your-username/codecompass /path/to/your/repo
+npx @alvinveroy/codecompass /path/to/your/repo
 
 Note: The npx command downloads the compiled package from npm and runs the server.
 
@@ -57,7 +57,7 @@ npm run build
 node dist/index.js /path/to/your/repo
 
 Or, using npx:
-npx @your-username/codecompass /path/to/your/repo
+npx @alvinveroy/codecompass /path/to/your/repo
 
 ## Example Commands
 
@@ -82,7 +82,7 @@ Cursor, VSCode, Claude Desktop, Windsurf, Zed, Claude Code, or another MCP clien
 
 Installing via Smithery
 To install CodeCompass MCP Server automatically via Smithery:
-npx -y @smithery/cli install @your-username/codecompass --client claude
+npx -y @smithery/cli install @alvinveroy/codecompass --client claude
 
 Install in Cursor
 Add to ~/.cursor/mcp.json:
@@ -90,7 +90,7 @@ Add to ~/.cursor/mcp.json:
   "mcpServers": {
     "codecompass": {
       "command": "npx",
-      "args": ["-y", "@your-username/codecompass@latest", "${workspaceFolder}"]
+      "args": ["-y", "@alvinveroy/codecompass@latest", "${workspaceFolder}"]
     }
   }
 }
@@ -100,7 +100,7 @@ Alternative: Use Bun
   "mcpServers": {
     "codecompass": {
       "command": "bunx",
-      "args": ["-y", "@your-username/codecompass@latest", "${workspaceFolder}"]
+      "args": ["-y", "@alvinveroy/codecompass@latest", "${workspaceFolder}"]
     }
   }
 }
@@ -110,7 +110,7 @@ Alternative: Use Deno
   "mcpServers": {
     "codecompass": {
       "command": "deno",
-      "args": ["run", "--allow-net", "npm:@your-username/codecompass@latest", "${workspaceFolder}"]
+      "args": ["run", "--allow-net", "npm:@alvinveroy/codecompass@latest", "${workspaceFolder}"]
     }
   }
 }
@@ -122,7 +122,7 @@ Add to VSCode MCP configuration:
     "CodeCompass": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@your-username/codecompass@latest", "${workspaceFolder}"]
+      "args": ["-y", "@alvinveroy/codecompass@latest", "${workspaceFolder}"]
     }
   }
 }
@@ -133,7 +133,7 @@ Add to Windsurf MCP config:
   "mcpServers": {
     "codecompass": {
       "command": "npx",
-      "args": ["-y", "@your-username/codecompass@latest", "${workspaceFolder}"]
+      "args": ["-y", "@alvinveroy/codecompass@latest", "${workspaceFolder}"]
     }
   }
 }
@@ -145,7 +145,7 @@ Add to Zed settings.json:
     "CodeCompass": {
       "command": {
         "path": "npx",
-        "args": ["-y", "@your-username/codecompass@latest", "${workspaceFolder}"]
+        "args": ["-y", "@alvinveroy/codecompass@latest", "${workspaceFolder}"]
       },
       "settings": {}
     }
@@ -154,7 +154,7 @@ Add to Zed settings.json:
 
 Install in Claude Code
 Run:
-claude mcp add codecompass -- npx -y @your-username/codecompass@latest ${workspaceFolder}
+claude mcp add codecompass -- npx -y @alvinveroy/codecompass@latest ${workspaceFolder}
 
 Install in Claude Desktop
 Add to claude_desktop_config.json:
@@ -162,7 +162,7 @@ Add to claude_desktop_config.json:
   "mcpServers": {
     "codecompass": {
       "command": "npx",
-      "args": ["-y", "@your-username/codecompass@latest", "${workspaceFolder}"]
+      "args": ["-y", "@alvinveroy/codecompass@latest", "${workspaceFolder}"]
     }
   }
 }

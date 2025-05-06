@@ -1,6 +1,6 @@
 {
   "name": "@alvinveroy/codecompass",
-  "version": "1.0.8",
+  "version": "1.0.10",
   "description": "AI-powered MCP server for codebase navigation and LLM prompt optimization",
   "main": "dist/index.js",
   "bin": {
@@ -30,16 +30,19 @@
   "author": "Alvin Veroy",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "latest",
+    "@modelcontextprotocol/sdk": "^1.11.0",
     "@qdrant/js-client-rest": "^1.2.1",
     "axios": "^1.4.0",
     "isomorphic-git": "^1.24.5",
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0",
     "zod": "^3.21.4"
   },
   "devDependencies": {
-    "typescript": "^5.2.2",
+    "@types/axios": "^0.14.0",
     "@types/node": "^20.5.9",
-    "@types/axios": "^0.14.0"
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.2.2"
   },
   "repository": {
     "type": "git",
@@ -50,7 +53,7 @@
     "url": "https://github.com/alvinveroy/codecompass/issues"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=18.19.0"
   },
   "files": [
     "dist/",
