@@ -1,0 +1,24 @@
+import winston from "winston";
+
+// Configuration
+export const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
+export const QDRANT_HOST = process.env.QDRANT_HOST || "http://127.0.0.1:6333";
+export const COLLECTION_NAME = "codecompass";
+export const EMBEDDING_MODEL = "nomic-embed-text:v1.5";
+export const SUGGESTION_MODEL = "llama3.1:8b";
+export const MAX_RETRIES = 3;
+export const RETRY_DELAY = 1000;
+export const MAX_INPUT_LENGTH = 4096;
+export const MAX_SNIPPET_LENGTH = 500;
+
+// Setup Winston logger
+export const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: "codecompass.log" }),
+  ],
+});
