@@ -27,11 +27,13 @@ describe('Utils Module', () => {
         .mockRejectedValueOnce(new Error('fail'))
         .mockResolvedValueOnce('success');
       
-      const retryPromise = withRetry(fn, 2);
-      // First attempt fails, then setTimeout is called
-      await Promise.resolve();
-      vi.runAllTimers(); // Fast-forward through delay
-      const result = await retryPromise;
+      // Mock setTimeout to execute callback immediately
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+        callback();
+        return 0 as any;
+      });
+      
+      const result = await withRetry(fn, 2);
       
       expect(result).toBe('success');
       expect(fn).toHaveBeenCalledTimes(2);
@@ -44,22 +46,13 @@ describe('Utils Module', () => {
         .mockRejectedValueOnce(new Error('fail 3'))
         .mockResolvedValueOnce('success');
       
-      const retryPromise = withRetry(fn, 4);
+      // Mock setTimeout to execute callback immediately
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+        callback();
+        return 0 as any;
+      });
       
-      // First attempt fails
-      await Promise.resolve();
-      vi.runAllTimers(); // Run for first delay
-      
-      // Second attempt fails
-      await Promise.resolve();
-      vi.runAllTimers(); // Run for second delay
-      
-      // Third attempt fails
-      await Promise.resolve();
-      vi.runAllTimers(); // Run for third delay
-      
-      // Fourth attempt succeeds
-      const result = await retryPromise;
+      const result = await withRetry(fn, 4);
       
       expect(result).toBe('success');
       expect(fn).toHaveBeenCalledTimes(4);
@@ -69,20 +62,13 @@ describe('Utils Module', () => {
       const error = new Error('persistent failure');
       const fn = vi.fn().mockRejectedValue(error);
       
-      const retryPromise = withRetry(fn, 3);
+      // Mock setTimeout to execute callback immediately
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+        callback();
+        return 0 as any;
+      });
       
-      // First attempt fails
-      await Promise.resolve();
-      vi.runAllTimers(); // Run for first delay
-      
-      // Second attempt fails
-      await Promise.resolve();
-      vi.runAllTimers(); // Run for second delay
-      
-      // Third attempt fails and throws
-      await Promise.resolve();
-      
-      await expect(retryPromise).rejects.toThrow('persistent failure');
+      await expect(withRetry(fn, 3)).rejects.toThrow('persistent failure');
       expect(fn).toHaveBeenCalledTimes(3);
     });
 
@@ -93,18 +79,13 @@ describe('Utils Module', () => {
       
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
       
-      const retryPromise = withRetry(fn); // No retry count provided
+      // Mock setTimeout to execute callback immediately
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+        callback();
+        return 0 as any;
+      });
       
-      // First attempt fails
-      await Promise.resolve();
-      
-      // Run through each retry
-      for (let i = 0; i < config.MAX_RETRIES - 1; i++) {
-        vi.runAllTimers();
-        await Promise.resolve();
-      }
-      
-      await expect(retryPromise).rejects.toThrow('fail');
+      await expect(withRetry(fn)).rejects.toThrow('fail');
       expect(fn).toHaveBeenCalledTimes(4);
       
       // Restore original
@@ -116,26 +97,19 @@ describe('Utils Module', () => {
       Object.defineProperty(config, 'RETRY_DELAY', { value: 1000 });
       
       // Spy on setTimeout
-      const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+      const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+        callback();
+        return 0 as any;
+      });
       
       const fn = vi.fn()
         .mockRejectedValueOnce(new Error('fail'))
         .mockResolvedValueOnce('success');
       
-      const retryPromise = withRetry(fn, 2);
-      
-      // First attempt fails
-      await Promise.resolve();
-      
-      // Ensure all microtasks are processed
-      await vi.runAllTimersAsync();
+      await withRetry(fn, 2);
       
       // Now verify setTimeout was called with the correct delay
       expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
-      
-      // Complete the retry
-      await vi.runAllTimersAsync();
-      await retryPromise;
       
       // Restore original
       Object.defineProperty(config, 'RETRY_DELAY', { value: originalRetryDelay });
