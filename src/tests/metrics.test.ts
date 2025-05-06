@@ -183,7 +183,7 @@ describe('Metrics Module', () => {
   describe('logMetrics', () => {
     it('should log the current metrics', () => {
       // Mock the logger
-      const loggerSpy = vi.spyOn(require('../lib/config').logger, 'info');
+      const loggerSpy = vi.spyOn(require('../../src/lib/config').logger, 'info');
       
       incrementCounter('test_counter');
       recordTiming('test_timing', 100);
@@ -202,8 +202,8 @@ describe('Metrics Module', () => {
 
   describe('startMetricsLogging', () => {
     it('should start a timer that logs metrics at the specified interval', () => {
-      const loggerSpy = vi.spyOn(require('../lib/config').logger, 'info');
-      const logMetricsSpy = vi.spyOn(require('../lib/metrics'), 'logMetrics');
+      const loggerSpy = vi.spyOn(require('../../src/lib/config').logger, 'info');
+      const logMetricsSpy = vi.spyOn(require('../../src/lib/metrics'), 'logMetrics');
       
       const interval = 60000; // 1 minute
       const timer = startMetricsLogging(interval);
