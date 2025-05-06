@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- New MCP tool: `get_changelog` to access version history programmatically
+- Support for `.env` file configuration
+- Command-line flag `--changelog` to display version history
+- Command-line flag `--version` to display current version
+
+### Changed
+- Enhanced documentation for environment variable configuration
+- Improved client integration examples with all configurable options
 
 ## [1.1.0] - 2025-05-06
 
@@ -14,14 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic detection of current working directory
 - Improved documentation with formatted code blocks
 - Configuration table in README
+- Support for additional environment variables: `MCP_PORT`, `LOG_LEVEL`
 
 ### Changed
 - Removed requirement to specify repository path in command line arguments
 - Updated client integration examples to use environment variables
 - Improved README formatting and readability
+- Enhanced error handling for configuration issues
 
 ### Fixed
 - Issue with workspace folder path resolution
+- Connection retry logic for Ollama and Qdrant services
 
 ## [1.0.0] - 2025-04-15
 

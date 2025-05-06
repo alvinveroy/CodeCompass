@@ -8,7 +8,8 @@ CodeCompass is a TypeScript-based MCP server that transforms your Git repository
 - **AI-Driven Context**: Generates concise prompts with code summaries, documentation, and metadata.
 - **Diff Tracking**: Includes repository update timestamps for change awareness.
 - **Developer Tools**: Offers resources (repo://structure, repo://files/*) and tools (search_code, generate_suggestion, get_repository_context).
-- **Configurable**: Customize Ollama and Qdrant endpoints through environment variables.
+- **Fully Configurable**: Customize Ollama and Qdrant endpoints through environment variables or client configuration.
+- **Automatic Directory Detection**: Uses the current working directory without requiring manual specification.
 
 ## Prerequisites
 
@@ -68,7 +69,7 @@ docker run -d -p 127.0.0.1:6333:6333 qdrant/qdrant
 
 ## Configuration
 
-CodeCompass can be configured using environment variables:
+CodeCompass can be configured using environment variables either in your shell or in your MCP client configuration:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -76,6 +77,13 @@ CodeCompass can be configured using environment variables:
 | `QDRANT_HOST` | Qdrant server endpoint | `http://localhost:6333` |
 | `EMBEDDING_MODEL` | Model for generating embeddings | `nomic-embed-text:v1.5` |
 | `SUGGESTION_MODEL` | Model for generating suggestions | `llama3.1:8b` |
+| `MCP_PORT` | Port for MCP server | `3000` |
+| `LOG_LEVEL` | Logging verbosity | `info` |
+
+You can set these variables:
+1. In your shell before running CodeCompass
+2. In your MCP client configuration (see integration examples below)
+3. In a `.env` file in your project directory
 
 ## Usage
 
@@ -90,18 +98,39 @@ Or, using npx:
 npx @alvinveroy/codecompass
 ```
 
-CodeCompass will automatically use the current working directory as the repository path.
+CodeCompass automatically uses the current working directory as the repository path. No need to specify a path manually!
+
+### Version Information
+
+To check the current version:
+```bash
+npx @alvinveroy/codecompass --version
+```
+
+For a complete changelog, see the [CHANGELOG.md](./CHANGELOG.md) file or run:
+```bash
+npx @alvinveroy/codecompass --changelog
+```
 
 ## Example Commands
 
-View Repository Structure:const structure = await server.resource("repo://structure");
+```typescript
+// View Repository Structure
+const structure = await server.resource("repo://structure");
 console.log(structure.content[0].text);
 
-Search Code:const results = await server.tool("search_code", { query: "login function" });
+// Search Code
+const results = await server.tool("search_code", { query: "login function" });
 console.log(results.content[0].text);
 
-Get LLM Context:const context = await server.tool("get_repository_context", { query: "Implement login" });
+// Get LLM Context
+const context = await server.tool("get_repository_context", { query: "Implement login" });
 console.log(context.content[0].text);
+
+// Get Changelog Information
+const changelog = await server.tool("get_changelog", {});
+console.log(changelog.content[0].text);
+```
 
 ## Integration
 
@@ -127,7 +156,10 @@ Add to ~/.cursor/mcp.json:
       "args": ["-y", "@alvinveroy/codecompass@latest"],
       "env": {
         "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333"
+        "QDRANT_HOST": "http://localhost:6333",
+        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
+        "SUGGESTION_MODEL": "llama3.1:8b",
+        "LOG_LEVEL": "info"
       }
     }
   }
@@ -143,7 +175,9 @@ Alternative: Use Bun
       "args": ["-y", "@alvinveroy/codecompass@latest"],
       "env": {
         "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333"
+        "QDRANT_HOST": "http://localhost:6333",
+        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
+        "SUGGESTION_MODEL": "llama3.1:8b"
       }
     }
   }
@@ -159,7 +193,9 @@ Alternative: Use Deno
       "args": ["run", "--allow-net", "npm:@alvinveroy/codecompass@latest"],
       "env": {
         "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333"
+        "QDRANT_HOST": "http://localhost:6333",
+        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
+        "SUGGESTION_MODEL": "llama3.1:8b"
       }
     }
   }
@@ -177,7 +213,9 @@ Add to VSCode MCP configuration:
       "args": ["-y", "@alvinveroy/codecompass@latest"],
       "env": {
         "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333"
+        "QDRANT_HOST": "http://localhost:6333",
+        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
+        "SUGGESTION_MODEL": "llama3.1:8b"
       }
     }
   }
@@ -194,7 +232,9 @@ Add to Windsurf MCP config:
       "args": ["-y", "@alvinveroy/codecompass@latest"],
       "env": {
         "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333"
+        "QDRANT_HOST": "http://localhost:6333",
+        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
+        "SUGGESTION_MODEL": "llama3.1:8b"
       }
     }
   }
@@ -213,7 +253,9 @@ Add to Zed settings.json:
       },
       "env": {
         "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333"
+        "QDRANT_HOST": "http://localhost:6333",
+        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
+        "SUGGESTION_MODEL": "llama3.1:8b"
       },
       "settings": {}
     }
@@ -237,11 +279,23 @@ Add to claude_desktop_config.json:
       "args": ["-y", "@alvinveroy/codecompass@latest"],
       "env": {
         "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333"
+        "QDRANT_HOST": "http://localhost:6333",
+        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
+        "SUGGESTION_MODEL": "llama3.1:8b"
       }
     }
   }
 }
+```
+
+## Version History
+
+For a complete list of changes and version history, please see the [CHANGELOG.md](./CHANGELOG.md) file.
+
+You can also access the changelog information programmatically through the MCP tool:
+```typescript
+const changelog = await server.tool("get_changelog", {});
+console.log(changelog.content[0].text);
 ```
 
 ## Contributing
