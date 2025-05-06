@@ -32,10 +32,19 @@ const SUGGESTION_MODEL = "llama3.1:8b";
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 const MAX_INPUT_LENGTH = 4096;
+const MAX_SNIPPET_LENGTH = 500;
 
 // Schemas
 const SearchCodeSchema = z.object({ query: z.string().min(1, "Query is required") });
-const GenerateSuggestionSchema = z.object({ query: z.string().min(1, "Query is required") });
+const GenerateSuggestionSchema = z.object({
+  query: z.string().min(1, "Query is required").optional(),
+  prompt: z.string().min(1, "Prompt is required").optional(),
+}).transform((data) => ({
+  query: data.query || data.prompt || "",
+})).refine(data => data.query.length > 0, {
+  message: "Either query or prompt must be a non-empty string",
+  path: ["query"],
+});
 const GetRepositoryContextSchema = z.object({ query: z.string().min(1, "Query is required") });
 
 // Types
@@ -60,9 +69,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Promis
 
 // Utility: Preprocess input text
 function preprocessText(text: string): string {
-  // Remove control characters (except newlines and tabs)
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  // Normalize whitespace (replace multiple spaces with single space, preserve newlines)
   text = text.replace(/\s+/g, (match) => (match.includes("\n") ? "\n" : " "));
   return text.trim();
 }
@@ -352,7 +359,20 @@ async function startServer(repoPath: string): Promise<void> {
       throw new Error("MCP server does not support 'tool' method");
     }
     server.tool("search_code", async (params: unknown) => {
-      const { query } = SearchCodeSchema.parse(params);
+      logger.info("Received params for search_code", { params });
+      let normalizedParams;
+      try {
+        // Handle stringified JSON input
+        if (typeof params === "string") {
+          normalizedParams = JSON.parse(params);
+        } else {
+          normalizedParams = params;
+        }
+      } catch (error: any) {
+        logger.error("Failed to parse params as JSON", { message: error.message });
+        throw new Error("Invalid input format: params must be a valid JSON object or string");
+      }
+      const { query } = SearchCodeSchema.parse(normalizedParams);
       const embedding = await generateEmbedding(query);
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
@@ -365,47 +385,125 @@ async function startServer(repoPath: string): Promise<void> {
       });
       const summaries = await Promise.all(results.map(async result => ({
         filepath: (result.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (result.payload as QdrantSearchResult['payload']).content.slice(0, 200),
+        snippet: (result.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
         summary: suggestionModelAvailable
-          ? await summarizeSnippet((result.payload as QdrantSearchResult['payload']).content.slice(0, 200))
+          ? await summarizeSnippet((result.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH))
           : "Summary unavailable (suggestion model not loaded)",
+        last_modified: (result.payload as QdrantSearchResult['payload']).last_modified,
+        relevance: result.score,
       })));
-      return { content: summaries.map(s => ({ type: "text", text: `File: ${s.filepath}\nSnippet: ${s.snippet}\nSummary: ${s.summary}` })) };
+      return {
+        content: summaries.map(s => ({
+          type: "text",
+          text: `File: ${s.filepath}\nLast Modified: ${s.last_modified}\nRelevance: ${s.relevance.toFixed(2)}\nSnippet: ${s.snippet}\nSummary: ${s.summary}`,
+        })),
+      };
     });
 
     if (suggestionModelAvailable) {
       server.tool("generate_suggestion", async (params: unknown) => {
-        const { query } = GenerateSuggestionSchema.parse(params);
-        const suggestion = await generateSuggestion(query);
-        return { content: [{ type: "text", text: suggestion }] };
-      });
-
-      server.tool("get_repository_context", async (params: unknown) => {
-        const { query } = GetRepositoryContextSchema.parse(params);
-        const embedding = await generateEmbedding(query);
+        logger.info("Received params for generate_suggestion", { params });
+        let normalizedParams;
+        try {
+          // Handle stringified JSON input
+          if (typeof params === "string") {
+            normalizedParams = JSON.parse(params);
+          } else {
+            normalizedParams = params;
+          }
+        } catch (error: any) {
+          logger.error("Failed to parse params as JSON", { message: error.message });
+          throw new Error("Invalid input format: params must be a valid JSON object or string");
+        }
+        const { query } = GenerateSuggestionSchema.parse(normalizedParams);
         const isGitRepo = await validateGitRepository(repoPath);
         const files = isGitRepo
           ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
           : [];
+        const diff = await getRepositoryDiff(repoPath);
+        const embedding = await generateEmbedding(query);
         const searchResults = await qdrantClient.search(COLLECTION_NAME, {
           vector: embedding,
           limit: 3,
           filter: files.length ? { must: [{ key: "filepath", match: { any: files } }] } : undefined,
         });
-        const diff = await getRepositoryDiff(repoPath);
         const context = searchResults.map(r => ({
           filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-          snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, 200),
+          snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
           last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+          relevance: r.score,
         }));
-        const summary = await generateSuggestion(
-          `Provide context for "${query}" based on:\nFiles: ${JSON.stringify(context, null, 2)}\nDiff: ${diff}`
-        );
+
+        const prompt = `
+**Context**:
+Repository: ${repoPath}
+Files: ${files.join(", ")}
+Recent Changes: ${diff}
+
+**Relevant Snippets**:
+${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})\n${c.snippet}`).join("\n\n")}
+
+**Instruction**:
+Based on the provided context and snippets, generate a detailed code suggestion for "${query}". Include:
+- A suggested code implementation or improvement.
+- An explanation of how it addresses the query.
+- References to the provided snippets or context where applicable.
+Ensure the suggestion is concise, practical, and leverages the repository's existing code structure. If the query is ambiguous, provide a general solution with assumptions clearly stated.
+        `;
+        const suggestion = await generateSuggestion(prompt);
         return {
           content: [{
             type: "text",
-            text: `Context for "${query}":\n${summary}\n\nRelevant Files:\n${context.map(c => `${c.filepath} (Last modified: ${c.last_modified})\n${c.snippet}`).join("\n\n")}\n\nRecent Changes:\n${diff}`
-          }]
+            text: `Suggestion for "${query}":\n${suggestion}\n\n**Context Used**:\nFiles: ${files.join(", ")}\nRecent Changes: ${diff}\n\n**Relevant Snippets**:\n${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})\n${c.snippet}`).join("\n\n")}`,
+          }],
+        };
+      });
+
+      server.tool("get_repository_context", async (params: unknown) => {
+        const { query } = GetRepositoryContextSchema.parse(params);
+        const isGitRepo = await validateGitRepository(repoPath);
+        const files = isGitRepo
+          ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
+          : [];
+        const diff = await getRepositoryDiff(repoPath);
+        const embedding = await generateEmbedding(query);
+        const searchResults = await qdrantClient.search(COLLECTION_NAME, {
+          vector: embedding,
+          limit: 3,
+          filter: files.length ? { must: [{ key: "filepath", match: { any: files } }] } : undefined,
+        });
+        const context = searchResults.map(r => ({
+          filepath: (r.payload as QdrantSearchResult['payload']).filepath,
+          snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
+          last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+          relevance: r.score,
+        }));
+        const summary = await generateSuggestion(`
+**Context**:
+Repository: ${repoPath}
+Files: ${files.join(", ")}
+Recent Changes: ${diff}
+
+**Relevant Snippets**:
+${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})\n${c.snippet}`).join("\n\n")}
+
+**Instruction**:
+Provide a concise summary of the context for "${query}" based on the repository files and recent changes. Highlight key information relevant to the query, referencing specific files or snippets where applicable.
+        `);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              summary,
+              files: context.map(c => ({
+                filepath: c.filepath,
+                snippet: c.snippet,
+                last_modified: c.last_modified,
+                relevance: c.relevance,
+              })),
+              recent_changes: diff,
+            }, null, 2),
+          }],
         };
       });
     } else {
