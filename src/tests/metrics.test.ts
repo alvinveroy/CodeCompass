@@ -183,11 +183,13 @@ describe('Metrics Module', () => {
 
   describe('logMetrics', () => {
     it('should log the current metrics', () => {
-      // Mock the logger directly in the metrics module
+      // Create a mock logger object
       const mockInfo = vi.fn();
-      vi.spyOn(metricsModule, 'logger', 'get').mockReturnValue({ 
-        info: mockInfo as any 
-      });
+      const mockLogger = { info: mockInfo };
+      
+      // Replace the logger in the module
+      const originalLogger = metricsModule.logger;
+      (metricsModule as any).logger = mockLogger;
       
       incrementCounter('test_counter');
       recordTiming('test_timing', 100);
@@ -203,17 +205,19 @@ describe('Metrics Module', () => {
       }));
       
       // Restore the original logger
-      vi.restoreAllMocks();
+      (metricsModule as any).logger = originalLogger;
     });
   });
 
   describe('startMetricsLogging', () => {
     it('should start a timer that logs metrics at the specified interval', () => {
-      // Mock the logger directly in the metrics module
+      // Create a mock logger object
       const mockInfo = vi.fn();
-      vi.spyOn(metricsModule, 'logger', 'get').mockReturnValue({ 
-        info: mockInfo as any 
-      });
+      const mockLogger = { info: mockInfo };
+      
+      // Replace the logger in the module
+      const originalLogger = metricsModule.logger;
+      (metricsModule as any).logger = mockLogger;
       
       // Spy on logMetrics function
       const logMetricsSpy = vi.spyOn(metricsModule, 'logMetrics');
@@ -235,8 +239,8 @@ describe('Metrics Module', () => {
       // Clean up
       clearInterval(timer);
       
-      // Restore all mocks
-      vi.restoreAllMocks();
+      // Restore the original logger
+      (metricsModule as any).logger = originalLogger;
     });
 
     it('should use the default interval if none is specified', () => {
