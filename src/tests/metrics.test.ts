@@ -183,7 +183,7 @@ describe('Metrics Module', () => {
   describe('logMetrics', () => {
     it('should log the current metrics', () => {
       // Mock the logger
-      const loggerSpy = vi.spyOn(require('../lib/config').logger, 'info');
+      const loggerSpy = vi.spyOn(require('../lib/metrics').logger, 'info');
       
       incrementCounter('test_counter');
       recordTiming('test_timing', 100);
@@ -202,8 +202,11 @@ describe('Metrics Module', () => {
 
   describe('startMetricsLogging', () => {
     it('should start a timer that logs metrics at the specified interval', () => {
-      const loggerSpy = vi.spyOn(require('../../src/lib/config').logger, 'info');
+      const loggerSpy = vi.spyOn(require('../lib/metrics').logger, 'info');
       const logMetricsSpy = vi.spyOn(require('../lib/metrics'), 'logMetrics');
+      
+      // Mock setInterval
+      vi.spyOn(global, 'setInterval');
       
       const interval = 60000; // 1 minute
       const timer = startMetricsLogging(interval);
@@ -223,9 +226,12 @@ describe('Metrics Module', () => {
     it('should use the default interval if none is specified', () => {
       const defaultInterval = 300000; // 5 minutes
       
+      // Mock setInterval
+      vi.spyOn(global, 'setInterval');
+      
       const timer = startMetricsLogging();
       
-      expect(setInterval).toHaveBeenCalledWith(expect.any(Function), defaultInterval);
+      expect(global.setInterval).toHaveBeenCalledWith(expect.any(Function), defaultInterval);
       
       // Clean up
       clearInterval(timer);
