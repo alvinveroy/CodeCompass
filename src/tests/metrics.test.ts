@@ -220,13 +220,16 @@ describe('Metrics Module', () => {
       
       expect(infoSpy).toHaveBeenCalledWith(`Starting metrics logging every ${interval}ms`);
       
-      // Initially, logMetrics should not have been called yet
-      expect(logMetricsSpy).toHaveBeenCalledTimes(0);
+      // logMetrics should be called immediately when startMetricsLogging is called
+      expect(logMetricsSpy).toHaveBeenCalledTimes(1);
+      
+      // Reset the spy to check the interval call
+      logMetricsSpy.mockClear();
       
       // Advance time to trigger the interval
       vi.advanceTimersByTime(interval);
       
-      // Now logMetrics should have been called once
+      // Now logMetrics should have been called again
       expect(logMetricsSpy).toHaveBeenCalledTimes(1);
       
       // Clean up
