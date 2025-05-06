@@ -2,6 +2,7 @@ import axios from "axios";
 import { logger, OLLAMA_HOST, EMBEDDING_MODEL, SUGGESTION_MODEL, MAX_INPUT_LENGTH } from "./config";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types";
 import { withRetry, preprocessText } from "./utils";
+import { incrementCounter, recordTiming, timeExecution } from "./metrics";
 
 // Check Ollama
 export async function checkOllama(): Promise<boolean> {
@@ -57,20 +58,33 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
 
 // Generate Embedding
 export async function generateEmbedding(text: string): Promise<number[]> {
+  incrementCounter('embedding_requests');
+  
   const processedText = preprocessText(text);
   const truncatedText = processedText.length > MAX_INPUT_LENGTH ? processedText.slice(0, MAX_INPUT_LENGTH) : processedText;
+  
   try {
-    const response = await withRetry(async () => {
-      logger.info(`Generating embedding for text (length: ${truncatedText.length}, snippet: "${truncatedText.slice(0, 100)}...")`);
-      const res = await axios.post<OllamaEmbeddingResponse>(
-        `${OLLAMA_HOST}/api/embeddings`,
-        { model: EMBEDDING_MODEL, prompt: truncatedText },
-        { timeout: 10000 }
-      );
-      return res.data;
+    return await timeExecution('embedding_generation', async () => {
+      const response = await withRetry(async () => {
+        logger.info(`Generating embedding for text (length: ${truncatedText.length}, snippet: "${truncatedText.slice(0, 100)}...")`);
+        const res = await axios.post<OllamaEmbeddingResponse>(
+          `${OLLAMA_HOST}/api/embeddings`,
+          { model: EMBEDDING_MODEL, prompt: truncatedText },
+          { timeout: 10000 }
+        );
+        
+        if (!res.data.embedding || !Array.isArray(res.data.embedding)) {
+          throw new Error("Invalid embedding response from Ollama API");
+        }
+        
+        return res.data;
+      });
+      
+      incrementCounter('embedding_success');
+      return response.embedding;
     });
-    return response.embedding;
   } catch (error: any) {
+    incrementCounter('embedding_errors');
     logger.error("Ollama embedding error", {
       message: error.message,
       code: error.code,
@@ -84,24 +98,31 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       inputLength: truncatedText.length,
       inputSnippet: truncatedText.slice(0, 100),
     });
-    throw error;
+    throw new Error(`Failed to generate embedding: ${error.message}`);
   }
 }
 
 // Generate Suggestion
 export async function generateSuggestion(prompt: string): Promise<string> {
+  incrementCounter('suggestion_requests');
+  
   try {
-    logger.info(`Generating suggestion for prompt (length: ${prompt.length})`);
-    const response = await withRetry(async () => {
-      const res = await axios.post<OllamaGenerateResponse>(
-        `${OLLAMA_HOST}/api/generate`,
-        { model: SUGGESTION_MODEL, prompt, stream: false },
-        { timeout: 60000 } // Increased timeout to 60 seconds for complex prompts
-      );
-      return res.data;
+    return await timeExecution('suggestion_generation', async () => {
+      logger.info(`Generating suggestion for prompt (length: ${prompt.length})`);
+      const response = await withRetry(async () => {
+        const res = await axios.post<OllamaGenerateResponse>(
+          `${OLLAMA_HOST}/api/generate`,
+          { model: SUGGESTION_MODEL, prompt, stream: false },
+          { timeout: 60000 } // Increased timeout to 60 seconds for complex prompts
+        );
+        return res.data;
+      });
+      
+      incrementCounter('suggestion_success');
+      return response.response;
     });
-    return response.response;
   } catch (error: any) {
+    incrementCounter('suggestion_errors');
     logger.error("Ollama suggestion error", {
       message: error.message,
       code: error.code,

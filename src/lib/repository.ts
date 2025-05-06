@@ -30,17 +30,36 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
   }
 
   const files = await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
-  logger.info("Files to index:", { files });
+  logger.info(`Found ${files.length} files in repository`);
 
   if (!files.length) {
     logger.warn("No files to index in repository.");
     return;
   }
 
-  for (const filepath of files) {
+  // Filter files to only include code files
+  const codeExtensions = ['.ts', '.js', '.tsx', '.jsx', '.json', '.md', '.html', '.css', '.scss', '.py', '.java', '.c', '.cpp', '.go', '.rs', '.php', '.rb'];
+  const filteredFiles = files.filter(file => {
+    const ext = path.extname(file).toLowerCase();
+    return codeExtensions.includes(ext) && !file.includes('node_modules/') && !file.includes('dist/');
+  });
+  
+  logger.info(`Filtered to ${filteredFiles.length} code files for indexing`);
+
+  let successCount = 0;
+  let errorCount = 0;
+
+  for (const filepath of filteredFiles) {
     try {
       const fullPath = path.join(repoPath, filepath);
       const content = await fs.readFile(fullPath, "utf8");
+      
+      // Skip empty or very large files
+      if (!content.trim() || content.length > MAX_SNIPPET_LENGTH * 10) {
+        logger.info(`Skipping ${filepath}: ${!content.trim() ? 'empty file' : 'file too large'}`);
+        continue;
+      }
+      
       const embedding = await generateEmbedding(content);
       const pointId = uuidv4();
       logger.info(`Upserting to Qdrant: ${filepath} (ID: ${pointId})`);
@@ -48,6 +67,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
         points: [{ id: pointId, vector: embedding, payload: { filepath, content, last_modified: (await fs.stat(fullPath)).mtime.toISOString() } }],
       });
       logger.info(`Indexed: ${filepath}`);
+      successCount++;
     } catch (error: any) {
       logger.error(`Failed to index ${filepath}`, {
         message: error.message,
@@ -59,8 +79,11 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
             }
           : null,
       });
+      errorCount++;
     }
   }
+  
+  logger.info(`Indexing complete: ${successCount} files indexed successfully, ${errorCount} errors`);
 }
 
 // Get Repository Diff
