@@ -204,7 +204,7 @@ ${s.summary}
     
     return {
       content: [{
-        type: "markdown",
+        type: "text",
         text: formattedResponse,
       }],
     };
@@ -229,7 +229,7 @@ Timings: ${Object.keys(metrics.timings).length} (all reset)
     
     return {
       content: [{
-        type: "markdown",
+        type: "text",
         text: formattedResponse,
       }],
     };
@@ -304,7 +304,7 @@ ${diff}
       
       return {
         content: [{
-          type: "markdown",
+          type: "text",
           text: formattedResponse,
         }],
       };
@@ -372,7 +372,7 @@ ${diff}
       
       return {
         content: [{
-          type: "markdown",
+          type: "text",
           text: formattedResponse,
         }],
       };
