@@ -206,14 +206,18 @@ describe('Metrics Module', () => {
 
   describe('startMetricsLogging', () => {
     it('should start a timer that logs metrics at the specified interval', () => {
-      // Spy on the logger's info method instead of replacing the logger
+      // Spy on the logger's info method
       const infoSpy = vi.spyOn(metricsModule.logger, 'info');
       
-      // Spy on logMetrics function
-      const logMetricsSpy = vi.spyOn(metricsModule, 'logMetrics');
+      // Spy on logMetrics function BEFORE starting the timer
+      const logMetricsSpy = vi.spyOn(metricsModule, 'logMetrics').mockImplementation(() => {});
       
-      // Mock setInterval
-      vi.spyOn(global, 'setInterval');
+      // Mock setInterval to capture the callback
+      let intervalCallback: Function;
+      vi.spyOn(global, 'setInterval').mockImplementation((callback: Function, ms: number) => {
+        intervalCallback = callback;
+        return 123 as unknown as NodeJS.Timeout; // Return a dummy timer id
+      });
       
       const interval = 60000; // 1 minute
       const timer = startMetricsLogging(interval);
@@ -221,16 +225,19 @@ describe('Metrics Module', () => {
       expect(infoSpy).toHaveBeenCalledWith(`Starting metrics logging every ${interval}ms`);
       expect(global.setInterval).toHaveBeenCalledWith(expect.any(Function), interval);
       
-      // Fast-forward time to trigger the interval
-      vi.advanceTimersByTime(interval);
+      // Manually invoke the interval callback
+      if (intervalCallback) {
+        intervalCallback();
+      }
       
       expect(logMetricsSpy).toHaveBeenCalledTimes(1);
       
       // Clean up
       clearInterval(timer);
       
-      // Restore the original implementation
+      // Restore all mocks
       infoSpy.mockRestore();
+      logMetricsSpy.mockRestore();
     });
 
     it('should use the default interval if none is specified', () => {
