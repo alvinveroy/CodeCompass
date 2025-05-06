@@ -184,21 +184,57 @@ async function registerTools(
       last_modified: (result.payload as QdrantSearchResult['payload']).last_modified,
       relevance: result.score,
     })));
+    
+    // Format the response in a more readable way
+    const formattedResponse = `
+# Search Results for: "${query}"
+
+${summaries.map(s => `
+## ${s.filepath}
+- Last Modified: ${s.last_modified}
+- Relevance: ${s.relevance.toFixed(2)}
+
+### Code Snippet
+\`\`\`
+${s.snippet}
+\`\`\`
+
+### Summary
+${s.summary}
+`).join('\n')}
+`;
+    
     return {
-      content: summaries.map(s => ({
+      content: [{
         type: "text",
-        text: `File: ${s.filepath}\nLast Modified: ${s.last_modified}\nRelevance: ${s.relevance.toFixed(2)}\nSnippet: ${s.snippet}\nSummary: ${s.summary}`,
-      })),
+        text: formattedResponse,
+      }],
     };
   });
 
   // Add reset_metrics tool
   server.tool("reset_metrics", async () => {
     resetMetrics();
+    const metrics = getMetrics();
+    
+    // Format the response in a more readable way
+    const formattedResponse = `
+# Metrics Reset
+
+Metrics have been reset successfully.
+
+## Current Metrics
+\`\`\`
+Uptime: ${metrics.uptime}ms
+Counters: ${Object.keys(metrics.counters).length} (all reset to 0)
+Timings: ${Object.keys(metrics.timings).length} (all reset)
+\`\`\`
+`;
+    
     return {
       content: [{
         type: "text",
-        text: "Metrics have been reset successfully.",
+        text: formattedResponse,
       }],
     };
   });
@@ -247,10 +283,35 @@ Based on the provided context and snippets, generate a detailed code suggestion 
 Ensure the suggestion is concise, practical, and leverages the repository's existing code structure. If the query is ambiguous, provide a general solution with assumptions clearly stated.
       `;
       const suggestion = await generateSuggestion(prompt);
+      
+      // Format the response in a more readable way
+      const formattedResponse = `
+# Code Suggestion for: "${query}"
+
+## Suggestion
+${suggestion}
+
+## Context Used
+${context.map(c => `
+### ${c.filepath}
+- Last modified: ${c.last_modified}
+- Relevance: ${c.relevance.toFixed(2)}
+
+\`\`\`
+${c.snippet}
+\`\`\`
+`).join('\n')}
+
+## Recent Changes
+\`\`\`
+${diff}
+\`\`\`
+`;
+      
       return {
         content: [{
           type: "text",
-          text: `Suggestion for "${query}":\n${suggestion}\n\n**Context Used**:\nFiles: ${files.join(", ")}\nRecent Changes: ${diff}\n\n**Relevant Snippets**:\n${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})\n${c.snippet}`).join("\n\n")}`,
+          text: formattedResponse,
         }],
       };
     });

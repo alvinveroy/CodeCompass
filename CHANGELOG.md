@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Enhanced documentation for environment variable configuration
 - Improved client integration examples with all configurable options
+- Improved formatting for all tool outputs using Markdown for better readability
+- Standardized response format across all MCP tools
 
 ## [1.1.0] - 2025-05-06
 
