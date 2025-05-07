@@ -140,7 +140,7 @@ const history = await server.tool("get_session_history", { sessionId: "session_1
 console.log(history.content[0].text);
 
 // Analyze Code Problem
-const analysis = await server.tool("analyze_code_problem", { 
+const analysis = await server.tool("agent_query", { 
   query: "Fix the authentication error in login.ts",
   sessionId: "session_123456789" 
 });
