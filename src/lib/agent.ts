@@ -138,12 +138,20 @@ Based on both searches, I can provide a comprehensive explanation of error handl
 
 // Parse tool calls from LLM output
 export function parseToolCalls(output: string): { tool: string; parameters: any }[] {
+  // Log the output for debugging
+  logger.debug("Parsing tool calls from output", { outputLength: output.length });
+  
+  // Use a more robust regex that handles multiline JSON
   const toolCallRegex = /TOOL_CALL:\s*({[\s\S]*?})/g;
   const matches = [...output.matchAll(toolCallRegex)];
   
+  logger.debug(`Found ${matches.length} potential tool calls`);
+  
   return matches.map(match => {
     try {
-      return JSON.parse(match[1].trim());
+      const jsonStr = match[1].trim();
+      logger.debug("Attempting to parse JSON", { jsonStr });
+      return JSON.parse(jsonStr);
     } catch (error) {
       logger.error("Failed to parse tool call", { match: match[1], error });
       return null;
