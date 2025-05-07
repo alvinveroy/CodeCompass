@@ -273,8 +273,9 @@ export async function startServer(repoPath: string): Promise<void> {
     await server.connect(transport);
 
     logger.info(`CodeCompass MCP server running for repository: ${repoPath}`);
-    const capabilities = server.getCapabilities ? server.getCapabilities() : server;
-    logger.info(`Tools available: ${Object.keys(capabilities.tools || {}).join(', ')}`);
+    // Access the tools directly from the server's capabilities property if it exists
+    const toolsObj = server.capabilities?.tools || {};
+    logger.info(`Tools available: ${Object.keys(toolsObj).join(', ')}`);
     
     // Ensure metrics interval is cleared on shutdown
     process.on('SIGINT', () => {
