@@ -249,7 +249,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add get_changelog tool
   server.tool("get_changelog", async () => {
     try {
-      const changelogPath = path.join(projectRoot, 'CHANGELOG.md');
+      const changelogPath = path.join(repoPath, 'CHANGELOG.md');
       const changelog = await fs.readFile(changelogPath, 'utf8');
       
       return {
@@ -375,6 +375,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
         last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
         relevance: r.score,
+        note: ""
       }));
       
       // Include previous relevant results if current results are limited
@@ -503,7 +504,9 @@ Session ID: ${session.id}`;
       
       logger.info("Received params for get_repository_context", { params });
       const normalizedParams = normalizeToolParams(params);
-      const { query, sessionId } = GetRepositoryContextSchema.parse(normalizedParams);
+      const parsed = GetRepositoryContextSchema.parse(normalizedParams);
+      const query = parsed.query;
+      const sessionId = 'sessionId' in parsed ? parsed.sessionId : undefined;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
