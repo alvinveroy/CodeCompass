@@ -141,25 +141,35 @@ export function parseToolCalls(output: string): { tool: string; parameters: any 
   // Log the output for debugging
   logger.debug("Parsing tool calls from output", { outputLength: output.length });
   
-  // Use a more specific regex that handles the exact format in the test
-  const toolCallRegex = /TOOL_CALL:\s*({.*?"tool".*?"parameters".*?})/gs;
-  const matches = output.match(toolCallRegex) || [];
+  // Split the output by lines and look for lines starting with TOOL_CALL:
+  const lines = output.split('\n');
+  const results: { tool: string; parameters: any }[] = [];
   
-  logger.debug(`Found ${matches.length} potential tool calls`);
-  
-  return matches.map(match => {
-    try {
-      // Extract just the JSON part
-      const jsonPart = match.replace(/TOOL_CALL:\s*/, '').trim();
-      logger.debug("Attempting to parse JSON", { jsonPart });
-      const parsed = JSON.parse(jsonPart);
-      logger.debug("Successfully parsed JSON", { parsed });
-      return parsed;
-    } catch (error) {
-      logger.error("Failed to parse tool call", { match, error });
-      return null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith('TOOL_CALL:')) {
+      try {
+        // Extract the JSON part
+        const jsonPart = line.substring('TOOL_CALL:'.length).trim();
+        logger.debug("Found potential tool call", { jsonPart });
+        
+        const parsed = JSON.parse(jsonPart);
+        logger.debug("Successfully parsed JSON", { parsed });
+        
+        if (parsed && parsed.tool && parsed.parameters) {
+          results.push({
+            tool: parsed.tool,
+            parameters: parsed.parameters
+          });
+        }
+      } catch (error) {
+        logger.error("Failed to parse tool call", { line, error });
+      }
     }
-  }).filter(Boolean);
+  }
+  
+  logger.debug(`Found ${results.length} valid tool calls`);
+  return results;
 }
 
 // Execute a tool call
