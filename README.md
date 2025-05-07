@@ -130,6 +130,21 @@ console.log(context.content[0].text);
 // Get Changelog Information
 const changelog = await server.tool("get_changelog", {});
 console.log(changelog.content[0].text);
+
+// Reset Metrics
+const reset = await server.tool("reset_metrics", {});
+console.log(reset.content[0].text);
+
+// View Session History
+const history = await server.tool("get_session_history", { sessionId: "session_123456789" });
+console.log(history.content[0].text);
+
+// Analyze Code Problem
+const analysis = await server.tool("analyze_code_problem", { 
+  query: "Fix the authentication error in login.ts",
+  sessionId: "session_123456789" 
+});
+console.log(analysis.content[0].text);
 ```
 
 ## Integration

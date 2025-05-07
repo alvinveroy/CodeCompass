@@ -11,12 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for `.env` file configuration
 - Command-line flag `--changelog` to display version history
 - Command-line flag `--version` to display current version
+- New MCP tool: `reset_metrics` to reset all metrics counters
+- New MCP tool: `get_session_history` to view detailed session information
+- New MCP tool: `analyze_code_problem` for multi-step reasoning and problem analysis
 
 ### Changed
 - Enhanced documentation for environment variable configuration
 - Improved client integration examples with all configurable options
 - Improved formatting for all tool outputs using Markdown for better readability
 - Standardized response format across all MCP tools
+- Fixed TypeScript build errors in server.ts
+- Improved parameter handling for MCP tools
 
 ## [1.1.0] - 2025-05-06
 
