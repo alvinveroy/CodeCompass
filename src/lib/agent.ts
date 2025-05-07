@@ -143,7 +143,7 @@ export function parseToolCalls(output: string): { tool: string; parameters: any 
   
   return matches.map(match => {
     try {
-      return JSON.parse(match[1]);
+      return JSON.parse(match[1].trim());
     } catch (error) {
       logger.error("Failed to parse tool call", { match: match[1], error });
       return null;
