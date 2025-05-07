@@ -19,14 +19,14 @@ describe('Agent', () => {
   describe('parseToolCalls', () => {
     it('should parse valid tool calls', () => {
       const output = `
-        I'll use the search_code tool to find relevant files.
-        
-        TOOL_CALL: {"tool": "search_code", "parameters": {"query": "authentication"}}
-        
-        Now I'll get repository context.
-        
-        TOOL_CALL: {"tool": "get_repository_context", "parameters": {"query": "project structure"}}
-      `;
+I'll use the search_code tool to find relevant files.
+
+TOOL_CALL: {"tool": "search_code", "parameters": {"query": "authentication"}}
+
+Now I'll get repository context.
+
+TOOL_CALL: {"tool": "get_repository_context", "parameters": {"query": "project structure"}}
+`;
       
       const result = parseToolCalls(output);
       
