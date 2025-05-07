@@ -34,6 +34,13 @@ export const FeedbackSchema = z.object({
   suggestion: z.string()
 });
 
+// Agent schema
+export const AgentQuerySchema = z.object({
+  query: z.string().min(1, "Query is required"),
+  sessionId: z.string().optional(),
+  maxSteps: z.number().optional().default(5)
+});
+
 // Types
 export interface OllamaEmbeddingResponse { 
   embedding: number[] 
@@ -61,4 +68,21 @@ export interface QdrantSearchResult {
     last_modified: string 
   }; 
   score: number 
+}
+
+// Agent types
+export interface AgentStep {
+  tool: string;
+  input: any;
+  output: any;
+  reasoning: string;
+}
+
+export interface AgentState {
+  sessionId: string;
+  query: string;
+  steps: AgentStep[];
+  context: any[];
+  finalResponse?: string;
+  isComplete: boolean;
 }

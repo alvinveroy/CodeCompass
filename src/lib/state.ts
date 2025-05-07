@@ -23,6 +23,17 @@ export interface SessionState {
     lastFiles: string[];
     lastDiff: string;
   };
+  agentSteps?: {
+    timestamp: number;
+    query: string;
+    steps: {
+      tool: string;
+      input: any;
+      output: any;
+      reasoning: string;
+    }[];
+    finalResponse: string;
+  }[];
   createdAt: number;
   lastUpdated: number;
 }
@@ -42,6 +53,7 @@ export function createSession(repoPath: string): SessionState {
       lastFiles: [],
       lastDiff: "",
     },
+    agentSteps: [],
     createdAt: Date.now(),
     lastUpdated: Date.now(),
   };
@@ -197,4 +209,50 @@ export function getAverageRelevanceScore(sessionId: string): number {
   
   const sum = session.queries.reduce((acc, q) => acc + q.relevanceScore, 0);
   return sum / session.queries.length;
+}
+
+// Add agent steps to session
+export function addAgentSteps(
+  sessionId: string,
+  query: string,
+  steps: {
+    tool: string;
+    input: any;
+    output: any;
+    reasoning: string;
+  }[],
+  finalResponse: string
+): SessionState {
+  const session = getOrCreateSession(sessionId);
+  
+  if (!session.agentSteps) {
+    session.agentSteps = [];
+  }
+  
+  session.agentSteps.push({
+    timestamp: Date.now(),
+    query,
+    steps,
+    finalResponse
+  });
+  
+  session.lastUpdated = Date.now();
+  return session;
+}
+
+// Get the most recent agent steps
+export function getRecentAgentSteps(sessionId: string, limit: number = 3): any[] {
+  const session = getOrCreateSession(sessionId);
+  
+  if (!session.agentSteps) {
+    return [];
+  }
+  
+  return session.agentSteps
+    .slice(-limit)
+    .map(step => ({
+      query: step.query,
+      tools: step.steps.map(s => s.tool),
+      timestamp: step.timestamp
+    }));
 }

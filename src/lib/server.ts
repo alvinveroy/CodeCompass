@@ -5,13 +5,14 @@ import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH } from "./config";
-import { SearchCodeSchema, GenerateSuggestionSchema, GetRepositoryContextSchema, QdrantSearchResult, FeedbackSchema } from "./types";
+import { SearchCodeSchema, GenerateSuggestionSchema, GetRepositoryContextSchema, QdrantSearchResult, FeedbackSchema, AgentQuerySchema } from "./types";
 import { checkOllama, checkOllamaModel, generateEmbedding, generateSuggestion, summarizeSnippet, processFeedback } from "./ollama";
 import { initializeQdrant, searchWithRefinement } from "./qdrant";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
-import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain } from "./metrics";
+import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun, trackAgentCompletion, trackAgentToolUsage } from "./metrics";
 import { VERSION } from "./version";
-import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults } from "./state";
+import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults, addAgentSteps } from "./state";
+import { runAgentLoop, parseToolCalls } from "./agent";
 
 // Normalize tool parameters to handle various input formats
 export function normalizeToolParams(params: unknown): Record<string, any> {
@@ -206,6 +207,7 @@ export async function startServer(repoPath: string): Promise<void> {
           get_repository_context: {},
           ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
           get_changelog: {},
+          agent_query: {}, // New agent tool that works regardless of suggestion model
         },
       },
     });
@@ -275,8 +277,8 @@ export async function startServer(repoPath: string): Promise<void> {
     logger.info(`CodeCompass MCP server running for repository: ${repoPath}`);
     // Log available tools without directly accessing server.capabilities
     logger.info(`CodeCompass server started with tools: ${Object.keys(suggestionModelAvailable ? 
-      { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {} } : 
-      { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {} }
+      { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {} } : 
+      { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, agent_query: {} }
     ).join(', ')}`);
     
     // Ensure metrics interval is cleared on shutdown
@@ -302,6 +304,53 @@ async function registerTools(
   if (typeof server.tool !== "function") {
     throw new Error("MCP server does not support 'tool' method");
   }
+  
+  // Add the agent_query tool
+  server.tool("agent_query", async (params: unknown) => {
+    const chainId = generateChainId();
+    trackToolChain(chainId, "agent_query");
+    trackAgentRun();
+    
+    logger.info("Received params for agent_query", { params });
+    const normalizedParams = normalizeToolParams(params);
+    logger.debug("Normalized params for agent_query", normalizedParams);
+    
+    // Ensure query exists
+    if (!normalizedParams.query && typeof normalizedParams === 'object') {
+      normalizedParams.query = "repository information";
+      logger.warn("No query provided for agent_query, using default");
+    }
+    
+    const { query, sessionId, maxSteps = 5 } = normalizedParams;
+    
+    try {
+      // Run the agent loop
+      const response = await runAgentLoop(
+        query,
+        sessionId,
+        qdrantClient,
+        repoPath,
+        suggestionModelAvailable,
+        maxSteps
+      );
+      
+      return {
+        content: [{
+          type: "text",
+          text: response,
+        }],
+      };
+    } catch (error: any) {
+      logger.error("Error in agent_query", { error: error.message });
+      
+      return {
+        content: [{
+          type: "text",
+          text: `# Error in Agent Processing\n\nThere was an error processing your query: ${error.message}\n\nPlease try a more specific query or use one of the other tools directly.`,
+        }],
+      };
+    }
+  });
   
   // Search Code Tool with iterative refinement
   server.tool("search_code", async (params: unknown) => {

@@ -28,6 +28,19 @@ let lastResetTime = Date.now();
 const queryRefinements: { [queryId: string]: number } = {}; // Track number of refinements per query
 const toolChains: { [chainId: string]: string[] } = {}; // Track tool chains
 const feedbackScores: number[] = []; // Track feedback scores
+const agentMetrics: {
+  runs: number;
+  completions: number;
+  averageSteps: number;
+  totalSteps: number;
+  toolUsage: { [tool: string]: number };
+} = {
+  runs: 0,
+  completions: 0,
+  averageSteps: 0,
+  totalSteps: 0,
+  toolUsage: {}
+};
 
 // Increment a counter metric
 export function incrementCounter(name: string, value = 1): void {
@@ -78,6 +91,12 @@ export function getMetrics(): {
     min: number; 
     max: number;
   };
+  agent: {
+    runs: number;
+    completions: number;
+    averageSteps: number;
+    toolUsage: { [tool: string]: number };
+  };
 } {
   const uptime = Date.now() - lastResetTime;
   
@@ -90,13 +109,23 @@ export function getMetrics(): {
     max: feedbackScores.length ? Math.max(...feedbackScores) : 0,
   };
   
+  // Calculate agent average steps
+  agentMetrics.averageSteps = agentMetrics.runs > 0 ? 
+    agentMetrics.totalSteps / agentMetrics.runs : 0;
+  
   return {
     counters,
     timings,
     uptime,
     queryRefinements,
     toolChains,
-    feedbackStats
+    feedbackStats,
+    agent: {
+      runs: agentMetrics.runs,
+      completions: agentMetrics.completions,
+      averageSteps: agentMetrics.averageSteps,
+      toolUsage: agentMetrics.toolUsage
+    }
   };
 }
 
@@ -107,6 +136,14 @@ export function resetMetrics(): void {
   Object.keys(queryRefinements).forEach(key => delete queryRefinements[key]);
   Object.keys(toolChains).forEach(key => delete toolChains[key]);
   feedbackScores.length = 0;
+  
+  // Reset agent metrics
+  agentMetrics.runs = 0;
+  agentMetrics.completions = 0;
+  agentMetrics.totalSteps = 0;
+  agentMetrics.averageSteps = 0;
+  Object.keys(agentMetrics.toolUsage).forEach(key => delete agentMetrics.toolUsage[key]);
+  
   lastResetTime = Date.now();
   logger.info("Metrics reset");
 }
@@ -136,6 +173,28 @@ export function trackToolChain(chainId: string, toolName: string): void {
 // Track feedback score
 export function trackFeedbackScore(score: number): void {
   feedbackScores.push(score);
+}
+
+// Track agent run
+export function trackAgentRun(): void {
+  agentMetrics.runs++;
+  incrementCounter('agent_runs');
+}
+
+// Track agent completion
+export function trackAgentCompletion(steps: number): void {
+  agentMetrics.completions++;
+  agentMetrics.totalSteps += steps;
+  incrementCounter('agent_completions');
+}
+
+// Track agent tool usage
+export function trackAgentToolUsage(tool: string): void {
+  if (!agentMetrics.toolUsage[tool]) {
+    agentMetrics.toolUsage[tool] = 0;
+  }
+  agentMetrics.toolUsage[tool]++;
+  incrementCounter(`agent_tool_${tool}`);
 }
 
 // Schedule periodic metrics logging
