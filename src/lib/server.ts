@@ -44,6 +44,99 @@ export function normalizeToolParams(params: unknown): Record<string, any> {
   }
 }
 
+// Function to register the get_repository_context tool separately
+async function registerGetRepositoryContextTool(
+  server: McpServer,
+  qdrantClient: QdrantClient,
+  repoPath: string
+): Promise<void> {
+  if (typeof server.tool !== "function") {
+    throw new Error("MCP server does not support 'tool' method");
+  }
+  
+  // Get Repository Context Tool with simplified implementation for when suggestion model is unavailable
+  server.tool("get_repository_context", async (params: unknown) => {
+    const chainId = generateChainId();
+    trackToolChain(chainId, "get_repository_context");
+    
+    logger.info("Received params for get_repository_context (simplified)", { params });
+    const normalizedParams = normalizeToolParams(params);
+    const parsed = GetRepositoryContextSchema.parse(normalizedParams);
+    const query = parsed.query;
+    const sessionId = 'sessionId' in parsed ? parsed.sessionId : undefined;
+    
+    // Get or create session
+    const session = getOrCreateSession(sessionId, repoPath);
+    
+    // Log the extracted query to confirm it's working
+    logger.info("Extracted query for repository context", { query, sessionId: session.id });
+    
+    const isGitRepo = await validateGitRepository(repoPath);
+    const files = isGitRepo
+      ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
+      : [];
+    const diff = await getRepositoryDiff(repoPath);
+    
+    // Update context in session
+    updateContext(session.id, repoPath, files, diff);
+    
+    // Use iterative query refinement
+    const { results, refinedQuery } = await searchWithRefinement(
+      qdrantClient, 
+      query, 
+      files
+    );
+    
+    // Get recent queries from session to provide context
+    const recentQueries = getRecentQueries(session.id);
+    
+    const context = results.map(r => ({
+      filepath: (r.payload as QdrantSearchResult['payload']).filepath,
+      snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
+      last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+      relevance: r.score,
+    }));
+    
+    // Add query to session
+    addQuery(session.id, query, results);
+    
+    // Format the response as clean markdown without using the suggestion model
+    const formattedResponse = `# Repository Context Summary for: "${query}"
+${refinedQuery !== query ? `\n> Query refined to: "${refinedQuery}"` : ''}
+
+## Summary
+Repository context information for "${query}" is available in the files below.
+Note: Detailed summary unavailable (suggestion model not loaded).
+
+## Relevant Files
+${context.map(c => `
+### ${c.filepath}
+- Last modified: ${c.last_modified}
+- Relevance: ${c.relevance.toFixed(2)}
+
+\`\`\`
+${c.snippet}
+\`\`\`
+`).join('\n')}
+
+## Recent Changes
+\`\`\`
+${diff}
+\`\`\`
+
+Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
+    
+    return {
+      content: [{
+        type: "text",
+        text: formattedResponse,
+      }],
+    };
+  });
+  
+  logger.info("get_repository_context tool registered separately");
+}
+
 // Generate a chain ID for tracking tool chains
 function generateChainId(): string {
   return `chain_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -86,7 +179,8 @@ export async function startServer(repoPath: string): Promise<void> {
         },
         tools: {
           search_code: {},
-          ...(suggestionModelAvailable ? { generate_suggestion: {}, get_repository_context: {} } : {}),
+          get_repository_context: {},
+          ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
           get_changelog: {},
         },
       },
@@ -140,6 +234,12 @@ export async function startServer(repoPath: string): Promise<void> {
 
     // Register tools
     await registerTools(server, qdrantClient, repoPath, suggestionModelAvailable);
+  
+    // Ensure get_repository_context is always registered
+    if (!suggestionModelAvailable) {
+      logger.info("Registering get_repository_context tool separately");
+      registerGetRepositoryContextTool(server, qdrantClient, repoPath);
+    }
 
     // Start metrics logging
     const metricsInterval = startMetricsLogging(300000); // Log metrics every 5 minutes
