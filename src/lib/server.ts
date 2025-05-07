@@ -19,7 +19,8 @@ export function normalizeToolParams(params: unknown): Record<string, any> {
     // Handle stringified JSON input
     if (typeof params === "string") {
       try {
-        return JSON.parse(params);
+        const parsed = JSON.parse(params);
+        return parsed;
       } catch {
         // If it's not valid JSON, treat it as a query string
         return { query: params };
@@ -61,7 +62,30 @@ async function registerGetRepositoryContextTool(
     
     logger.info("Received params for get_repository_context (simplified)", { params });
     const normalizedParams = normalizeToolParams(params);
-    const parsed = GetRepositoryContextSchema.parse(normalizedParams);
+    logger.debug("Normalized params for get_repository_context (simplified)", normalizedParams);
+      
+    // Handle the case where params might be a JSON string with a query property
+    let parsedParams = normalizedParams;
+    if (typeof normalizedParams === 'string') {
+      try {
+        const parsed = JSON.parse(normalizedParams);
+        if (parsed && typeof parsed === 'object') {
+          parsedParams = parsed;
+        }
+      } catch (e) {
+        // If it's not valid JSON, keep using it as a string query
+        parsedParams = { query: normalizedParams };
+      }
+    }
+      
+    // Ensure query exists
+    if (!parsedParams.query && typeof parsedParams === 'object') {
+      // If query is missing but we have a JSON object, use the entire object as context
+      parsedParams.query = "repository context";
+      logger.warn("No query provided for get_repository_context, using default");
+    }
+      
+    const parsed = GetRepositoryContextSchema.parse(parsedParams);
     const query = parsed.query;
     const sessionId = 'sessionId' in parsed ? parsed.sessionId : undefined;
     
@@ -279,9 +303,17 @@ async function registerTools(
   server.tool("search_code", async (params: unknown) => {
     const chainId = generateChainId();
     trackToolChain(chainId, "search_code");
-    
+      
     logger.info("Received params for search_code", { params });
     const normalizedParams = normalizeToolParams(params);
+    logger.debug("Normalized params for search_code", normalizedParams);
+      
+    // Ensure query exists
+    if (!normalizedParams.query && typeof normalizedParams === 'object') {
+      normalizedParams.query = "code search";
+      logger.warn("No query provided for search_code, using default");
+    }
+      
     const { query, sessionId } = SearchCodeSchema.parse(normalizedParams);
     
     // Get or create session
@@ -383,9 +415,12 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   
   // Add get_session_history tool
   server.tool("get_session_history", async (params: unknown) => {
+    logger.info("Received params for get_session_history", { params });
     const normalizedParams = normalizeToolParams(params);
+    logger.debug("Normalized params for get_session_history", normalizedParams);
+      
     const { sessionId } = normalizedParams;
-    
+      
     if (!sessionId) {
       throw new Error("Session ID is required");
     }
@@ -439,6 +474,14 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       
       logger.info("Received params for generate_suggestion", { params });
       const normalizedParams = normalizeToolParams(params);
+      logger.debug("Normalized params for generate_suggestion", normalizedParams);
+      
+      // Ensure query exists
+      if (!normalizedParams.query && typeof normalizedParams === 'object') {
+        normalizedParams.query = "code suggestion";
+        logger.warn("No query provided for generate_suggestion, using default");
+      }
+      
       const { query, sessionId } = GenerateSuggestionSchema.parse(normalizedParams);
       
       // Get or create session
@@ -558,24 +601,27 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
     server.tool("provide_feedback", async (params: unknown) => {
       logger.info("Received params for provide_feedback", { params });
       const normalizedParams = normalizeToolParams(params);
-      const { sessionId, feedbackId, score, comments, originalQuery, suggestion } = FeedbackSchema.parse(normalizedParams);
+      logger.debug("Normalized params for provide_feedback", normalizedParams);
       
-      // Get session
-      const session = getOrCreateSession(sessionId);
+      try {
+        const { sessionId, feedbackId, score, comments, originalQuery, suggestion } = FeedbackSchema.parse(normalizedParams);
       
-      // Add feedback to session
-      addFeedback(session.id, score, comments);
+        // Get session
+        const session = getOrCreateSession(sessionId);
+        
+        // Add feedback to session
+        addFeedback(session.id, score, comments);
+        
+        // Process feedback to improve the suggestion
+        const improvedSuggestion = await processFeedback(
+          originalQuery,
+          suggestion,
+          comments,
+          score
+        );
       
-      // Process feedback to improve the suggestion
-      const improvedSuggestion = await processFeedback(
-        originalQuery,
-        suggestion,
-        comments,
-        score
-      );
-      
-      // Format the response
-      const formattedResponse = `# Improved Suggestion Based on Your Feedback
+        // Format the response
+        const formattedResponse = `# Improved Suggestion Based on Your Feedback
 
 Thank you for your feedback (score: ${score}/10).
 
@@ -589,13 +635,22 @@ ${comments}
 ${improvedSuggestion}
 
 Session ID: ${session.id}`;
-      
-      return {
-        content: [{
-          type: "text",
-          text: formattedResponse,
-        }],
-      };
+        
+        return {
+          content: [{
+            type: "text",
+            text: formattedResponse,
+          }],
+        };
+      } catch (error: any) {
+        logger.error("Error processing feedback", { error: error.message });
+        return {
+          content: [{
+            type: "text",
+            text: `# Error Processing Feedback\n\n${error.message}\n\nPlease ensure you provide all required parameters: sessionId, feedbackId, score, comments, originalQuery, and suggestion.`,
+          }],
+        };
+      }
     });
 
     // Get Repository Context Tool with state management
@@ -605,7 +660,30 @@ Session ID: ${session.id}`;
       
       logger.info("Received params for get_repository_context", { params });
       const normalizedParams = normalizeToolParams(params);
-      const parsed = GetRepositoryContextSchema.parse(normalizedParams);
+      logger.debug("Normalized params for get_repository_context", normalizedParams);
+      
+      // Handle the case where params might be a JSON string with a query property
+      let parsedParams = normalizedParams;
+      if (typeof normalizedParams === 'string') {
+        try {
+          const parsed = JSON.parse(normalizedParams);
+          if (parsed && typeof parsed === 'object') {
+            parsedParams = parsed;
+          }
+        } catch (e) {
+          // If it's not valid JSON, keep using it as a string query
+          parsedParams = { query: normalizedParams };
+        }
+      }
+      
+      // Ensure query exists
+      if (!parsedParams.query && typeof parsedParams === 'object') {
+        // If query is missing but we have a JSON object, use the entire object as context
+        parsedParams.query = "repository context";
+        logger.warn("No query provided for get_repository_context, using default");
+      }
+      
+      const parsed = GetRepositoryContextSchema.parse(parsedParams);
       const query = parsed.query;
       const sessionId = 'sessionId' in parsed ? parsed.sessionId : undefined;
       
@@ -701,11 +779,15 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       
       logger.info("Received params for analyze_code_problem", { params });
       const normalizedParams = normalizeToolParams(params);
-      const { query, sessionId } = normalizedParams;
+      logger.debug("Normalized params for analyze_code_problem", normalizedParams);
       
-      if (!query) {
-        throw new Error("Query parameter is required");
+      // Ensure query exists
+      if (!normalizedParams.query && typeof normalizedParams === 'object') {
+        normalizedParams.query = "code problem";
+        logger.warn("No query provided for analyze_code_problem, using default");
       }
+      
+      const { query = "code problem", sessionId } = normalizedParams;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
