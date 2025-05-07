@@ -4,36 +4,44 @@ import { resetMetrics, getMetrics } from '../lib/metrics';
 import { getOrCreateSession, addQuery, addSuggestion } from '../lib/state';
 
 // Mock dependencies
-vi.mock('../lib/metrics', () => ({
-  resetMetrics: vi.fn(),
-  getMetrics: vi.fn().mockReturnValue({ 
+vi.mock('../lib/metrics', () => {
+  const mockMetrics = { 
     counters: {}, 
     timings: {},
     uptime: 0,
     queryRefinements: {},
     toolChains: {},
     feedbackStats: { count: 0, average: 0, min: 0, max: 0 }
-  }),
-  incrementCounter: vi.fn(),
-  recordTiming: vi.fn(),
-}));
+  };
+  
+  return {
+    resetMetrics: vi.fn(),
+    getMetrics: vi.fn().mockReturnValue(mockMetrics),
+    incrementCounter: vi.fn(),
+    recordTiming: vi.fn(),
+  };
+});
 
-vi.mock('../lib/state', () => ({
-  getOrCreateSession: vi.fn().mockReturnValue({
+vi.mock('../lib/state', () => {
+  const mockSession = {
     id: 'test_session',
     queries: [],
     suggestions: [],
     context: { repoPath: '/test/repo' },
     createdAt: Date.now(),
     lastUpdated: Date.now(),
-  }),
-  addQuery: vi.fn(),
-  addSuggestion: vi.fn(),
-  addFeedback: vi.fn(),
-  updateContext: vi.fn(),
-  getRecentQueries: vi.fn().mockReturnValue([]),
-  getRelevantResults: vi.fn().mockReturnValue([]),
-}));
+  };
+  
+  return {
+    getOrCreateSession: vi.fn().mockReturnValue(mockSession),
+    addQuery: vi.fn(),
+    addSuggestion: vi.fn(),
+    addFeedback: vi.fn(),
+    updateContext: vi.fn(),
+    getRecentQueries: vi.fn().mockReturnValue([]),
+    getRelevantResults: vi.fn().mockReturnValue([]),
+  };
+});
 
 describe('Server Tools', () => {
   beforeEach(() => {
