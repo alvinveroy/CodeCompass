@@ -12,7 +12,11 @@
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest --passWithNoTests",
-    "test:coverage": "vitest run --coverage --passWithNoTests"
+    "test:coverage": "vitest run --coverage --passWithNoTests",
+    "version:patch": "ts-node src/scripts/version-bump.ts patch",
+    "version:minor": "ts-node src/scripts/version-bump.ts minor",
+    "version:major": "ts-node src/scripts/version-bump.ts major",
+    "version:commit": "ts-node src/scripts/version-bump.ts patch --commit"
   },
   "keywords": [
     "mcp-server",
@@ -46,6 +50,7 @@
     "@types/axios": "^0.14.0",
     "@types/node": "^20.5.9",
     "@types/uuid": "^10.0.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.2.2",
     "vitest": "^0.34.6"
   },
