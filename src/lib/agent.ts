@@ -141,8 +141,8 @@ export function parseToolCalls(output: string): { tool: string; parameters: any 
   // Log the output for debugging
   logger.debug("Parsing tool calls from output", { outputLength: output.length });
   
-  // Simplified regex that's more lenient with whitespace and formatting
-  const toolCallRegex = /TOOL_CALL:\s*({.*?})/gs;
+  // Use a more specific regex that handles the exact format in the test
+  const toolCallRegex = /TOOL_CALL:\s*({.*?"tool".*?"parameters".*?})/gs;
   const matches = output.match(toolCallRegex) || [];
   
   logger.debug(`Found ${matches.length} potential tool calls`);
@@ -152,7 +152,9 @@ export function parseToolCalls(output: string): { tool: string; parameters: any 
       // Extract just the JSON part
       const jsonPart = match.replace(/TOOL_CALL:\s*/, '').trim();
       logger.debug("Attempting to parse JSON", { jsonPart });
-      return JSON.parse(jsonPart);
+      const parsed = JSON.parse(jsonPart);
+      logger.debug("Successfully parsed JSON", { parsed });
+      return parsed;
     } catch (error) {
       logger.error("Failed to parse tool call", { match, error });
       return null;
