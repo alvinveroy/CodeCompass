@@ -1,10 +1,22 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { initMcpSafeLogging } from "./mcp-logger";
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH } from "./config";
+// Redirect console.log and other logging to avoid interfering with MCP protocol
+const originalConsoleLog = console.log;
+const originalConsoleInfo = console.info;
+const originalConsoleWarn = console.warn;
+const originalConsoleError = console.error;
+
+// Replace console methods to prevent them from writing to stdout
+console.log = (...args) => logger.debug(...args);
+console.info = (...args) => logger.info(...args);
+console.warn = (...args) => logger.warn(...args);
+console.error = (...args) => logger.error(...args);
 import { QdrantSearchResult } from "./types";
 import { z } from "zod";
 import { checkOllama, checkOllamaModel, generateEmbedding, generateSuggestion, summarizeSnippet, processFeedback } from "./ollama";
@@ -176,6 +188,9 @@ function generateChainId(): string {
 
 // Start Server
 export async function startServer(repoPath: string): Promise<void> {
+  // Initialize MCP-safe logging to prevent console output from interfering with protocol
+  initMcpSafeLogging();
+  
   logger.info("Starting CodeCompass MCP server...");
 
   try {
@@ -277,16 +292,18 @@ export async function startServer(repoPath: string): Promise<void> {
     // Start metrics logging
     const metricsInterval = startMetricsLogging(300000); // Log metrics every 5 minutes
     
-    // Connect to transport after registering all capabilities
+    // Configure transport to use proper JSON formatting
     const transport = new StdioServerTransport();
-    await server.connect(transport);
-
+    
+    // Log startup info before connecting to avoid stdout pollution
     logger.info(`CodeCompass MCP server running for repository: ${repoPath}`);
-    // Log available tools without directly accessing server.capabilities
     logger.info(`CodeCompass server started with tools: ${Object.keys(suggestionModelAvailable ? 
       { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {} } : 
       { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, agent_query: {} }
     ).join(', ')}`);
+    
+    // Connect to transport after registering all capabilities
+    await server.connect(transport);
     
     // Ensure metrics interval is cleared on shutdown
     process.on('SIGINT', () => {
