@@ -2,23 +2,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { normalizeToolParams } from '../lib/server';
 
 // Mock dependencies
-vi.mock('../lib/metrics', () => {
-  const mockMetricsObj = {
-    counters: {},
-    timings: {},
-    uptime: 0,
-    queryRefinements: {},
-    toolChains: {},
-    feedbackStats: { count: 0, average: 0, min: 0, max: 0 }
-  };
-  
-  return {
-    resetMetrics: vi.fn(),
-    getMetrics: vi.fn().mockReturnValue(mockMetricsObj),
-    incrementCounter: vi.fn(),
-    recordTiming: vi.fn()
-  };
-});
+// Mock metrics module
+const mockMetricsObj = {
+  counters: {},
+  timings: {},
+  uptime: 0,
+  queryRefinements: {},
+  toolChains: {},
+  feedbackStats: { count: 0, average: 0, min: 0, max: 0 }
+};
+
+vi.mock('../lib/metrics', () => ({
+  resetMetrics: vi.fn(),
+  getMetrics: vi.fn(() => mockMetricsObj),
+  incrementCounter: vi.fn(),
+  recordTiming: vi.fn()
+}));
 
 vi.mock('../lib/state', () => ({
   getOrCreateSession: vi.fn(() => ({
@@ -122,12 +121,22 @@ describe('Server Tools', () => {
     });
 
     it('should get metrics', () => {
+      // Create a manual mock for this specific test
+      vi.mocked(getMetrics).mockReturnValueOnce({
+        counters: { test: 1 },
+        timings: { test: { count: 1, totalMs: 100, avgMs: 100, minMs: 100, maxMs: 100 } },
+        uptime: 1000,
+        queryRefinements: {},
+        toolChains: {},
+        feedbackStats: { count: 0, average: 0, min: 0, max: 0 }
+      });
+      
       const metrics = getMetrics();
       expect(getMetrics).toHaveBeenCalled();
-      
-      // Check if metrics is defined before making assertions
-      expect(metrics).toBeDefined();
-      expect(metrics).not.toBeNull();
+      expect(metrics).toEqual(expect.objectContaining({
+        counters: expect.any(Object),
+        timings: expect.any(Object)
+      }));
     });
   });
 });
