@@ -5,7 +5,8 @@ import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH } from "./config";
-import { SearchCodeSchema, GenerateSuggestionSchema, GetRepositoryContextSchema, QdrantSearchResult, FeedbackSchema, AgentQuerySchema } from "./types";
+import { QdrantSearchResult } from "./types";
+import { z } from "zod";
 import { checkOllama, checkOllamaModel, generateEmbedding, generateSuggestion, summarizeSnippet, processFeedback } from "./ollama";
 import { initializeQdrant, searchWithRefinement } from "./qdrant";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
@@ -57,38 +58,44 @@ async function registerGetRepositoryContextTool(
   }
   
   // Get Repository Context Tool with simplified implementation for when suggestion model is unavailable
-  server.tool("get_repository_context", async (params: unknown) => {
-    const chainId = generateChainId();
-    trackToolChain(chainId, "get_repository_context");
-    
-    logger.info("Received params for get_repository_context (simplified)", { params });
-    const normalizedParams = normalizeToolParams(params);
-    logger.debug("Normalized params for get_repository_context (simplified)", normalizedParams);
+  server.tool(
+    "get_repository_context",
+    "Get high-level context about your repository related to a specific query. This provides an overview of relevant project structure, patterns, and conventions.",
+    {
+      query: z.string().describe("The query to get repository context for"),
+      sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
+    },
+    async (params: unknown) => {
+      const chainId = generateChainId();
+      trackToolChain(chainId, "get_repository_context");
       
-    // Handle the case where params might be a JSON string with a query property
-    let parsedParams = normalizedParams;
-    if (typeof normalizedParams === 'string') {
-      try {
-        const parsed = JSON.parse(normalizedParams);
-        if (parsed && typeof parsed === 'object') {
-          parsedParams = parsed;
+      logger.info("Received params for get_repository_context (simplified)", { params });
+      const normalizedParams = normalizeToolParams(params);
+      logger.debug("Normalized params for get_repository_context (simplified)", normalizedParams);
+        
+      // Handle the case where params might be a JSON string with a query property
+      let parsedParams = normalizedParams;
+      if (typeof normalizedParams === 'string') {
+        try {
+          const parsed = JSON.parse(normalizedParams);
+          if (parsed && typeof parsed === 'object') {
+            parsedParams = parsed;
+          }
+        } catch (e) {
+          // If it's not valid JSON, keep using it as a string query
+          parsedParams = { query: normalizedParams };
         }
-      } catch (e) {
-        // If it's not valid JSON, keep using it as a string query
-        parsedParams = { query: normalizedParams };
       }
-    }
-      
-    // Ensure query exists
-    if (!parsedParams.query && typeof parsedParams === 'object') {
-      // If query is missing but we have a JSON object, use the entire object as context
-      parsedParams.query = "repository context";
-      logger.warn("No query provided for get_repository_context, using default");
-    }
-      
-    const parsed = GetRepositoryContextSchema.parse(parsedParams);
-    const query = parsed.query;
-    const sessionId = 'sessionId' in parsed ? parsed.sessionId : undefined;
+        
+      // Ensure query exists
+      if (!parsedParams.query && typeof parsedParams === 'object') {
+        // If query is missing but we have a JSON object, use the entire object as context
+        parsedParams.query = "repository context";
+        logger.warn("No query provided for get_repository_context, using default");
+      }
+        
+      const query = parsedParams.query;
+      const sessionId = 'sessionId' in parsedParams ? parsedParams.sessionId : undefined;
     
     // Get or create session
     const session = getOrCreateSession(sessionId, repoPath);
@@ -306,22 +313,30 @@ async function registerTools(
   }
   
   // Add the agent_query tool
-  server.tool("agent_query", async (params: unknown) => {
-    const chainId = generateChainId();
-    trackToolChain(chainId, "agent_query");
-    trackAgentRun();
-    
-    logger.info("Received params for agent_query", { params });
-    const normalizedParams = normalizeToolParams(params);
-    logger.debug("Normalized params for agent_query", normalizedParams);
-    
-    // Ensure query exists
-    if (!normalizedParams.query && typeof normalizedParams === 'object') {
-      normalizedParams.query = "repository information";
-      logger.warn("No query provided for agent_query, using default");
-    }
-    
-    const { query, sessionId, maxSteps = 5 } = normalizedParams;
+  server.tool(
+    "agent_query",
+    "Run an AI agent that can perform multiple steps to answer complex questions about your codebase. The agent can use other tools internally to gather information and provide a comprehensive response.",
+    {
+      query: z.string().describe("The question or task for the agent to process"),
+      sessionId: z.string().optional().describe("Optional session ID to maintain context between requests"),
+      maxSteps: z.number().default(5).describe("Maximum number of reasoning steps the agent should take (default: 5)")
+    },
+    async (params: unknown) => {
+      const chainId = generateChainId();
+      trackToolChain(chainId, "agent_query");
+      trackAgentRun();
+      
+      logger.info("Received params for agent_query", { params });
+      const normalizedParams = normalizeToolParams(params);
+      logger.debug("Normalized params for agent_query", normalizedParams);
+      
+      // Ensure query exists
+      if (!normalizedParams.query && typeof normalizedParams === 'object') {
+        normalizedParams.query = "repository information";
+        logger.warn("No query provided for agent_query, using default");
+      }
+      
+      const { query, sessionId, maxSteps = 5 } = normalizedParams;
     
     try {
       // Run the agent loop
@@ -353,21 +368,28 @@ async function registerTools(
   });
   
   // Search Code Tool with iterative refinement
-  server.tool("search_code", async (params: unknown) => {
-    const chainId = generateChainId();
-    trackToolChain(chainId, "search_code");
-      
-    logger.info("Received params for search_code", { params });
-    const normalizedParams = normalizeToolParams(params);
-    logger.debug("Normalized params for search_code", normalizedParams);
-      
-    // Ensure query exists
-    if (!normalizedParams.query && typeof normalizedParams === 'object') {
-      normalizedParams.query = "code search";
-      logger.warn("No query provided for search_code, using default");
-    }
-      
-    const { query, sessionId } = SearchCodeSchema.parse(normalizedParams);
+  server.tool(
+    "search_code",
+    "Search for code in your repository based on a query. This function uses semantic search to find relevant code snippets that match your query.",
+    {
+      query: z.string().describe("The search query to find relevant code in the repository"),
+      sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
+    },
+    async (params: unknown) => {
+      const chainId = generateChainId();
+      trackToolChain(chainId, "search_code");
+        
+      logger.info("Received params for search_code", { params });
+      const normalizedParams = normalizeToolParams(params);
+      logger.debug("Normalized params for search_code", normalizedParams);
+        
+      // Ensure query exists
+      if (!normalizedParams.query && typeof normalizedParams === 'object') {
+        normalizedParams.query = "code search";
+        logger.warn("No query provided for search_code, using default");
+      }
+        
+      const { query, sessionId } = normalizedParams;
     
     // Get or create session
     const session = getOrCreateSession(sessionId, repoPath);
@@ -433,50 +455,66 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   });
 
   // Add get_changelog tool
-  server.tool("get_changelog", async () => {
-    try {
-      const changelogPath = path.join(repoPath, 'CHANGELOG.md');
-      const changelog = await fs.readFile(changelogPath, 'utf8');
-      
-      return {
-        content: [{
-          type: "text",
-          text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
-        }],
-      };
-    } catch (error) {
-      logger.error("Failed to read changelog", { error });
-      return {
-        content: [{
-          type: "text",
-          text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
-        }],
-      };
+  server.tool(
+    "get_changelog",
+    "Retrieve the changelog for the repository. This function returns the contents of the CHANGELOG.md file if it exists.",
+    {},
+    async () => {
+      try {
+        const changelogPath = path.join(repoPath, 'CHANGELOG.md');
+        const changelog = await fs.readFile(changelogPath, 'utf8');
+        
+        return {
+          content: [{
+            type: "text",
+            text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
+          }],
+        };
+      } catch (error) {
+        logger.error("Failed to read changelog", { error });
+        return {
+          content: [{
+            type: "text",
+            text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
+          }],
+        };
+      }
     }
-  });
+  );
   
   // Add reset_metrics tool
-  server.tool("reset_metrics", async () => {
-    resetMetrics();
-    return {
-      content: [{
-        type: "text",
-        text: "# Metrics Reset\n\nAll metrics have been reset successfully.",
-      }],
-    };
-  });
+  server.tool(
+    "reset_metrics",
+    "Reset all the tracking metrics for the current session. This is useful for benchmarking or starting fresh measurements.",
+    {},
+    async () => {
+      resetMetrics();
+      return {
+        content: [{
+          type: "text",
+          text: "# Metrics Reset\n\nAll metrics have been reset successfully.",
+        }],
+      };
+    }
+  );
   
   // Add get_session_history tool
-  server.tool("get_session_history", async (params: unknown) => {
-    logger.info("Received params for get_session_history", { params });
-    const normalizedParams = normalizeToolParams(params);
-    logger.debug("Normalized params for get_session_history", normalizedParams);
-      
-    const { sessionId } = normalizedParams;
-      
-    if (!sessionId) {
-      throw new Error("Session ID is required");
-    }
+  server.tool(
+    "get_session_history",
+    "Retrieve the history of queries and suggestions from a specific session. This helps track your interaction with CodeCompass.",
+    {
+      sessionId: z.string().describe("The session ID to retrieve history for")
+    },
+    async (params: unknown) => {
+      logger.info("Received params for get_session_history", { params });
+      const normalizedParams = normalizeToolParams(params);
+      logger.debug("Normalized params for get_session_history", normalizedParams);
+        
+      const { sessionId } = normalizedParams;
+        
+      if (!sessionId) {
+        throw new Error("Session ID is required");
+      }
     
     try {
       const session = getOrCreateSession(sessionId);
@@ -521,21 +559,28 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
     
   if (suggestionModelAvailable) {
     // Generate Suggestion Tool with multi-step reasoning
-    server.tool("generate_suggestion", async (params: unknown) => {
-      const chainId = generateChainId();
-      trackToolChain(chainId, "generate_suggestion");
-      
-      logger.info("Received params for generate_suggestion", { params });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for generate_suggestion", normalizedParams);
-      
-      // Ensure query exists
-      if (!normalizedParams.query && typeof normalizedParams === 'object') {
-        normalizedParams.query = "code suggestion";
-        logger.warn("No query provided for generate_suggestion, using default");
-      }
-      
-      const { query, sessionId } = GenerateSuggestionSchema.parse(normalizedParams);
+    server.tool(
+      "generate_suggestion",
+      "Generate code suggestions based on a query or prompt. This function uses AI to provide implementation ideas and code examples.",
+      {
+        query: z.string().describe("The query or prompt for generating code suggestions"),
+        sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
+      },
+      async (params: unknown) => {
+        const chainId = generateChainId();
+        trackToolChain(chainId, "generate_suggestion");
+        
+        logger.info("Received params for generate_suggestion", { params });
+        const normalizedParams = normalizeToolParams(params);
+        logger.debug("Normalized params for generate_suggestion", normalizedParams);
+        
+        // Ensure query exists
+        if (!normalizedParams.query && typeof normalizedParams === 'object') {
+          normalizedParams.query = "code suggestion";
+          logger.warn("No query provided for generate_suggestion, using default");
+        }
+        
+        const { query, sessionId } = normalizedParams;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -651,13 +696,24 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
     });
     
     // Add a new feedback tool
-    server.tool("provide_feedback", async (params: unknown) => {
-      logger.info("Received params for provide_feedback", { params });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for provide_feedback", normalizedParams);
-      
-      try {
-        const { sessionId, feedbackId, score, comments, originalQuery, suggestion } = FeedbackSchema.parse(normalizedParams);
+    server.tool(
+      "provide_feedback",
+      "Provide feedback on a suggestion to improve future recommendations.",
+      {
+        sessionId: z.string().describe("The session ID that received the suggestion"),
+        feedbackId: z.string().optional().describe("The ID of the suggestion to provide feedback for"),
+        score: z.number().min(1).max(10).describe("Rating score from 1-10"),
+        comments: z.string().describe("Detailed feedback comments"),
+        originalQuery: z.string().describe("The original query that generated the suggestion"),
+        suggestion: z.string().describe("The suggestion that was provided")
+      },
+      async (params: unknown) => {
+        logger.info("Received params for provide_feedback", { params });
+        const normalizedParams = normalizeToolParams(params);
+        logger.debug("Normalized params for provide_feedback", normalizedParams);
+        
+        try {
+          const { sessionId, feedbackId, score, comments, originalQuery, suggestion } = normalizedParams;
       
         // Get session
         const session = getOrCreateSession(sessionId);
@@ -707,38 +763,44 @@ Session ID: ${session.id}`;
     });
 
     // Get Repository Context Tool with state management
-    server.tool("get_repository_context", async (params: unknown) => {
-      const chainId = generateChainId();
-      trackToolChain(chainId, "get_repository_context");
-      
-      logger.info("Received params for get_repository_context", { params });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for get_repository_context", normalizedParams);
-      
-      // Handle the case where params might be a JSON string with a query property
-      let parsedParams = normalizedParams;
-      if (typeof normalizedParams === 'string') {
-        try {
-          const parsed = JSON.parse(normalizedParams);
-          if (parsed && typeof parsed === 'object') {
-            parsedParams = parsed;
+    server.tool(
+      "get_repository_context",
+      "Get high-level context about your repository related to a specific query. This provides an overview of relevant project structure, patterns, and conventions.",
+      {
+        query: z.string().describe("The query to get repository context for"),
+        sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
+      },
+      async (params: unknown) => {
+        const chainId = generateChainId();
+        trackToolChain(chainId, "get_repository_context");
+        
+        logger.info("Received params for get_repository_context", { params });
+        const normalizedParams = normalizeToolParams(params);
+        logger.debug("Normalized params for get_repository_context", normalizedParams);
+        
+        // Handle the case where params might be a JSON string with a query property
+        let parsedParams = normalizedParams;
+        if (typeof normalizedParams === 'string') {
+          try {
+            const parsed = JSON.parse(normalizedParams);
+            if (parsed && typeof parsed === 'object') {
+              parsedParams = parsed;
+            }
+          } catch (e) {
+            // If it's not valid JSON, keep using it as a string query
+            parsedParams = { query: normalizedParams };
           }
-        } catch (e) {
-          // If it's not valid JSON, keep using it as a string query
-          parsedParams = { query: normalizedParams };
         }
-      }
-      
-      // Ensure query exists
-      if (!parsedParams.query && typeof parsedParams === 'object') {
-        // If query is missing but we have a JSON object, use the entire object as context
-        parsedParams.query = "repository context";
-        logger.warn("No query provided for get_repository_context, using default");
-      }
-      
-      const parsed = GetRepositoryContextSchema.parse(parsedParams);
-      const query = parsed.query;
-      const sessionId = 'sessionId' in parsed ? parsed.sessionId : undefined;
+        
+        // Ensure query exists
+        if (!parsedParams.query && typeof parsedParams === 'object') {
+          // If query is missing but we have a JSON object, use the entire object as context
+          parsedParams.query = "repository context";
+          logger.warn("No query provided for get_repository_context, using default");
+        }
+        
+        const query = parsedParams.query;
+        const sessionId = 'sessionId' in parsedParams ? parsedParams.sessionId : undefined;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -826,21 +888,28 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     });
     
     // Add a new tool for multi-step reasoning
-    server.tool("analyze_code_problem", async (params: unknown) => {
-      const chainId = generateChainId();
-      trackToolChain(chainId, "analyze_code_problem");
-      
-      logger.info("Received params for analyze_code_problem", { params });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for analyze_code_problem", normalizedParams);
-      
-      // Ensure query exists
-      if (!normalizedParams.query && typeof normalizedParams === 'object') {
-        normalizedParams.query = "code problem";
-        logger.warn("No query provided for analyze_code_problem, using default");
-      }
-      
-      const { query = "code problem", sessionId } = normalizedParams;
+    server.tool(
+      "analyze_code_problem",
+      "Analyze a code problem through multiple steps: problem analysis, root cause identification, and implementation planning.",
+      {
+        query: z.string().describe("Description of the code problem to analyze"),
+        sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
+      },
+      async (params: unknown) => {
+        const chainId = generateChainId();
+        trackToolChain(chainId, "analyze_code_problem");
+        
+        logger.info("Received params for analyze_code_problem", { params });
+        const normalizedParams = normalizeToolParams(params);
+        logger.debug("Normalized params for analyze_code_problem", normalizedParams);
+        
+        // Ensure query exists
+        if (!normalizedParams.query && typeof normalizedParams === 'object') {
+          normalizedParams.query = "code problem";
+          logger.warn("No query provided for analyze_code_problem, using default");
+        }
+        
+        const { query = "code problem", sessionId } = normalizedParams;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
