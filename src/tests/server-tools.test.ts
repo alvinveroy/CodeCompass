@@ -13,7 +13,7 @@ const mockMetricsObj = {
   agent: {
     runs: 0,
     completions: 0,
-    totalSteps: 0,
+    averageSteps: 0,
     toolUsage: {}
   }
 };
@@ -138,7 +138,7 @@ describe('Server Tools', () => {
         agent: {
           runs: 0,
           completions: 0,
-          totalSteps: 0,
+          averageSteps: 0,
           toolUsage: {}
         }
       });
