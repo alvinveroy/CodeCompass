@@ -9,7 +9,13 @@ const mockMetricsObj = {
   uptime: 0,
   queryRefinements: {},
   toolChains: {},
-  feedbackStats: { count: 0, average: 0, min: 0, max: 0 }
+  feedbackStats: { count: 0, average: 0, min: 0, max: 0 },
+  agent: {
+    runs: 0,
+    completions: 0,
+    totalSteps: 0,
+    toolUsage: {}
+  }
 };
 
 vi.mock('../lib/metrics', () => ({
@@ -128,7 +134,13 @@ describe('Server Tools', () => {
         uptime: 1000,
         queryRefinements: {},
         toolChains: {},
-        feedbackStats: { count: 0, average: 0, min: 0, max: 0 }
+        feedbackStats: { count: 0, average: 0, min: 0, max: 0 },
+        agent: {
+          runs: 0,
+          completions: 0,
+          totalSteps: 0,
+          toolUsage: {}
+        }
       });
       
       const metrics = getMetrics();
