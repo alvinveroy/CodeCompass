@@ -249,6 +249,7 @@ export async function startServer(repoPath: string): Promise<void> {
     await server.connect(transport);
 
     logger.info(`CodeCompass MCP server running for repository: ${repoPath}`);
+    logger.info(`Tools available: ${Object.keys(server.capabilities.tools).join(', ')}`);
     
     // Ensure metrics interval is cleared on shutdown
     process.on('SIGINT', () => {
