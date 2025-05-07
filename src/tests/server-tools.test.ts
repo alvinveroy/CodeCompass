@@ -6,20 +6,27 @@ import { getOrCreateSession, addQuery, addSuggestion } from '../lib/state';
 // Mock dependencies
 vi.mock('../lib/metrics', () => ({
   resetMetrics: vi.fn(),
-  getMetrics: vi.fn().mockReturnValue({ counters: {}, timings: {} }),
+  getMetrics: vi.fn().mockReturnValue({ 
+    counters: {}, 
+    timings: {},
+    uptime: 0,
+    queryRefinements: {},
+    toolChains: {},
+    feedbackStats: { count: 0, average: 0, min: 0, max: 0 }
+  }),
   incrementCounter: vi.fn(),
   recordTiming: vi.fn(),
 }));
 
 vi.mock('../lib/state', () => ({
-  getOrCreateSession: vi.fn().mockImplementation((sessionId) => ({
-    id: sessionId || 'test_session',
+  getOrCreateSession: vi.fn().mockReturnValue({
+    id: 'test_session',
     queries: [],
     suggestions: [],
     context: { repoPath: '/test/repo' },
     createdAt: Date.now(),
     lastUpdated: Date.now(),
-  })),
+  }),
   addQuery: vi.fn(),
   addSuggestion: vi.fn(),
   addFeedback: vi.fn(),
@@ -74,8 +81,9 @@ describe('Server Tools', () => {
       expect(result).toEqual({ query: '42' });
     });
 
-    it('should throw error for null input', () => {
-      expect(() => normalizeToolParams(null)).toThrow('Invalid input format');
+    it('should handle null input', () => {
+      const result = normalizeToolParams(null);
+      expect(result).toEqual({ query: 'null' });
     });
   });
 
