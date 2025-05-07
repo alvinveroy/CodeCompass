@@ -10,6 +10,7 @@ import { checkOllama, checkOllamaModel, generateEmbedding, generateSuggestion, s
 import { initializeQdrant } from "./qdrant";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
 import { getMetrics, resetMetrics, startMetricsLogging } from "./metrics";
+import { VERSION } from "./version";
 
 // Normalize tool parameters to handle various input formats
 export function normalizeToolParams(params: unknown): Record<string, any> {
@@ -67,16 +68,20 @@ export async function startServer(repoPath: string): Promise<void> {
 
     const server = new McpServer({
       name: "CodeCompass",
-      version: "1.0.0",
+      version: VERSION,
       vendor: "CodeCompass",
       capabilities: {
         resources: {
           "repo://structure": {},
           "repo://files/*": {},
+          "repo://health": {},
+          "repo://metrics": {},
+          "repo://version": {},
         },
         tools: {
           search_code: {},
           ...(suggestionModelAvailable ? { generate_suggestion: {}, get_repository_context: {} } : {}),
+          get_changelog: {},
         },
       },
     });
@@ -92,6 +97,7 @@ export async function startServer(repoPath: string): Promise<void> {
         ollama: await checkOllama().then(() => "healthy").catch(() => "unhealthy"),
         qdrant: await qdrantClient.getCollections().then(() => "healthy").catch(() => "unhealthy"),
         repository: await validateGitRepository(repoPath) ? "healthy" : "unhealthy",
+        version: VERSION,
         timestamp: new Date().toISOString()
       };
       return { contents: [{ uri: "repo://health", text: JSON.stringify(status, null, 2) }] };
@@ -101,6 +107,11 @@ export async function startServer(repoPath: string): Promise<void> {
     server.resource("repo://metrics", "repo://metrics", {}, async () => {
       const metrics = getMetrics();
       return { contents: [{ uri: "repo://metrics", text: JSON.stringify(metrics, null, 2) }] };
+    });
+    
+    // Add version resource
+    server.resource("repo://version", "repo://version", {}, async () => {
+      return { contents: [{ uri: "repo://version", text: VERSION }] };
     });
     server.resource("repo://structure", "repo://structure", {}, async () => {
       const isGitRepo = await validateGitRepository(repoPath);
@@ -210,29 +221,27 @@ ${s.summary}
     };
   });
 
-  // Add reset_metrics tool
-  server.tool("reset_metrics", async () => {
-    resetMetrics();
-    const metrics = getMetrics();
-    
-    // Format the response as clean markdown
-    const formattedResponse = `# Metrics Reset
-
-Metrics have been reset successfully.
-
-## Current Metrics
-\`\`\`
-Uptime: ${metrics.uptime}ms
-Counters: ${Object.keys(metrics.counters).length} (all reset to 0)
-Timings: ${Object.keys(metrics.timings).length} (all reset)
-\`\`\``;
-    
-    return {
-      content: [{
-        type: "text",
-        text: formattedResponse,
-      }],
-    };
+  // Add get_changelog tool
+  server.tool("get_changelog", async () => {
+    try {
+      const changelogPath = path.join(projectRoot, 'CHANGELOG.md');
+      const changelog = await fs.readFile(changelogPath, 'utf8');
+      
+      return {
+        content: [{
+          type: "text",
+          text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
+        }],
+      };
+    } catch (error) {
+      logger.error("Failed to read changelog", { error });
+      return {
+        content: [{
+          type: "text",
+          text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
+        }],
+      };
+    }
   });
     
   if (suggestionModelAvailable) {

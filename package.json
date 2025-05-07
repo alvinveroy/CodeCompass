@@ -16,7 +16,10 @@
     "version:patch": "ts-node src/scripts/version-bump.ts patch",
     "version:minor": "ts-node src/scripts/version-bump.ts minor",
     "version:major": "ts-node src/scripts/version-bump.ts major",
-    "version:commit": "ts-node src/scripts/version-bump.ts patch --commit"
+    "version:commit": "ts-node src/scripts/version-bump.ts patch --commit",
+    "version:release": "ts-node src/scripts/version-bump.ts patch --commit --push --changelog",
+    "version:minor-release": "ts-node src/scripts/version-bump.ts minor --commit --push --changelog",
+    "version:major-release": "ts-node src/scripts/version-bump.ts major --commit --push --changelog"
   },
   "keywords": [
     "mcp-server",
