@@ -19,8 +19,8 @@ export const SUGGESTION_PROVIDER = process.env.SUGGESTION_PROVIDER || process.en
 export const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "ollama";
 
 // Declare global variables for TypeScript
-// This interface is for type checking only
-interface GlobalVars {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface _GlobalVars {
   CURRENT_LLM_PROVIDER: string;
   CURRENT_SUGGESTION_PROVIDER: string;
   CURRENT_EMBEDDING_PROVIDER: string;
@@ -38,13 +38,15 @@ declare global {
   var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
-// Declare NodeJS namespace separately to avoid syntax errors
-declare namespace NodeJS {
-  interface Global {
-    CURRENT_LLM_PROVIDER: string;
-    CURRENT_SUGGESTION_PROVIDER: string;
-    CURRENT_EMBEDDING_PROVIDER: string;
-    CURRENT_SUGGESTION_MODEL?: string;
+// Add NodeJS Global interface augmentation
+declare global {
+  namespace NodeJS {
+    interface Global {
+      CURRENT_LLM_PROVIDER: string;
+      CURRENT_SUGGESTION_PROVIDER: string;
+      CURRENT_EMBEDDING_PROVIDER: string;
+      CURRENT_SUGGESTION_MODEL?: string;
+    }
   }
 }
 
