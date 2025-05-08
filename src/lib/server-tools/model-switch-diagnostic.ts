@@ -29,11 +29,22 @@ export async function modelSwitchDiagnostic(): Promise<Record<string, any>> {
   const testDeepseek = "deepseek-coder";
   const testOllama = "llama3.1:8b";
   
-  // Test setting deepseek
-  global.CURRENT_SUGGESTION_MODEL = testDeepseek;
-  process.env.SUGGESTION_MODEL = testDeepseek;
-  global.CURRENT_SUGGESTION_PROVIDER = "deepseek";
-  process.env.SUGGESTION_PROVIDER = "deepseek";
+  // Test setting deepseek - use a more robust approach
+  try {
+    // Clear existing values first
+    delete process.env.SUGGESTION_MODEL;
+    delete process.env.SUGGESTION_PROVIDER;
+    global.CURRENT_SUGGESTION_MODEL = undefined;
+    global.CURRENT_SUGGESTION_PROVIDER = undefined;
+    
+    // Now set the new values
+    global.CURRENT_SUGGESTION_MODEL = testDeepseek;
+    process.env.SUGGESTION_MODEL = testDeepseek;
+    global.CURRENT_SUGGESTION_PROVIDER = "deepseek";
+    process.env.SUGGESTION_PROVIDER = "deepseek";
+  } catch (error) {
+    logger.error(`Error setting DeepSeek model: ${error}`);
+  }
   
   const deepseekTest = {
     expected: {
@@ -47,11 +58,22 @@ export async function modelSwitchDiagnostic(): Promise<Record<string, any>> {
     success: global.CURRENT_SUGGESTION_MODEL === testDeepseek && global.CURRENT_SUGGESTION_PROVIDER === "deepseek"
   };
   
-  // Test setting ollama
-  global.CURRENT_SUGGESTION_MODEL = testOllama;
-  process.env.SUGGESTION_MODEL = testOllama;
-  global.CURRENT_SUGGESTION_PROVIDER = "ollama";
-  process.env.SUGGESTION_PROVIDER = "ollama";
+  // Test setting ollama - use a more robust approach
+  try {
+    // Clear existing values first
+    delete process.env.SUGGESTION_MODEL;
+    delete process.env.SUGGESTION_PROVIDER;
+    global.CURRENT_SUGGESTION_MODEL = undefined;
+    global.CURRENT_SUGGESTION_PROVIDER = undefined;
+    
+    // Now set the new values
+    global.CURRENT_SUGGESTION_MODEL = testOllama;
+    process.env.SUGGESTION_MODEL = testOllama;
+    global.CURRENT_SUGGESTION_PROVIDER = "ollama";
+    process.env.SUGGESTION_PROVIDER = "ollama";
+  } catch (error) {
+    logger.error(`Error setting Ollama model: ${error}`);
+  }
   
   const ollamaTest = {
     expected: {

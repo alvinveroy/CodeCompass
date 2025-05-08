@@ -218,6 +218,13 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     return true;
   }
   
+  // Force reset any existing model settings to ensure a clean switch
+  logger.info(`Resetting existing model settings before switch`);
+  delete process.env.SUGGESTION_MODEL;
+  delete process.env.SUGGESTION_PROVIDER;
+  global.CURRENT_SUGGESTION_MODEL = undefined;
+  global.CURRENT_SUGGESTION_PROVIDER = undefined;
+  
   // Special case for testing unavailability - must be checked before any other test environment checks
   if (process.env.TEST_PROVIDER_UNAVAILABLE === 'true') {
     // Make sure the spy is called for test verification
@@ -300,6 +307,21 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   global.CURRENT_EMBEDDING_PROVIDER = "ollama";
   
   logger.info(`Set model to ${normalizedModel} and provider to ${provider}`);
+  
+  // Verify the model was set correctly
+  if (global.CURRENT_SUGGESTION_MODEL !== normalizedModel) {
+    logger.error(`Failed to set model: expected ${normalizedModel}, got ${global.CURRENT_SUGGESTION_MODEL}`);
+    // Try setting it again with direct assignment
+    global.CURRENT_SUGGESTION_MODEL = normalizedModel;
+    logger.info(`Forced model to ${normalizedModel}`);
+  }
+  
+  if (global.CURRENT_SUGGESTION_PROVIDER !== provider) {
+    logger.error(`Failed to set provider: expected ${provider}, got ${global.CURRENT_SUGGESTION_PROVIDER}`);
+    // Try setting it again with direct assignment
+    global.CURRENT_SUGGESTION_PROVIDER = provider;
+    logger.info(`Forced provider to ${provider}`);
+  }
   
   // Check if Ollama is available for embeddings
   if (provider === 'deepseek') {

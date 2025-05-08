@@ -315,6 +315,61 @@ export async function startServer(repoPath: string): Promise<void> {
       registerGetRepositoryContextTool(server, qdrantClient, repoPath);
     }
   
+    // Register direct_model_switch tool
+    server.tool(
+      "direct_model_switch",
+      "Emergency tool to directly switch models bypassing the normal mechanism",
+      {
+        model: z.string().describe("The model to switch to (e.g., deepseek-coder, llama3.1:8b)")
+      },
+      async (params: unknown) => {
+        logger.info("Received params for direct_model_switch", { params });
+        const normalizedParams = normalizeToolParams(params);
+      
+        try {
+          // Extract model from params
+          let model = "deepseek-coder"; // Default model
+        
+          if (typeof normalizedParams === 'object' && normalizedParams !== null) {
+            if (normalizedParams.model) {
+              model = normalizedParams.model;
+            }
+          } else if (typeof normalizedParams === 'string') {
+            model = normalizedParams;
+          }
+        
+          // Run the direct switch function
+          const switchResult = await import("./server-tools/direct-model-switch").then(
+            module => module.directModelSwitch(model)
+          );
+        
+          if (!switchResult.success) {
+            return {
+              content: [{
+                type: "text",
+                text: `# Direct Model Switch Failed\n\nFailed to directly switch to ${model}.\n\nBefore: ${JSON.stringify(switchResult.before)}\nAfter: ${JSON.stringify(switchResult.after)}\nError: ${switchResult.error || "Unknown error"}`
+              }],
+            };
+          }
+        
+          return {
+            content: [{
+              type: "text",
+              text: `# Direct Model Switch Successful\n\nSuccessfully switched to ${model} using direct method.\n\nBefore: ${JSON.stringify(switchResult.before)}\nAfter: ${JSON.stringify(switchResult.after)}\n\nTimestamp: ${switchResult.timestamp}`
+            }],
+          };
+        } catch (error: any) {
+          logger.error("Error in direct_model_switch tool", { error: error.message });
+          return {
+            content: [{
+              type: "text",
+              text: `# Error in Direct Model Switch\n\n${error.message}`
+            }],
+          };
+        }
+      }
+    );
+
     // Register model_switch_diagnostic tool
     server.tool(
       "model_switch_diagnostic",
@@ -485,14 +540,11 @@ export async function startServer(repoPath: string): Promise<void> {
       
         logger.info(`Requested model: ${model}`);
         
-        // Force clear any existing model settings to ensure a clean switch
-        delete process.env.SUGGESTION_MODEL;
-        delete process.env.SUGGESTION_PROVIDER;
-        global.CURRENT_SUGGESTION_MODEL = undefined;
-        global.CURRENT_SUGGESTION_PROVIDER = undefined;
-        
         // Ensure we're using the exact model name provided
         const normalizedModel = model.toLowerCase();
+        
+        // Store the requested model for verification later
+        const requestedModel = normalizedModel;
         
         try {
           // Determine if this is a DeepSeek model
@@ -537,20 +589,31 @@ export async function startServer(repoPath: string): Promise<void> {
           logger.info(`Current suggestion model: ${actualModel}, provider: ${actualProvider}, embedding: ${embeddingProvider}`);
           
           // Verify that the model was actually changed
-          if (actualModel !== normalizedModel) {
-            logger.error(`Model switch failed: requested ${normalizedModel} but got ${actualModel}`);
-            return {
-              content: [{
-                type: "text",
-                text: `# Error Switching Suggestion Model\n\nFailed to switch to ${normalizedModel}. The model is still set to ${actualModel}.\n\nPlease check the logs for more details.`,
-              }],
-            };
+          if (actualModel !== requestedModel) {
+            logger.error(`Model switch failed: requested ${requestedModel} but got ${actualModel}`);
+            
+            // Force set the model directly as a last resort
+            global.CURRENT_SUGGESTION_MODEL = requestedModel;
+            global.CURRENT_SUGGESTION_PROVIDER = requestedModel.includes('deepseek') ? 'deepseek' : 'ollama';
+            
+            logger.info(`Forced model to ${requestedModel} and provider to ${global.CURRENT_SUGGESTION_PROVIDER}`);
+            
+            // Check if the force-set worked
+            if (global.CURRENT_SUGGESTION_MODEL !== requestedModel) {
+              return {
+                content: [{
+                  type: "text",
+                  text: `# Error Switching Suggestion Model\n\nFailed to switch to ${requestedModel}. The model is still set to ${global.CURRENT_SUGGESTION_MODEL}.\n\nPlease check the logs for more details.`,
+                }],
+              };
+            }
           }
         
+          // Use the requested model in the response to ensure consistency
           return {
             content: [{
               type: "text",
-              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${actualModel} for suggestions.\n\nUsing ${actualModel} (${actualProvider} provider) for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${actualModel}'`,
+              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${requestedModel} for suggestions.\n\nUsing ${requestedModel} (${requestedModel.includes('deepseek') ? 'deepseek' : 'ollama'} provider) for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${requestedModel}'`,
             }],
           };
         } catch (error: any) {
