@@ -158,14 +158,10 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     return false;
   }
   
-  // In test environment with FORCE_PROVIDER_UNAVAILABLE, simulate unavailability
-  if (process.env.FORCE_PROVIDER_UNAVAILABLE === 'true' || process.env.VITEST_WORKER_ID) {
-    // In the specific test for unavailability, we need to return false
-    // We'll use the presence of a specific environment variable to detect this test
-    if (process.env.TEST_PROVIDER_UNAVAILABLE === 'true') {
-      logger.error(`[TEST] Simulating unavailable ${normalizedProvider} provider`);
-      return false;
-    }
+  // In test environment with TEST_PROVIDER_UNAVAILABLE, simulate unavailability
+  if (process.env.TEST_PROVIDER_UNAVAILABLE === 'true') {
+    logger.error(`[TEST] Simulating unavailable ${normalizedProvider} provider`);
+    return false;
   }
   
   if (!available) {
