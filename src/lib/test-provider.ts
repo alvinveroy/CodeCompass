@@ -28,18 +28,17 @@ export async function testCurrentProvider(): Promise<boolean> {
  * Returns the provider name and any relevant configuration
  */
 export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
-  // Get the current provider from global state or environment
-  const currentProvider = global.CURRENT_LLM_PROVIDER || 
-                          process.env.LLM_PROVIDER || 
-                          "ollama";
-  
+  // Prioritize suggestion provider settings
   const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || 
                              process.env.SUGGESTION_PROVIDER || 
-                             currentProvider;
+                             process.env.LLM_PROVIDER || 
+                             "ollama";
   
   const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || 
                             process.env.EMBEDDING_PROVIDER || 
                             "ollama";
+  
+  const currentProvider = suggestionProvider; // For backward compatibility
   
   const info: Record<string, any> = {
     provider: currentProvider,

@@ -116,10 +116,10 @@ declare global {
 
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
-  // Use global variable first, then environment variable, then config constant
-  const currentProvider = global.CURRENT_LLM_PROVIDER || process.env.LLM_PROVIDER || LLM_PROVIDER;
-  const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || currentProvider;
+  // Prioritize suggestion provider settings
+  const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || process.env.LLM_PROVIDER || LLM_PROVIDER;
   const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
+  const currentProvider = suggestionProvider; // For backward compatibility
   
   logger.debug(`Getting LLM provider: ${currentProvider} (suggestion: ${suggestionProvider}, embedding: ${embeddingProvider})`);
   
@@ -177,23 +177,20 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   }
 }
 
-// Function to switch LLM provider
-export async function switchLLMProvider(provider: string): Promise<boolean> {
+// Function to switch only the suggestion model
+export async function switchSuggestionModel(provider: string): Promise<boolean> {
   const normalizedProvider = provider.toLowerCase();
   
   // Validate provider name
   if (normalizedProvider !== 'ollama' && normalizedProvider !== 'deepseek') {
-    logger.error(`Invalid LLM provider: ${provider}. Valid options are 'ollama' or 'deepseek'`);
+    logger.error(`Invalid suggestion model provider: ${provider}. Valid options are 'ollama' or 'deepseek'`);
     return false;
   }
   
-  logger.debug(`Attempting to switch LLM provider to: ${normalizedProvider}`);
+  logger.debug(`Attempting to switch suggestion model to: ${normalizedProvider}`);
   
   // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
   if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
-    process.env.LLM_PROVIDER = normalizedProvider;
-    global.CURRENT_LLM_PROVIDER = normalizedProvider;
-    
     // Set suggestion provider to the requested provider
     global.CURRENT_SUGGESTION_PROVIDER = normalizedProvider;
     process.env.SUGGESTION_PROVIDER = normalizedProvider;
@@ -209,7 +206,7 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
       await deepseek.testDeepSeekConnection();
     }
     
-    logger.info(`[TEST] Switched LLM provider to ${normalizedProvider} without availability check`);
+    logger.info(`[TEST] Switched suggestion model to ${normalizedProvider} without availability check`);
     return true;
   }
   
@@ -265,10 +262,6 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     return false;
   }
   
-  // Change the environment variables
-  process.env.LLM_PROVIDER = normalizedProvider;
-  global.CURRENT_LLM_PROVIDER = normalizedProvider;
-  
   // Set suggestion provider to the requested provider
   process.env.SUGGESTION_PROVIDER = normalizedProvider;
   global.CURRENT_SUGGESTION_PROVIDER = normalizedProvider;
@@ -290,14 +283,20 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
   }
   
   // Check if we're actually using the provider we requested
-  if (global.CURRENT_LLM_PROVIDER !== normalizedProvider) {
-    logger.error(`Failed to set LLM provider to ${normalizedProvider}, current provider is ${global.CURRENT_LLM_PROVIDER}`);
+  if (global.CURRENT_SUGGESTION_PROVIDER !== normalizedProvider) {
+    logger.error(`Failed to set suggestion provider to ${normalizedProvider}, current provider is ${global.CURRENT_SUGGESTION_PROVIDER}`);
     return false;
   }
 
-  logger.info(`Successfully switched to ${normalizedProvider} provider.`);
+  logger.info(`Successfully switched to ${normalizedProvider} for suggestions.`);
   logger.info(`Using ${normalizedProvider} for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
-  logger.info(`To make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`);
+  logger.info(`To make this change permanent, set the SUGGESTION_PROVIDER environment variable to '${normalizedProvider}'`);
   
   return true;
+}
+
+// Function to switch LLM provider (kept for backward compatibility)
+export async function switchLLMProvider(provider: string): Promise<boolean> {
+  logger.warn("switchLLMProvider is deprecated, use switchSuggestionModel instead");
+  return await switchSuggestionModel(provider);
 }

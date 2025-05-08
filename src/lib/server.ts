@@ -240,7 +240,7 @@ export async function startServer(repoPath: string): Promise<void> {
           ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
           get_changelog: {},
           agent_query: {}, // New agent tool that works regardless of suggestion model
-          switch_llm_provider: {}, // Add the switch_llm_provider tool to capabilities
+          switch_suggestion_model: {}, // Add the switch_suggestion_model tool to capabilities
           check_provider: {}, // Add the check_provider tool to capabilities
           reset_metrics: {}, // Add reset_metrics tool to capabilities
         },
@@ -309,20 +309,20 @@ export async function startServer(repoPath: string): Promise<void> {
       registerGetRepositoryContextTool(server, qdrantClient, repoPath);
     }
     
-    // Register the switch provider tool
+    // Register the switch suggestion model tool
     server.tool(
-      "switch_llm_provider",
-      "Switch between different LLM providers (ollama or deepseek).",
+      "switch_suggestion_model",
+      "Switch between different suggestion models (ollama or deepseek) while keeping embeddings on ollama.",
       {
-        provider: z.string().describe("The LLM provider to switch to (ollama or deepseek)")
+        provider: z.string().describe("The suggestion model provider to switch to (ollama or deepseek)")
       },
       async (params: unknown) => {
         const chainId = generateChainId();
-        trackToolChain(chainId, "switch_llm_provider");
+        trackToolChain(chainId, "switch_suggestion_model");
         
-        logger.info("Received params for switch_llm_provider", { params });
+        logger.info("Received params for switch_suggestion_model", { params });
         const normalizedParams = normalizeToolParams(params);
-        logger.debug("Normalized params for switch_llm_provider", normalizedParams);
+        logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
         
         // Ensure provider exists
         if (!normalizedParams.provider && typeof normalizedParams === 'object') {
@@ -339,43 +339,42 @@ export async function startServer(repoPath: string): Promise<void> {
             return {
               content: [{
                 type: "text",
-                text: `# Failed to Switch LLM Provider\n\nUnable to switch to DeepSeek provider. DeepSeek API key is not configured.\n\nPlease set the DEEPSEEK_API_KEY environment variable and try again.`,
+                text: `# Failed to Switch Suggestion Model\n\nUnable to switch to DeepSeek provider. DeepSeek API key is not configured.\n\nPlease set the DEEPSEEK_API_KEY environment variable and try again.`,
               }],
             };
           }
           
-          // Switch to the specified provider
-          const success = await switchLLMProvider(normalizedProvider);
+          // Switch only the suggestion provider
+          const success = await switchSuggestionModel(normalizedProvider);
           
           if (!success) {
             return {
               content: [{
                 type: "text",
-                text: `# Failed to Switch LLM Provider\n\nUnable to switch to ${normalizedProvider} provider. Please check your configuration and logs for details.`,
+                text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${normalizedProvider} provider. Please check your configuration and logs for details.`,
               }],
             };
           }
           
-          // Get the actual current provider after switching
-          const actualProvider = global.CURRENT_LLM_PROVIDER || process.env.LLM_PROVIDER || normalizedProvider;
-          const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || actualProvider;
+          // Get the actual current providers after switching
+          const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || normalizedProvider;
           const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
           
-          // Log the current provider to debug
-          logger.info(`Current LLM provider: ${actualProvider}, suggestion: ${suggestionProvider}, embedding: ${embeddingProvider}`);
+          // Log the current providers to debug
+          logger.info(`Current suggestion provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
           
           return {
             content: [{
               type: "text",
-              text: `# LLM Provider Switched\n\nSuccessfully switched to ${normalizedProvider} provider.\n\nUsing ${suggestionProvider} for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`,
+              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${normalizedProvider} for suggestions.\n\nUsing ${suggestionProvider} for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_PROVIDER environment variable to '${normalizedProvider}'`,
             }],
           };
         } catch (error: any) {
-          logger.error("Error switching LLM provider", { error: error.message });
+          logger.error("Error switching suggestion model", { error: error.message });
           return {
             content: [{
               type: "text",
-              text: `# Error Switching LLM Provider\n\n${error.message}`,
+              text: `# Error Switching Suggestion Model\n\n${error.message}`,
             }],
           };
         }
@@ -644,7 +643,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           type: "text",
           text: `# LLM Provider Status
 
-## Current Provider: ${providerInfo.provider}
+## Current Suggestion Provider: ${providerInfo.suggestionProvider}
+## Current Embedding Provider: ${providerInfo.embeddingProvider}
 
 - Connection Test: ${connectionTest ? "✅ Successful" : "❌ Failed"}
 - Provider Details:
@@ -653,7 +653,7 @@ ${Object.entries(providerInfo)
   .map(([key, value]) => `  - ${key}: ${value}`)
   .join('\n')}
 
-To switch providers, use the \`switch_llm_provider\` tool with either "ollama" or "deepseek" as the provider parameter.
+To switch suggestion providers, use the \`switch_suggestion_model\` tool with either "ollama" or "deepseek" as the provider parameter.
 `,
         }],
       };
