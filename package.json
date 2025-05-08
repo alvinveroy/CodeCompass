@@ -15,6 +15,7 @@
     "test:watch": "vitest --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "test:deepseek": "ts-node src/scripts/test-deepseek.ts",
+    "set-deepseek-key": "ts-node src/scripts/set-deepseek-key.ts",
     "version:patch": "ts-node src/scripts/version-bump.ts patch",
     "version:minor": "ts-node src/scripts/version-bump.ts minor",
     "version:major": "ts-node src/scripts/version-bump.ts major",
