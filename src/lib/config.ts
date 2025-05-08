@@ -36,6 +36,15 @@ declare global {
   var CURRENT_EMBEDDING_PROVIDER: string;
   // eslint-disable-next-line no-var
   var CURRENT_SUGGESTION_MODEL?: string;
+  
+  namespace NodeJS {
+    interface Global {
+      CURRENT_LLM_PROVIDER: string;
+      CURRENT_SUGGESTION_PROVIDER: string;
+      CURRENT_EMBEDDING_PROVIDER: string;
+      CURRENT_SUGGESTION_MODEL?: string;
+    }
+  }
 }
 
 // Initialize global provider state
