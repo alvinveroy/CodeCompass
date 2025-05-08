@@ -10,7 +10,7 @@ export const SUGGESTION_MODEL = process.env.SUGGESTION_MODEL || "llama3.1:8b";
 // LLM Provider Configuration
 export const LLM_PROVIDER = process.env.LLM_PROVIDER || "ollama"; // "ollama" or "deepseek"
 export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
-export const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1";
+export const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
 export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-coder";
 
 // Mixed Provider Configuration

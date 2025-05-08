@@ -1097,7 +1097,7 @@ To switch suggestion models, use the \`switch_suggestion_model\` tool with the m
 - For DeepSeek models: \`{"model": "deepseek-coder"}\` (requires DEEPSEEK_API_KEY)
 
 Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
-You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/v1).
+You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).
 `,
         }],
       };
