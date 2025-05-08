@@ -1,3 +1,10 @@
 node_modules/
 dist/
 coverage/
+**/*.js
+**/*.d.ts
+*.config.js
+*.config.ts
+scripts/
+src/**/*.test.ts
+src/**/*.spec.ts

@@ -25,6 +25,11 @@ module.exports = {
     }],
     'no-console': 'off',
     '@typescript-eslint/ban-ts-comment': 'off',
+    '@typescript-eslint/no-non-null-assertion': 'off',
+    '@typescript-eslint/no-empty-function': 'warn',
+    '@typescript-eslint/no-inferrable-types': 'warn',
+    '@typescript-eslint/no-var-requires': 'off',
+    '@typescript-eslint/no-empty-interface': 'warn'
   },
   overrides: [
     {
@@ -34,5 +39,5 @@ module.exports = {
       }
     }
   ],
-  ignorePatterns: ['dist/', 'node_modules/'],
+  ignorePatterns: ['dist/', 'node_modules/', '**/*.js', '**/*.d.ts'],
 };
