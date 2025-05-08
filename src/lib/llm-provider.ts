@@ -300,7 +300,9 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
   logger.warn("switchLLMProvider is deprecated, use switchSuggestionModel instead");
   
   // For backward compatibility with tests, also set LLM_PROVIDER
-  if ((process.env.NODE_ENV === 'test' || process.env.VITEST)) {
+  // Only set for valid providers (ollama or deepseek)
+  if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && 
+      (provider.toLowerCase() === 'ollama' || provider.toLowerCase() === 'deepseek')) {
     process.env.LLM_PROVIDER = provider.toLowerCase();
   }
   
