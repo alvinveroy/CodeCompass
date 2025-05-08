@@ -565,7 +565,7 @@ export async function runAgentLoop(
           logger.error(`Error executing tool ${toolCall.tool}`, { error: _err.message });
           
           // Add error to user prompt
-          userPrompt += `\n\nError executing tool ${toolCall.tool}: ${err.message}\n\nPlease try a different approach or provide a response with the information you have.`;
+          userPrompt += `\n\nError executing tool ${toolCall.tool}: ${_err.message}\n\nPlease try a different approach or provide a response with the information you have.`;
         }
       }
       

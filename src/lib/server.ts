@@ -1373,8 +1373,7 @@ Session ID: ${session.id}`;
           }],
         };
       } catch (error: unknown) {
-        const err = error as Error;
-        logger.error("Error processing feedback", { error: err.message });
+        logger.error("Error processing feedback", { error: (error as Error).message });
         return {
           content: [{
             type: "text",
