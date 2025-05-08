@@ -43,7 +43,12 @@ function formatLogAsJson(level: string, message: unknown): string {
  */
 export function initMcpSafeLogging(): void {
   // Create logs directory if it doesn't exist
-  const logsDir = path.join(process.cwd(), 'logs');
+  let logsDir = path.join(process.cwd(), 'logs');
+  
+  // Ensure we never use absolute paths starting with /logs
+  if (logsDir.startsWith('/logs')) {
+    logsDir = path.join(process.cwd(), 'logs');
+  }
   try {
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
@@ -234,7 +239,7 @@ export function logMcpMessage(direction: 'sent' | 'received', message: unknown):
   
   // Write to file log
   try {
-    const logsDir = path.join(process.cwd(), 'logs');
+    let logsDir = path.join(process.cwd(), 'logs');
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
