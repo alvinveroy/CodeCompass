@@ -230,6 +230,7 @@ export async function startServer(repoPath: string): Promise<void> {
           "repo://files/*": {},
           "repo://health": {},
           "repo://metrics": {},
+          "repo://provider": {},
           "repo://version": {},
         },
         tools: {
@@ -239,6 +240,7 @@ export async function startServer(repoPath: string): Promise<void> {
           get_changelog: {},
           agent_query: {}, // New agent tool that works regardless of suggestion model
           switch_llm_provider: {}, // Add the switch_llm_provider tool to capabilities
+          check_provider: {}, // Add the check_provider tool to capabilities
         },
       },
     });
@@ -264,6 +266,13 @@ export async function startServer(repoPath: string): Promise<void> {
     server.resource("repo://metrics", "repo://metrics", {}, async () => {
       const metrics = getMetrics();
       return { contents: [{ uri: "repo://metrics", text: JSON.stringify(metrics, null, 2) }] };
+    });
+    
+    // Add provider status resource
+    server.resource("repo://provider", "repo://provider", {}, async () => {
+      const { getCurrentProviderInfo } = await import("./test-provider");
+      const providerInfo = await getCurrentProviderInfo();
+      return { contents: [{ uri: "repo://provider", text: JSON.stringify(providerInfo, null, 2) }] };
     });
     
     // Add version resource
@@ -320,27 +329,38 @@ export async function startServer(repoPath: string): Promise<void> {
         }
         
         const provider = normalizedParams.provider;
+        const normalizedProvider = provider.toLowerCase();
         
         try {
+          // Check if we're trying to switch to DeepSeek but don't have an API key
+          if (normalizedProvider === 'deepseek' && !await deepseek.checkDeepSeekApiKey()) {
+            return {
+              content: [{
+                type: "text",
+                text: `# Failed to Switch LLM Provider\n\nUnable to switch to DeepSeek provider. DeepSeek API key is not configured.\n\nPlease set the DEEPSEEK_API_KEY environment variable and try again.`,
+              }],
+            };
+          }
+          
           // Switch to the specified provider
-          const success = await switchLLMProvider(provider);
+          const success = await switchLLMProvider(normalizedProvider);
           
           if (!success) {
             return {
               content: [{
                 type: "text",
-                text: `# Failed to Switch LLM Provider\n\nUnable to switch to ${provider} provider. Please check your configuration and logs for details.`,
+                text: `# Failed to Switch LLM Provider\n\nUnable to switch to ${normalizedProvider} provider. Please check your configuration and logs for details.`,
               }],
             };
           }
           
-          // Log the current environment variable to debug
-          logger.info(`Current LLM_PROVIDER environment variable: ${process.env.LLM_PROVIDER}`);
+          // Log the current provider to debug
+          logger.info(`Current LLM provider: ${normalizedProvider}`);
           
           return {
             content: [{
               type: "text",
-              text: `# LLM Provider Switched\n\nSuccessfully switched to ${provider} provider.\n\nTo make this change permanent, set the LLM_PROVIDER environment variable to '${provider}'`,
+              text: `# LLM Provider Switched\n\nSuccessfully switched to ${normalizedProvider} provider.\n\nTo make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`,
             }],
           };
         } catch (error: any) {
@@ -364,8 +384,8 @@ export async function startServer(repoPath: string): Promise<void> {
     // Log startup info to file
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
     logger.info(`CodeCompass server started with tools: ${Object.keys(suggestionModelAvailable ? 
-      { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {}, switch_llm_provider: {} } : 
-      { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, agent_query: {}, switch_llm_provider: {} }
+      { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {}, switch_llm_provider: {}, check_provider: {} } : 
+      { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, agent_query: {}, switch_llm_provider: {}, check_provider: {} }
     ).join(', ')}`);
     
     // Display version and status to stderr (similar to Context7)

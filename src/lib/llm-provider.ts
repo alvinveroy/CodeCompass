@@ -61,13 +61,25 @@ Please provide an improved response addressing the user's feedback.`;
   }
 }
 
+// Declare global variable for TypeScript
+declare global {
+  var CURRENT_LLM_PROVIDER: string | undefined;
+}
+
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
-  // Use the current environment variable value, not the imported constant
-  const currentProvider = process.env.LLM_PROVIDER || LLM_PROVIDER;
+  // Use global variable first, then environment variable, then config constant
+  const currentProvider = global.CURRENT_LLM_PROVIDER || process.env.LLM_PROVIDER || LLM_PROVIDER;
+  
+  logger.debug(`Getting LLM provider: ${currentProvider}`);
   
   switch (currentProvider.toLowerCase()) {
     case 'deepseek':
+      // Check if DeepSeek API key is configured
+      if (!await deepseek.checkDeepSeekApiKey()) {
+        logger.warn("DeepSeek API key not configured, falling back to Ollama");
+        return new OllamaProvider();
+      }
       logger.info("Using DeepSeek as LLM provider");
       return new DeepSeekProvider();
     case 'ollama':
@@ -79,28 +91,45 @@ export async function getLLMProvider(): Promise<LLMProvider> {
 
 // Function to switch LLM provider
 export async function switchLLMProvider(provider: string): Promise<boolean> {
-  if (provider.toLowerCase() !== 'ollama' && provider.toLowerCase() !== 'deepseek') {
+  const normalizedProvider = provider.toLowerCase();
+  
+  // Validate provider name
+  if (normalizedProvider !== 'ollama' && normalizedProvider !== 'deepseek') {
     logger.error(`Invalid LLM provider: ${provider}. Valid options are 'ollama' or 'deepseek'`);
     return false;
   }
   
-  // Actually change the environment variable
-  process.env.LLM_PROVIDER = provider.toLowerCase();
-  logger.info(`Switching LLM provider to ${provider}`);
-  logger.info(`To make this change permanent, set the LLM_PROVIDER environment variable to '${provider}'`);
-  
-  // Check if the new provider is available
+  // Check if the provider is available before switching
   let available = false;
-  if (provider.toLowerCase() === 'ollama') {
-    available = await ollama.checkOllama();
-  } else {
-    available = await deepseek.testDeepSeekConnection();
+  try {
+    if (normalizedProvider === 'ollama') {
+      available = await ollama.checkOllama();
+    } else if (normalizedProvider === 'deepseek') {
+      // For DeepSeek, we need to check if the API key is configured
+      if (!deepseek.checkDeepSeekApiKey()) {
+        logger.error(`DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable.`);
+        return false;
+      }
+      available = await deepseek.testDeepSeekConnection();
+    }
+  } catch (error: any) {
+    logger.error(`Error checking ${normalizedProvider} availability: ${error.message}`);
+    return false;
   }
   
   if (!available) {
-    logger.error(`The ${provider} provider is not available. Please check your configuration.`);
+    logger.error(`The ${normalizedProvider} provider is not available. Please check your configuration.`);
     return false;
   }
+  
+  // Change the environment variable
+  process.env.LLM_PROVIDER = normalizedProvider;
+  
+  // Store the current provider in a global variable to ensure it persists
+  global.CURRENT_LLM_PROVIDER = normalizedProvider;
+  
+  logger.info(`Successfully switched LLM provider to ${normalizedProvider}`);
+  logger.info(`To make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`);
   
   return true;
 }
