@@ -80,10 +80,14 @@ class HybridProvider implements LLMProvider {
 // DeepSeek Provider Implementation
 class DeepSeekProvider implements LLMProvider {
   async checkConnection(): Promise<boolean> {
+    // First ensure the API key is properly set
+    await deepseek.checkDeepSeekApiKey();
     return await deepseek.testDeepSeekConnection();
   }
 
   async generateText(prompt: string): Promise<string> {
+    // First ensure the API key is properly set
+    await deepseek.checkDeepSeekApiKey();
     return await deepseek.generateWithDeepSeek(prompt);
   }
 
@@ -229,22 +233,29 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   
   switch (suggestionProvider.toLowerCase()) {
     case 'deepseek':
-      // Check if DeepSeek API key is configured
-      if (!await deepseek.checkDeepSeekApiKey()) {
-        logger.warn("DeepSeek API key not configured, falling back to Ollama");
-        provider = new OllamaProvider();
-      } else {
-        logger.info("Using DeepSeek as LLM provider");
-        provider = new DeepSeekProvider();
-        
-        // Verify DeepSeek connection
-        const isConnected = await provider.checkConnection();
-        logger.info(`DeepSeek provider connection test: ${isConnected ? "successful" : "failed"}`);
-        
-        if (!isConnected) {
-          logger.warn("DeepSeek connection failed, falling back to Ollama");
+      try {
+        // Check if DeepSeek API key is configured
+        const apiKeyConfigured = await deepseek.checkDeepSeekApiKey();
+        if (!apiKeyConfigured) {
+          logger.warn("DeepSeek API key not configured, falling back to Ollama");
           provider = new OllamaProvider();
+        } else {
+          logger.info("Using DeepSeek as LLM provider");
+          provider = new DeepSeekProvider();
+          
+          // Verify DeepSeek connection
+          const isConnected = await provider.checkConnection();
+          logger.info(`DeepSeek provider connection test: ${isConnected ? "successful" : "failed"}`);
+          
+          if (!isConnected) {
+            logger.warn("DeepSeek connection failed, falling back to Ollama");
+            provider = new OllamaProvider();
+          }
         }
+      } catch (error: any) {
+        logger.error(`Error configuring DeepSeek provider: ${error.message}`);
+        logger.warn("Falling back to Ollama due to DeepSeek configuration error");
+        provider = new OllamaProvider();
       }
       break;
     case 'ollama':
