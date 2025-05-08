@@ -20,16 +20,15 @@ const originalConsole = {
  * Format log message as JSON for MCP protocol
  * @param level Log level
  * @param message Message to log
- * @returns JSON formatted log message
+ * @returns JSON formatted log object
  */
-function formatLogAsJson(level: string, message: unknown): string {
-  const logObject = {
+function formatLogAsJson(level: string, message: unknown): object {
+  return {
     type: "log",
     level,
     message: typeof message === 'object' ? JSON.stringify(message) : String(message),
     timestamp: new Date().toISOString()
   };
-  return JSON.stringify(logObject);
 }
 
 /**
@@ -130,5 +129,5 @@ export function logMcpMessage(direction: 'sent' | 'received', message: unknown):
     content: typeof message === 'string' ? message : JSON.stringify(message),
     timestamp: new Date().toISOString()
   };
-  logger.debug(JSON.stringify(logObject));
+  logger.debug(logObject);
 }
