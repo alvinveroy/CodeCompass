@@ -1,7 +1,6 @@
 import { logger } from "./config";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
-// fs and path are not used in this file
 
 // Interface for LLM Provider
 export interface LLMProvider {
@@ -196,14 +195,14 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   logger.debug(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
   
   // Check if we have a cached provider and if it's still valid
-  const cacheMaxAge = 2000; // 2 seconds max cache age
+  const _cacheMaxAge = 2000; // 2 seconds max cache age
   const now = Date.now();
   
   if (providerCache && 
       providerCache.suggestionModel === suggestionModel &&
       providerCache.suggestionProvider === suggestionProvider &&
       providerCache.embeddingProvider === embeddingProvider &&
-      (now - providerCache.timestamp) < cacheMaxAge) {
+      (now - providerCache.timestamp) < _cacheMaxAge) {
     logger.debug("Using cached LLM provider");
     return providerCache.provider;
   }
@@ -366,8 +365,9 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
             provider = new OllamaProvider();
           }
         }
-      } catch (error: any) {
-        logger.error(`Error configuring DeepSeek provider: ${error.message}`);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.error(`Error configuring DeepSeek provider: ${errorMsg}`);
         logger.warn("Falling back to Ollama due to DeepSeek configuration error");
         provider = new OllamaProvider();
       }
@@ -471,8 +471,9 @@ async function checkProviderAvailability(provider: string, normalizedModel: stri
         available = true;
       }
     }
-  } catch (error: any) {
-    logger.error(`Error checking ${provider} availability for model ${normalizedModel}: ${error.message}`);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error(`Error checking ${provider} availability for model ${normalizedModel}: ${errorMsg}`);
     return false;
   }
   

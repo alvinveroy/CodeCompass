@@ -1,5 +1,5 @@
 import { logger } from "./config";
-import { MAX_RETRIES, RETRY_DELAY, MAX_INPUT_LENGTH } from "./config";
+import { MAX_RETRIES, RETRY_DELAY } from "./config";
 
 // Utility: Retry logic
 export async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
@@ -8,9 +8,9 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES):
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
-    } catch (error: any) {
-      lastError = error;
-      logger.warn(`Retry ${i + 1}/${retries} after error: ${error.message}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      logger.warn(`Retry ${i + 1}/${retries} after error: ${lastError.message}`);
       
       if (i < retries - 1) {
         // Use exponential backoff for retries

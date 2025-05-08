@@ -19,6 +19,18 @@ export async function initializeQdrant(): Promise<QdrantClient> {
   return client;
 }
 
+// Define search result type
+interface SearchResult {
+  id: string | number;
+  score: number;
+  payload: {
+    filepath: string;
+    content: string;
+    last_modified: string;
+    [key: string]: unknown;
+  };
+}
+
 // Search with iterative refinement
 export async function searchWithRefinement(
   client: QdrantClient, 
@@ -26,10 +38,10 @@ export async function searchWithRefinement(
   files: string[] = [], 
   maxRefinements: number = 2,
   relevanceThreshold: number = 0.7
-): Promise<{ results: any[], refinedQuery: string, relevanceScore: number }> {
+): Promise<{ results: SearchResult[], refinedQuery: string, relevanceScore: number }> {
   const queryId = `query_${Date.now()}`;
   let currentQuery = query;
-  let bestResults: any[] = [];
+  let bestResults: SearchResult[] = [];
   let bestRelevanceScore = 0;
   let refinementCount = 0;
   
@@ -80,7 +92,7 @@ export async function searchWithRefinement(
 }
 
 // Refine query based on search results
-async function refineQuery(originalQuery: string, results: any[], currentRelevance: number): Promise<string> {
+async function refineQuery(originalQuery: string, results: SearchResult[], currentRelevance: number): Promise<string> {
   // If no results or very poor results, broaden the query
   if (results.length === 0 || currentRelevance < 0.3) {
     return broadenQuery(originalQuery);
@@ -113,7 +125,7 @@ function broadenQuery(query: string): string {
 }
 
 // Focus a query based on search results
-function focusQueryBasedOnResults(query: string, results: any[]): string {
+function focusQueryBasedOnResults(query: string, results: SearchResult[]): string {
   // Extract key terms from the results
   const contentSamples = results.slice(0, 3).map(r => 
     r.payload?.content?.substring(0, 200) || ''
@@ -129,7 +141,7 @@ function focusQueryBasedOnResults(query: string, results: any[]): string {
 }
 
 // Make minor tweaks to a query
-function tweakQuery(query: string, results: any[]): string {
+function tweakQuery(query: string, results: SearchResult[]): string {
   // Get the most relevant result
   const topResult = results[0];
   const filepath = topResult.payload?.filepath || '';

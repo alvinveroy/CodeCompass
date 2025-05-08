@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { switchLLMProvider, getLLMProvider } from './llm-provider';
-import { logger, LLM_PROVIDER } from './config';
+import { LLM_PROVIDER } from './config';
 
 async function main() {
   const args = process.argv.slice(2);

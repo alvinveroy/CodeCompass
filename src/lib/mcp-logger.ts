@@ -98,6 +98,6 @@ export function restoreConsole(): void {
  * @param direction 'sent' or 'received'
  * @param message The message content
  */
-export function logMcpMessage(direction: 'sent' | 'received', message: any): void {
+export function logMcpMessage(direction: 'sent' | 'received', message: unknown): void {
   logger.debug(`MCP ${direction}: ${typeof message === 'string' ? message : JSON.stringify(message)}`);
 }
