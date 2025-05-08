@@ -228,7 +228,8 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   }
   
   // Cache the provider - ensure we're using the same reference
-  if (!providerCache) {
+  if (providerCache === null) {
+    // Create a new cache object if none exists
     providerCache = {
       suggestionModel,
       suggestionProvider,
@@ -236,8 +237,9 @@ export async function getLLMProvider(): Promise<LLMProvider> {
       provider,
       timestamp: Date.now()
     };
-  } else if (providerCache) {
+  } else {
     // Update existing cache with new values but keep the same object reference
+    // TypeScript now knows providerCache is not null here
     providerCache.suggestionModel = suggestionModel;
     providerCache.suggestionProvider = suggestionProvider;
     providerCache.embeddingProvider = embeddingProvider;
