@@ -128,6 +128,10 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     if (currentProvider.toLowerCase() === 'deepseek') {
       logger.info("[TEST] Using DeepSeek as LLM provider");
       
+      // Log the API key status (without revealing it)
+      const hasApiKey = await deepseek.checkDeepSeekApiKey();
+      logger.info(`[TEST] DeepSeek API key configured: ${hasApiKey}`);
+      
       const provider = new DeepSeekProvider();
       // Override checkConnection to call the test function but always return true
       provider.checkConnection = async () => {
