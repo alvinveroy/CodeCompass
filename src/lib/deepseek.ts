@@ -48,6 +48,13 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       logger.info(`Sending test request to DeepSeek API at ${apiUrl}`);
       logger.info(`Using model: ${DEEPSEEK_MODEL}`);
       
+      // Add more detailed request logging
+      logger.debug(`DeepSeek test request payload: ${JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [{ role: "user", content: "Hello" }],
+        max_tokens: 10
+      })}`);
+      
       const response = await axios.post(
         apiUrl,
         {
@@ -60,7 +67,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
           },
-          timeout: 10000
+          timeout: 15000 // Increase timeout for test request
         }
       );
       
@@ -84,11 +91,24 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     } catch (requestError: any) {
       logger.error("DeepSeek API connection test failed", {
         message: requestError.message,
+        code: requestError.code,
         response: requestError.response ? {
           status: requestError.response.status,
-          data: requestError.response.data
-        } : null
+          statusText: requestError.response.statusText,
+          data: JSON.stringify(requestError.response.data)
+        } : 'No response data',
+        request: requestError.request ? 'Request present' : 'No request data'
       });
+      
+      // Check for specific error types
+      if (requestError.code === 'ECONNREFUSED') {
+        logger.error("Connection refused. Check if the DeepSeek API endpoint is correct and accessible.");
+      } else if (requestError.response && requestError.response.status === 401) {
+        logger.error("Authentication failed. Check your DeepSeek API key.");
+      } else if (requestError.response && requestError.response.status === 404) {
+        logger.error("API endpoint not found. Check the DeepSeek API URL.");
+      }
+      
       return false;
     }
   } catch (error: any) {
@@ -124,8 +144,20 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
       const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
       const model = process.env.DEEPSEEK_MODEL || DEEPSEEK_MODEL;
       
+      logger.debug(`Using DeepSeek API URL: ${apiUrl}`);
+      logger.debug(`Using model: ${model}`);
+      
       const response = await enhancedWithRetry(async () => {
         logger.debug(`Sending request to DeepSeek API at ${apiUrl} with model ${model}`);
+        
+        // Log request payload for debugging (without the full prompt)
+        logger.debug(`Request payload: ${JSON.stringify({
+          model: model,
+          messages: [{ role: "user", content: `${prompt.substring(0, 50)}...` }],
+          temperature: 0.7,
+          max_tokens: 2048
+        })}`);
+        
         const res = await axios.post(
           apiUrl,
           {
@@ -195,6 +227,16 @@ async function enhancedWithRetry<T>(
         logger.warn(`DeepSeek rate limit exceeded (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
       } else {
         logger.warn(`DeepSeek retry ${i + 1}/${retries} after error: ${error.message}`);
+        // Log more detailed error information
+        logger.debug(`DeepSeek error details:`, {
+          code: error.code,
+          message: error.message,
+          response: error.response ? {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            data: error.response.data
+          } : 'No response data'
+        });
       }
       
       // Wait before retrying with exponential backoff
@@ -216,11 +258,15 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
     }
 
     const processedText = preprocessText(text);
+    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
     
     return await timeExecution('deepseek_embedding_generation', async () => {
       logger.info(`Generating embedding with DeepSeek for text (length: ${processedText.length})`);
+      logger.debug(`Using DeepSeek embedding URL: ${DEEPSEEK_EMBEDDING_URL}`);
       
       const response = await enhancedWithRetry(async () => {
+        logger.debug(`Sending embedding request to DeepSeek API with model: deepseek-embedding`);
+        
         const res = await axios.post(
           DEEPSEEK_EMBEDDING_URL,
           {
@@ -230,7 +276,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
           {
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY}`
+              "Authorization": `Bearer ${apiKey}`
             },
             timeout: REQUEST_TIMEOUT
           }
