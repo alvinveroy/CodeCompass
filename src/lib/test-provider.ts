@@ -33,8 +33,18 @@ export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
                           process.env.LLM_PROVIDER || 
                           "ollama";
   
+  const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || 
+                             process.env.SUGGESTION_PROVIDER || 
+                             currentProvider;
+  
+  const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || 
+                            process.env.EMBEDDING_PROVIDER || 
+                            "ollama";
+  
   const info: Record<string, any> = {
     provider: currentProvider,
+    suggestionProvider: suggestionProvider,
+    embeddingProvider: embeddingProvider,
     timestamp: new Date().toISOString()
   };
   

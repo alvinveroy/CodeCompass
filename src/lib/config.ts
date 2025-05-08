@@ -13,8 +13,15 @@ export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 export const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1";
 export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-coder";
 
+// Mixed Provider Configuration
+export const USE_MIXED_PROVIDERS = process.env.USE_MIXED_PROVIDERS === "true" || false;
+export const SUGGESTION_PROVIDER = process.env.SUGGESTION_PROVIDER || process.env.LLM_PROVIDER || "ollama";
+export const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "ollama";
+
 // Initialize global provider state
 global.CURRENT_LLM_PROVIDER = process.env.LLM_PROVIDER || LLM_PROVIDER;
+global.CURRENT_SUGGESTION_PROVIDER = process.env.SUGGESTION_PROVIDER || process.env.LLM_PROVIDER || LLM_PROVIDER;
+global.CURRENT_EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "ollama";
 
 // Request Configuration
 export const MAX_INPUT_LENGTH = 4096;

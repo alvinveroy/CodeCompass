@@ -29,6 +29,52 @@ class OllamaProvider implements LLMProvider {
   }
 }
 
+// Hybrid Provider Implementation that uses different backends for different operations
+class HybridProvider implements LLMProvider {
+  private suggestionProvider: LLMProvider;
+  private embeddingProvider: LLMProvider;
+
+  constructor(suggestionProviderName: string, embeddingProviderName: string) {
+    // Initialize the suggestion provider
+    if (suggestionProviderName.toLowerCase() === 'deepseek') {
+      this.suggestionProvider = new DeepSeekProvider();
+    } else {
+      this.suggestionProvider = new OllamaProvider();
+    }
+
+    // Initialize the embedding provider
+    if (embeddingProviderName.toLowerCase() === 'deepseek') {
+      this.embeddingProvider = new DeepSeekProvider();
+    } else {
+      this.embeddingProvider = new OllamaProvider();
+    }
+  }
+
+  async checkConnection(): Promise<boolean> {
+    // Check both providers
+    const suggestionCheck = await this.suggestionProvider.checkConnection();
+    const embeddingCheck = await this.embeddingProvider.checkConnection();
+    
+    // Both must be available
+    return suggestionCheck && embeddingCheck;
+  }
+
+  async generateText(prompt: string): Promise<string> {
+    // Use the suggestion provider for text generation
+    return await this.suggestionProvider.generateText(prompt);
+  }
+
+  async generateEmbedding(text: string): Promise<number[]> {
+    // Use the embedding provider for embeddings
+    return await this.embeddingProvider.generateEmbedding(text);
+  }
+
+  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
+    // Use the suggestion provider for feedback processing
+    return await this.suggestionProvider.processFeedback(originalPrompt, suggestion, feedback, score);
+  }
+}
+
 // DeepSeek Provider Implementation
 class DeepSeekProvider implements LLMProvider {
   async checkConnection(): Promise<boolean> {
@@ -61,17 +107,21 @@ Please provide an improved response addressing the user's feedback.`;
   }
 }
 
-// Declare global variable for TypeScript
+// Declare global variables for TypeScript
 declare global {
   var CURRENT_LLM_PROVIDER: string | undefined;
+  var CURRENT_SUGGESTION_PROVIDER: string | undefined;
+  var CURRENT_EMBEDDING_PROVIDER: string | undefined;
 }
 
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
   // Use global variable first, then environment variable, then config constant
   const currentProvider = global.CURRENT_LLM_PROVIDER || process.env.LLM_PROVIDER || LLM_PROVIDER;
+  const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || currentProvider;
+  const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
   
-  logger.debug(`Getting LLM provider: ${currentProvider}`);
+  logger.debug(`Getting LLM provider: ${currentProvider} (suggestion: ${suggestionProvider}, embedding: ${embeddingProvider})`);
   
   // In test environment, skip API key check but still call the check functions for test spies
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
@@ -100,6 +150,13 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     }
   }
   
+  // Create a hybrid provider that uses different backends for different operations
+  if (suggestionProvider.toLowerCase() !== embeddingProvider.toLowerCase()) {
+    logger.info(`Using hybrid provider: ${suggestionProvider} for suggestions, ${embeddingProvider} for embeddings`);
+    return new HybridProvider(suggestionProvider, embeddingProvider);
+  }
+  
+  // Use a single provider for all operations
   switch (currentProvider.toLowerCase()) {
     case 'deepseek':
       // Check if DeepSeek API key is configured
@@ -130,6 +187,14 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
   if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
     process.env.LLM_PROVIDER = normalizedProvider;
     global.CURRENT_LLM_PROVIDER = normalizedProvider;
+    
+    // Set suggestion provider to the requested provider
+    global.CURRENT_SUGGESTION_PROVIDER = normalizedProvider;
+    process.env.SUGGESTION_PROVIDER = normalizedProvider;
+    
+    // Keep embedding provider as ollama
+    global.CURRENT_EMBEDDING_PROVIDER = "ollama";
+    process.env.EMBEDDING_PROVIDER = "ollama";
     
     // In test environment, we still want to call the check functions for test spies to work
     if (normalizedProvider === 'ollama') {
@@ -181,13 +246,32 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     return false;
   }
   
-  // Change the environment variable
+  // Change the environment variables
   process.env.LLM_PROVIDER = normalizedProvider;
-  
-  // Store the current provider in a global variable to ensure it persists
   global.CURRENT_LLM_PROVIDER = normalizedProvider;
   
+  // Set suggestion provider to the requested provider
+  process.env.SUGGESTION_PROVIDER = normalizedProvider;
+  global.CURRENT_SUGGESTION_PROVIDER = normalizedProvider;
+  
+  // Always keep embedding provider as ollama
+  process.env.EMBEDDING_PROVIDER = "ollama";
+  global.CURRENT_EMBEDDING_PROVIDER = "ollama";
+  
+  // Check if Ollama is available for embeddings
+  if (normalizedProvider === 'deepseek') {
+    const ollamaAvailable = await ollama.checkOllama();
+    if (!ollamaAvailable) {
+      logger.warn("Ollama is not available for embeddings. Using DeepSeek for both suggestions and embeddings.");
+      process.env.EMBEDDING_PROVIDER = "deepseek";
+      global.CURRENT_EMBEDDING_PROVIDER = "deepseek";
+    } else {
+      logger.info("Using DeepSeek for suggestions and Ollama for embeddings");
+    }
+  }
+  
   logger.info(`Successfully switched LLM provider to ${normalizedProvider}`);
+  logger.info(`Using ${global.CURRENT_SUGGESTION_PROVIDER} for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings`);
   logger.info(`To make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`);
   
   return true;
