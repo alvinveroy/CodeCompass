@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New MCP tool: `get_session_history` to view detailed session information
 - New MCP tool: `agent_query` for multi-step reasoning and problem analysis
 - Version number display in console when server starts
+- DeepSeek API integration as an alternative to OpenAI
+- New diagnostic tools: `debug_provider`, `reset_provider`, `model_switch_diagnostic`
+- Docker support for containerized deployment
+- CLI tool for setting DeepSeek API key
 
 ### Changed
 - Enhanced documentation for environment variable configuration
@@ -23,10 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardized response format across all MCP tools
 - Fixed TypeScript build errors in server.ts
 - Improved parameter handling for MCP tools
+- Enhanced retry mechanism for API calls with better error handling
+- Refactored provider switching for more reliable model changes
 
 ### Fixed
 - Fixed MCP logging to prevent JSON parsing errors in Claude Desktop
 - Replaced logger.configure with custom file logging implementation
+- Fixed connection issues with DeepSeek API
+- Resolved race conditions in model switching
+- Improved error handling for missing API keys
 
 ## [1.1.0] - 2025-05-06
 

@@ -14,10 +14,11 @@ The [Model Context Protocol (MCP)](https://www.anthropic.com/news/model-context-
 
 ## Why Choose CodeCompass?
 - **Local Privacy with Ollama**: Runs models locally by default for data security, ideal for sensitive projects.
-- **Cloud Flexibility**: Configurable to use online models like OpenAI for enhanced performance.
+- **Cloud Flexibility**: Configurable to use online models like OpenAI or DeepSeek for enhanced performance.
 - **Agentic RAG**: An AI agent autonomously retrieves code, documentation, and metadata for comprehensive answers.
 - **Vibe Coding Ready**: Supports natural language prompts for intuitive code generation.
 - **Developer-Friendly**: Integrates with VSCode, Cursor, Zed, Claude Desktop, and more.
+- **Metrics & Diagnostics**: Built-in tools for tracking performance and diagnosing issues.
 
 ## Installation
 ### Prerequisites
@@ -53,6 +54,11 @@ The [Model Context Protocol (MCP)](https://www.anthropic.com/news/model-context-
    ```bash
    npx @alvinveroy/codecompass
    ```
+3. **Using Docker**:
+   ```bash
+   docker pull alvinveroy/codecompass:latest
+   docker run -p 3000:3000 -v /path/to/your/repo:/app/repo alvinveroy/codecompass
+   ```
 
 ## Configuration
 Set environment variables in your shell, MCP client, or `.env` file:
@@ -62,6 +68,8 @@ Set environment variables in your shell, MCP client, or `.env` file:
 | `LLM_PROVIDER`            | `ollama`                          | AI provider (`ollama`, `openai`, or `deepseek`) |
 | `OLLAMA_HOST`             | `http://localhost:11434`          | Ollama server address (for `ollama`)     |
 | `OPENAI_API_KEY`          | None                              | OpenAI API key (for `openai`)            |
+| `DEEPSEEK_API_KEY`        | None                              | DeepSeek API key (for `deepseek`)        |
+| `DEEPSEEK_API_URL`        | Default DeepSeek API endpoint     | Custom DeepSeek API endpoint (optional)  |
 | `QDRANT_HOST`             | `http://localhost:6333`           | Qdrant server address                    |
 | `EMBEDDING_MODEL`         | `nomic-embed-text:v1.5`           | Embedding model (Ollama)                 |
 | `SUGGESTION_MODEL`        | `llama3.1:8b`                     | Suggestion model (Ollama)                |
@@ -88,6 +96,11 @@ QDRANT_HOST=http://localhost:6333
 MCP_PORT=3000
 ```
 
+**Setting DeepSeek API Key via CLI**:
+```bash
+npm run set-deepseek-key YOUR_API_KEY
+```
+
 ## Usage
 Interact with CodeCompass via MCP using tools optimized for Vibe Coding:
 
@@ -106,6 +119,18 @@ Interact with CodeCompass via MCP using tools optimized for Vibe Coding:
 - **Generate Suggestion**:
   ```javascript
   server.tool("generate_suggestion", { query: "Fix null pointer in auth", code: "..." })
+  ```
+- **Agent Query** (Multi-step reasoning):
+  ```javascript
+  server.tool("agent_query", { query: "How does the authentication flow work?", maxSteps: 5 })
+  ```
+- **Check Provider Status**:
+  ```javascript
+  server.tool("check_provider", { verbose: true })
+  ```
+- **Switch Models**:
+  ```javascript
+  server.tool("switch_suggestion_model", { model: "llama3.1:8b" })
   ```
 
 ### Vibe Coding Example
@@ -251,12 +276,34 @@ CodeCompass integrates seamlessly with popular IDEs and tools, enhancing your Vi
 | **Code Exploration**    | Navigate codebases with natural language queries.                           | Simplifies large project understanding.            |
 | **Onboarding**          | Provide new developers with AI-driven codebase insights.                    | Eases integration with contextual explanations.   |
 
+## Diagnostics and Troubleshooting
+
+CodeCompass includes several diagnostic tools to help troubleshoot issues:
+
+- **Reset Metrics**: Clear all performance counters
+  ```javascript
+  server.tool("reset_metrics", {})
+  ```
+- **Debug Provider**: Test provider configuration
+  ```javascript
+  server.tool("debug_provider", {})
+  ```
+- **Model Switch Diagnostic**: Diagnose model switching issues
+  ```javascript
+  server.tool("model_switch_diagnostic", {})
+  ```
+- **Get Changelog**: View version history
+  ```javascript
+  server.tool("get_changelog", {})
+  ```
+
 ## Why CodeCompass for the Vibe Coder Arsenal?
 CodeCompass is a must-have in the Vibe coder arsenal, a collection of tools for AI-driven development. By implementing [MCP](https://www.anthropic.com/news/model-context-protocol), it connects your repository to AI assistants, enabling Vibe Coding with:
 - **Privacy-First**: Local Ollama models keep data secure.
-- **Flexible AI**: Supports cloud models like OpenAI for versatility.
+- **Flexible AI**: Supports cloud models like OpenAI and DeepSeek for versatility.
 - **Seamless Integration**: Enhances IDEs for efficient workflows.
 - **Democratized Coding**: Makes coding accessible via natural language.
+- **Metrics & Diagnostics**: Built-in tools for performance monitoring and troubleshooting.
 
 ## Contributing
 Join our community! See [CONTRIBUTING.md](https://github.com/alvinveroy/CodeCompass/blob/main/CONTRIBUTING.md) for guidelines.
