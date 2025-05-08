@@ -181,36 +181,7 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   
   // In test environment, skip API key check but still call the check functions for test spies
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    // Get the provider from environment or global variables
-    const testProvider = suggestionProvider.toLowerCase();
-    
-    if (testProvider === 'deepseek') {
-      logger.info("[TEST] Using DeepSeek as LLM provider");
-      
-      // Log the API key status (without revealing it)
-      const hasApiKey = await deepseek.checkDeepSeekApiKey();
-      logger.info(`[TEST] DeepSeek API key configured: ${hasApiKey}`);
-      
-      const provider = new DeepSeekProvider();
-      // Override checkConnection to call the test function but always return true
-      provider.checkConnection = async () => {
-        // Make sure the spy is called
-        await deepseek.testDeepSeekConnection();
-        return true;
-      };
-      return provider;
-    } else {
-      logger.info("[TEST] Using Ollama as LLM provider");
-      
-      const provider = new OllamaProvider();
-      // Override checkConnection to call the test function but always return true
-      provider.checkConnection = async () => {
-        // Make sure the spy is called
-        await ollama.checkOllama();
-        return true;
-      };
-      return provider;
-    }
+    return createTestProvider(suggestionProvider);
   }
   
   
@@ -220,13 +191,111 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     return new HybridProvider(suggestionProvider, embeddingProvider);
   }
   
-  // Use a single provider for all operations
+  // Create the appropriate provider based on the suggestion provider
+  const provider = await createProvider(suggestionProvider.toLowerCase());
+  
+  // Cache the provider
+  providerCache = {
+    suggestionModel,
+    suggestionProvider,
+    embeddingProvider,
+    provider,
+    timestamp: Date.now()
+  };
+  
+  return provider;
+}
+
+// Function to switch the suggestion model
+export async function switchSuggestionModel(model: string): Promise<boolean> {
+  const normalizedModel = model.toLowerCase();
+  
+  // Determine provider based on model name
+  const isDeepSeekModel = normalizedModel.includes('deepseek');
+  const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
+  
+  // Log the requested model
+  logger.debug(`Requested model: ${normalizedModel}, provider: ${provider}`);
+  
+  // Handle test environment
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+    return await handleTestEnvironment(normalizedModel, provider);
+  }
+  
+  // Reset existing model settings to ensure a clean switch
+  resetModelSettings();
+  
+  logger.info(`Switching suggestion model to: ${normalizedModel} (provider: ${provider})`);
+  
+  // Check if the provider is available before switching
+  const available = await checkProviderAvailability(provider, normalizedModel);
+  if (!available) {
+    return false;
+  }
+  
+  // Set model configuration
+  setModelConfiguration(normalizedModel, provider);
+  
+  // Configure embedding provider
+  await configureEmbeddingProvider(provider);
+
+  logger.info(`Successfully switched to ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
+  
+  // Save the configuration to a persistent file
+  saveModelConfig();
+  
+  logger.debug(`Current configuration: model=${global.CURRENT_SUGGESTION_MODEL}, provider=${global.CURRENT_SUGGESTION_PROVIDER}, embedding=${global.CURRENT_EMBEDDING_PROVIDER}`);
+  
+  return true;
+}
+
+// Helper functions to reduce duplication and improve maintainability
+
+/**
+ * Creates a test provider for test environments
+ */
+async function createTestProvider(suggestionProvider: string): Promise<LLMProvider> {
+  const testProvider = suggestionProvider.toLowerCase();
+  
+  if (testProvider === 'deepseek') {
+    logger.info("[TEST] Using DeepSeek as LLM provider");
+    
+    // Log the API key status (without revealing it)
+    const hasApiKey = await deepseek.checkDeepSeekApiKey();
+    logger.info(`[TEST] DeepSeek API key configured: ${hasApiKey}`);
+    
+    const provider = new DeepSeekProvider();
+    // Override checkConnection to call the test function but always return true
+    provider.checkConnection = async () => {
+      // Make sure the spy is called
+      await deepseek.testDeepSeekConnection();
+      return true;
+    };
+    return provider;
+  } else {
+    logger.info("[TEST] Using Ollama as LLM provider");
+    
+    const provider = new OllamaProvider();
+    // Override checkConnection to call the test function but always return true
+    provider.checkConnection = async () => {
+      // Make sure the spy is called
+      await ollama.checkOllama();
+      return true;
+    };
+    return provider;
+  }
+}
+
+/**
+ * Creates the appropriate provider based on the provider name
+ */
+async function createProvider(providerName: string): Promise<LLMProvider> {
   let provider: LLMProvider;
   
   // Log the actual provider being used
-  logger.info(`Creating provider instance for: ${suggestionProvider.toLowerCase()}`);
+  logger.info(`Creating provider instance for: ${providerName}`);
   
-  switch (suggestionProvider.toLowerCase()) {
+  switch (providerName) {
     case 'deepseek':
       try {
         // Check if DeepSeek API key is configured
@@ -264,31 +333,15 @@ export async function getLLMProvider(): Promise<LLMProvider> {
       break;
   }
   
-  // Cache the provider
-  providerCache = {
-    suggestionModel,
-    suggestionProvider,
-    embeddingProvider,
-    provider,
-    timestamp: Date.now()
-  };
-  
   return provider;
 }
 
-// Function to switch the suggestion model
-export async function switchSuggestionModel(model: string): Promise<boolean> {
-  const normalizedModel = model.toLowerCase();
-  
-  // Determine provider based on model name
-  const isDeepSeekModel = normalizedModel.includes('deepseek');
-  const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
-  
-  // Log the requested model
-  logger.debug(`Requested model: ${normalizedModel}, provider: ${provider}`);
-  
+/**
+ * Handles test environment for model switching
+ */
+async function handleTestEnvironment(normalizedModel: string, provider: string): Promise<boolean> {
   // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
-  if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
+  if (process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
     // Set suggestion model and provider
     global.CURRENT_SUGGESTION_MODEL = normalizedModel;
     process.env.SUGGESTION_MODEL = normalizedModel;
@@ -310,26 +363,30 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     return true;
   }
   
-  // Reset existing model settings to ensure a clean switch
+  // Special case for testing unavailability
+  // Make sure the spy is called for test verification
+  if (provider === 'deepseek') {
+    await deepseek.testDeepSeekConnection();
+  }
+  logger.error(`[TEST] Simulating unavailable ${provider} provider for model ${normalizedModel}`);
+  return false;
+}
+
+/**
+ * Resets model settings to ensure a clean switch
+ */
+function resetModelSettings(): void {
   logger.debug(`Resetting existing model settings before switch`);
   delete process.env.SUGGESTION_MODEL;
   delete process.env.SUGGESTION_PROVIDER;
   global.CURRENT_SUGGESTION_MODEL = undefined;
   global.CURRENT_SUGGESTION_PROVIDER = undefined;
-  
-  // Special case for testing unavailability - must be checked before any other test environment checks
-  if (process.env.TEST_PROVIDER_UNAVAILABLE === 'true') {
-    // Make sure the spy is called for test verification
-    if (provider === 'deepseek') {
-      await deepseek.testDeepSeekConnection();
-    }
-    logger.error(`[TEST] Simulating unavailable ${provider} provider for model ${normalizedModel}`);
-    return false;
-  }
-  
-  logger.info(`Switching suggestion model to: ${normalizedModel} (provider: ${provider})`);
-  
-  // Check if the provider is available before switching
+}
+
+/**
+ * Checks if the provider is available
+ */
+async function checkProviderAvailability(provider: string, normalizedModel: string): Promise<boolean> {
   let available = false;
   try {
     if (provider === 'ollama') {
@@ -387,6 +444,13 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     return false;
   }
   
+  return available;
+}
+
+/**
+ * Sets the model configuration
+ */
+function setModelConfiguration(normalizedModel: string, provider: string): void {
   // Set suggestion model and provider - ensure we're setting the exact model requested
   process.env.SUGGESTION_MODEL = normalizedModel;
   global.CURRENT_SUGGESTION_MODEL = normalizedModel;
@@ -396,7 +460,12 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   // Always keep embedding provider as ollama
   process.env.EMBEDDING_PROVIDER = "ollama";
   global.CURRENT_EMBEDDING_PROVIDER = "ollama";
-  
+}
+
+/**
+ * Configures the embedding provider
+ */
+async function configureEmbeddingProvider(provider: string): Promise<void> {
   // Always use Ollama for embeddings
   if (provider === 'deepseek') {
     const ollamaAvailable = await ollama.checkOllama();
@@ -407,14 +476,4 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     process.env.EMBEDDING_PROVIDER = "ollama";
     global.CURRENT_EMBEDDING_PROVIDER = "ollama";
   }
-
-  logger.info(`Successfully switched to ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
-  
-  // Save the configuration to a persistent file
-  saveModelConfig();
-  
-  logger.debug(`Current configuration: model=${global.CURRENT_SUGGESTION_MODEL}, provider=${global.CURRENT_SUGGESTION_PROVIDER}, embedding=${global.CURRENT_EMBEDDING_PROVIDER}`);
-  
-  return true;
 }
-
