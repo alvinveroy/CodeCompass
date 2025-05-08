@@ -60,8 +60,8 @@ Examples:
     
     case 'test':
       console.log(`Testing ${LLM_PROVIDER} provider connection...`);
-      const provider = await getLLMProvider();
-      const available = await provider.checkConnection();
+      const llmProvider = await getLLMProvider();
+      const available = await llmProvider.checkConnection();
       
       if (available) {
         console.log(`${LLM_PROVIDER} provider is available and working correctly.`);

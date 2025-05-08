@@ -954,8 +954,11 @@ ${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Rele
 Provide a concise summary of the context for "${query}" based on the repository files and recent changes. Highlight key information relevant to the query, referencing specific files or snippets where applicable.
       `;
       
+      // Get the current LLM provider
+      const llmProvider = await getLLMProvider();
+      
       // Generate summary with multi-step reasoning
-      const summary = await generateSuggestion(summaryPrompt);
+      const summary = await llmProvider.generateText(summaryPrompt);
       
       // Add query to session
       addQuery(session.id, query, results);
