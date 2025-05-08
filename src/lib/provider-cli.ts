@@ -57,6 +57,7 @@ Examples:
         process.exit(1);
       }
       break;
+    }
     
     case 'test': {
       console.log(`Testing ${LLM_PROVIDER} provider connection...`);
