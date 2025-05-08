@@ -12,6 +12,8 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
+    project: './tsconfig.json',
+    tsconfigRootDir: __dirname,
   },
   rules: {
     '@typescript-eslint/no-explicit-any': 'warn',
@@ -22,6 +24,15 @@ module.exports = {
       varsIgnorePattern: '^_' 
     }],
     'no-console': 'off',
+    '@typescript-eslint/ban-ts-comment': 'off',
   },
+  overrides: [
+    {
+      files: ['*.ts'],
+      parserOptions: {
+        project: ['./tsconfig.json']
+      }
+    }
+  ],
   ignorePatterns: ['dist/', 'node_modules/'],
 };
