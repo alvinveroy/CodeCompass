@@ -70,6 +70,7 @@ Examples:
         process.exit(1);
       }
       break;
+    }
     
     default:
       console.error(`Unknown command: ${command}`);

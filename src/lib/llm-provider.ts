@@ -345,7 +345,7 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
   logger.info(`Creating provider instance for: ${providerName}`);
   
   switch (providerName) {
-    case 'deepseek':
+    case 'deepseek': {
       try {
         // Check if DeepSeek API key is configured
         const apiKeyConfigured = await deepseek.checkDeepSeekApiKey();
@@ -372,8 +372,9 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
         provider = new OllamaProvider();
       }
       break;
+    }
     case 'ollama':
-    default:
+    default: {
       logger.info("Using Ollama as LLM provider");
       provider = new OllamaProvider();
       
@@ -381,6 +382,7 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
       const isConnected = await provider.checkConnection();
       logger.info(`Ollama provider connection test: ${isConnected ? "successful" : "failed"}`);
       break;
+    }
   }
   
   return provider;
