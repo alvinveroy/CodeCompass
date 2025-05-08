@@ -396,6 +396,67 @@ export async function startServer(repoPath: string): Promise<void> {
       }
     );
 
+    // Register the switch_llm_provider tool for backward compatibility
+    server.tool(
+      "switch_llm_provider",
+      "Switch between different LLM providers (ollama or deepseek). This is an alias for switch_suggestion_model for backward compatibility.",
+      {
+        provider: z.string().describe("The LLM provider to switch to (ollama or deepseek)")
+      },
+      async (params: unknown) => {
+        const chainId = generateChainId();
+        trackToolChain(chainId, "switch_llm_provider");
+        
+        logger.info("Received params for switch_llm_provider", { params });
+        
+        // Extract provider from params, handling different input formats
+        let provider = "ollama";
+        
+        if (typeof params === 'string') {
+          try {
+            // Try to parse as JSON if it's a string
+            const parsed = JSON.parse(params);
+            if (parsed && typeof parsed === 'object' && parsed.provider) {
+              provider = parsed.provider;
+            }
+          } catch (e) {
+            // If not valid JSON, use as is
+            provider = params;
+          }
+        } else if (typeof params === 'object' && params !== null) {
+          const normalizedParams = params as any;
+          if (normalizedParams.provider) {
+            provider = normalizedParams.provider;
+          }
+        }
+        
+        logger.info(`Using provider for switch_llm_provider: ${provider}`);
+        
+        // Reuse the switch_suggestion_model implementation
+        const success = await switchSuggestionModel(provider);
+        
+        if (!success) {
+          return {
+            content: [{
+              type: "text",
+              text: `# Failed to Switch LLM Provider\n\nUnable to switch to ${provider} provider. Please check your configuration and logs for details.`,
+            }],
+          };
+        }
+        
+        // Get the actual current providers after switching
+        const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || provider;
+        const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
+        
+        return {
+          content: [{
+            type: "text",
+            text: `# LLM Provider Switched\n\nSuccessfully switched to ${provider} for suggestions.\n\nUsing ${suggestionProvider} for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_PROVIDER environment variable to '${provider}'`,
+          }],
+        };
+      }
+    );
+    
     // Start metrics logging
     const metricsInterval = startMetricsLogging(300000); // Log metrics every 5 minutes
     
