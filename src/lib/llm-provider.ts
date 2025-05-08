@@ -228,7 +228,9 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
         logger.error(`DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable.`);
         return false;
       }
+      // If API key is configured, test the connection
       available = await deepseek.testDeepSeekConnection();
+      logger.info(`DeepSeek connection test result: ${available}`);
     }
   } catch (error: any) {
     logger.error(`Error checking ${normalizedProvider} availability: ${error.message}`);

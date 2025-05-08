@@ -358,14 +358,16 @@ export async function startServer(repoPath: string): Promise<void> {
           
           // Get the actual current provider after switching
           const actualProvider = global.CURRENT_LLM_PROVIDER || process.env.LLM_PROVIDER || normalizedProvider;
+          const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || actualProvider;
+          const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
           
           // Log the current provider to debug
-          logger.info(`Current LLM provider: ${actualProvider}`);
+          logger.info(`Current LLM provider: ${actualProvider}, suggestion: ${suggestionProvider}, embedding: ${embeddingProvider}`);
           
           return {
             content: [{
               type: "text",
-              text: `# LLM Provider Switched\n\nSuccessfully switched to ${actualProvider} provider.\n\nTo make this change permanent, set the LLM_PROVIDER environment variable to '${actualProvider}'`,
+              text: `# LLM Provider Switched\n\nSuccessfully switched to ${normalizedProvider} provider.\n\nUsing ${suggestionProvider} for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`,
             }],
           };
         } catch (error: any) {
