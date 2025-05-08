@@ -1,5 +1,7 @@
 import { logger } from "./config";
 import { getLLMProvider } from "./llm-provider";
+import * as fs from 'fs';
+import * as path from 'path';
 import { incrementCounter, recordTiming, timeExecution } from "./metrics";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
@@ -455,6 +457,10 @@ export async function runAgentLoop(
     }
   });
   
+  // Load saved configuration to ensure we're using the correct model
+  const { loadModelConfig } = await import('./model-persistence');
+  loadModelConfig(true); // Force set the configuration
+  
   // Import the clearProviderCache function and use it
   const { clearProviderCache } = await import('./llm-provider');
   clearProviderCache();
@@ -462,6 +468,9 @@ export async function runAgentLoop(
   const currentProvider = await getLLMProvider();
   const isConnected = await currentProvider.checkConnection();
   logger.info(`Agent confirmed provider: ${isConnected ? "connected" : "disconnected"}`);
+  
+  // Log the actual provider and model being used
+  logger.info(`Agent using model: ${global.CURRENT_SUGGESTION_MODEL}, provider: ${global.CURRENT_SUGGESTION_PROVIDER}`);
   
   // Verify the provider is working with a test generation
   try {

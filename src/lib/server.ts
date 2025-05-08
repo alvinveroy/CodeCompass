@@ -2,11 +2,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { initMcpSafeLogging, restoreConsole } from "./mcp-logger";
 import fs from "fs/promises";
+import * as fsSync from "fs";
 import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
 import * as deepseek from "./deepseek";
+import { loadModelConfig, saveModelConfig, forceUpdateModelConfig } from "./model-persistence";
 
 // Initialize MCP-safe logging immediately
 initMcpSafeLogging();
@@ -200,12 +202,15 @@ export async function startServer(repoPath: string): Promise<void> {
       repoPath = process.cwd();
     }
 
+    // Load saved model configuration
+    loadModelConfig(true);
+    
     // Get and check LLM provider
     const llmProvider = await getLLMProvider();
     const isLlmAvailable = await llmProvider.checkConnection();
     
     if (!isLlmAvailable) {
-      logger.warn(`LLM provider (${LLM_PROVIDER}) is not available. Some features may not work.`);
+      logger.warn(`LLM provider (${global.CURRENT_SUGGESTION_PROVIDER || LLM_PROVIDER}) is not available. Some features may not work.`);
     }
     
     // Check if suggestion model is available (only needed for Ollama)
@@ -422,12 +427,8 @@ export async function startServer(repoPath: string): Promise<void> {
           
           // Force update the provider based on model name
           if (switchResult.success) {
-            const isDeepSeekModel = model.toLowerCase().includes('deepseek');
-            global.CURRENT_SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
-            process.env.SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
-            
-            // Force set environment variables to ensure they're properly set
-            process.env.SUGGESTION_MODEL = model.toLowerCase();
+            // Use the model persistence module to update and save the configuration
+            forceUpdateModelConfig(model);
             
             // Clear any cached provider instances and modules
             Object.keys(require.cache).forEach(key => {
@@ -435,6 +436,10 @@ export async function startServer(repoPath: string): Promise<void> {
                 delete require.cache[key];
               }
             });
+            
+            // Reset the provider cache
+            const { clearProviderCache } = await import('./llm-provider');
+            clearProviderCache();
             
             // Ensure the LLM provider is updated immediately
             const llmProvider = await getLLMProvider();
@@ -821,6 +826,36 @@ async function registerTools(
       // Import the clearProviderCache function and use it
       const { clearProviderCache } = await import('./llm-provider');
       clearProviderCache();
+      
+      // Load saved configuration to ensure we're using the correct model
+      try {
+        const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
+        const configFile = path.join(configDir, 'model-config.json');
+        
+        if (fs.existsSync(configFile)) {
+          const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+          
+          // Force set global variables from saved config
+          if (config.SUGGESTION_MODEL) {
+            global.CURRENT_SUGGESTION_MODEL = config.SUGGESTION_MODEL;
+            process.env.SUGGESTION_MODEL = config.SUGGESTION_MODEL;
+          }
+          
+          if (config.SUGGESTION_PROVIDER) {
+            global.CURRENT_SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
+            process.env.SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
+          }
+          
+          if (config.EMBEDDING_PROVIDER) {
+            global.CURRENT_EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
+            process.env.EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
+          }
+          
+          logger.info(`Loaded saved model configuration from ${configFile}`);
+        }
+      } catch (error: any) {
+        logger.warn(`Failed to load saved model configuration: ${error.message}`);
+      }
       
       // Ensure we have the latest LLM provider
       const llmProvider = await getLLMProvider();

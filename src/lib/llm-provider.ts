@@ -117,38 +117,7 @@ declare global {
   var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
-// Load saved model configuration if available
-function loadSavedModelConfig(): void {
-  try {
-    const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
-    const configFile = path.join(configDir, 'model-config.json');
-    
-    if (fs.existsSync(configFile)) {
-      const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-      
-      // Only set if not already set in environment or globals
-      if (!global.CURRENT_SUGGESTION_MODEL && !process.env.SUGGESTION_MODEL && config.SUGGESTION_MODEL) {
-        global.CURRENT_SUGGESTION_MODEL = config.SUGGESTION_MODEL;
-        process.env.SUGGESTION_MODEL = config.SUGGESTION_MODEL;
-        logger.info(`Loaded saved suggestion model: ${config.SUGGESTION_MODEL}`);
-      }
-      
-      if (!global.CURRENT_SUGGESTION_PROVIDER && !process.env.SUGGESTION_PROVIDER && config.SUGGESTION_PROVIDER) {
-        global.CURRENT_SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
-        process.env.SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
-        logger.info(`Loaded saved suggestion provider: ${config.SUGGESTION_PROVIDER}`);
-      }
-      
-      if (!global.CURRENT_EMBEDDING_PROVIDER && !process.env.EMBEDDING_PROVIDER && config.EMBEDDING_PROVIDER) {
-        global.CURRENT_EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
-        process.env.EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
-        logger.info(`Loaded saved embedding provider: ${config.EMBEDDING_PROVIDER}`);
-      }
-    }
-  } catch (error: any) {
-    logger.warn(`Failed to load saved model configuration: ${error.message}`);
-  }
-}
+import { loadModelConfig } from './model-persistence';
 
 // Cache for LLM providers to avoid creating new instances unnecessarily
 let providerCache: {
@@ -168,20 +137,25 @@ export function clearProviderCache(): void {
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
   // Load saved configuration first
-  loadSavedModelConfig();
+  loadModelConfig();
   
   // Prioritize suggestion model and provider settings
   const suggestionModel = global.CURRENT_SUGGESTION_MODEL || process.env.SUGGESTION_MODEL || "llama3.1:8b";
+  
+  // Determine provider based on model name first, then use saved provider
   const isDeepSeekModel = suggestionModel.toLowerCase().includes('deepseek');
+  const defaultProvider = isDeepSeekModel ? "deepseek" : "ollama";
   
   const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || 
                              process.env.SUGGESTION_PROVIDER || 
-                             (isDeepSeekModel ? "deepseek" : process.env.LLM_PROVIDER || LLM_PROVIDER);
+                             defaultProvider;
   
   const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
-  const currentProvider = suggestionProvider; // For backward compatibility
   
-  logger.info(`Getting LLM provider: ${currentProvider} (model: ${suggestionModel}, suggestion: ${suggestionProvider}, embedding: ${embeddingProvider})`);
+  // Log the actual values being used
+  logger.info(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
+  logger.info(`Global variables: model=${global.CURRENT_SUGGESTION_MODEL}, provider=${global.CURRENT_SUGGESTION_PROVIDER}`);
+  logger.info(`Environment variables: model=${process.env.SUGGESTION_MODEL}, provider=${process.env.SUGGESTION_PROVIDER}`);
   
   // Check if we have a cached provider and if it's still valid
   const cacheMaxAge = 2000; // 2 seconds max cache age (reduced from 5s)
