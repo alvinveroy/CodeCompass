@@ -316,67 +316,74 @@ export async function startServer(repoPath: string): Promise<void> {
     }
   
     // Register debug_model_switch tool
-    server.registerTool("debug_model_switch", async (params: unknown) => {
-      const normalizedParams = normalizeToolParams(params);
-      logger.info("Received params for debug_model_switch", normalizedParams);
-    
-      try {
-        // Extract model from params
-        let model = "deepseek-coder"; // Default model for debugging
+    server.tool(
+      "debug_model_switch",
+      "Debug tool to help diagnose model switching issues",
+      {
+        model: z.string().optional().describe("The model to test switching to")
+      },
+      async (params: unknown) => {
+        const normalizedParams = normalizeToolParams(params);
+        logger.info("Received params for debug_model_switch", normalizedParams);
       
-        if (typeof normalizedParams === 'object' && normalizedParams !== null) {
-          if (normalizedParams.model) {
-            model = normalizedParams.model;
+        try {
+          // Extract model from params
+          let model = "deepseek-coder"; // Default model for debugging
+        
+          if (typeof normalizedParams === 'object' && normalizedParams !== null) {
+            if (normalizedParams.model) {
+              model = normalizedParams.model;
+            }
+          } else if (typeof normalizedParams === 'string') {
+            model = normalizedParams;
           }
-        } else if (typeof normalizedParams === 'string') {
-          model = normalizedParams;
+        
+          // Run the debug function
+          const debugResult = await import("./server-tools/debug-model-switch").then(
+            module => module.debugModelSwitch(model)
+          );
+        
+          return {
+            content: [{
+              type: "text",
+              text: `# Model Switch Debug Results\n\n` +
+                `Requested model: ${debugResult.requestedModel}\n` +
+                `Normalized model: ${debugResult.normalizedModel}\n` +
+                `Provider: ${debugResult.provider}\n\n` +
+                `## Before Direct Setting\n` +
+                `### Environment Variables\n` +
+                `- SUGGESTION_MODEL: ${debugResult.before.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${debugResult.before.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${debugResult.before.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${debugResult.before.environment.DEEPSEEK_API_KEY}\n\n` +
+                `### Global Variables\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${debugResult.before.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${debugResult.before.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${debugResult.before.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `## After Direct Setting\n` +
+                `### Environment Variables\n` +
+                `- SUGGESTION_MODEL: ${debugResult.after.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${debugResult.after.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${debugResult.after.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${debugResult.after.environment.DEEPSEEK_API_KEY}\n\n` +
+                `### Global Variables\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${debugResult.after.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${debugResult.after.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${debugResult.after.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `Timestamp: ${debugResult.timestamp}`
+            }],
+          };
+        } catch (error: any) {
+          logger.error("Error in debug_model_switch tool", { error: error.message });
+          return {
+            content: [{
+              type: "text",
+              text: `# Error in Debug Model Switch\n\n${error.message}`,
+            }],
+          };
         }
-      
-        // Run the debug function
-        const debugResult = await import("./server-tools/debug-model-switch").then(
-          module => module.debugModelSwitch(model)
-        );
-      
-        return {
-          content: [{
-            type: "text",
-            text: `# Model Switch Debug Results\n\n` +
-              `Requested model: ${debugResult.requestedModel}\n` +
-              `Normalized model: ${debugResult.normalizedModel}\n` +
-              `Provider: ${debugResult.provider}\n\n` +
-              `## Before Direct Setting\n` +
-              `### Environment Variables\n` +
-              `- SUGGESTION_MODEL: ${debugResult.before.environment.SUGGESTION_MODEL || "Not set"}\n` +
-              `- SUGGESTION_PROVIDER: ${debugResult.before.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-              `- EMBEDDING_PROVIDER: ${debugResult.before.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-              `- DEEPSEEK_API_KEY: ${debugResult.before.environment.DEEPSEEK_API_KEY}\n\n` +
-              `### Global Variables\n` +
-              `- CURRENT_SUGGESTION_MODEL: ${debugResult.before.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-              `- CURRENT_SUGGESTION_PROVIDER: ${debugResult.before.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-              `- CURRENT_EMBEDDING_PROVIDER: ${debugResult.before.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
-              `## After Direct Setting\n` +
-              `### Environment Variables\n` +
-              `- SUGGESTION_MODEL: ${debugResult.after.environment.SUGGESTION_MODEL || "Not set"}\n` +
-              `- SUGGESTION_PROVIDER: ${debugResult.after.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-              `- EMBEDDING_PROVIDER: ${debugResult.after.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-              `- DEEPSEEK_API_KEY: ${debugResult.after.environment.DEEPSEEK_API_KEY}\n\n` +
-              `### Global Variables\n` +
-              `- CURRENT_SUGGESTION_MODEL: ${debugResult.after.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-              `- CURRENT_SUGGESTION_PROVIDER: ${debugResult.after.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-              `- CURRENT_EMBEDDING_PROVIDER: ${debugResult.after.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
-              `Timestamp: ${debugResult.timestamp}`
-          }],
-        };
-      } catch (error: any) {
-        logger.error("Error in debug_model_switch tool", { error: error.message });
-        return {
-          content: [{
-            type: "text",
-            text: `# Error in Debug Model Switch\n\n${error.message}`,
-          }],
-        };
       }
-    });
+    );
   
     // Register the switch suggestion model tool
     server.tool(
