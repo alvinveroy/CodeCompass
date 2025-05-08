@@ -1,7 +1,5 @@
 import { logger } from "./config";
 import { getLLMProvider } from "./llm-provider";
-import * as fs from 'fs';
-import * as path from 'path';
 import { incrementCounter, recordTiming, timeExecution } from "./metrics";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
@@ -11,6 +9,7 @@ import { validateGitRepository, getRepositoryDiff } from "./repository";
 import git from "isomorphic-git";
 import fs from "fs/promises";
 import path from "path";
+import * as fsSync from 'fs';
 
 // Tool registry for agent to understand available tools
 export interface Tool {
