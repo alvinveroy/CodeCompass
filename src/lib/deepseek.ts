@@ -3,7 +3,10 @@ import { logger, DEEPSEEK_API_KEY, DEEPSEEK_API_URL, DEEPSEEK_MODEL, REQUEST_TIM
 import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
 import { preprocessText } from "./utils";
 
-// Check if DeepSeek API key is configured
+/**
+ * Check if DeepSeek API key is configured
+ * @returns Promise<boolean> - True if API key is configured, false otherwise
+ */
 export async function checkDeepSeekApiKey(): Promise<boolean> {
   // Check if the API key is set in the environment
   const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
@@ -18,7 +21,10 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
   return true;
 }
 
-// Test DeepSeek API connection
+/**
+ * Test DeepSeek API connection
+ * @returns Promise<boolean> - True if connection is successful, false otherwise
+ */
 export async function testDeepSeekConnection(): Promise<boolean> {
   try {
     if (!await checkDeepSeekApiKey()) {
@@ -26,8 +32,11 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     }
 
     logger.info("Testing DeepSeek API connection...");
+    const apiUrl = process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
+    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+    
     const response = await axios.post(
-      `${DEEPSEEK_API_URL}/chat/completions`,
+      `${apiUrl}/chat/completions`,
       {
         model: DEEPSEEK_MODEL,
         messages: [{ role: "user", content: "Hello" }],
@@ -36,7 +45,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       {
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+          "Authorization": `Bearer ${apiKey}`
         },
         timeout: 10000
       }
@@ -61,7 +70,11 @@ export async function testDeepSeekConnection(): Promise<boolean> {
   }
 }
 
-// Generate text with DeepSeek API
+/**
+ * Generate text with DeepSeek API
+ * @param prompt - The prompt to generate text from
+ * @returns Promise<string> - The generated text
+ */
 export async function generateWithDeepSeek(prompt: string): Promise<string> {
   incrementCounter('deepseek_requests');
   
@@ -73,11 +86,15 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
     return await timeExecution('deepseek_generation', async () => {
       logger.info(`Generating with DeepSeek for prompt (length: ${prompt.length})`);
       
+      const apiUrl = process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
+      const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+      const model = process.env.DEEPSEEK_MODEL || DEEPSEEK_MODEL;
+      
       const response = await enhancedWithRetry(async () => {
         const res = await axios.post(
-          `${DEEPSEEK_API_URL}/chat/completions`,
+          `${apiUrl}/chat/completions`,
           {
-            model: DEEPSEEK_MODEL,
+            model: model,
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
             max_tokens: 2048
@@ -85,7 +102,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
           {
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+              "Authorization": `Bearer ${apiKey}`
             },
             timeout: REQUEST_TIMEOUT
           }

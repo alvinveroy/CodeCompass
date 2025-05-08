@@ -4,12 +4,17 @@ import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types";
 import { withRetry, preprocessText } from "./utils";
 import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
 
-// Check Ollama
+/**
+ * Check if Ollama server is running and accessible
+ * @returns Promise<boolean> - True if Ollama is accessible, false otherwise
+ */
 export async function checkOllama(): Promise<boolean> {
-  logger.info(`Checking Ollama at ${OLLAMA_HOST}`);
+  const host = process.env.OLLAMA_HOST || OLLAMA_HOST;
+  logger.info(`Checking Ollama at ${host}`);
+  
   try {
     await enhancedWithRetry(async () => {
-      const response = await axios.get(OLLAMA_HOST, { timeout: 10000 });
+      const response = await axios.get(host, { timeout: 10000 });
       logger.info(`Ollama status: ${response.status}`);
     });
     return true;
@@ -19,13 +24,20 @@ export async function checkOllama(): Promise<boolean> {
   }
 }
 
-// Check Ollama Model
+/**
+ * Check if a specific Ollama model is available
+ * @param model - The model name to check
+ * @param isEmbeddingModel - Whether this is an embedding model
+ * @returns Promise<boolean> - True if model is available, false otherwise
+ */
 export async function checkOllamaModel(model: string, isEmbeddingModel: boolean): Promise<boolean> {
+  const host = process.env.OLLAMA_HOST || OLLAMA_HOST;
   logger.info(`Checking Ollama model: ${model}`);
+  
   try {
     if (isEmbeddingModel) {
       const response = await axios.post<OllamaEmbeddingResponse>(
-        `${OLLAMA_HOST}/api/embeddings`,
+        `${host}/api/embeddings`,
         { model, prompt: "test" },
         { timeout: 10000 }
       );
@@ -35,7 +47,7 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
       }
     } else {
       const response = await axios.post<OllamaGenerateResponse>(
-        `${OLLAMA_HOST}/api/generate`,
+        `${host}/api/generate`,
         { model, prompt: "test", stream: false },
         { timeout: 10000 }
       );
@@ -96,7 +108,11 @@ async function enhancedWithRetry<T>(
   throw lastError || new Error("All retries failed");
 }
 
-// Generate Embedding
+/**
+ * Generate embeddings for text using Ollama
+ * @param text - The text to generate embeddings for
+ * @returns Promise<number[]> - The embedding vector
+ */
 export async function generateEmbedding(text: string): Promise<number[]> {
   incrementCounter('embedding_requests');
   
@@ -105,11 +121,14 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   
   try {
     return await timeExecution('embedding_generation', async () => {
+      const host = process.env.OLLAMA_HOST || OLLAMA_HOST;
+      const model = process.env.EMBEDDING_MODEL || EMBEDDING_MODEL;
+      
       const response = await enhancedWithRetry(async () => {
         logger.info(`Generating embedding for text (length: ${truncatedText.length}, snippet: "${truncatedText.slice(0, 100)}...")`);
         const res = await axios.post<OllamaEmbeddingResponse>(
-          `${OLLAMA_HOST}/api/embeddings`,
-          { model: EMBEDDING_MODEL, prompt: truncatedText },
+          `${host}/api/embeddings`,
+          { model: model, prompt: truncatedText },
           { timeout: REQUEST_TIMEOUT }
         );
         
