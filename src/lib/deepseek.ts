@@ -52,7 +52,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     logger.info(`Testing DeepSeek API connection with key length: ${apiKey.length}, key prefix: ${apiKey.substring(0, 5)}...`);
     
     // Always use the correct endpoint for testing
-    const apiUrl = "https://api.deepseek.com/chat/completions";
+    const apiUrl = DEEPSEEK_API_URL;
     process.env.DEEPSEEK_API_URL = apiUrl;
     
     logger.info(`Using DeepSeek API URL: ${apiUrl}`);
@@ -159,7 +159,8 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
     return await timeExecution('deepseek_generation', async () => {
       logger.info(`Generating with DeepSeek for prompt (length: ${prompt.length})`);
       
-      const apiUrl = process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
+      // Always use the constant to ensure consistency
+      const apiUrl = DEEPSEEK_API_URL;
       // Ensure we're getting the latest value from the environment
       const model = process.env.DEEPSEEK_MODEL || DEEPSEEK_MODEL;
       
