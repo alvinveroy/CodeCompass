@@ -1,5 +1,5 @@
 import axios from "axios";
-import { logger, OLLAMA_HOST, EMBEDDING_MODEL, SUGGESTION_MODEL, MAX_INPUT_LENGTH, REQUEST_TIMEOUT } from "./config";
+import { logger, OLLAMA_HOST, EMBEDDING_MODEL, SUGGESTION_MODEL, MAX_INPUT_LENGTH, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types";
 import { withRetry, preprocessText } from "./utils";
 import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
@@ -7,11 +7,16 @@ import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } fro
 // Check Ollama
 export async function checkOllama(): Promise<boolean> {
   logger.info(`Checking Ollama at ${OLLAMA_HOST}`);
-  await withRetry(async () => {
-    const response = await axios.get(OLLAMA_HOST, { timeout: 5000 });
-    logger.info(`Ollama status: ${response.status}`);
-  });
-  return true;
+  try {
+    await enhancedWithRetry(async () => {
+      const response = await axios.get(OLLAMA_HOST, { timeout: 10000 });
+      logger.info(`Ollama status: ${response.status}`);
+    });
+    return true;
+  } catch (error) {
+    logger.error(`Failed to connect to Ollama: ${error}`);
+    return false;
+  }
 }
 
 // Check Ollama Model
@@ -56,6 +61,41 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
   }
 }
 
+// Enhanced withRetry function with exponential backoff
+async function enhancedWithRetry<T>(
+  fn: () => Promise<T>, 
+  retries = MAX_RETRIES, 
+  initialDelay = RETRY_DELAY
+): Promise<T> {
+  let lastError: Error | undefined;
+  let currentDelay = initialDelay;
+  
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a timeout error
+      const isTimeout = error.code === 'ECONNABORTED' || 
+                        error.message?.includes('timeout') ||
+                        error.response?.status === 500;
+      
+      if (isTimeout) {
+        logger.warn(`Request timed out (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
+      } else {
+        logger.warn(`Retry ${i + 1}/${retries} after error: ${error.message}`);
+      }
+      
+      // Wait before retrying with exponential backoff
+      await new Promise(resolve => setTimeout(resolve, currentDelay));
+      currentDelay *= 2; // Exponential backoff
+    }
+  }
+  
+  throw lastError || new Error("All retries failed");
+}
+
 // Generate Embedding
 export async function generateEmbedding(text: string): Promise<number[]> {
   incrementCounter('embedding_requests');
@@ -65,7 +105,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   
   try {
     return await timeExecution('embedding_generation', async () => {
-      const response = await withRetry(async () => {
+      const response = await enhancedWithRetry(async () => {
         logger.info(`Generating embedding for text (length: ${truncatedText.length}, snippet: "${truncatedText.slice(0, 100)}...")`);
         const res = await axios.post<OllamaEmbeddingResponse>(
           `${OLLAMA_HOST}/api/embeddings`,
@@ -118,7 +158,7 @@ ${prompt}
 Break this down into logical steps. What information do you need? How will you structure your response?
 Provide a concise plan with 3-5 steps.`;
       
-      const plan = await withRetry(async () => {
+      const plan = await enhancedWithRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(
           `${OLLAMA_HOST}/api/generate`,
           { model: SUGGESTION_MODEL, prompt: planPrompt, stream: false },
@@ -140,7 +180,7 @@ ${prompt}
 
 Provide a comprehensive, well-structured response following your plan.`;
       
-      const response = await withRetry(async () => {
+      const response = await enhancedWithRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(
           `${OLLAMA_HOST}/api/generate`,
           { model: SUGGESTION_MODEL, prompt: executionPrompt, stream: false },
@@ -168,7 +208,7 @@ ${evaluation.feedback}
 
 Please provide an improved version addressing these issues.`;
         
-        const refinedResponse = await withRetry(async () => {
+        const refinedResponse = await enhancedWithRetry(async () => {
           const res = await axios.post<OllamaGenerateResponse>(
             `${OLLAMA_HOST}/api/generate`,
             { model: SUGGESTION_MODEL, prompt: refinementPrompt, stream: false },
@@ -227,7 +267,7 @@ Format your answer as:
 Score: [number]
 Feedback: [your detailed feedback]`;
     
-    const evaluationResponse = await withRetry(async () => {
+    const evaluationResponse = await enhancedWithRetry(async () => {
       const res = await axios.post<OllamaGenerateResponse>(
         `${OLLAMA_HOST}/api/generate`,
         { model: SUGGESTION_MODEL, prompt: evaluationPrompt, stream: false },
@@ -277,7 +317,7 @@ ${feedback}
 
 Please provide an improved response addressing the user's feedback.`;
     
-    const improvedResponse = await withRetry(async () => {
+    const improvedResponse = await enhancedWithRetry(async () => {
       const res = await axios.post<OllamaGenerateResponse>(
         `${OLLAMA_HOST}/api/generate`,
         { model: SUGGESTION_MODEL, prompt: feedbackPrompt, stream: false },
