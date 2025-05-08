@@ -358,7 +358,7 @@ export async function startServer(repoPath: string): Promise<void> {
             timestamp: string;
           }
           
-          const typedResult = debugResult as DebugResultType;
+          const typedResult = debugResult as unknown as DebugResultType;
           
           return {
             content: [{
