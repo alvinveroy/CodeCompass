@@ -984,7 +984,6 @@ async function registerTools(
           const summarizePrompt = `Summarize this code snippet in 50 words or less:\n\n${snippet}`;
           summary = await llmProvider.generateText(summarizePrompt);
         } catch (error: unknown) {
-          const err = error as Error;
           logger.warn(`Failed to generate summary: ${error.message}`);
           summary = "Summary generation failed";
         }
