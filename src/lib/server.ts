@@ -479,8 +479,8 @@ export async function startServer(repoPath: string): Promise<void> {
             }],
           };
         } catch (error: unknown) {
-          const err = error as Error;
-          logger.error("Error in direct_model_switch tool", { error: err.message });
+          const _err = error as Error;
+          logger.error("Error in direct_model_switch tool", { error: _err.message });
           return {
             content: [{
               type: "text",
