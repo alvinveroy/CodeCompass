@@ -1,5 +1,5 @@
 import { logger } from "./config";
-import { generateSuggestion } from "./ollama";
+import { getLLMProvider } from "./llm-provider";
 import { incrementCounter, recordTiming, timeExecution } from "./metrics";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
@@ -330,8 +330,11 @@ Based on the provided context and snippets, generate a detailed code suggestion 
 - References to the provided snippets or context where applicable.
       `;
       
-      // Generate suggestion
-      const suggestion = await generateSuggestion(prompt);
+      // Get the current LLM provider
+      const llmProvider = await getLLMProvider();
+      
+      // Generate suggestion with the current provider
+      const suggestion = await llmProvider.generateText(prompt);
       
       // Add suggestion to session
       addSuggestion(session.id, query, suggestion);
@@ -408,7 +411,11 @@ Structure your analysis with these sections:
 - Recommended Approach
       `;
       
-      const analysis = await generateSuggestion(analysisPrompt);
+      // Get the current LLM provider
+      const llmProvider = await getLLMProvider();
+      
+      // Generate analysis with the current provider
+      const analysis = await llmProvider.generateText(analysisPrompt);
       
       // Add to session
       addQuery(session.id, query, contextResults);
@@ -471,8 +478,11 @@ export async function runAgentLoop(
         userPrompt += `\n\nContext from previous steps:\n${contextStr}`;
       }
       
+      // Get the current LLM provider
+      const llmProvider = await getLLMProvider();
+      
       // Get agent reasoning
-      const agentOutput = await generateSuggestion(agentPrompt);
+      const agentOutput = await llmProvider.generateText(agentPrompt);
       
       // Check if the agent wants to make tool calls
       const toolCalls = parseToolCalls(agentOutput);
@@ -522,7 +532,8 @@ export async function runAgentLoop(
       if (step === maxSteps - 1 && !agentState.isComplete) {
         // Generate final response based on collected information
         const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nYou've reached the maximum number of steps. Please provide your final response to the user based on the information collected so far.`;
-        agentState.finalResponse = await generateSuggestion(finalPrompt);
+        const llmProvider = await getLLMProvider();
+        agentState.finalResponse = await llmProvider.generateText(finalPrompt);
         agentState.isComplete = true;
       }
     }
@@ -530,7 +541,8 @@ export async function runAgentLoop(
     // If we somehow don't have a final response, generate one
     if (!agentState.finalResponse) {
       const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nPlease provide your final response to the user based on the information collected so far.`;
-      agentState.finalResponse = await generateSuggestion(finalPrompt);
+      const llmProvider = await getLLMProvider();
+      agentState.finalResponse = await llmProvider.generateText(finalPrompt);
     }
     
     // Add the final response as a suggestion in the session

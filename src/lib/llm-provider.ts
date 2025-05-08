@@ -206,7 +206,7 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   }
   
   // Use a single provider for all operations
-  switch (currentProvider.toLowerCase()) {
+  switch (suggestionProvider.toLowerCase()) {
     case 'deepseek':
       // Check if DeepSeek API key is configured
       if (!await deepseek.checkDeepSeekApiKey()) {

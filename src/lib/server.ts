@@ -342,6 +342,14 @@ export async function startServer(repoPath: string): Promise<void> {
           const switchResult = await import("./server-tools/direct-model-switch").then(
             module => module.directModelSwitch(model)
           );
+          
+          // Force update the provider based on model name
+          if (switchResult.success) {
+            const isDeepSeekModel = model.toLowerCase().includes('deepseek');
+            global.CURRENT_SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
+            process.env.SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
+            logger.info(`Forced provider to ${global.CURRENT_SUGGESTION_PROVIDER} based on model name`);
+          }
         
           if (!switchResult.success) {
             return {
