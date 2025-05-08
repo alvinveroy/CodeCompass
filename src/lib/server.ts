@@ -621,6 +621,38 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     }
   );
   
+  // Add check_provider tool
+  server.tool(
+    "check_provider",
+    "Check the current LLM provider status and test the connection.",
+    {},
+    async () => {
+      const { testCurrentProvider, getCurrentProviderInfo } = await import("./test-provider");
+      
+      const providerInfo = await getCurrentProviderInfo();
+      const connectionTest = await testCurrentProvider();
+      
+      return {
+        content: [{
+          type: "text",
+          text: `# LLM Provider Status
+
+## Current Provider: ${providerInfo.provider}
+
+- Connection Test: ${connectionTest ? "✅ Successful" : "❌ Failed"}
+- Provider Details:
+${Object.entries(providerInfo)
+  .filter(([key]) => key !== 'provider')
+  .map(([key, value]) => `  - ${key}: ${value}`)
+  .join('\n')}
+
+To switch providers, use the \`switch_llm_provider\` tool with either "ollama" or "deepseek" as the provider parameter.
+`,
+        }],
+      };
+    }
+  );
+  
   // Add get_session_history tool
   server.tool(
     "get_session_history",
