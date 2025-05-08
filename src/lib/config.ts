@@ -3,8 +3,8 @@ import winston from "winston";
 // Configuration
 export const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
 export const QDRANT_HOST = process.env.QDRANT_HOST || "http://127.0.0.1:6333";
-export const _COLLECTION_NAME = "codecompass";
-export const _EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5";
+export const COLLECTION_NAME = "codecompass";
+export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5";
 export const SUGGESTION_MODEL = process.env.SUGGESTION_MODEL || "llama3.1:8b";
 
 // LLM Provider Configuration
