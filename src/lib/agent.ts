@@ -18,6 +18,14 @@ export interface Tool {
   requiresModel: boolean;
 }
 
+// Define AgentStep interface
+export interface AgentStep {
+  tool: string;
+  input: unknown;
+  output: unknown;
+  reasoning: string;
+}
+
 // Tool registry with descriptions for the agent
 export const toolRegistry: Tool[] = [
   {
@@ -68,7 +76,7 @@ export const toolRegistry: Tool[] = [
 export function createAgentState(sessionId: string, query: string): AgentState {
   return {
     sessionId,
-    query,
+    query as string,
     steps: [],
     context: [],
     isComplete: false
@@ -182,6 +190,9 @@ export async function executeToolCall(
 ): Promise<unknown> {
   const { tool, parameters } = toolCall;
   
+  // Type assertion for parameters
+  const typedParams = parameters as Record<string, unknown>;
+  
   // Find the tool in the registry
   const toolInfo = toolRegistry.find(t => t.name === tool);
   if (!toolInfo) {
@@ -196,7 +207,8 @@ export async function executeToolCall(
   // Execute the appropriate tool
   switch (tool) {
     case "search_code": {
-      const { query, sessionId } = parameters;
+      const query = typedParams.query as string;
+      const sessionId = typedParams.sessionId as string | undefined;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -207,7 +219,7 @@ export async function executeToolCall(
         : [];
       
       // Update context in session
-      updateContext(session.id, repoPath, files);
+      updateContext(session.id, repoPath, files, _diff);
       
       // Use iterative query refinement
       const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
@@ -236,7 +248,8 @@ export async function executeToolCall(
     }
     
     case "get_repository_context": {
-      const { query, sessionId } = parameters;
+      const query = typedParams.query as string;
+      const sessionId = typedParams.sessionId as string | undefined;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -280,7 +293,8 @@ export async function executeToolCall(
     }
     
     case "generate_suggestion": {
-      const { query, sessionId } = parameters;
+      const query = typedParams.query as string;
+      const sessionId = typedParams.sessionId as string | undefined;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -318,7 +332,7 @@ export async function executeToolCall(
 **Context**:
 Repository: ${repoPath}
 Files: ${files.slice(0, 10).join(", ")}${files.length > 10 ? "..." : ""}
-Recent Changes: ${diff.substring(0, 500)}${diff.length > 500 ? "..." : ""}
+Recent Changes: ${_diff.substring(0, 500)}${_diff.length > 500 ? "..." : ""}
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
@@ -371,7 +385,8 @@ Based on the provided context and snippets, generate a detailed code suggestion 
     }
     
     case "analyze_code_problem": {
-      const { query, sessionId } = parameters;
+      const query = typedParams.query as string;
+      const sessionId = typedParams.sessionId as string | undefined;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -555,7 +570,7 @@ export async function runAgentLoop(
             input: toolCall.parameters,
             output: toolOutput,
             reasoning: agentOutput
-          } as AgentStep);
+          } as unknown as AgentStep);
           
           // Add context from tool output
           agentState.context.push(toolOutput);

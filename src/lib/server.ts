@@ -107,7 +107,7 @@ async function registerGetRepositoryContextTool(
       const sessionId = 'sessionId' in parsedParams ? parsedParams.sessionId : undefined;
     
     // Get or create session
-    const session = getOrCreateSession(sessionId, repoPath);
+    const session = getOrCreateSession(sessionId as string | undefined, repoPath);
     
     // Log the extracted query to confirm it's working
     logger.info("Extracted query for repository context", { query, sessionId: session.id });
@@ -139,7 +139,7 @@ async function registerGetRepositoryContextTool(
     }));
     
     // Add query to session
-    addQuery(session.id, query, results);
+    addQuery(session.id, query as string, results);
     
     // Format the response as clean markdown without using the suggestion model
     const formattedResponse = `# Repository Context Summary for: "${query}"
@@ -162,7 +162,7 @@ ${c.snippet}
 
 ## Recent Changes
 \`\`\`
-${diff}
+${_diff}
 \`\`\`
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
@@ -227,7 +227,7 @@ export async function startServer(repoPath: string): Promise<void> {
         suggestionModelAvailable = isLlmAvailable;
       }
     } catch (error: unknown) {
-      logger.warn(`Warning: Model not available. Suggestion tools may be limited: ${error.message}`);
+      logger.warn(`Warning: Model not available. Suggestion tools may be limited: ${(error as Error).message}`);
     }
     
     const qdrantClient = await initializeQdrant();
@@ -309,8 +309,8 @@ export async function startServer(repoPath: string): Promise<void> {
         const content = await fs.readFile(path.join(repoPath, filepath), "utf8");
         return { contents: [{ uri: uri.toString(), text: content }] };
       } catch (error: unknown) {
-        logger.error(`Error reading file ${filepath}`, { message: error.message });
-        return { contents: [{ uri: uri.toString(), text: `Error: ${error.message}` }] };
+        logger.error(`Error reading file ${filepath}`, { message: (error as Error).message });
+        return { contents: [{ uri: uri.toString(), text: `Error: ${(error as Error).message}` }] };
       }
     });
 
@@ -338,22 +338,22 @@ export async function startServer(repoPath: string): Promise<void> {
               type: "text",
               text: `# Provider Debug Results\n\n` +
                 `## Current State\n` +
-                `- Suggestion Model: ${debugResult.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- Suggestion Provider: ${debugResult.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- Embedding Provider: ${debugResult.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- Suggestion Model: ${(debugResult as any).globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- Suggestion Provider: ${(debugResult as any).globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- Embedding Provider: ${(debugResult as any).globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `## Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${debugResult.environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${debugResult.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${debugResult.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${debugResult.environment.DEEPSEEK_API_KEY}\n` +
-                `- DEEPSEEK_API_URL: ${debugResult.environment.DEEPSEEK_API_URL || "Not set"}\n` +
-                `- OLLAMA_HOST: ${debugResult.environment.OLLAMA_HOST || "Not set"}\n\n` +
+                `- SUGGESTION_MODEL: ${(debugResult as any).environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${(debugResult as any).environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${(debugResult as any).environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${(debugResult as any).environment.DEEPSEEK_API_KEY}\n` +
+                `- DEEPSEEK_API_URL: ${(debugResult as any).environment.DEEPSEEK_API_URL || "Not set"}\n` +
+                `- OLLAMA_HOST: ${(debugResult as any).environment.OLLAMA_HOST || "Not set"}\n\n` +
                 `## Provider Tests\n` +
-                `- Provider Type: ${debugResult.provider.type}\n` +
-                `- Provider Model: ${debugResult.provider.model}\n` +
-                `- Connection Test: ${debugResult.provider.connectionTest ? "✅ Successful" : "❌ Failed"}\n` +
-                `- Generation Test: ${debugResult.provider.generationTest ? "✅ Successful" : "❌ Failed"}\n` +
-                `${debugResult.provider.generationError ? `- Generation Error: ${debugResult.provider.generationError}\n` : ""}` +
+                `- Provider Type: ${(debugResult as any).provider.type}\n` +
+                `- Provider Model: ${(debugResult as any).provider.model}\n` +
+                `- Connection Test: ${(debugResult as any).provider.connectionTest ? "✅ Successful" : "❌ Failed"}\n` +
+                `- Generation Test: ${(debugResult as any).provider.generationTest ? "✅ Successful" : "❌ Failed"}\n` +
+                `${(debugResult as any).provider.generationError ? `- Generation Error: ${(debugResult as any).provider.generationError}\n` : ""}` +
                 `\n` +
                 `Timestamp: ${debugResult.timestamp}`
             }],
@@ -364,7 +364,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Error in Provider Debug\n\n${error.message}`,
+              text: `# Error in Provider Debug\n\n${(error as Error).message}`,
             }],
           };
         }
@@ -392,7 +392,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Error in Provider Reset\n\n${error.message}`,
+              text: `# Error in Provider Reset\n\n${(error as Error).message}`,
             }],
           };
         }
@@ -416,7 +416,7 @@ export async function startServer(repoPath: string): Promise<void> {
         
           if (typeof normalizedParams === 'object' && normalizedParams !== null) {
             if (normalizedParams.model) {
-              model = normalizedParams.model;
+              model = normalizedParams.model as string;
             }
           } else if (typeof normalizedParams === 'string') {
             model = normalizedParams;
@@ -483,7 +483,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Error in Direct Model Switch\n\n${error.message}`
+              text: `# Error in Direct Model Switch\n\n${(error as Error).message}`
             }],
           };
         }
@@ -510,27 +510,27 @@ export async function startServer(repoPath: string): Promise<void> {
               text: `# Model Switch Diagnostic Results\n\n` +
                 `## Current State\n` +
                 `### Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${diagnosticResult.currentState.environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${diagnosticResult.currentState.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${diagnosticResult.currentState.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${diagnosticResult.currentState.environment.DEEPSEEK_API_KEY}\n` +
-                `- DEEPSEEK_API_URL: ${diagnosticResult.currentState.environment.DEEPSEEK_API_URL || "Not set"}\n` +
-                `- OLLAMA_HOST: ${diagnosticResult.currentState.environment.OLLAMA_HOST || "Not set"}\n` +
-                `- NODE_ENV: ${diagnosticResult.currentState.environment.NODE_ENV || "Not set"}\n` +
-                `- VITEST: ${diagnosticResult.currentState.environment.VITEST || "Not set"}\n\n` +
+                `- SUGGESTION_MODEL: ${(diagnosticResult as any).currentState.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${(diagnosticResult as any).currentState.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${(diagnosticResult as any).currentState.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${(diagnosticResult as any).currentState.environment.DEEPSEEK_API_KEY}\n` +
+                `- DEEPSEEK_API_URL: ${(diagnosticResult as any).currentState.environment.DEEPSEEK_API_URL || "Not set"}\n` +
+                `- OLLAMA_HOST: ${(diagnosticResult as any).currentState.environment.OLLAMA_HOST || "Not set"}\n` +
+                `- NODE_ENV: ${(diagnosticResult as any).currentState.environment.NODE_ENV || "Not set"}\n` +
+                `- VITEST: ${(diagnosticResult as any).currentState.environment.VITEST || "Not set"}\n\n` +
                 `### Global Variables\n` +
-                `- CURRENT_SUGGESTION_MODEL: ${diagnosticResult.currentState.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- CURRENT_SUGGESTION_PROVIDER: ${diagnosticResult.currentState.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- CURRENT_EMBEDDING_PROVIDER: ${diagnosticResult.currentState.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${(diagnosticResult as any).currentState.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${(diagnosticResult as any).currentState.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${(diagnosticResult as any).currentState.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `## Test Results\n` +
                 `### DeepSeek Test\n` +
-                `- Expected: model=${diagnosticResult.tests.deepseek.expected.model}, provider=${diagnosticResult.tests.deepseek.expected.provider}\n` +
-                `- Actual: model=${diagnosticResult.tests.deepseek.actual.model}, provider=${diagnosticResult.tests.deepseek.actual.provider}\n` +
-                `- Success: ${diagnosticResult.tests.deepseek.success ? "✅" : "❌"}\n\n` +
+                `- Expected: model=${(diagnosticResult as any).tests.deepseek.expected.model}, provider=${(diagnosticResult as any).tests.deepseek.expected.provider}\n` +
+                `- Actual: model=${(diagnosticResult as any).tests.deepseek.actual.model}, provider=${(diagnosticResult as any).tests.deepseek.actual.provider}\n` +
+                `- Success: ${(diagnosticResult as any).tests.deepseek.success ? "✅" : "❌"}\n\n` +
                 `### Ollama Test\n` +
-                `- Expected: model=${diagnosticResult.tests.ollama.expected.model}, provider=${diagnosticResult.tests.ollama.expected.provider}\n` +
-                `- Actual: model=${diagnosticResult.tests.ollama.actual.model}, provider=${diagnosticResult.tests.ollama.actual.provider}\n` +
-                `- Success: ${diagnosticResult.tests.ollama.success ? "✅" : "❌"}\n\n` +
+                `- Expected: model=${(diagnosticResult as any).tests.ollama.expected.model}, provider=${(diagnosticResult as any).tests.ollama.expected.provider}\n` +
+                `- Actual: model=${(diagnosticResult as any).tests.ollama.actual.model}, provider=${(diagnosticResult as any).tests.ollama.actual.provider}\n` +
+                `- Success: ${(diagnosticResult as any).tests.ollama.success ? "✅" : "❌"}\n\n` +
                 `Timestamp: ${diagnosticResult.timestamp}`
             }],
           };
@@ -540,7 +540,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Error in Model Switch Diagnostic\n\n${error.message}`,
+              text: `# Error in Model Switch Diagnostic\n\n${(error as Error).message}`,
             }],
           };
         }
@@ -564,7 +564,7 @@ export async function startServer(repoPath: string): Promise<void> {
         
           if (typeof normalizedParams === 'object' && normalizedParams !== null) {
             if (normalizedParams.model) {
-              model = normalizedParams.model;
+              model = normalizedParams.model as string;
             }
           } else if (typeof normalizedParams === 'string') {
             model = normalizedParams;
@@ -584,24 +584,24 @@ export async function startServer(repoPath: string): Promise<void> {
                 `Provider: ${debugResult.provider}\n\n` +
                 `## Before Direct Setting\n` +
                 `### Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${debugResult.before.environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${debugResult.before.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${debugResult.before.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${debugResult.before.environment.DEEPSEEK_API_KEY}\n\n` +
+                `- SUGGESTION_MODEL: ${(debugResult as any).before.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${(debugResult as any).before.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${(debugResult as any).before.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${(debugResult as any).before.environment.DEEPSEEK_API_KEY}\n\n` +
                 `### Global Variables\n` +
-                `- CURRENT_SUGGESTION_MODEL: ${debugResult.before.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- CURRENT_SUGGESTION_PROVIDER: ${debugResult.before.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- CURRENT_EMBEDDING_PROVIDER: ${debugResult.before.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${(debugResult as any).before.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${(debugResult as any).before.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${(debugResult as any).before.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `## After Direct Setting\n` +
                 `### Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${debugResult.after.environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${debugResult.after.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${debugResult.after.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${debugResult.after.environment.DEEPSEEK_API_KEY}\n\n` +
+                `- SUGGESTION_MODEL: ${(debugResult as any).after.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${(debugResult as any).after.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${(debugResult as any).after.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${(debugResult as any).after.environment.DEEPSEEK_API_KEY}\n\n` +
                 `### Global Variables\n` +
-                `- CURRENT_SUGGESTION_MODEL: ${debugResult.after.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- CURRENT_SUGGESTION_PROVIDER: ${debugResult.after.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- CURRENT_EMBEDDING_PROVIDER: ${debugResult.after.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${(debugResult as any).after.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${(debugResult as any).after.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${(debugResult as any).after.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `Timestamp: ${debugResult.timestamp}`
             }],
           };
@@ -611,7 +611,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Error in Debug Model Switch\n\n${error.message}`,
+              text: `# Error in Debug Model Switch\n\n${(error as Error).message}`,
             }],
           };
         }
@@ -653,7 +653,7 @@ export async function startServer(repoPath: string): Promise<void> {
         } else if (typeof normalizedParams === 'object' && normalizedParams !== null) {
           // Handle object input
           if (normalizedParams.model) {
-            model = normalizedParams.model;
+            model = normalizedParams.model as string;
           } else if (normalizedParams.provider) {
             // For backward compatibility
             model = normalizedParams.provider === "deepseek" ? "deepseek-coder" : "llama3.1:8b";
@@ -744,7 +744,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Error Switching Suggestion Model\n\n${error.message}`,
+              text: `# Error Switching Suggestion Model\n\n${(error as Error).message}`,
             }],
           };
         }
@@ -863,10 +863,10 @@ async function registerTools(
             logger.info(`Loaded saved model configuration from ${configFile}`);
           }
         } catch (fsError: unknown) {
-          logger.warn(`Failed to read model configuration file: ${fsError.message}`);
+          logger.warn(`Failed to read model configuration file: ${(fsError as Error).message}`);
         }
       } catch (error: unknown) {
-        logger.warn(`Failed to load saved model configuration: ${error.message}`);
+        logger.warn(`Failed to load saved model configuration: ${(error as Error).message}`);
       }
       
       // Ensure we have the latest LLM provider
@@ -894,7 +894,7 @@ async function registerTools(
       // Run the agent loop with timeout
       const response = await Promise.race([
         runAgentLoop(
-          query,
+          query as string,
           sessionId,
           qdrantClient,
           repoPath,
@@ -916,7 +916,7 @@ async function registerTools(
       return {
         content: [{
           type: "text",
-          text: `# Error in Agent Processing\n\nThere was an error processing your query: ${error.message}\n\nPlease try a more specific query or use one of the other tools directly.`,
+          text: `# Error in Agent Processing\n\nThere was an error processing your query: ${(error as Error).message}\n\nPlease try a more specific query or use one of the other tools directly.`,
         }],
       };
     }
@@ -947,7 +947,7 @@ async function registerTools(
       const { query, sessionId } = normalizedParams;
     
     // Get or create session
-    const session = getOrCreateSession(sessionId, repoPath);
+    const session = getOrCreateSession(sessionId as string | undefined, repoPath);
     
     // Log the extracted query to confirm it's working
     logger.info("Extracted query for search_code", { query, sessionId: session.id });
@@ -968,7 +968,7 @@ async function registerTools(
     );
     
     // Add query to session
-    addQuery(session.id, query, results, relevanceScore);
+    addQuery(session.id, query as string, results, relevanceScore);
     
     // Get the current LLM provider
     const llmProvider = await getLLMProvider();
@@ -984,7 +984,7 @@ async function registerTools(
           const summarizePrompt = `Summarize this code snippet in 50 words or less:\n\n${snippet}`;
           summary = await llmProvider.generateText(summarizePrompt);
         } catch (error: unknown) {
-          logger.warn(`Failed to generate summary: ${error.message}`);
+          logger.warn(`Failed to generate summary: ${(error as Error).message}`);
           summary = "Summary generation failed";
         }
       }
@@ -1130,7 +1130,7 @@ You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://
       }
     
     try {
-      const session = getOrCreateSession(sessionId);
+      const session = getOrCreateSession(sessionId as string);
       
       return {
         content: [{
@@ -1164,7 +1164,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       return {
         content: [{
           type: "text",
-          text: `# Error\n\n${error.message}`,
+          text: `# Error\n\n${(error as Error).message}`,
         }],
       };
     }
@@ -1196,7 +1196,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         const { query, sessionId } = normalizedParams;
       
       // Get or create session
-      const session = getOrCreateSession(sessionId, repoPath);
+      const session = getOrCreateSession(sessionId as string | undefined, repoPath);
       
       // Log the extracted query to confirm it's working
       logger.info("Extracted query for generate_suggestion", { query, sessionId: session.id });
@@ -1211,7 +1211,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       const _diff = await getRepositoryDiff(repoPath);
       
       // Update context in session
-      updateContext(session.id, repoPath, files, diff);
+      updateContext(session.id, repoPath, files, _diff);
       
       // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
@@ -1236,13 +1236,13 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       // Include previous relevant results if current results are limited
       if (context.length < 2 && relevantResults.length > 0) {
         const additionalContext = relevantResults
-          .filter(r => !context.some(c => c.filepath === r.payload?.filepath))
+          .filter(r => !context.some(c => c.filepath === (r as any).payload?.filepath))
           .slice(0, 2)
           .map(r => ({
-            filepath: r.payload?.filepath || "unknown",
-            snippet: r.payload?.content?.slice(0, MAX_SNIPPET_LENGTH) || "",
-            last_modified: r.payload?.last_modified || "unknown",
-            relevance: r.score || 0.5,
+            filepath: (r as any).payload?.filepath || "unknown",
+            snippet: (r as any).payload?.content?.slice(0, MAX_SNIPPET_LENGTH) || "",
+            last_modified: (r as any).payload?.last_modified || "unknown",
+            relevance: (r as any).score || 0.5,
             note: "From previous related query"
           }));
         
@@ -1253,7 +1253,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
 **Context**:
 Repository: ${repoPath}
 Files: ${files.join(", ")}
-Recent Changes: ${diff}
+Recent Changes: ${_diff}
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
@@ -1274,7 +1274,7 @@ Ensure the suggestion is concise, practical, and leverages the repository's exis
       const suggestion = await llmProvider.generateText(prompt);
       
       // Add suggestion to session
-      addSuggestion(session.id, query, suggestion);
+      addSuggestion(session.id, query as string, suggestion);
       
       // Format the response as clean markdown
       const formattedResponse = `# Code Suggestion for: "${query}"
@@ -1297,7 +1297,7 @@ ${c.snippet}
 
 ## Recent Changes
 \`\`\`
-${diff}
+${_diff}
 \`\`\`
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)
@@ -1332,17 +1332,17 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
           const { sessionId, score, comments, originalQuery, suggestion } = normalizedParams;
       
         // Get session
-        const session = getOrCreateSession(sessionId);
+        const session = getOrCreateSession(sessionId as string);
         
         // Add feedback to session
-        addFeedback(session.id, score, comments);
+        addFeedback(session.id, score as number, comments as string);
         
         // Get the current LLM provider
         const llmProvider = await getLLMProvider();
         
         // Process feedback to improve the suggestion
         const improvedSuggestion = await llmProvider.processFeedback(
-          originalQuery,
+          originalQuery as string,
           suggestion,
           comments,
           score
@@ -1375,7 +1375,7 @@ Session ID: ${session.id}`;
         return {
           content: [{
             type: "text",
-            text: `# Error Processing Feedback\n\n${error.message}\n\nPlease ensure you provide all required parameters: sessionId, feedbackId, score, comments, originalQuery, and suggestion.`,
+            text: `# Error Processing Feedback\n\n${(error as Error).message}\n\nPlease ensure you provide all required parameters: sessionId, feedbackId, score, comments, originalQuery, and suggestion.`,
           }],
         };
       }
@@ -1422,7 +1422,7 @@ Session ID: ${session.id}`;
         const sessionId = 'sessionId' in parsedParams ? parsedParams.sessionId : undefined;
       
       // Get or create session
-      const session = getOrCreateSession(sessionId, repoPath);
+      const session = getOrCreateSession(sessionId as string | undefined, repoPath);
       
       // Log the extracted query to confirm it's working
       logger.info("Extracted query for repository context", { query, sessionId: session.id });
@@ -1434,7 +1434,7 @@ Session ID: ${session.id}`;
       const _diff = await getRepositoryDiff(repoPath);
       
       // Update context in session
-      updateContext(session.id, repoPath, files, diff);
+      updateContext(session.id, repoPath, files, _diff);
       
       // Use iterative query refinement
       const { results, refinedQuery } = await searchWithRefinement(
@@ -1457,7 +1457,7 @@ Session ID: ${session.id}`;
 **Context**:
 Repository: ${repoPath}
 Files: ${files.join(", ")}
-Recent Changes: ${diff}
+Recent Changes: ${_diff}
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
@@ -1474,7 +1474,7 @@ Provide a concise summary of the context for "${query}" based on the repository 
       const summary = await llmProvider.generateText(summaryPrompt);
       
       // Add query to session
-      addQuery(session.id, query, results);
+      addQuery(session.id, query as string, results);
       
       // Format the response as clean markdown
       const formattedResponse = `# Repository Context Summary for: "${query}"
@@ -1534,7 +1534,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         const { query = "code problem", sessionId } = normalizedParams;
       
       // Get or create session
-      const session = getOrCreateSession(sessionId, repoPath);
+      const session = getOrCreateSession(sessionId as string | undefined, repoPath);
       
       // Step 1: Get repository context
       trackToolChain(chainId, "get_repository_context");
@@ -1609,7 +1609,7 @@ Generate a step-by-step implementation plan to solve this problem. Include:
       const implementationPlan = await llmProvider.generateText(planPrompt);
       
       // Add to session
-      addQuery(session.id, query, contextResults);
+      addQuery(session.id, query as string, contextResults);
       addSuggestion(session.id, analysisPrompt, analysis);
       addSuggestion(session.id, planPrompt, implementationPlan);
       

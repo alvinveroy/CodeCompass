@@ -47,7 +47,8 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
   process.env.DEEPSEEK_API_KEY = apiKey;
   
   // Set it in the global scope too for redundancy
-  (global as unknown).DEEPSEEK_API_KEY = apiKey;
+  // Note: We don't actually use this global property, just setting for redundancy
+  (global as any).DEEPSEEK_API_KEY = apiKey;
   
   logger.info(`DeepSeek API key is configured and set in environment. Length: ${apiKey.length}`);
   return true;
@@ -144,11 +145,16 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       });
       
       // Check for specific error types
-      if (requestError.code === 'ECONNREFUSED') {
+      const typedError = requestError as { 
+        code?: string; 
+        response?: { status: number; statusText: string; data: unknown }; 
+      };
+      
+      if (typedError.code === 'ECONNREFUSED') {
         logger.error("Connection refused. Check if the DeepSeek API endpoint is correct and accessible.");
-      } else if (requestError.response && requestError.response.status === 401) {
+      } else if (typedError.response && typedError.response.status === 401) {
         logger.error("Authentication failed. Check your DeepSeek API key.");
-      } else if (requestError.response && requestError.response.status === 404) {
+      } else if (typedError.response && typedError.response.status === 404) {
         logger.error("API endpoint not found. Check the DeepSeek API URL.");
       }
       
@@ -281,15 +287,21 @@ async function enhancedWithRetry<T>(
       } else if (isRateLimit) {
         logger.warn(`DeepSeek rate limit exceeded (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
       } else {
-        logger.warn(`DeepSeek retry ${i + 1}/${retries} after error: ${error.message}`);
+        const typedError = error as { 
+          code?: string; 
+          message: string;
+          response?: { status: number; statusText: string; data: unknown }; 
+        };
+        
+        logger.warn(`DeepSeek retry ${i + 1}/${retries} after error: ${typedError.message}`);
         // Log more detailed error information
         logger.debug(`DeepSeek error details:`, {
-          code: error.code,
-          message: error.message,
-          response: error.response ? {
-            status: error.response.status,
-            statusText: error.response.statusText,
-            data: error.response.data
+          code: typedError.code,
+          message: typedError.message,
+          response: typedError.response ? {
+            status: typedError.response.status,
+            statusText: typedError.response.statusText,
+            data: typedError.response.data
           } : 'No response data'
         });
       }

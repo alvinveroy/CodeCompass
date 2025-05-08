@@ -112,17 +112,7 @@ Please provide an improved response addressing the user's feedback.`;
   }
 }
 
-// Declare global variables for TypeScript
-declare global {
-  // eslint-disable-next-line no-var
-  var CURRENT_LLM_PROVIDER: string | undefined;
-  // eslint-disable-next-line no-var
-  var CURRENT_SUGGESTION_PROVIDER: string | undefined;
-  // eslint-disable-next-line no-var
-  var CURRENT_EMBEDDING_PROVIDER: string | undefined;
-  // eslint-disable-next-line no-var
-  var CURRENT_SUGGESTION_MODEL: string | undefined;
-}
+// Note: Global variables are declared in config.ts
 
 import { loadModelConfig, saveModelConfig } from './model-persistence';
 
@@ -424,7 +414,7 @@ function resetModelSettings(): void {
   delete process.env.SUGGESTION_MODEL;
   delete process.env.SUGGESTION_PROVIDER;
   global.CURRENT_SUGGESTION_MODEL = undefined;
-  global.CURRENT_SUGGESTION_PROVIDER = undefined;
+  global.CURRENT_SUGGESTION_PROVIDER = "";
 }
 
 /**

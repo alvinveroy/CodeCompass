@@ -1,5 +1,5 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { logger, QDRANT_HOST, _COLLECTION_NAME as COLLECTION_NAME } from "./config";
+import { logger, QDRANT_HOST, COLLECTION_NAME } from "./config";
 import { withRetry, preprocessText } from "./utils";
 import { generateEmbedding } from "./ollama";
 import { trackQueryRefinement } from "./metrics";
@@ -29,6 +29,10 @@ interface SearchResult {
     last_modified: string;
     [key: string]: unknown;
   };
+  version?: number;
+  vector?: number[] | Record<string, unknown> | number[][] | null;
+  shard_key?: string;
+  order_value?: number;
 }
 
 // Search with iterative refinement
@@ -67,7 +71,7 @@ export async function searchWithRefinement(
     
     // If this is the best result so far, save it
     if (avgRelevance > bestRelevanceScore) {
-      bestResults = searchResults;
+      bestResults = searchResults as SearchResult[];
       bestRelevanceScore = avgRelevance;
     }
     
@@ -77,7 +81,7 @@ export async function searchWithRefinement(
     }
     
     // Refine the query based on results
-    currentQuery = await refineQuery(currentQuery, searchResults, avgRelevance);
+    currentQuery = await refineQuery(currentQuery, searchResults as SearchResult[], avgRelevance);
     refinementCount++;
     trackQueryRefinement(queryId);
   }

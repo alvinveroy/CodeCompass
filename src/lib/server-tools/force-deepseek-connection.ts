@@ -9,7 +9,7 @@ export async function forceDeepseekConnection(params: Record<string, unknown>): 
   logger.info("Running force DeepSeek API connection test");
   
   // Get API key from params or environment
-  const apiKey = params.apiKey || process.env.DEEPSEEK_API_KEY || "";
+  const apiKey = (params.apiKey as string) || process.env.DEEPSEEK_API_KEY || "";
   if (!apiKey) {
     return {
       success: false,
@@ -18,10 +18,10 @@ export async function forceDeepseekConnection(params: Record<string, unknown>): 
   }
   
   // Get API URL from params or use default endpoint
-  const apiUrl = params.apiUrl || process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
+  const apiUrl = (params.apiUrl as string) || process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
   
   // Get model from params or use default
-  const model = params.model || process.env.DEEPSEEK_MODEL || "deepseek-coder";
+  const model = (params.model as string) || process.env.DEEPSEEK_MODEL || "deepseek-coder";
   
   // Log test parameters
   logger.info(`Force testing DeepSeek API with key length: ${apiKey.length}, key prefix: ${apiKey.substring(0, 5)}...`);
@@ -29,9 +29,9 @@ export async function forceDeepseekConnection(params: Record<string, unknown>): 
   logger.info(`Using model: ${model}`);
   
   // Force set environment variables
-  process.env.DEEPSEEK_API_KEY = apiKey;
-  process.env.DEEPSEEK_API_URL = apiUrl;
-  process.env.DEEPSEEK_MODEL = model;
+  process.env.DEEPSEEK_API_KEY = apiKey as string;
+  process.env.DEEPSEEK_API_URL = apiUrl as string;
+  process.env.DEEPSEEK_MODEL = model as string;
   
   try {
     // Make a simple request to test the API
@@ -117,10 +117,10 @@ export async function forceDeepseekConnection(params: Record<string, unknown>): 
       apiKeyLength: apiKey.length,
       apiKeyPrefix: apiKey.substring(0, 5),
       model: model,
-      error: error.message,
-      errorCode: error.code,
-      responseStatus: error.response?.status,
-      responseData: error.response?.data,
+      error: (error as Error).message,
+      errorCode: (error as any).code,
+      responseStatus: (error as any).response?.status,
+      responseData: (error as any).response?.data,
       troubleshooting: [
         "1. Verify your API key is correct",
         "2. Ensure the API URL is correct (should be https://api.deepseek.com/chat/completions)",
