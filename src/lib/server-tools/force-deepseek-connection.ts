@@ -19,7 +19,7 @@ export async function forceDeepseekConnection(params: Record<string, any>): Prom
   }
   
   // Get API URL from params or use default endpoint
-  const apiUrl = params.apiUrl || process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
+  const apiUrl = params.apiUrl || process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
   
   // Get model from params or use default
   const model = params.model || process.env.DEEPSEEK_MODEL || "deepseek-coder";

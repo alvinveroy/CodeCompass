@@ -48,14 +48,14 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     logger.warn("DeepSeek API key is not available in environment");
   }
   
-  // Import the testDeepSeekConnection function directly
-  const { testDeepSeekConnection } = require("../deepseek");
+  // Import the deepseek module
+  const deepseek = require("../deepseek");
   
   try {
     // First try direct DeepSeek connection test which is known to work
     if (global.CURRENT_SUGGESTION_PROVIDER === 'deepseek' || process.env.SUGGESTION_PROVIDER === 'deepseek') {
       logger.info("Testing DeepSeek connection directly");
-      const connected = await testDeepSeekConnection();
+      const connected = await deepseek.testDeepSeekConnection();
       connectionStatus = connected ? "Connected" : "Failed";
       
       // If direct test succeeded but we still want to check the provider interface

@@ -27,7 +27,7 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
   process.env.DEEPSEEK_API_KEY = apiKey;
   
   // Set it in the global scope too for redundancy
-  global.DEEPSEEK_API_KEY = apiKey;
+  (global as any).DEEPSEEK_API_KEY = apiKey;
   
   logger.info(`DeepSeek API key is configured and set in environment. Length: ${apiKey.length}`);
   return true;

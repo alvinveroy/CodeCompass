@@ -41,9 +41,9 @@ async function main() {
   
   // Test the connection
   try {
-    const { testDeepSeekConnection } = require('../lib/deepseek');
+    const deepseek = require('../lib/deepseek');
     console.log('Testing DeepSeek connection...');
-    const connected = await testDeepSeekConnection();
+    const connected = await deepseek.testDeepSeekConnection();
     if (connected) {
       console.log('✅ Connection successful! The API key is working.');
     } else {
