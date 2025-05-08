@@ -124,7 +124,7 @@ async function registerGetRepositoryContextTool(
     // Use iterative query refinement
     const { results, refinedQuery } = await searchWithRefinement(
       qdrantClient, 
-      query, 
+      query as string, 
       files
     );
     
@@ -162,7 +162,7 @@ ${c.snippet}
 
 ## Recent Changes
 \`\`\`
-${_diff}
+${diff}
 \`\`\`
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
@@ -963,7 +963,7 @@ async function registerTools(
     // Use iterative query refinement
     const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
       qdrantClient, 
-      query, 
+      query as string, 
       files
     );
     
@@ -1220,7 +1220,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       // Use iterative query refinement for better search results
       const { results, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
-        query, 
+        query as string, 
         files
       );
       
@@ -1439,7 +1439,7 @@ Session ID: ${session.id}`;
       // Use iterative query refinement
       const { results, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
-        query, 
+        query as string, 
         files
       );
       
@@ -1549,7 +1549,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       // Use iterative query refinement to find relevant code
       const { results: contextResults } = await searchWithRefinement(
         qdrantClient, 
-        query, 
+        query as string, 
         files
       );
       

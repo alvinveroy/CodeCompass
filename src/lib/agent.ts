@@ -304,7 +304,7 @@ export async function executeToolCall(
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      await getRepositoryDiff(repoPath); // Call for side effects but don't store result
+      const _diff = await getRepositoryDiff(repoPath);
       
       // Update context in session
       updateContext(session.id, repoPath, files);
