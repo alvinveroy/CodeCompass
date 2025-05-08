@@ -59,7 +59,7 @@ Set environment variables in your shell, MCP client, or `.env` file:
 
 | Variable                  | Default Value                     | Description                              |
 |---------------------------|-----------------------------------|------------------------------------------|
-| `LLM_PROVIDER`            | `ollama`                          | AI provider (`ollama` or `openai`)       |
+| `LLM_PROVIDER`            | `ollama`                          | AI provider (`ollama`, `openai`, or `deepseek`) |
 | `OLLAMA_HOST`             | `http://localhost:11434`          | Ollama server address (for `ollama`)     |
 | `OPENAI_API_KEY`          | None                              | OpenAI API key (for `openai`)            |
 | `QDRANT_HOST`             | `http://localhost:6333`           | Qdrant server address                    |
@@ -78,6 +78,14 @@ QDRANT_HOST=http://localhost:6333
 MCP_PORT=3000
 OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 OPENAI_SUGGESTION_MODEL=gpt-4o
+```
+
+**Example .env for DeepSeek**:
+```env
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=sk-xxx
+QDRANT_HOST=http://localhost:6333
+MCP_PORT=3000
 ```
 
 ## Usage
