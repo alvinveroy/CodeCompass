@@ -349,11 +349,18 @@ export async function startServer(repoPath: string): Promise<void> {
             global.CURRENT_SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
             process.env.SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
             
+            // Clear any cached provider instances
+            delete require.cache[require.resolve('./llm-provider')];
+            
             // Ensure the LLM provider is updated immediately
             const llmProvider = await getLLMProvider();
             
             logger.info(`Forced provider to ${global.CURRENT_SUGGESTION_PROVIDER} based on model name`);
             logger.info(`Current LLM provider: ${await llmProvider.checkConnection() ? "connected" : "disconnected"}`);
+            
+            // Verify the provider was actually set correctly
+            logger.info(`Verification - Current suggestion provider: ${global.CURRENT_SUGGESTION_PROVIDER}`);
+            logger.info(`Verification - Current suggestion model: ${global.CURRENT_SUGGESTION_MODEL}`);
           }
         
           if (!switchResult.success) {
@@ -712,19 +719,35 @@ async function registerTools(
       const { query, sessionId, maxSteps = 5 } = normalizedParams;
     
     try {
+      // Force clear any cached providers
+      delete require.cache[require.resolve('./llm-provider')];
+      
       // Ensure we have the latest LLM provider
       const llmProvider = await getLLMProvider();
-      logger.info(`Agent using provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
       
-      // Run the agent loop
-      const response = await runAgentLoop(
-        query,
-        sessionId,
-        qdrantClient,
-        repoPath,
-        suggestionModelAvailable,
-        maxSteps
-      );
+      // Log detailed provider information
+      logger.info(`Agent using provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
+      logger.info(`Provider details - suggestionProvider: ${process.env.SUGGESTION_PROVIDER}, suggestionModel: ${process.env.SUGGESTION_MODEL}`);
+      
+      // Create a timeout promise
+      const timeoutPromise = new Promise<string>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Agent query timed out after 60 seconds"));
+        }, 60000); // 60 second timeout
+      });
+      
+      // Run the agent loop with timeout
+      const response = await Promise.race([
+        runAgentLoop(
+          query,
+          sessionId,
+          qdrantClient,
+          repoPath,
+          suggestionModelAvailable,
+          maxSteps
+        ),
+        timeoutPromise
+      ]);
       
       return {
         content: [{

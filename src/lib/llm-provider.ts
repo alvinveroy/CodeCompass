@@ -150,6 +150,15 @@ function loadSavedModelConfig(): void {
   }
 }
 
+// Cache for LLM providers to avoid creating new instances unnecessarily
+let providerCache: {
+  suggestionModel: string;
+  suggestionProvider: string;
+  embeddingProvider: string;
+  provider: LLMProvider;
+  timestamp: number;
+} | null = null;
+
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
   // Load saved configuration first
@@ -166,7 +175,23 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
   const currentProvider = suggestionProvider; // For backward compatibility
   
-  logger.debug(`Getting LLM provider: ${currentProvider} (model: ${suggestionModel}, suggestion: ${suggestionProvider}, embedding: ${embeddingProvider})`);
+  logger.info(`Getting LLM provider: ${currentProvider} (model: ${suggestionModel}, suggestion: ${suggestionProvider}, embedding: ${embeddingProvider})`);
+  
+  // Check if we have a cached provider and if it's still valid
+  const cacheMaxAge = 5000; // 5 seconds max cache age
+  const now = Date.now();
+  
+  if (providerCache && 
+      providerCache.suggestionModel === suggestionModel &&
+      providerCache.suggestionProvider === suggestionProvider &&
+      providerCache.embeddingProvider === embeddingProvider &&
+      (now - providerCache.timestamp) < cacheMaxAge) {
+    logger.debug("Using cached LLM provider");
+    return providerCache.provider;
+  }
+  
+  // Clear the cache
+  providerCache = null;
   
   // In test environment, skip API key check but still call the check functions for test spies
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
@@ -209,20 +234,36 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   }
   
   // Use a single provider for all operations
+  let provider: LLMProvider;
+  
   switch (suggestionProvider.toLowerCase()) {
     case 'deepseek':
       // Check if DeepSeek API key is configured
       if (!await deepseek.checkDeepSeekApiKey()) {
         logger.warn("DeepSeek API key not configured, falling back to Ollama");
-        return new OllamaProvider();
+        provider = new OllamaProvider();
+      } else {
+        logger.info("Using DeepSeek as LLM provider");
+        provider = new DeepSeekProvider();
       }
-      logger.info("Using DeepSeek as LLM provider");
-      return new DeepSeekProvider();
+      break;
     case 'ollama':
     default:
       logger.info("Using Ollama as LLM provider");
-      return new OllamaProvider();
+      provider = new OllamaProvider();
+      break;
   }
+  
+  // Cache the provider
+  providerCache = {
+    suggestionModel,
+    suggestionProvider,
+    embeddingProvider,
+    provider,
+    timestamp: Date.now()
+  };
+  
+  return provider;
 }
 
 // Function to switch the suggestion model

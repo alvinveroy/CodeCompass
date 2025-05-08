@@ -447,6 +447,10 @@ export async function runAgentLoop(
   // Log the current provider and model being used by the agent
   logger.info(`Agent running with provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
   
+  // Force refresh the provider to ensure we're using the latest settings
+  const currentProvider = await getLLMProvider();
+  logger.info(`Agent confirmed provider: ${await currentProvider.checkConnection() ? "connected" : "disconnected"}`);
+  
   return await timeExecution('agent_loop', async () => {
     // Get or create session
     const session = getOrCreateSession(sessionId, repoPath);
