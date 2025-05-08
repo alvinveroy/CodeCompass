@@ -85,7 +85,7 @@ export function initMcpSafeLogging(): void {
 /**
  * Restore original console methods
  */
-export function restoreConsole(): void {
+export function _restoreConsole(): void {
   console.log = originalConsole.log;
   console.info = originalConsole.info;
   console.warn = originalConsole.warn;
