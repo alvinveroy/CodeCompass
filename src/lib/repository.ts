@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH } from "./config";
 import { generateEmbedding } from "./ollama";
-import { QdrantSearchResult } from "./types";
+import type { QdrantSearchResult } from "./types";
 
 // Validate Git Repository
 export async function validateGitRepository(repoPath: string): Promise<boolean> {
@@ -15,7 +15,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
     await git.resolveRef({ fs, dir: repoPath, gitdir, ref: "HEAD" });
     logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.warn(`Failed to validate Git repository at ${repoPath}: ${error.message}`);
     return false;
   }
@@ -68,7 +68,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       });
       logger.info(`Indexed: ${filepath}`);
       successCount++;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`Failed to index ${filepath}`, {
         message: error.message,
         code: error.code,
@@ -110,7 +110,7 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
       },
     });
     return changes.join('\n') || "No changes since last commit";
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Diff error", { message: error.message });
     return "Failed to retrieve diff";
   }

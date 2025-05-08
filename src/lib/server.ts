@@ -17,14 +17,14 @@ import { z } from "zod";
 import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant, searchWithRefinement } from "./qdrant";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
-import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun, trackAgentCompletion, trackAgentToolUsage } from "./metrics";
-import { getLLMProvider, switchLLMProvider, switchSuggestionModel } from "./llm-provider";
+import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun } from "./metrics";
+import { getLLMProvider, switchSuggestionModel } from "./llm-provider";
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults, addAgentSteps } from "./state";
 import { runAgentLoop, parseToolCalls } from "./agent";
 
 // Normalize tool parameters to handle various input formats
-export function normalizeToolParams(params: unknown): Record<string, any> {
+export function normalizeToolParams(params: unknown): Record<string, unknown> {
   try {
     // Handle stringified JSON input
     if (typeof params === "string") {
@@ -89,7 +89,7 @@ async function registerGetRepositoryContextTool(
           if (parsed && typeof parsed === 'object') {
             parsedParams = parsed;
           }
-        } catch (e) {
+        } catch (_e) {
           // If it's not valid JSON, keep using it as a string query
           parsedParams = { query: normalizedParams };
         }
@@ -128,7 +128,7 @@ async function registerGetRepositoryContextTool(
     );
     
     // Get recent queries from session to provide context
-    const recentQueries = getRecentQueries(session.id);
+    const _recentQueries = getRecentQueries(session.id);
     
     const context = results.map(r => ({
       filepath: (r.payload as QdrantSearchResult['payload']).filepath,
@@ -307,7 +307,7 @@ export async function startServer(repoPath: string): Promise<void> {
       try {
         const content = await fs.readFile(path.join(repoPath, filepath), "utf8");
         return { contents: [{ uri: uri.toString(), text: content }] };
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.error(`Error reading file ${filepath}`, { message: error.message });
         return { contents: [{ uri: uri.toString(), text: `Error: ${error.message}` }] };
       }
@@ -641,7 +641,7 @@ export async function startServer(repoPath: string): Promise<void> {
               // For backward compatibility
               model = parsed.provider === "deepseek" ? "deepseek-coder" : "llama3.1:8b";
             }
-          } catch (e) {
+          } catch (_e) {
             // If not valid JSON, use as is
             model = normalizedParams;
           }
@@ -858,7 +858,7 @@ async function registerTools(
         } catch (fsError: any) {
           logger.warn(`Failed to read model configuration file: ${fsError.message}`);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.warn(`Failed to load saved model configuration: ${error.message}`);
       }
       
@@ -871,7 +871,7 @@ async function registerTools(
       
       // Verify the provider is working with a test generation
       try {
-        const testResult = await llmProvider.generateText("Test message");
+        const _testResult = await llmProvider.generateText("Test message");
         logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
       } catch (error) {
         logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
@@ -1201,7 +1201,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      const diff = await getRepositoryDiff(repoPath);
+      const _diff = await getRepositoryDiff(repoPath);
       
       // Update context in session
       updateContext(session.id, repoPath, files, diff);
@@ -1322,7 +1322,7 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
         logger.debug("Normalized params for provide_feedback", normalizedParams);
         
         try {
-          const { sessionId, feedbackId, score, comments, originalQuery, suggestion } = normalizedParams;
+          const { sessionId, score, comments, originalQuery, suggestion } = normalizedParams;
       
         // Get session
         const session = getOrCreateSession(sessionId);
@@ -1363,7 +1363,7 @@ Session ID: ${session.id}`;
             text: formattedResponse,
           }],
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.error("Error processing feedback", { error: error.message });
         return {
           content: [{
@@ -1398,7 +1398,7 @@ Session ID: ${session.id}`;
             if (parsed && typeof parsed === 'object') {
               parsedParams = parsed;
             }
-          } catch (e) {
+          } catch (_e) {
             // If it's not valid JSON, keep using it as a string query
             parsedParams = { query: normalizedParams };
           }

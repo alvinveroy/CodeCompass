@@ -5,7 +5,7 @@ import { getLLMProvider, clearProviderCache } from "./llm-provider";
  * Debug function to verify the current provider is working correctly
  * @returns Object with debug information
  */
-export async function debugProvider(): Promise<Record<string, any>> {
+export async function debugProvider(): Promise<Record<string, unknown>> {
   logger.info("Running provider debug");
   
   // Clear module cache for provider-related modules
@@ -46,7 +46,7 @@ export async function debugProvider(): Promise<Record<string, any>> {
   try {
     const result = await llmProvider.generateText("Test message for provider debug");
     generationTest = result.length > 0;
-  } catch (error: any) {
+  } catch (error: unknown) {
     generationError = error.message;
   }
   

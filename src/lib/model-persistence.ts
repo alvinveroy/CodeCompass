@@ -33,7 +33,7 @@ export function saveModelConfig(): void {
     // Write to file
     fs.writeFileSync(MODEL_CONFIG_FILE, JSON.stringify(config, null, 2));
     logger.info(`Saved model configuration to ${MODEL_CONFIG_FILE}`);
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     logger.warn(`Failed to save model configuration: ${error.message}`);
   }
 }
@@ -74,7 +74,7 @@ export function loadModelConfig(forceSet: boolean = false): void {
     }
     
     logger.info(`Loaded model configuration from ${MODEL_CONFIG_FILE}`);
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     logger.warn(`Failed to load model configuration: ${error.message}`);
   }
 }

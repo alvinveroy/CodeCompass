@@ -6,7 +6,7 @@ export interface SessionState {
   queries: {
     timestamp: number;
     query: string;
-    results: any[];
+    results: unknown[];
     relevanceScore: number;
   }[];
   suggestions: {
@@ -28,8 +28,8 @@ export interface SessionState {
     query: string;
     steps: {
       tool: string;
-      input: any;
-      output: any;
+      input: unknown;
+      output: unknown;
       reasoning: string;
     }[];
     finalResponse: string;
@@ -82,7 +82,7 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
 export function addQuery(
   sessionId: string, 
   query: string, 
-  results: any[] = [], 
+  results: unknown[] = [], 
   relevanceScore: number = 0
 ): SessionState {
   const session = getOrCreateSession(sessionId);
@@ -194,7 +194,7 @@ export function getRecentQueries(sessionId: string, limit: number = 5): string[]
 }
 
 // Get the most relevant results from previous queries
-export function getRelevantResults(sessionId: string, limit: number = 3): any[] {
+export function getRelevantResults(sessionId: string, limit: number = 3): unknown[] {
   const session = getOrCreateSession(sessionId);
   return session.queries
     .sort((a, b) => b.relevanceScore - a.relevanceScore)
@@ -217,8 +217,8 @@ export function addAgentSteps(
   query: string,
   steps: {
     tool: string;
-    input: any;
-    output: any;
+    input: unknown;
+    output: unknown;
     reasoning: string;
   }[],
   finalResponse: string
@@ -241,7 +241,7 @@ export function addAgentSteps(
 }
 
 // Get the most recent agent steps
-export function getRecentAgentSteps(sessionId: string, limit: number = 3): any[] {
+export function getRecentAgentSteps(sessionId: string, limit: number = 3): unknown[] {
   const session = getOrCreateSession(sessionId);
   
   if (!session.agentSteps) {
