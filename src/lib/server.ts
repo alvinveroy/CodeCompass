@@ -188,6 +188,12 @@ export async function startServer(repoPath: string): Promise<void> {
   logger.info("Starting CodeCompass MCP server...");
 
   try {
+    // Set default suggestion model if specified in environment
+    if (process.env.SUGGESTION_MODEL) {
+      logger.info(`Using suggestion model from environment: ${process.env.SUGGESTION_MODEL}`);
+      await switchSuggestionModel(process.env.SUGGESTION_MODEL);
+    }
+    
     // Validate repoPath
     if (!repoPath || repoPath === "${workspaceFolder}" || repoPath.trim() === "") {
       logger.warn("Invalid repository path provided, defaulting to current directory");
