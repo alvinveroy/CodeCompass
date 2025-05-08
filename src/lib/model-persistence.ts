@@ -43,7 +43,7 @@ export function saveModelConfig(): void {
  * Load the model configuration from persistent storage
  * @param forceSet Whether to force set the configuration even if already set
  */
-export function loadModelConfig(forceSet: boolean = false): void {
+export function loadModelConfig(forceSet = false): void {
   try {
     // DeepSeek API key is loaded by the deepseek module directly
     

@@ -186,7 +186,7 @@ function generateSessionId(): string {
 }
 
 // Get the most recent queries
-export function getRecentQueries(sessionId: string, limit: number = 5): string[] {
+export function getRecentQueries(sessionId: string, limit = 5): string[] {
   const session = getOrCreateSession(sessionId);
   return session.queries
     .slice(-limit)
@@ -194,7 +194,7 @@ export function getRecentQueries(sessionId: string, limit: number = 5): string[]
 }
 
 // Get the most relevant results from previous queries
-export function getRelevantResults(sessionId: string, limit: number = 3): unknown[] {
+export function getRelevantResults(sessionId: string, limit = 3): unknown[] {
   const session = getOrCreateSession(sessionId);
   return session.queries
     .sort((a, b) => b.relevanceScore - a.relevanceScore)
@@ -241,7 +241,7 @@ export function addAgentSteps(
 }
 
 // Get the most recent agent steps
-export function getRecentAgentSteps(sessionId: string, limit: number = 3): unknown[] {
+export function getRecentAgentSteps(sessionId: string, limit = 3): unknown[] {
   const session = getOrCreateSession(sessionId);
   
   if (!session.agentSteps) {

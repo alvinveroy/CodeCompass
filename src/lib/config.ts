@@ -39,15 +39,17 @@ declare global {
 }
 
 // Global interface augmentation
+interface GlobalWithProviders {
+  CURRENT_LLM_PROVIDER: string;
+  CURRENT_SUGGESTION_PROVIDER: string;
+  CURRENT_EMBEDDING_PROVIDER: string;
+  CURRENT_SUGGESTION_MODEL?: string;
+}
+
+// Extend the NodeJS global type
 declare global {
-  namespace NodeJS {
-    interface Global {
-      CURRENT_LLM_PROVIDER: string;
-      CURRENT_SUGGESTION_PROVIDER: string;
-      CURRENT_EMBEDDING_PROVIDER: string;
-      CURRENT_SUGGESTION_MODEL?: string;
-    }
-  }
+  // eslint-disable-next-line @typescript-eslint/no-empty-interface
+  interface Global extends GlobalWithProviders {}
 }
 
 // Initialize global provider state

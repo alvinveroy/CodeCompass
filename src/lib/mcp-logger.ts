@@ -22,11 +22,11 @@ const originalConsole = {
  */
 export function initMcpSafeLogging(): void {
   // Replace console methods to prevent them from writing to stdout/stderr
-  console.log = (...args) => logger.debug(...args);
-  console.info = (...args) => logger.info(...args);
-  console.warn = (...args) => logger.warn(...args);
-  console.error = (...args) => logger.error(...args);
-  console.debug = (...args) => logger.debug(...args);
+  console.log = (...args: unknown[]) => logger.debug(args[0] || {});
+  console.info = (...args: unknown[]) => logger.info(args[0] || {});
+  console.warn = (...args: unknown[]) => logger.warn(args[0] || {});
+  console.error = (...args: unknown[]) => logger.error(args[0] || {});
+  console.debug = (...args: unknown[]) => logger.debug(args[0] || {});
   
   // Redirect logging to a file instead of stdout
   // Note: We can't use logger.configure as it's not available

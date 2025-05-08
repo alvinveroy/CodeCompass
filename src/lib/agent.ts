@@ -463,7 +463,7 @@ export async function runAgentLoop(
   qdrantClient: QdrantClient,
   repoPath: string,
   suggestionModelAvailable: boolean,
-  maxSteps: number = 5
+  maxSteps = 5
 ): Promise<string> {
   incrementCounter('agent_runs');
   

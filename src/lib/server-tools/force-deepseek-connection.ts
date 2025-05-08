@@ -118,9 +118,9 @@ export async function forceDeepseekConnection(params: Record<string, unknown>): 
       apiKeyPrefix: apiKey.substring(0, 5),
       model: model,
       error: (error as Error).message,
-      errorCode: (error as any).code,
-      responseStatus: (error as any).response?.status,
-      responseData: (error as any).response?.data,
+      errorCode: (error as Error & { code?: string }).code,
+      responseStatus: (error as Error & { response?: { status?: number } }).response?.status,
+      responseData: (error as Error & { response?: { data?: unknown } }).response?.data,
       troubleshooting: [
         "1. Verify your API key is correct",
         "2. Ensure the API URL is correct (should be https://api.deepseek.com/chat/completions)",

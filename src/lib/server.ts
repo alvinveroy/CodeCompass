@@ -338,22 +338,22 @@ export async function startServer(repoPath: string): Promise<void> {
               type: "text",
               text: `# Provider Debug Results\n\n` +
                 `## Current State\n` +
-                `- Suggestion Model: ${(debugResult as any).globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- Suggestion Provider: ${(debugResult as any).globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- Embedding Provider: ${(debugResult as any).globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- Suggestion Model: ${(debugResult as Record<string, { CURRENT_SUGGESTION_MODEL?: string }>).globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- Suggestion Provider: ${(debugResult as Record<string, { CURRENT_SUGGESTION_PROVIDER?: string }>).globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- Embedding Provider: ${(debugResult as Record<string, { CURRENT_EMBEDDING_PROVIDER?: string }>).globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `## Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${(debugResult as any).environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${(debugResult as any).environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${(debugResult as any).environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${(debugResult as any).environment.DEEPSEEK_API_KEY}\n` +
-                `- DEEPSEEK_API_URL: ${(debugResult as any).environment.DEEPSEEK_API_URL || "Not set"}\n` +
-                `- OLLAMA_HOST: ${(debugResult as any).environment.OLLAMA_HOST || "Not set"}\n\n` +
+                `- SUGGESTION_MODEL: ${(debugResult as Record<string, { SUGGESTION_MODEL?: string }>).environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${(debugResult as Record<string, { SUGGESTION_PROVIDER?: string }>).environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${(debugResult as Record<string, { EMBEDDING_PROVIDER?: string }>).environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${(debugResult as Record<string, { DEEPSEEK_API_KEY?: string }>).environment.DEEPSEEK_API_KEY}\n` +
+                `- DEEPSEEK_API_URL: ${(debugResult as Record<string, { DEEPSEEK_API_URL?: string }>).environment.DEEPSEEK_API_URL || "Not set"}\n` +
+                `- OLLAMA_HOST: ${(debugResult as Record<string, { OLLAMA_HOST?: string }>).environment.OLLAMA_HOST || "Not set"}\n\n` +
                 `## Provider Tests\n` +
-                `- Provider Type: ${(debugResult as any).provider.type}\n` +
-                `- Provider Model: ${(debugResult as any).provider.model}\n` +
-                `- Connection Test: ${(debugResult as any).provider.connectionTest ? "✅ Successful" : "❌ Failed"}\n` +
-                `- Generation Test: ${(debugResult as any).provider.generationTest ? "✅ Successful" : "❌ Failed"}\n` +
-                `${(debugResult as any).provider.generationError ? `- Generation Error: ${(debugResult as any).provider.generationError}\n` : ""}` +
+                `- Provider Type: ${(debugResult as Record<string, { type?: string }>).provider.type}\n` +
+                `- Provider Model: ${(debugResult as Record<string, { model?: string }>).provider.model}\n` +
+                `- Connection Test: ${(debugResult as Record<string, { connectionTest?: boolean }>).provider.connectionTest ? "✅ Successful" : "❌ Failed"}\n` +
+                `- Generation Test: ${(debugResult as Record<string, { generationTest?: boolean }>).provider.generationTest ? "✅ Successful" : "❌ Failed"}\n` +
+                `${(debugResult as Record<string, { generationError?: string }>).provider.generationError ? `- Generation Error: ${(debugResult as Record<string, { generationError?: string }>).provider.generationError}\n` : ""}` +
                 `\n` +
                 `Timestamp: ${debugResult.timestamp}`
             }],
@@ -510,27 +510,27 @@ export async function startServer(repoPath: string): Promise<void> {
               text: `# Model Switch Diagnostic Results\n\n` +
                 `## Current State\n` +
                 `### Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${(diagnosticResult as any).currentState.environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${(diagnosticResult as any).currentState.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${(diagnosticResult as any).currentState.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${(diagnosticResult as any).currentState.environment.DEEPSEEK_API_KEY}\n` +
-                `- DEEPSEEK_API_URL: ${(diagnosticResult as any).currentState.environment.DEEPSEEK_API_URL || "Not set"}\n` +
-                `- OLLAMA_HOST: ${(diagnosticResult as any).currentState.environment.OLLAMA_HOST || "Not set"}\n` +
-                `- NODE_ENV: ${(diagnosticResult as any).currentState.environment.NODE_ENV || "Not set"}\n` +
-                `- VITEST: ${(diagnosticResult as any).currentState.environment.VITEST || "Not set"}\n\n` +
+                `- SUGGESTION_MODEL: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.environment.DEEPSEEK_API_KEY}\n` +
+                `- DEEPSEEK_API_URL: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.environment.DEEPSEEK_API_URL || "Not set"}\n` +
+                `- OLLAMA_HOST: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.environment.OLLAMA_HOST || "Not set"}\n` +
+                `- NODE_ENV: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.environment.NODE_ENV || "Not set"}\n` +
+                `- VITEST: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.environment.VITEST || "Not set"}\n\n` +
                 `### Global Variables\n` +
-                `- CURRENT_SUGGESTION_MODEL: ${(diagnosticResult as any).currentState.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- CURRENT_SUGGESTION_PROVIDER: ${(diagnosticResult as any).currentState.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- CURRENT_EMBEDDING_PROVIDER: ${(diagnosticResult as any).currentState.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${(diagnosticResult as Record<string, Record<string, Record<string, string | undefined>>>).currentState.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `## Test Results\n` +
                 `### DeepSeek Test\n` +
-                `- Expected: model=${(diagnosticResult as any).tests.deepseek.expected.model}, provider=${(diagnosticResult as any).tests.deepseek.expected.provider}\n` +
-                `- Actual: model=${(diagnosticResult as any).tests.deepseek.actual.model}, provider=${(diagnosticResult as any).tests.deepseek.actual.provider}\n` +
-                `- Success: ${(diagnosticResult as any).tests.deepseek.success ? "✅" : "❌"}\n\n` +
+                `- Expected: model=${(diagnosticResult as Record<string, Record<string, Record<string, Record<string, string>>>>).tests.deepseek.expected.model}, provider=${(diagnosticResult as Record<string, Record<string, Record<string, Record<string, string>>>>).tests.deepseek.expected.provider}\n` +
+                `- Actual: model=${(diagnosticResult as Record<string, Record<string, Record<string, Record<string, string>>>>).tests.deepseek.actual.model}, provider=${(diagnosticResult as Record<string, Record<string, Record<string, Record<string, string>>>>).tests.deepseek.actual.provider}\n` +
+                `- Success: ${(diagnosticResult as Record<string, Record<string, Record<string, boolean>>>).tests.deepseek.success ? "✅" : "❌"}\n\n` +
                 `### Ollama Test\n` +
-                `- Expected: model=${(diagnosticResult as any).tests.ollama.expected.model}, provider=${(diagnosticResult as any).tests.ollama.expected.provider}\n` +
-                `- Actual: model=${(diagnosticResult as any).tests.ollama.actual.model}, provider=${(diagnosticResult as any).tests.ollama.actual.provider}\n` +
-                `- Success: ${(diagnosticResult as any).tests.ollama.success ? "✅" : "❌"}\n\n` +
+                `- Expected: model=${(diagnosticResult as Record<string, Record<string, Record<string, Record<string, string>>>>).tests.ollama.expected.model}, provider=${(diagnosticResult as Record<string, Record<string, Record<string, Record<string, string>>>>).tests.ollama.expected.provider}\n` +
+                `- Actual: model=${(diagnosticResult as Record<string, Record<string, Record<string, Record<string, string>>>>).tests.ollama.actual.model}, provider=${(diagnosticResult as Record<string, Record<string, Record<string, Record<string, string>>>>).tests.ollama.actual.provider}\n` +
+                `- Success: ${(diagnosticResult as Record<string, Record<string, Record<string, boolean>>>).tests.ollama.success ? "✅" : "❌"}\n\n` +
                 `Timestamp: ${diagnosticResult.timestamp}`
             }],
           };
@@ -584,24 +584,24 @@ export async function startServer(repoPath: string): Promise<void> {
                 `Provider: ${debugResult.provider}\n\n` +
                 `## Before Direct Setting\n` +
                 `### Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${(debugResult as any).before.environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${(debugResult as any).before.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${(debugResult as any).before.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${(debugResult as any).before.environment.DEEPSEEK_API_KEY}\n\n` +
+                `- SUGGESTION_MODEL: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).before.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).before.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).before.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).before.environment.DEEPSEEK_API_KEY}\n\n` +
                 `### Global Variables\n` +
-                `- CURRENT_SUGGESTION_MODEL: ${(debugResult as any).before.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- CURRENT_SUGGESTION_PROVIDER: ${(debugResult as any).before.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- CURRENT_EMBEDDING_PROVIDER: ${(debugResult as any).before.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).before.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).before.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).before.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `## After Direct Setting\n` +
                 `### Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${(debugResult as any).after.environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${(debugResult as any).after.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${(debugResult as any).after.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${(debugResult as any).after.environment.DEEPSEEK_API_KEY}\n\n` +
+                `- SUGGESTION_MODEL: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).after.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).after.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).after.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).after.environment.DEEPSEEK_API_KEY}\n\n` +
                 `### Global Variables\n` +
-                `- CURRENT_SUGGESTION_MODEL: ${(debugResult as any).after.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- CURRENT_SUGGESTION_PROVIDER: ${(debugResult as any).after.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- CURRENT_EMBEDDING_PROVIDER: ${(debugResult as any).after.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).after.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).after.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${(debugResult as Record<string, Record<string, Record<string, string | undefined>>>).after.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `Timestamp: ${debugResult.timestamp}`
             }],
           };
@@ -778,7 +778,7 @@ export async function startServer(repoPath: string): Promise<void> {
       process.exit(0);
     });
     
-    await new Promise(() => {});
+    await new Promise<void>(() => {});
   } catch (error: unknown) {
     const err = error as Error;
     logger.error("Failed to start CodeCompass", { message: err.message });

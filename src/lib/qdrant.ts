@@ -40,8 +40,8 @@ export async function searchWithRefinement(
   client: QdrantClient, 
   query: string, 
   files: string[] = [], 
-  maxRefinements: number = 2,
-  relevanceThreshold: number = 0.7
+  maxRefinements = 2,
+  relevanceThreshold = 0.7
 ): Promise<{ results: SearchResult[], refinedQuery: string, relevanceScore: number }> {
   const queryId = `query_${Date.now()}`;
   let currentQuery = query;

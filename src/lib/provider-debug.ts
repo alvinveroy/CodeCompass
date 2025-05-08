@@ -42,7 +42,7 @@ export async function debugProvider(): Promise<Record<string, unknown>> {
   
   // Test text generation
   let generationTest = false;
-  let generationError = null;
+  let generationError: string | null = null;
   try {
     const result = await llmProvider.generateText("Test message for provider debug");
     generationTest = result.length > 0;
