@@ -480,8 +480,8 @@ export async function runAgentLoop(
   try {
     const _testResult = await currentProvider.generateText("Test message");
     logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
-  } catch (error: unknown) {
-    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
+  } catch (_error: unknown) {
+    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error: _error });
   }
   
   return await timeExecution('agent_loop', async () => {
@@ -560,9 +560,9 @@ export async function runAgentLoop(
           // Update user prompt with tool results
           userPrompt += `\n\nTool: ${toolCall.tool}\nResults: ${JSON.stringify(toolOutput, null, 2)}\n\nBased on these results, what's your next step? If you have enough information, provide a final response to the user.`;
           
-        } catch (error: unknown) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          logger.error(`Error executing tool ${toolCall.tool}`, { error: err.message });
+        } catch (_error: unknown) {
+          const _err = _error instanceof Error ? _error : new Error(String(_error));
+          logger.error(`Error executing tool ${toolCall.tool}`, { error: _err.message });
           
           // Add error to user prompt
           userPrompt += `\n\nError executing tool ${toolCall.tool}: ${err.message}\n\nPlease try a different approach or provide a response with the information you have.`;
