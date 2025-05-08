@@ -1,8 +1,8 @@
 import axios from "axios";
-import { logger, OLLAMA_HOST, EMBEDDING_MODEL, SUGGESTION_MODEL, MAX_INPUT_LENGTH, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
+import { logger, OLLAMA_HOST, SUGGESTION_MODEL, MAX_INPUT_LENGTH, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types";
-import { withRetry, preprocessText } from "./utils";
-import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
+import { preprocessText } from "./utils";
+import { incrementCounter, timeExecution, trackFeedbackScore } from "./metrics";
 
 /**
  * Check if Ollama server is running and accessible
@@ -57,13 +57,16 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
       }
     }
     throw new Error(`Model ${model} not functional`);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    const axiosError = error as { response?: { status: number; data: unknown } };
+    
     logger.error(`Ollama model check error for ${model}`, {
-      message: error.message,
-      response: error.response
+      message: err.message,
+      response: axiosError.response
         ? {
-            status: error.response.status,
-            data: error.response.data,
+            status: axiosError.response.status,
+            data: axiosError.response.data,
           }
         : null,
     });
@@ -85,13 +88,15 @@ async function enhancedWithRetry<T>(
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
-    } catch (error: any) {
-      lastError = error;
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      lastError = err;
       
       // Check if it's a timeout error
-      const isTimeout = error.code === 'ECONNABORTED' || 
-                        error.message?.includes('timeout') ||
-                        error.response?.status === 500;
+      const axiosError = error as { code?: string; response?: { status: number } };
+      const isTimeout = axiosError.code === 'ECONNABORTED' || 
+                        err.message.includes('timeout') ||
+                        axiosError.response?.status === 500;
       
       if (isTimeout) {
         logger.warn(`Request timed out (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
@@ -143,22 +148,29 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       incrementCounter('embedding_success');
       return response.embedding;
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     incrementCounter('embedding_errors');
+    const err = error instanceof Error ? error : new Error(String(error));
+    const axiosError = error as { 
+      code?: string; 
+      config?: unknown; 
+      response?: { status: number; data: unknown } 
+    };
+    
     logger.error("Ollama embedding error", {
-      message: error.message,
-      code: error.code,
-      config: error.config,
-      response: error.response
+      message: err.message,
+      code: axiosError.code,
+      config: axiosError.config,
+      response: axiosError.response
         ? {
-            status: error.response.status,
-            data: error.response.data,
+            status: axiosError.response.status,
+            data: axiosError.response.data,
           }
         : null,
       inputLength: truncatedText.length,
       inputSnippet: truncatedText.slice(0, 100),
     });
-    throw new Error(`Failed to generate embedding: ${error.message}`);
+    throw new Error(`Failed to generate embedding: ${err.message}`);
   }
 }
 
@@ -245,21 +257,24 @@ Please provide an improved version addressing these issues.`;
       incrementCounter('suggestion_success');
       return response.response;
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     incrementCounter('suggestion_errors');
+    const err = error instanceof Error ? error : new Error(String(error));
+    const axiosError = error as { code?: string; response?: { status: number; data: unknown } };
+    
     logger.error("Ollama suggestion error", {
-      message: error.message,
-      code: error.code,
-      response: error.response
+      message: err.message,
+      code: axiosError.code,
+      response: axiosError.response
         ? {
-            status: error.response.status,
-            data: error.response.data,
+            status: axiosError.response.status,
+            data: axiosError.response.data,
           }
         : null,
       promptLength: prompt.length,
       promptSnippet: prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '')
     });
-    throw new Error("Failed to generate suggestion: " + (error.message || "Unknown error"));
+    throw new Error("Failed to generate suggestion: " + (err.message || "Unknown error"));
   }
 }
 
@@ -308,8 +323,9 @@ Feedback: [your detailed feedback]`;
     trackFeedbackScore(score);
     
     return { score, feedback };
-  } catch (error: any) {
-    logger.warn("Failed to evaluate suggestion", { error: error.message });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.warn("Failed to evaluate suggestion", { error: err.message });
     return { score: 7, feedback: "Evaluation failed, proceeding with original response." };
   }
 }
@@ -348,9 +364,10 @@ Please provide an improved response addressing the user's feedback.`;
     
     incrementCounter('feedback_refinements');
     return improvedResponse;
-  } catch (error: any) {
-    logger.error("Failed to process feedback", { error: error.message });
-    throw new Error("Failed to improve response based on feedback: " + error.message);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("Failed to process feedback", { error: err.message });
+    throw new Error("Failed to improve response based on feedback: " + err.message);
   }
 }
 

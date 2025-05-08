@@ -73,8 +73,8 @@ export interface QdrantSearchResult {
 // Agent types
 export interface AgentStep {
   tool: string;
-  input: any;
-  output: any;
+  input: unknown;
+  output: unknown;
   reasoning: string;
 }
 
@@ -82,7 +82,7 @@ export interface AgentState {
   sessionId: string;
   query: string;
   steps: AgentStep[];
-  context: any[];
+  context: unknown[];
   finalResponse?: string;
   isComplete: boolean;
 }

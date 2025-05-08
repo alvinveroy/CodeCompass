@@ -8,7 +8,7 @@ const DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
 
 // Export the constants for use in other modules
 export { DEEPSEEK_API_URL, DEEPSEEK_EMBEDDING_URL };
-import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
+import { incrementCounter, timeExecution } from "./metrics";
 import { preprocessText } from "./utils";
 
 /**
@@ -29,8 +29,9 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
         }
       }
     }
-  } catch (error: any) {
-    logger.warn(`Failed to load DeepSeek config: ${error.message}`);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.warn(`Failed to load DeepSeek config: ${err.message}`);
   }
 
   // Check if the API key is set in the environment
@@ -146,12 +147,15 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       
       return false;
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    const axiosError = error as { response?: { status: number; data: unknown } };
+    
     logger.error("DeepSeek API connection test failed", {
-      message: error.message,
-      response: error.response ? {
-        status: error.response.status,
-        data: error.response.data
+      message: err.message,
+      response: axiosError.response ? {
+        status: axiosError.response.status,
+        data: axiosError.response.data
       } : null
     });
     return false;
@@ -224,19 +228,22 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
       incrementCounter('deepseek_success');
       return response;
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     incrementCounter('deepseek_errors');
+    const err = error instanceof Error ? error : new Error(String(error));
+    const axiosError = error as { code?: string; response?: { status: number; data: unknown } };
+    
     logger.error("DeepSeek API error", {
-      message: error.message,
-      code: error.code,
-      response: error.response ? {
-        status: error.response.status,
-        data: error.response.data
+      message: err.message,
+      code: axiosError.code,
+      response: axiosError.response ? {
+        status: axiosError.response.status,
+        data: axiosError.response.data
       } : null,
       promptLength: prompt.length,
       promptSnippet: prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '')
     });
-    throw new Error(`Failed to generate with DeepSeek: ${error.message}`);
+    throw new Error(`Failed to generate with DeepSeek: ${err.message}`);
   }
 }
 
@@ -252,13 +259,15 @@ async function enhancedWithRetry<T>(
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
-    } catch (error: any) {
-      lastError = error;
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      lastError = err;
       
       // Check if it's a timeout error or rate limit error
-      const isTimeout = error.code === 'ECONNABORTED' || 
-                        error.message?.includes('timeout');
-      const isRateLimit = error.response?.status === 429;
+      const axiosError = error as { code?: string; response?: { status: number } };
+      const isTimeout = axiosError.code === 'ECONNABORTED' || 
+                        err.message.includes('timeout');
+      const isRateLimit = axiosError.response?.status === 429;
       
       if (isTimeout) {
         logger.warn(`DeepSeek request timed out (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
@@ -334,18 +343,21 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
       incrementCounter('deepseek_embedding_success');
       return response;
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     incrementCounter('deepseek_embedding_errors');
+    const err = error instanceof Error ? error : new Error(String(error));
+    const axiosError = error as { code?: string; response?: { status: number; data: unknown } };
+    
     logger.error("DeepSeek embedding error", {
-      message: error.message,
-      code: error.code,
-      response: error.response ? {
-        status: error.response.status,
-        data: error.response.data
+      message: err.message,
+      code: axiosError.code,
+      response: axiosError.response ? {
+        status: axiosError.response.status,
+        data: axiosError.response.data
       } : null,
       textLength: text.length,
       textSnippet: text.slice(0, 100) + (text.length > 100 ? '...' : '')
     });
-    throw new Error(`Failed to generate embedding with DeepSeek: ${error.message}`);
+    throw new Error(`Failed to generate embedding with DeepSeek: ${err.message}`);
   }
 }

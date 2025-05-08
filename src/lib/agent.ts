@@ -1,21 +1,20 @@
 import { logger } from "./config";
 import { getLLMProvider } from "./llm-provider";
-import { incrementCounter, recordTiming, timeExecution } from "./metrics";
+import { incrementCounter, timeExecution } from "./metrics";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { QdrantSearchResult, AgentState, AgentStep } from "./types";
+import { QdrantSearchResult, AgentState } from "./types";
 import { searchWithRefinement } from "./qdrant";
 import { validateGitRepository, getRepositoryDiff } from "./repository";
 import git from "isomorphic-git";
 import fs from "fs/promises";
 import path from "path";
-import * as fsSync from 'fs';
 
 // Tool registry for agent to understand available tools
 export interface Tool {
   name: string;
   description: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   requiresModel: boolean;
 }
 
@@ -175,11 +174,11 @@ export function parseToolCalls(output: string): { tool: string; parameters: any 
 
 // Execute a tool call
 export async function executeToolCall(
-  toolCall: { tool: string; parameters: any },
+  toolCall: { tool: string; parameters: unknown },
   qdrantClient: QdrantClient,
   repoPath: string,
   suggestionModelAvailable: boolean
-): Promise<any> {
+): Promise<unknown> {
   const { tool, parameters } = toolCall;
   
   // Find the tool in the registry
@@ -248,7 +247,7 @@ export async function executeToolCall(
       const diff = await getRepositoryDiff(repoPath);
       
       // Update context in session
-      updateContext(session.id, repoPath, files, diff);
+      updateContext(session.id, repoPath, files);
       
       // Use iterative query refinement
       const { results, refinedQuery } = await searchWithRefinement(
@@ -297,7 +296,7 @@ export async function executeToolCall(
       
       // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
-      const relevantResults = getRelevantResults(session.id);
+      const _relevantResults = getRelevantResults(session.id);
       
       // Use iterative query refinement for better search results
       const { results } = await searchWithRefinement(
@@ -478,10 +477,11 @@ export async function runAgentLoop(
   
   // Verify the provider is working with a test generation
   try {
-    const testResult = await currentProvider.generateText("Test message");
+    const _testResult = await currentProvider.generateText("Test message");
     logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
-  } catch (error) {
-    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error: err });
   }
   
   return await timeExecution('agent_loop', async () => {
@@ -552,7 +552,7 @@ export async function runAgentLoop(
             input: toolCall.parameters,
             output: toolOutput,
             reasoning: agentOutput
-          });
+          } as AgentStep);
           
           // Add context from tool output
           agentState.context.push(toolOutput);
