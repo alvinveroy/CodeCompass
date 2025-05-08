@@ -332,7 +332,7 @@ export async function executeToolCall(
 **Context**:
 Repository: ${repoPath}
 Files: ${files.slice(0, 10).join(", ")}${files.length > 10 ? "..." : ""}
-Recent Changes: ${diff ? diff.substring(0, 500) : ""}${diff && diff.length > 500 ? "..." : ""}
+Recent Changes: ${_diff ? _diff.substring(0, 500) : ""}${_diff && _diff.length > 500 ? "..." : ""}
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:

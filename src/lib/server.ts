@@ -162,7 +162,7 @@ ${c.snippet}
 
 ## Recent Changes
 \`\`\`
-${diff}
+${_diff}
 \`\`\`
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
@@ -899,7 +899,7 @@ async function registerTools(
           qdrantClient,
           repoPath,
           suggestionModelAvailable,
-          maxSteps
+          maxSteps as number
         ),
         timeoutPromise
       ]);
@@ -1344,8 +1344,8 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
         const improvedSuggestion = await llmProvider.processFeedback(
           originalQuery as string,
           suggestion as string,
-          comments,
-          score
+          comments as string,
+          score as number
         );
       
         // Format the response
