@@ -17,16 +17,33 @@ const originalConsole = {
 };
 
 /**
+ * Format log message as JSON for MCP protocol
+ * @param level Log level
+ * @param message Message to log
+ * @returns JSON formatted log message
+ */
+function formatLogAsJson(level: string, message: unknown): string {
+  const logObject = {
+    type: "log",
+    level,
+    message: typeof message === 'object' ? JSON.stringify(message) : String(message),
+    timestamp: new Date().toISOString()
+  };
+  return JSON.stringify(logObject);
+}
+
+/**
  * Initialize MCP-safe logging
  * Redirects all console output to the logger to avoid interfering with MCP protocol
  */
 export function initMcpSafeLogging(): void {
   // Replace console methods to prevent them from writing to stdout/stderr
-  console.log = (...args: unknown[]) => logger.debug(args[0] || {});
-  console.info = (...args: unknown[]) => logger.info(args[0] || {});
-  console.warn = (...args: unknown[]) => logger.warn(args[0] || {});
-  console.error = (...args: unknown[]) => logger.error(args[0] || {});
-  console.debug = (...args: unknown[]) => logger.debug(args[0] || {});
+  // and ensure they output valid JSON
+  console.log = (...args: unknown[]) => logger.debug(formatLogAsJson("debug", args[0] || {}));
+  console.info = (...args: unknown[]) => logger.info(formatLogAsJson("info", args[0] || {}));
+  console.warn = (...args: unknown[]) => logger.warn(formatLogAsJson("warn", args[0] || {}));
+  console.error = (...args: unknown[]) => logger.error(formatLogAsJson("error", args[0] || {}));
+  console.debug = (...args: unknown[]) => logger.debug(formatLogAsJson("debug", args[0] || {}));
   
   // Redirect logging to a file instead of stdout
   // Note: We can't use logger.configure as it's not available
@@ -44,7 +61,7 @@ export function initMcpSafeLogging(): void {
     const logFile = path.join(logsDir, 'codecompass.log');
     const logStream = fs.createWriteStream(logFile, { flags: 'a' });
     
-    // Override logger methods to write to file
+    // Override logger methods to write to file and ensure proper JSON formatting for MCP
     const originalDebug = logger.debug;
     const originalInfo = logger.info;
     const originalWarn = logger.warn;
@@ -53,29 +70,37 @@ export function initMcpSafeLogging(): void {
     logger.debug = (...args) => {
       const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
       logStream.write(`${new Date().toISOString()} [DEBUG] ${message}\n`);
-      // Call the original function with the first argument or an empty object
-      return originalDebug.call(logger, args[0] || {});
+      
+      // Format as JSON for MCP protocol
+      const jsonMessage = formatLogAsJson("debug", args[0] || {});
+      return originalDebug.call(logger, jsonMessage);
     };
     
     logger.info = (...args) => {
       const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
       logStream.write(`${new Date().toISOString()} [INFO] ${message}\n`);
-      // Call the original function with the first argument or an empty object
-      return originalInfo.call(logger, args[0] || {});
+      
+      // Format as JSON for MCP protocol
+      const jsonMessage = formatLogAsJson("info", args[0] || {});
+      return originalInfo.call(logger, jsonMessage);
     };
     
     logger.warn = (...args) => {
       const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
       logStream.write(`${new Date().toISOString()} [WARN] ${message}\n`);
-      // Call the original function with the first argument or an empty object
-      return originalWarn.call(logger, args[0] || {});
+      
+      // Format as JSON for MCP protocol
+      const jsonMessage = formatLogAsJson("warn", args[0] || {});
+      return originalWarn.call(logger, jsonMessage);
     };
     
     logger.error = (...args) => {
       const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
       logStream.write(`${new Date().toISOString()} [ERROR] ${message}\n`);
-      // Call the original function with the first argument or an empty object
-      return originalError.call(logger, args[0] || {});
+      
+      // Format as JSON for MCP protocol
+      const jsonMessage = formatLogAsJson("error", args[0] || {});
+      return originalError.call(logger, jsonMessage);
     };
   } catch (error) {
     console.error("Failed to set up file logging:", error);
@@ -99,5 +124,11 @@ export function _restoreConsole(): void {
  * @param message The message content
  */
 export function logMcpMessage(direction: 'sent' | 'received', message: unknown): void {
-  logger.debug(`MCP ${direction}: ${typeof message === 'string' ? message : JSON.stringify(message)}`);
+  const logObject = {
+    type: "mcp_message",
+    direction,
+    content: typeof message === 'string' ? message : JSON.stringify(message),
+    timestamp: new Date().toISOString()
+  };
+  logger.debug(JSON.stringify(logObject));
 }
