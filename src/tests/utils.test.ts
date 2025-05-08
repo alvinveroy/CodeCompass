@@ -28,9 +28,9 @@ describe('Utils Module', () => {
         .mockResolvedValueOnce('success');
       
       // Mock setTimeout to execute callback immediately
-      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {
         callback();
-        return 0 as any;
+        return 0 as unknown as NodeJS.Timeout;
       });
       
       const result = await withRetry(fn, 2);
@@ -47,9 +47,9 @@ describe('Utils Module', () => {
         .mockResolvedValueOnce('success');
       
       // Mock setTimeout to execute callback immediately
-      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {
         callback();
-        return 0 as any;
+        return 0 as unknown as NodeJS.Timeout;
       });
       
       const result = await withRetry(fn, 4);
@@ -63,9 +63,9 @@ describe('Utils Module', () => {
       const fn = vi.fn().mockRejectedValue(error);
       
       // Mock setTimeout to execute callback immediately
-      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {
         callback();
-        return 0 as any;
+        return 0 as unknown as NodeJS.Timeout;
       });
       
       await expect(withRetry(fn, 3)).rejects.toThrow('persistent failure');
@@ -80,9 +80,9 @@ describe('Utils Module', () => {
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
       
       // Mock setTimeout to execute callback immediately
-      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {
         callback();
-        return 0 as any;
+        return 0 as unknown as NodeJS.Timeout;
       });
       
       await expect(withRetry(fn)).rejects.toThrow('fail');
@@ -97,9 +97,9 @@ describe('Utils Module', () => {
       Object.defineProperty(config, 'RETRY_DELAY', { value: 1000 });
       
       // Spy on setTimeout
-      const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+      const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {
         callback();
-        return 0 as any;
+        return 0 as unknown as NodeJS.Timeout;
       });
       
       const fn = vi.fn()

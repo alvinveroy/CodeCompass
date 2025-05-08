@@ -6,7 +6,7 @@ import * as path from 'path';
  * Directly switches the model without going through the regular switchSuggestionModel function
  * This is a last resort for when the normal switching mechanism fails
  */
-export async function directModelSwitch(model: string): Promise<Record<string, any>> {
+export async function directModelSwitch(model: string): Promise<Record<string, unknown>> {
   logger.info(`Direct model switch for: ${model}`);
   
   const normalizedModel = model.toLowerCase();
@@ -57,7 +57,7 @@ export async function directModelSwitch(model: string): Promise<Record<string, a
     logger.info(`Saved model configuration to ${configFile}`);
     
     logger.info(`Directly set model to ${normalizedModel} and provider to ${provider}`);
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     logger.error(`Error in direct model switch: ${error.message}`);
     return {
       success: false,

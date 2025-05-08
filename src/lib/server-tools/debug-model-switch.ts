@@ -3,7 +3,7 @@ import { logger } from "../config";
 /**
  * Debug function to help diagnose model switching issues
  */
-export async function debugModelSwitch(model: string): Promise<Record<string, any>> {
+export async function debugModelSwitch(model: string): Promise<Record<string, unknown>> {
   logger.info(`Debug model switch for: ${model}`);
   
   // Get environment variables before switch

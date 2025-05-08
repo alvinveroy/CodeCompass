@@ -50,7 +50,7 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     } else {
       logger.warn("DeepSeek API key configuration failed");
     }
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     logger.error(`Error checking DeepSeek API key: ${error.message}`);
   }
   
@@ -80,7 +80,7 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     if (connectionStatus === "Failed" && hasApiKey) {
       logger.warn("Connection failed despite having API key. Check API URL and network connectivity.");
     }
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     connectionStatus = `Error: ${error.message}`;
     logger.error(`Provider connection error: ${error.message}`);
   }

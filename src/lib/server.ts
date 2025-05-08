@@ -40,7 +40,7 @@ export function normalizeToolParams(params: unknown): Record<string, unknown> {
     // Handle object input
     if (typeof params === 'object' && params !== null) {
       if ('query' in params || 'prompt' in params || 'sessionId' in params) {
-        return params as Record<string, any>;
+        return params as Record<string, unknown>;
       } else {
         // If no query property exists but we have an object, use the entire object as the query
         return { query: JSON.stringify(params) };
@@ -49,8 +49,9 @@ export function normalizeToolParams(params: unknown): Record<string, unknown> {
     
     // Handle primitive values
     return { query: String(params) };
-  } catch (error: any) {
-    logger.error("Failed to normalize parameters", { message: error.message });
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error("Failed to normalize parameters", { message: err.message });
     throw new Error("Invalid input format: parameters must be a valid JSON object or string");
   }
 }
@@ -357,8 +358,9 @@ export async function startServer(repoPath: string): Promise<void> {
                 `Timestamp: ${debugResult.timestamp}`
             }],
           };
-        } catch (error: any) {
-          logger.error("Error in debug_provider tool", { error: error.message });
+        } catch (error: unknown) {
+          const err = error as Error;
+          logger.error("Error in debug_provider tool", { error: err.message });
           return {
             content: [{
               type: "text",
@@ -385,8 +387,9 @@ export async function startServer(repoPath: string): Promise<void> {
               text: `# Provider Reset Complete\n\nAll provider settings and cache have been reset.\n\nUse the switch_suggestion_model tool to set a new provider.`
             }],
           };
-        } catch (error: any) {
-          logger.error("Error in reset_provider tool", { error: error.message });
+        } catch (error: unknown) {
+          const err = error as Error;
+          logger.error("Error in reset_provider tool", { error: err.message });
           return {
             content: [{
               type: "text",
@@ -475,8 +478,9 @@ export async function startServer(repoPath: string): Promise<void> {
               text: `# Direct Model Switch Successful\n\nSuccessfully switched to ${model} using direct method.\n\nBefore: ${JSON.stringify(switchResult.before)}\nAfter: ${JSON.stringify(switchResult.after)}\n\nTimestamp: ${switchResult.timestamp}`
             }],
           };
-        } catch (error: any) {
-          logger.error("Error in direct_model_switch tool", { error: error.message });
+        } catch (error: unknown) {
+          const err = error as Error;
+          logger.error("Error in direct_model_switch tool", { error: err.message });
           return {
             content: [{
               type: "text",
@@ -531,8 +535,9 @@ export async function startServer(repoPath: string): Promise<void> {
                 `Timestamp: ${diagnosticResult.timestamp}`
             }],
           };
-        } catch (error: any) {
-          logger.error("Error in model_switch_diagnostic tool", { error: error.message });
+        } catch (error: unknown) {
+          const err = error as Error;
+          logger.error("Error in model_switch_diagnostic tool", { error: err.message });
           return {
             content: [{
               type: "text",
@@ -601,8 +606,9 @@ export async function startServer(repoPath: string): Promise<void> {
                 `Timestamp: ${debugResult.timestamp}`
             }],
           };
-        } catch (error: any) {
-          logger.error("Error in debug_model_switch tool", { error: error.message });
+        } catch (error: unknown) {
+          const err = error as Error;
+          logger.error("Error in debug_model_switch tool", { error: err.message });
           return {
             content: [{
               type: "text",
@@ -733,8 +739,9 @@ export async function startServer(repoPath: string): Promise<void> {
               text: `# Suggestion Model Switched\n\nSuccessfully switched to ${requestedModel} for suggestions.\n\nUsing ${requestedModel} (${requestedModel.includes('deepseek') ? 'deepseek' : 'ollama'} provider) for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${requestedModel}'`,
             }],
           };
-        } catch (error: any) {
-          logger.error("Error switching suggestion model", { error: error.message });
+        } catch (error: unknown) {
+          const err = error as Error;
+          logger.error("Error switching suggestion model", { error: err.message });
           return {
             content: [{
               type: "text",
@@ -773,8 +780,9 @@ export async function startServer(repoPath: string): Promise<void> {
     });
     
     await new Promise(() => {});
-  } catch (error: any) {
-    logger.error("Failed to start CodeCompass", { message: error.message });
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error("Failed to start CodeCompass", { message: err.message });
     process.exit(1);
   }
 }
@@ -903,8 +911,9 @@ async function registerTools(
           text: response,
         }],
       };
-    } catch (error: any) {
-      logger.error("Error in agent_query", { error: error.message });
+    } catch (error: unknown) {
+      const err = error as Error;
+      logger.error("Error in agent_query", { error: err.message });
       
       return {
         content: [{
@@ -976,7 +985,8 @@ async function registerTools(
           // Create a summarization prompt
           const summarizePrompt = `Summarize this code snippet in 50 words or less:\n\n${snippet}`;
           summary = await llmProvider.generateText(summarizePrompt);
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const err = error as Error;
           logger.warn(`Failed to generate summary: ${error.message}`);
           summary = "Summary generation failed";
         }
@@ -1364,7 +1374,8 @@ Session ID: ${session.id}`;
           }],
         };
       } catch (error: unknown) {
-        logger.error("Error processing feedback", { error: error.message });
+        const err = error as Error;
+        logger.error("Error processing feedback", { error: err.message });
         return {
           content: [{
             type: "text",

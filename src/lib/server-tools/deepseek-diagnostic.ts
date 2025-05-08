@@ -4,7 +4,7 @@ import { checkDeepSeekApiKey, testDeepSeekConnection } from "../deepseek";
 /**
  * Performs a comprehensive diagnostic of the DeepSeek API configuration and connection
  */
-export async function deepseekDiagnostic(): Promise<Record<string, any>> {
+export async function deepseekDiagnostic(): Promise<Record<string, unknown>> {
   logger.info("Running DeepSeek API diagnostic");
   
   // Get environment variables
@@ -21,7 +21,7 @@ export async function deepseekDiagnostic(): Promise<Record<string, any>> {
   try {
     const hasApiKey = await checkDeepSeekApiKey();
     apiKeyStatus = hasApiKey ? "Configured" : "Not configured";
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     apiKeyStatus = `Error: ${error.message}`;
   }
   
@@ -35,7 +35,7 @@ export async function deepseekDiagnostic(): Promise<Record<string, any>> {
     if (!connected && apiKeyStatus === "Configured") {
       connectionStatus = "Failed - API key is configured but connection test failed. Check API URL and network connectivity.";
     }
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     connectionStatus = `Error: ${error.message}`;
   }
   

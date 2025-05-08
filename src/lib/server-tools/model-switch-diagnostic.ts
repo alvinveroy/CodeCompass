@@ -3,7 +3,7 @@ import { logger } from "../config";
 /**
  * Performs a comprehensive diagnostic on model switching
  */
-export async function modelSwitchDiagnostic(): Promise<Record<string, any>> {
+export async function modelSwitchDiagnostic(): Promise<Record<string, unknown>> {
   logger.info("Running comprehensive model switch diagnostic");
   
   // Get current state

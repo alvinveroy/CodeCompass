@@ -25,11 +25,17 @@ async function main() {
     }
     
     console.log('\n🔍 DeepSeek test complete');
-  } catch (error: any) {
-    console.error('\n❌ Test failed with error:', error.message);
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
+  } catch (error: unknown) {
+    const err = error as Error & { 
+      response?: { 
+        data: unknown; 
+        status: number; 
+      } 
+    };
+    console.error('\n❌ Test failed with error:', err.message);
+    if (err.response) {
+      console.error('Response data:', err.response.data);
+      console.error('Response status:', err.response.status);
     }
   }
 }

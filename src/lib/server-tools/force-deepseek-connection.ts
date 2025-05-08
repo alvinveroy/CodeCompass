@@ -6,7 +6,7 @@ import { DEEPSEEK_API_URL } from "../deepseek";
  * Force a connection to the DeepSeek API with explicit parameters
  * This bypasses all the normal configuration and directly tests the API
  */
-export async function forceDeepseekConnection(params: Record<string, any>): Promise<Record<string, any>> {
+export async function forceDeepseekConnection(params: Record<string, unknown>): Promise<Record<string, unknown>> {
   logger.info("Running force DeepSeek API connection test");
   
   // Get API key from params or environment
@@ -90,15 +90,24 @@ export async function forceDeepseekConnection(params: Record<string, any>): Prom
         error: `Unexpected response status: ${response.status}`
       };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Log detailed error information
+    const err = error as Error & { 
+      code?: string; 
+      response?: { 
+        status: number; 
+        statusText: string; 
+        data: unknown; 
+      } 
+    };
+    
     logger.error("DeepSeek API test failed", {
-      message: error.message,
-      code: error.code,
-      response: error.response ? {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
+      message: err.message,
+      code: err.code,
+      response: err.response ? {
+        status: err.response.status,
+        statusText: err.response.statusText,
+        data: err.response.data
       } : "No response data"
     });
     

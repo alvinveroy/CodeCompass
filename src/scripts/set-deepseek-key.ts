@@ -50,8 +50,9 @@ async function main() {
         console.log('❌ Connection failed. The API key may be invalid or there may be network issues.');
       }
     });
-  } catch (error: any) {
-    console.error('Error testing connection:', error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('Error testing connection:', err.message);
   }
 }
 

@@ -17,7 +17,7 @@ export async function testCurrentProvider(): Promise<boolean> {
     
     logger.info(`LLM provider test result: ${result.substring(0, 50)}...`);
     return true;
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     logger.error(`LLM provider test failed: ${error.message}`);
     return false;
   }
@@ -27,7 +27,7 @@ export async function testCurrentProvider(): Promise<boolean> {
  * Get information about the current LLM provider
  * Returns the provider name and any relevant configuration
  */
-export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
+export async function getCurrentProviderInfo(): Promise<Record<string, unknown>> {
   // Get model information
   const suggestionModel = global.CURRENT_SUGGESTION_MODEL || 
                           process.env.SUGGESTION_MODEL || 
@@ -45,7 +45,7 @@ export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
                             process.env.EMBEDDING_PROVIDER || 
                             "ollama";
   
-  const info: Record<string, any> = {
+  const info: Record<string, unknown> = {
     provider: suggestionProvider, // For backward compatibility
     suggestionModel: suggestionModel,
     suggestionProvider: suggestionProvider,
