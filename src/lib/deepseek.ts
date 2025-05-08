@@ -48,7 +48,7 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
   
   // Set it in the global scope too for redundancy
   // Note: We don't actually use this global property, just setting for redundancy
-  (global as any).DEEPSEEK_API_KEY = apiKey;
+  (global as Record<string, string>).DEEPSEEK_API_KEY = apiKey;
   
   logger.info(`DeepSeek API key is configured and set in environment. Length: ${apiKey.length}`);
   return true;
