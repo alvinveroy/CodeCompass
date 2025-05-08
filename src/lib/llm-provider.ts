@@ -161,8 +161,6 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   
   // Log the actual values being used
   logger.info(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
-  logger.info(`Global variables: model=${global.CURRENT_SUGGESTION_MODEL}, provider=${global.CURRENT_SUGGESTION_PROVIDER}`);
-  logger.info(`Environment variables: model=${process.env.SUGGESTION_MODEL}, provider=${process.env.SUGGESTION_PROVIDER}`);
   
   // Check if we have a cached provider and if it's still valid
   const cacheMaxAge = 2000; // 2 seconds max cache age
@@ -215,8 +213,6 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     }
   }
   
-  // Log the current provider settings for debugging
-  logger.info(`Getting LLM provider with settings - model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
   
   // Create a hybrid provider that uses different backends for different operations
   if (suggestionProvider.toLowerCase() !== embeddingProvider.toLowerCase()) {
@@ -404,20 +400,6 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   
   logger.info(`Set model to ${normalizedModel} and provider to ${provider}`);
   
-  // Verify the model was set correctly
-  if (global.CURRENT_SUGGESTION_MODEL !== normalizedModel) {
-    logger.error(`Failed to set model: expected ${normalizedModel}, got ${global.CURRENT_SUGGESTION_MODEL}`);
-    // Try setting it again with direct assignment
-    global.CURRENT_SUGGESTION_MODEL = normalizedModel;
-    logger.info(`Forced model to ${normalizedModel}`);
-  }
-  
-  if (global.CURRENT_SUGGESTION_PROVIDER !== provider) {
-    logger.error(`Failed to set provider: expected ${provider}, got ${global.CURRENT_SUGGESTION_PROVIDER}`);
-    // Try setting it again with direct assignment
-    global.CURRENT_SUGGESTION_PROVIDER = provider;
-    logger.info(`Forced provider to ${provider}`);
-  }
   
   // Always use Ollama for embeddings
   if (provider === 'deepseek') {
@@ -432,26 +414,11 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     global.CURRENT_EMBEDDING_PROVIDER = "ollama";
   }
   
-  // Check if we're actually using the model we requested
-  if (global.CURRENT_SUGGESTION_MODEL !== normalizedModel) {
-    logger.error(`Failed to set suggestion model to ${normalizedModel}, current model is ${global.CURRENT_SUGGESTION_MODEL}`);
-    // Force set the model again to ensure it's properly set
-    global.CURRENT_SUGGESTION_MODEL = normalizedModel;
-    process.env.SUGGESTION_MODEL = normalizedModel;
-    logger.info(`Forced model to ${normalizedModel} after detection of incorrect setting`);
-    
-    // Double-check that it's now set correctly
-    if (global.CURRENT_SUGGESTION_MODEL !== normalizedModel) {
-      logger.error(`Still failed to set suggestion model to ${normalizedModel}, current model is ${global.CURRENT_SUGGESTION_MODEL}`);
-      return false;
-    }
-  }
 
   logger.info(`Successfully switched to ${normalizedModel} (${provider} provider) for suggestions.`);
   logger.info(`Using ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
   
   // Save the configuration to a persistent file
-  import { saveModelConfig } from './model-persistence';
   saveModelConfig();
   
   logger.info(`To make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`);
