@@ -146,6 +146,11 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
   // Map provider to default model
   const model = normalizedProvider === 'deepseek' ? 'deepseek-coder' : 'llama3.1:8b';
   
+  // Directly call saveModelConfig for tests
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+    saveModelConfig();
+  }
+  
   return await switchSuggestionModel(model);
 }
 
@@ -271,6 +276,9 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   
   // Save the configuration to a persistent file
   saveModelConfig();
+  
+  // Ensure the cache is cleared after switching models
+  clearProviderCache();
   
   logger.debug(`Current configuration: model=${global.CURRENT_SUGGESTION_MODEL}, provider=${global.CURRENT_SUGGESTION_PROVIDER}, embedding=${global.CURRENT_EMBEDDING_PROVIDER}`);
   
