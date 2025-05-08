@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
-import { switchLLMProvider, getLLMProvider } from '../lib/llm-provider';
+import { switchLLMProvider, getLLMProvider, switchSuggestionModel, clearProviderCache } from '../lib/llm-provider';
 import * as ollama from '../lib/ollama';
 import * as deepseek from '../lib/deepseek';
+import * as modelPersistence from '../lib/model-persistence';
 
 // Mock the dependencies
 vi.mock('../lib/ollama', () => ({
@@ -18,8 +19,14 @@ vi.mock('../lib/deepseek', () => ({
   checkDeepSeekApiKey: vi.fn().mockResolvedValue(true)
 }));
 
+vi.mock('../lib/model-persistence', () => ({
+  loadModelConfig: vi.fn(),
+  saveModelConfig: vi.fn()
+}));
+
 describe('LLM Provider', () => {
   const originalEnv = { ...process.env };
+  const originalGlobal = { ...global };
   
   beforeEach(() => {
     // Reset mocks before each test
@@ -28,17 +35,34 @@ describe('LLM Provider', () => {
     // Reset environment variables
     process.env = { ...originalEnv };
     delete process.env.LLM_PROVIDER;
+    delete process.env.SUGGESTION_MODEL;
+    delete process.env.SUGGESTION_PROVIDER;
+    delete process.env.EMBEDDING_PROVIDER;
+    
+    // Reset global variables
+    global.CURRENT_SUGGESTION_MODEL = undefined;
+    global.CURRENT_SUGGESTION_PROVIDER = undefined;
+    global.CURRENT_EMBEDDING_PROVIDER = undefined;
+    
+    // Clear provider cache
+    clearProviderCache();
   });
   
   afterEach(() => {
     // Restore environment variables
     process.env = { ...originalEnv };
+    
+    // Restore global variables
+    global.CURRENT_SUGGESTION_MODEL = originalGlobal.CURRENT_SUGGESTION_MODEL;
+    global.CURRENT_SUGGESTION_PROVIDER = originalGlobal.CURRENT_SUGGESTION_PROVIDER;
+    global.CURRENT_EMBEDDING_PROVIDER = originalGlobal.CURRENT_EMBEDDING_PROVIDER;
   });
   
   describe('switchLLMProvider', () => {
     it('should switch to deepseek provider and update environment variable', async () => {
       // Mock the DeepSeek connection test to return true
       (deepseek.testDeepSeekConnection as Mock).mockResolvedValue(true);
+      (deepseek.checkDeepSeekApiKey as Mock).mockResolvedValue(true);
       
       // Call the function to switch to DeepSeek
       const result = await switchLLMProvider('deepseek');
@@ -48,12 +72,14 @@ describe('LLM Provider', () => {
       
       // Verify the environment variable was updated
       expect(process.env.LLM_PROVIDER).toBe('deepseek');
+      expect(process.env.SUGGESTION_PROVIDER).toBe('deepseek');
+      expect(process.env.SUGGESTION_MODEL).toBe('deepseek-coder');
       
       // Verify the DeepSeek connection was tested
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
       
-      // Verify Ollama connection was not tested
-      expect(ollama.checkOllama).not.toHaveBeenCalled();
+      // Verify model persistence was called
+      expect(modelPersistence.saveModelConfig).toHaveBeenCalled();
     });
     
     it('should switch to ollama provider and update environment variable', async () => {
@@ -68,12 +94,14 @@ describe('LLM Provider', () => {
       
       // Verify the environment variable was updated
       expect(process.env.LLM_PROVIDER).toBe('ollama');
+      expect(process.env.SUGGESTION_PROVIDER).toBe('ollama');
+      expect(process.env.SUGGESTION_MODEL).toBe('llama3.1:8b');
       
       // Verify the Ollama connection was tested
       expect(ollama.checkOllama).toHaveBeenCalled();
       
-      // Verify DeepSeek connection was not tested
-      expect(deepseek.testDeepSeekConnection).not.toHaveBeenCalled();
+      // Verify model persistence was called
+      expect(modelPersistence.saveModelConfig).toHaveBeenCalled();
     });
     
     it('should return false for invalid provider', async () => {
@@ -112,20 +140,64 @@ describe('LLM Provider', () => {
     });
   });
   
-  describe('getLLMProvider', () => {
-    it('should return DeepSeek provider when LLM_PROVIDER is set to deepseek', async () => {
-      // Set the environment variable
-      process.env.LLM_PROVIDER = 'deepseek';
-      process.env.NODE_ENV = 'test';
+  describe('switchSuggestionModel', () => {
+    it('should switch to deepseek model', async () => {
+      // Mock the DeepSeek connection test to return true
+      (deepseek.testDeepSeekConnection as Mock).mockResolvedValue(true);
+      (deepseek.checkDeepSeekApiKey as Mock).mockResolvedValue(true);
       
-      // Reset mocks before test
-      vi.resetAllMocks();
+      // Call the function to switch to DeepSeek model
+      const result = await switchSuggestionModel('deepseek-coder');
+      
+      // Verify the result is true (success)
+      expect(result).toBe(true);
+      
+      // Verify the environment and global variables were updated
+      expect(process.env.SUGGESTION_MODEL).toBe('deepseek-coder');
+      expect(process.env.SUGGESTION_PROVIDER).toBe('deepseek');
+      expect(global.CURRENT_SUGGESTION_MODEL).toBe('deepseek-coder');
+      expect(global.CURRENT_SUGGESTION_PROVIDER).toBe('deepseek');
+      
+      // Verify the DeepSeek connection was tested
+      expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
+      
+      // Verify model persistence was called
+      expect(modelPersistence.saveModelConfig).toHaveBeenCalled();
+    });
+    
+    it('should switch to ollama model', async () => {
+      // Mock the Ollama connection test to return true
+      (ollama.checkOllama as Mock).mockResolvedValue(true);
+      
+      // Call the function to switch to Ollama model
+      const result = await switchSuggestionModel('llama3.1:8b');
+      
+      // Verify the result is true (success)
+      expect(result).toBe(true);
+      
+      // Verify the environment and global variables were updated
+      expect(process.env.SUGGESTION_MODEL).toBe('llama3.1:8b');
+      expect(process.env.SUGGESTION_PROVIDER).toBe('ollama');
+      expect(global.CURRENT_SUGGESTION_MODEL).toBe('llama3.1:8b');
+      expect(global.CURRENT_SUGGESTION_PROVIDER).toBe('ollama');
+      
+      // Verify the Ollama connection was tested
+      expect(ollama.checkOllama).toHaveBeenCalled();
+      
+      // Verify model persistence was called
+      expect(modelPersistence.saveModelConfig).toHaveBeenCalled();
+    });
+  });
+  
+  describe('getLLMProvider', () => {
+    it('should return DeepSeek provider when SUGGESTION_PROVIDER is set to deepseek', async () => {
+      // Set the environment variable
+      process.env.SUGGESTION_PROVIDER = 'deepseek';
+      process.env.SUGGESTION_MODEL = 'deepseek-coder';
+      process.env.NODE_ENV = 'test';
       
       // Mock the DeepSeek connection test
       (deepseek.testDeepSeekConnection as Mock).mockResolvedValue(true);
-      
-      // Directly call the function to ensure the spy is registered
-      await deepseek.testDeepSeekConnection();
       
       // Get the provider
       const provider = await getLLMProvider();
@@ -139,13 +211,14 @@ describe('LLM Provider', () => {
       // Verify the DeepSeek spy was called
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
       
-      // Verify Ollama spy was not called
-      expect(ollama.checkOllama).not.toHaveBeenCalled();
+      // Verify model config was loaded
+      expect(modelPersistence.loadModelConfig).toHaveBeenCalled();
     });
     
-    it('should return Ollama provider when LLM_PROVIDER is set to ollama', async () => {
+    it('should return Ollama provider when SUGGESTION_PROVIDER is set to ollama', async () => {
       // Set the environment variable
-      process.env.LLM_PROVIDER = 'ollama';
+      process.env.SUGGESTION_PROVIDER = 'ollama';
+      process.env.SUGGESTION_MODEL = 'llama3.1:8b';
       process.env.NODE_ENV = 'test';
       
       // Mock the Ollama connection test
@@ -160,35 +233,35 @@ describe('LLM Provider', () => {
       expect(typeof provider.generateText).toBe('function');
       expect(typeof provider.generateEmbedding).toBe('function');
       
-      // Force a call to checkOllama to ensure the spy is triggered
-      await ollama.checkOllama();
-      
-      // Verify the spy was called
+      // Verify the Ollama spy was called
       expect(ollama.checkOllama).toHaveBeenCalled();
-      expect(deepseek.testDeepSeekConnection).not.toHaveBeenCalled();
+      
+      // Verify model config was loaded
+      expect(modelPersistence.loadModelConfig).toHaveBeenCalled();
     });
     
-    it('should use environment variable over imported constant', async () => {
-      // Set the environment variable to deepseek
-      process.env.LLM_PROVIDER = 'deepseek';
+    it('should use provider cache when available', async () => {
+      // Set the environment variable
+      process.env.SUGGESTION_PROVIDER = 'ollama';
+      process.env.SUGGESTION_MODEL = 'llama3.1:8b';
       process.env.NODE_ENV = 'test';
       
-      // Reset mocks before test
+      // Mock the Ollama connection test
+      (ollama.checkOllama as Mock).mockResolvedValue(true);
+      
+      // Get the provider first time
+      const provider1 = await getLLMProvider();
+      
+      // Reset mocks
       vi.resetAllMocks();
       
-      // Mock the DeepSeek connection test
-      (deepseek.testDeepSeekConnection as Mock).mockResolvedValue(true);
+      // Get the provider second time (should use cache)
+      const provider2 = await getLLMProvider();
       
-      // Directly call the function to ensure the spy is registered
-      await deepseek.testDeepSeekConnection();
+      // Verify the providers are the same
+      expect(provider1).toBe(provider2);
       
-      // Get the provider
-      const provider = await getLLMProvider();
-      
-      // Verify the DeepSeek spy was called
-      expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
-      
-      // Verify Ollama spy was not called
+      // Verify the Ollama spy was not called again
       expect(ollama.checkOllama).not.toHaveBeenCalled();
     });
   });
