@@ -6,8 +6,14 @@ export const QDRANT_HOST = process.env.QDRANT_HOST || "http://127.0.0.1:6333";
 export const COLLECTION_NAME = "codecompass";
 export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5";
 export const SUGGESTION_MODEL = process.env.SUGGESTION_MODEL || "llama3.1:8b";
-export const MAX_RETRIES = 3;
-export const RETRY_DELAY = 1000;
+
+// LLM Provider Configuration
+export const LLM_PROVIDER = process.env.LLM_PROVIDER || "ollama"; // "ollama" or "deepseek"
+export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
+export const DEEPSEEK_API_URL = "https://api.deepseek.com/v1";
+export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-coder";
+
+// Request Configuration
 export const MAX_INPUT_LENGTH = 4096;
 export const MAX_SNIPPET_LENGTH = 500;
 export const REQUEST_TIMEOUT = 120000; // 120 seconds timeout for API requests

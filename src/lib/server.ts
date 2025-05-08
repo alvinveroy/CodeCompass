@@ -5,16 +5,17 @@ import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH } from "./config";
+import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
 
 // Initialize MCP-safe logging immediately
 initMcpSafeLogging();
 import { QdrantSearchResult } from "./types";
 import { z } from "zod";
-import { checkOllama, checkOllamaModel, generateEmbedding, generateSuggestion, summarizeSnippet, processFeedback } from "./ollama";
+import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant, searchWithRefinement } from "./qdrant";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
 import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun, trackAgentCompletion, trackAgentToolUsage } from "./metrics";
+import { getLLMProvider, switchLLMProvider } from "./llm-provider";
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults, addAgentSteps } from "./state";
 import { runAgentLoop, parseToolCalls } from "./agent";
@@ -192,15 +193,30 @@ export async function startServer(repoPath: string): Promise<void> {
       repoPath = process.cwd();
     }
 
-    await checkOllama();
-    await checkOllamaModel(process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5", true);
+    // Get and check LLM provider
+    const llmProvider = await getLLMProvider();
+    const isLlmAvailable = await llmProvider.checkConnection();
+    
+    if (!isLlmAvailable) {
+      logger.warn(`LLM provider (${LLM_PROVIDER}) is not available. Some features may not work.`);
+    }
+    
+    // Check if suggestion model is available (only needed for Ollama)
     let suggestionModelAvailable = false;
     try {
-      await checkOllamaModel(process.env.SUGGESTION_MODEL || "llama3.1:8b", false);
-      suggestionModelAvailable = true;
+      if (LLM_PROVIDER.toLowerCase() === 'ollama') {
+        await checkOllama();
+        await checkOllamaModel(process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5", true);
+        await checkOllamaModel(process.env.SUGGESTION_MODEL || "llama3.1:8b", false);
+        suggestionModelAvailable = true;
+      } else {
+        // For DeepSeek, we assume the model is available if the connection test passed
+        suggestionModelAvailable = isLlmAvailable;
+      }
     } catch (error: any) {
-      logger.warn(`Warning: Ollama model ${process.env.SUGGESTION_MODEL || "llama3.1:8b"} is not available. Suggestion tools disabled: ${error.message}`);
+      logger.warn(`Warning: Model not available. Suggestion tools may be limited: ${error.message}`);
     }
+    
     const qdrantClient = await initializeQdrant();
     await indexRepository(qdrantClient, repoPath);
 
@@ -280,6 +296,60 @@ export async function startServer(repoPath: string): Promise<void> {
       logger.info("Registering get_repository_context tool separately");
       registerGetRepositoryContextTool(server, qdrantClient, repoPath);
     }
+    
+    // Register the switch provider tool
+    server.tool(
+      "switch_llm_provider",
+      "Switch between different LLM providers (ollama or deepseek).",
+      {
+        provider: z.string().describe("The LLM provider to switch to (ollama or deepseek)")
+      },
+      async (params: unknown) => {
+        const chainId = generateChainId();
+        trackToolChain(chainId, "switch_llm_provider");
+        
+        logger.info("Received params for switch_llm_provider", { params });
+        const normalizedParams = normalizeToolParams(params);
+        logger.debug("Normalized params for switch_llm_provider", normalizedParams);
+        
+        // Ensure provider exists
+        if (!normalizedParams.provider && typeof normalizedParams === 'object') {
+          normalizedParams.provider = "ollama";
+          logger.warn("No provider specified, defaulting to ollama");
+        }
+        
+        const provider = normalizedParams.provider;
+        
+        try {
+          // Switch to the specified provider
+          const success = await switchLLMProvider(provider);
+          
+          if (!success) {
+            return {
+              content: [{
+                type: "text",
+                text: `# Failed to Switch LLM Provider\n\nUnable to switch to ${provider} provider. Please check your configuration and logs for details.`,
+              }],
+            };
+          }
+          
+          return {
+            content: [{
+              type: "text",
+              text: `# LLM Provider Switched\n\nSuccessfully switched to ${provider} provider.\n\nTo make this change permanent, set the LLM_PROVIDER environment variable to '${provider}'`,
+            }],
+          };
+        } catch (error: any) {
+          logger.error("Error switching LLM provider", { error: error.message });
+          return {
+            content: [{
+              type: "text",
+              text: `# Error Switching LLM Provider\n\n${error.message}`,
+            }],
+          };
+        }
+      }
+    );
 
     // Start metrics logging
     const metricsInterval = startMetricsLogging(300000); // Log metrics every 5 minutes
@@ -427,16 +497,33 @@ async function registerTools(
     // Add query to session
     addQuery(session.id, query, results, relevanceScore);
     
+    // Get the current LLM provider
+    const llmProvider = await getLLMProvider();
+    
     // Generate summaries for the results
-    const summaries = await Promise.all(results.map(async result => ({
-      filepath: (result.payload as QdrantSearchResult['payload']).filepath,
-      snippet: (result.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
-      summary: suggestionModelAvailable
-        ? await summarizeSnippet((result.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH))
-        : "Summary unavailable (suggestion model not loaded)",
-      last_modified: (result.payload as QdrantSearchResult['payload']).last_modified,
-      relevance: result.score,
-    })));
+    const summaries = await Promise.all(results.map(async result => {
+      const snippet = (result.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH);
+      let summary = "Summary unavailable";
+      
+      if (suggestionModelAvailable) {
+        try {
+          // Create a summarization prompt
+          const summarizePrompt = `Summarize this code snippet in 50 words or less:\n\n${snippet}`;
+          summary = await llmProvider.generateText(summarizePrompt);
+        } catch (error: any) {
+          logger.warn(`Failed to generate summary: ${error.message}`);
+          summary = "Summary generation failed";
+        }
+      }
+      
+      return {
+        filepath: (result.payload as QdrantSearchResult['payload']).filepath,
+        snippet,
+        summary,
+        last_modified: (result.payload as QdrantSearchResult['payload']).last_modified,
+        relevance: result.score,
+      };
+    }));
     
     // Format the response as clean markdown
     const formattedResponse = `# Search Results for: "${query}"
@@ -666,8 +753,11 @@ Based on the provided context and snippets, generate a detailed code suggestion 
 Ensure the suggestion is concise, practical, and leverages the repository's existing code structure. If the query is ambiguous, provide a general solution with assumptions clearly stated.
       `;
       
-      // Generate suggestion with multi-step reasoning
-      const suggestion = await generateSuggestion(prompt);
+      // Get the current LLM provider
+      const llmProvider = await getLLMProvider();
+      
+      // Generate suggestion with the current provider
+      const suggestion = await llmProvider.generateText(prompt);
       
       // Add suggestion to session
       addSuggestion(session.id, query, suggestion);
@@ -733,8 +823,11 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
         // Add feedback to session
         addFeedback(session.id, score, comments);
         
+        // Get the current LLM provider
+        const llmProvider = await getLLMProvider();
+        
         // Process feedback to improve the suggestion
-        const improvedSuggestion = await processFeedback(
+        const improvedSuggestion = await llmProvider.processFeedback(
           originalQuery,
           suggestion,
           comments,
@@ -975,7 +1068,10 @@ Structure your analysis with these sections:
 - Recommended Approach
       `;
       
-      const analysis = await generateSuggestion(analysisPrompt);
+      // Get the current LLM provider
+      const llmProvider = await getLLMProvider();
+      
+      const analysis = await llmProvider.generateText(analysisPrompt);
       
       // Step 3: Generate implementation plan
       trackToolChain(chainId, "generate_implementation_plan");
@@ -993,7 +1089,7 @@ Generate a step-by-step implementation plan to solve this problem. Include:
 4. Testing approach to verify the solution works
       `;
       
-      const implementationPlan = await generateSuggestion(planPrompt);
+      const implementationPlan = await llmProvider.generateText(planPrompt);
       
       // Add to session
       addQuery(session.id, query, contextResults);

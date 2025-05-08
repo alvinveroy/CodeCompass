@@ -4,7 +4,8 @@
   "description": "AI-powered MCP server for codebase navigation and LLM prompt optimization",
   "main": "dist/index.js",
   "bin": {
-    "codecompass": "dist/index.js"
+    "codecompass": "dist/index.js",
+    "codecompass-provider": "dist/lib/provider-cli.js"
   },
   "scripts": {
     "build": "tsc",
