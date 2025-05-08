@@ -57,7 +57,11 @@ describe('Config Module', () => {
   
     it('should be able to log messages without throwing errors', () => {
       // Mock console methods to prevent actual logging during tests
-      const originalConsole = { ...console };
+      const originalInfo = console.info;
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      const originalDebug = console.debug;
+      
       console.info = vi.fn();
       console.error = vi.fn();
       console.warn = vi.fn();
@@ -68,8 +72,11 @@ describe('Config Module', () => {
       expect(() => config.logger.warn('Test warning message')).not.toThrow();
       expect(() => config.logger.debug('Test debug message')).not.toThrow();
       
-      // Restore console
-      console = { ...originalConsole };
+      // Restore console methods
+      console.info = originalInfo;
+      console.error = originalError;
+      console.warn = originalWarn;
+      console.debug = originalDebug;
     });
   });
 

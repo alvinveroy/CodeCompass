@@ -31,8 +31,8 @@ export function initMcpSafeLogging(): void {
   // Instead, we'll use a custom file logger implementation
   
   // Create logs directory if it doesn't exist
-  const fs = require('fs');
-  const path = require('path');
+  import * as fs from 'fs';
+  import * as path from 'path';
   const logsDir = path.join(process.cwd(), 'logs');
   
   try {

@@ -34,7 +34,7 @@ Examples:
       console.log(`Current LLM provider: ${LLM_PROVIDER}`);
       break;
     
-    case 'switch':
+    case 'switch': {
       if (args.length < 2) {
         console.error('Error: Missing provider argument. Use "ollama" or "deepseek"');
         process.exit(1);
@@ -58,7 +58,7 @@ Examples:
       }
       break;
     
-    case 'test':
+    case 'test': {
       console.log(`Testing ${LLM_PROVIDER} provider connection...`);
       const llmProvider = await getLLMProvider();
       const available = await llmProvider.checkConnection();

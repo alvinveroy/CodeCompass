@@ -1,8 +1,7 @@
-import { logger, LLM_PROVIDER } from "./config";
+import { logger } from "./config";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
-import * as fs from 'fs';
-import * as path from 'path';
+// fs and path are not used in this file
 
 // Interface for LLM Provider
 export interface LLMProvider {
@@ -116,9 +115,13 @@ Please provide an improved response addressing the user's feedback.`;
 
 // Declare global variables for TypeScript
 declare global {
+  // eslint-disable-next-line no-var
   var CURRENT_LLM_PROVIDER: string | undefined;
+  // eslint-disable-next-line no-var
   var CURRENT_SUGGESTION_PROVIDER: string | undefined;
+  // eslint-disable-next-line no-var
   var CURRENT_EMBEDDING_PROVIDER: string | undefined;
+  // eslint-disable-next-line no-var
   var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 

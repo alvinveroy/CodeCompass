@@ -98,10 +98,10 @@ async function refineQuery(originalQuery: string, results: any[], currentRelevan
 // Broaden a query that's too specific
 function broadenQuery(query: string): string {
   // Remove specific terms, file extensions, or technical jargon
-  let broadened = query
+  const broadened = query
     .replace(/\b(exact|specific|only|must)\b/gi, '')
     .replace(/\.(ts|js|tsx|jsx|py|java|cpp|rb|go|rs|php)\b/gi, '')
-    .replace(/["'{}()\[\]]/g, ' ')
+    .replace(/["'{}()[\]]/g, ' ')
     .trim();
   
   // If query became too short, add some generic terms

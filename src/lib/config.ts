@@ -19,15 +19,22 @@ export const SUGGESTION_PROVIDER = process.env.SUGGESTION_PROVIDER || process.en
 export const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "ollama";
 
 // Declare global variables for TypeScript
+interface Global {
+  CURRENT_LLM_PROVIDER: string;
+  CURRENT_SUGGESTION_PROVIDER: string;
+  CURRENT_EMBEDDING_PROVIDER: string;
+  CURRENT_SUGGESTION_MODEL?: string;
+}
+
 declare global {
-  namespace NodeJS {
-    interface Global {
-      CURRENT_LLM_PROVIDER: string;
-      CURRENT_SUGGESTION_PROVIDER: string;
-      CURRENT_EMBEDDING_PROVIDER: string;
-      CURRENT_SUGGESTION_MODEL?: string;
-    }
-  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var CURRENT_LLM_PROVIDER: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var CURRENT_SUGGESTION_PROVIDER: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var CURRENT_EMBEDDING_PROVIDER: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var CURRENT_SUGGESTION_MODEL?: string;
 }
 
 // Initialize global provider state
