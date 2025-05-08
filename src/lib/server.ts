@@ -348,7 +348,12 @@ export async function startServer(repoPath: string): Promise<void> {
             const isDeepSeekModel = model.toLowerCase().includes('deepseek');
             global.CURRENT_SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
             process.env.SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
+            
+            // Ensure the LLM provider is updated immediately
+            const llmProvider = await getLLMProvider();
+            
             logger.info(`Forced provider to ${global.CURRENT_SUGGESTION_PROVIDER} based on model name`);
+            logger.info(`Current LLM provider: ${await llmProvider.checkConnection() ? "connected" : "disconnected"}`);
           }
         
           if (!switchResult.success) {
@@ -707,6 +712,10 @@ async function registerTools(
       const { query, sessionId, maxSteps = 5 } = normalizedParams;
     
     try {
+      // Ensure we have the latest LLM provider
+      const llmProvider = await getLLMProvider();
+      logger.info(`Agent using provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
+      
       // Run the agent loop
       const response = await runAgentLoop(
         query,

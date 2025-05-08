@@ -444,6 +444,9 @@ export async function runAgentLoop(
 ): Promise<string> {
   incrementCounter('agent_runs');
   
+  // Log the current provider and model being used by the agent
+  logger.info(`Agent running with provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
+  
   return await timeExecution('agent_loop', async () => {
     // Get or create session
     const session = getOrCreateSession(sessionId, repoPath);

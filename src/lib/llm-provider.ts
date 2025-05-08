@@ -199,6 +199,9 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     }
   }
   
+  // Log the current provider settings for debugging
+  logger.info(`Getting LLM provider with settings - model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
+  
   // Create a hybrid provider that uses different backends for different operations
   if (suggestionProvider.toLowerCase() !== embeddingProvider.toLowerCase()) {
     logger.info(`Using hybrid provider: ${suggestionProvider} for suggestions, ${embeddingProvider} for embeddings`);
