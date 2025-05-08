@@ -28,34 +28,40 @@ export async function testCurrentProvider(): Promise<boolean> {
  * Returns the provider name and any relevant configuration
  */
 export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
+  // Get model information
+  const suggestionModel = global.CURRENT_SUGGESTION_MODEL || 
+                          process.env.SUGGESTION_MODEL || 
+                          "llama3.1:8b";
+  
+  // Determine provider based on model
+  const isDeepSeekModel = suggestionModel.toLowerCase().includes('deepseek');
+  
   // Prioritize suggestion provider settings
   const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || 
                              process.env.SUGGESTION_PROVIDER || 
-                             process.env.LLM_PROVIDER || 
-                             "ollama";
+                             (isDeepSeekModel ? "deepseek" : process.env.LLM_PROVIDER || "ollama");
   
   const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || 
                             process.env.EMBEDDING_PROVIDER || 
                             "ollama";
   
-  const currentProvider = suggestionProvider; // For backward compatibility
-  
   const info: Record<string, any> = {
-    provider: suggestionProvider, // Use suggestionProvider as the main provider
+    provider: suggestionProvider, // For backward compatibility
+    suggestionModel: suggestionModel,
     suggestionProvider: suggestionProvider,
     embeddingProvider: embeddingProvider,
     timestamp: new Date().toISOString()
   };
   
   // Add provider-specific information
-  if (currentProvider === "deepseek") {
+  if (suggestionProvider === "deepseek") {
     info.apiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1";
-    info.model = process.env.DEEPSEEK_MODEL || "deepseek-coder";
+    info.model = suggestionModel;
     info.hasApiKey = !!process.env.DEEPSEEK_API_KEY;
   } else {
     info.host = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
     info.embeddingModel = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5";
-    info.suggestionModel = process.env.SUGGESTION_MODEL || "llama3.1:8b";
+    info.suggestionModel = suggestionModel;
   }
   
   return info;
