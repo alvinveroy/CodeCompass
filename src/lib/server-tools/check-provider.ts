@@ -13,7 +13,7 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
     EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER,
     DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ? "Set" : "Not set",
-    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL,
+    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
     OLLAMA_HOST: process.env.OLLAMA_HOST,
   };
   

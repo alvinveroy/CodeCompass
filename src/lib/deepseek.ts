@@ -19,7 +19,7 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
   }
   
   // Log that we found the API key (without revealing it)
-  logger.info(`DeepSeek API key is configured: ${apiKey ? "Yes" : "No"}`);
+  logger.info(`DeepSeek API key is configured: ${apiKey ? "Yes" : "No"}, value length: ${apiKey.length}`);
   return true;
 }
 

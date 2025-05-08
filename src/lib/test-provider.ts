@@ -55,11 +55,15 @@ export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
   
   // Add provider-specific information
   if (suggestionProvider === "deepseek") {
+    const apiKey = process.env.DEEPSEEK_API_KEY;
     info.apiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
     info.model = suggestionModel;
-    info.hasApiKey = !!process.env.DEEPSEEK_API_KEY;
-    info.apiKeyConfigured = !!process.env.DEEPSEEK_API_KEY;
+    info.hasApiKey = !!apiKey;
+    info.apiKeyConfigured = !!apiKey;
     info.apiEndpointConfigured = !!process.env.DEEPSEEK_API_URL;
+    
+    // Log the API key status for debugging (without revealing it)
+    console.log(`DeepSeek API key configured: ${!!apiKey}`);
   } else {
     info.host = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
     info.embeddingModel = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5";
