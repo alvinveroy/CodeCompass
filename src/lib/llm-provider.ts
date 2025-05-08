@@ -465,6 +465,9 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   logger.info(`To make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`);
   logger.info(`Current suggestion model: ${global.CURRENT_SUGGESTION_MODEL}, provider: ${global.CURRENT_SUGGESTION_PROVIDER}, embedding: ${global.CURRENT_EMBEDDING_PROVIDER}`);
   
+  // Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
+  // You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).
+  
   return true;
 }
 
