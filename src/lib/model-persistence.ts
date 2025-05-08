@@ -88,11 +88,9 @@ export function forceUpdateModelConfig(model: string): void {
   const isDeepSeekModel = normalizedModel.includes('deepseek');
   const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
   
-  // Set global variables
+  // Set model configuration
   global.CURRENT_SUGGESTION_MODEL = normalizedModel;
   global.CURRENT_SUGGESTION_PROVIDER = provider;
-  
-  // Set environment variables
   process.env.SUGGESTION_MODEL = normalizedModel;
   process.env.SUGGESTION_PROVIDER = provider;
   

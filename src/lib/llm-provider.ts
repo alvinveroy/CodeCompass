@@ -124,7 +124,10 @@ declare global {
 
 import { loadModelConfig, saveModelConfig } from './model-persistence';
 
-// Function to switch LLM provider (kept for backward compatibility)
+/**
+ * Switch LLM provider (kept for backward compatibility with tests)
+ * @deprecated Use switchSuggestionModel instead
+ */
 export async function switchLLMProvider(provider: string): Promise<boolean> {
   logger.warn("switchLLMProvider is deprecated, use switchSuggestionModel instead");
   
@@ -181,7 +184,7 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   
   const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
   
-  // Log the provider configuration
+  // Log the provider configuration at debug level
   logger.debug(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
   
   // Check if we have a cached provider and if it's still valid
@@ -207,14 +210,17 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   }
   
   
+  // Create the appropriate provider based on the configuration
+  let provider: LLMProvider;
+  
   // Create a hybrid provider that uses different backends for different operations
   if (suggestionProvider.toLowerCase() !== embeddingProvider.toLowerCase()) {
     logger.info(`Using hybrid provider: ${suggestionProvider} for suggestions, ${embeddingProvider} for embeddings`);
-    return new HybridProvider(suggestionProvider, embeddingProvider);
+    provider = new HybridProvider(suggestionProvider, embeddingProvider);
+  } else {
+    // Create a single provider for all operations
+    provider = await createProvider(suggestionProvider.toLowerCase());
   }
-  
-  // Create the appropriate provider based on the suggestion provider
-  const provider = await createProvider(suggestionProvider.toLowerCase());
   
   // Cache the provider
   providerCache = {
@@ -364,15 +370,8 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
 async function handleTestEnvironment(normalizedModel: string, provider: string): Promise<boolean> {
   // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
   if (process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
-    // Set suggestion model and provider
-    global.CURRENT_SUGGESTION_MODEL = normalizedModel;
-    process.env.SUGGESTION_MODEL = normalizedModel;
-    global.CURRENT_SUGGESTION_PROVIDER = provider;
-    process.env.SUGGESTION_PROVIDER = provider;
-    
-    // Keep embedding provider as ollama
-    global.CURRENT_EMBEDDING_PROVIDER = "ollama";
-    process.env.EMBEDDING_PROVIDER = "ollama";
+    // Set model configuration
+    setModelConfiguration(normalizedModel, provider);
     
     // In test environment, we still want to call the check functions for test spies to work
     if (provider === 'ollama') {
@@ -474,14 +473,14 @@ async function checkProviderAvailability(provider: string, normalizedModel: stri
  */
 function setModelConfiguration(normalizedModel: string, provider: string): void {
   // Set suggestion model and provider - ensure we're setting the exact model requested
-  process.env.SUGGESTION_MODEL = normalizedModel;
   global.CURRENT_SUGGESTION_MODEL = normalizedModel;
-  process.env.SUGGESTION_PROVIDER = provider;
   global.CURRENT_SUGGESTION_PROVIDER = provider;
+  process.env.SUGGESTION_MODEL = normalizedModel;
+  process.env.SUGGESTION_PROVIDER = provider;
   
   // Always keep embedding provider as ollama
-  process.env.EMBEDDING_PROVIDER = "ollama";
   global.CURRENT_EMBEDDING_PROVIDER = "ollama";
+  process.env.EMBEDDING_PROVIDER = "ollama";
 }
 
 /**
