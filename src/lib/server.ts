@@ -103,7 +103,7 @@ async function registerGetRepositoryContextTool(
         logger.warn("No query provided for get_repository_context, using default");
       }
         
-      const query = parsedParams.query;
+      const query = parsedParams.query as string;
       const sessionId = 'sessionId' in parsedParams ? parsedParams.sessionId : undefined;
     
     // Get or create session
@@ -1297,7 +1297,7 @@ ${c.snippet}
 
 ## Recent Changes
 \`\`\`
-${_diff}
+${diff}
 \`\`\`
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)
