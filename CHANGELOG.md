@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New MCP tool: `reset_metrics` to reset all metrics counters
 - New MCP tool: `get_session_history` to view detailed session information
 - New MCP tool: `agent_query` for multi-step reasoning and problem analysis
+- Version number display in console when server starts
 
 ### Changed
 - Enhanced documentation for environment variable configuration
@@ -22,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardized response format across all MCP tools
 - Fixed TypeScript build errors in server.ts
 - Improved parameter handling for MCP tools
+
+### Fixed
+- Fixed MCP logging to prevent JSON parsing errors in Claude Desktop
+- Replaced logger.configure with custom file logging implementation
 
 ## [1.1.0] - 2025-05-06
 

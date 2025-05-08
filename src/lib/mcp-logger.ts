@@ -26,15 +26,56 @@ export function initMcpSafeLogging(): void {
   console.error = (...args) => logger.error(...args);
   console.debug = (...args) => logger.debug(...args);
   
-  // Configure logger to use a file instead of stdout
-  logger.configure({
-    appenders: {
-      file: { type: 'file', filename: 'codecompass.log' }
-    },
-    categories: {
-      default: { appenders: ['file'], level: 'debug' }
+  // Redirect logging to a file instead of stdout
+  // Note: We can't use logger.configure as it's not available
+  // Instead, we'll use a custom file logger implementation
+  
+  // Create logs directory if it doesn't exist
+  const fs = require('fs');
+  const path = require('path');
+  const logsDir = path.join(process.cwd(), 'logs');
+  
+  try {
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
     }
-  });
+    
+    // Set up file logging
+    const logFile = path.join(logsDir, 'codecompass.log');
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    
+    // Override logger methods to write to file
+    const originalDebug = logger.debug;
+    const originalInfo = logger.info;
+    const originalWarn = logger.warn;
+    const originalError = logger.error;
+    
+    logger.debug = (...args) => {
+      const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+      logStream.write(`${new Date().toISOString()} [DEBUG] ${message}\n`);
+      return originalDebug.apply(logger, args);
+    };
+    
+    logger.info = (...args) => {
+      const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+      logStream.write(`${new Date().toISOString()} [INFO] ${message}\n`);
+      return originalInfo.apply(logger, args);
+    };
+    
+    logger.warn = (...args) => {
+      const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+      logStream.write(`${new Date().toISOString()} [WARN] ${message}\n`);
+      return originalWarn.apply(logger, args);
+    };
+    
+    logger.error = (...args) => {
+      const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+      logStream.write(`${new Date().toISOString()} [ERROR] ${message}\n`);
+      return originalError.apply(logger, args);
+    };
+  } catch (error) {
+    console.error("Failed to set up file logging:", error);
+  }
 }
 
 /**

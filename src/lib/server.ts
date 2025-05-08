@@ -287,12 +287,15 @@ export async function startServer(repoPath: string): Promise<void> {
     // Configure transport to use proper JSON formatting
     const transport = new StdioServerTransport();
     
-    // Log startup info to file only, not stdout
-    logger.info(`CodeCompass MCP server running for repository: ${repoPath}`);
+    // Log startup info to file
+    logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
     logger.info(`CodeCompass server started with tools: ${Object.keys(suggestionModelAvailable ? 
       { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {} } : 
       { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, agent_query: {} }
     ).join(', ')}`);
+    
+    // Display version and status to stderr (similar to Context7)
+    console.error(`CodeCompass v${VERSION} MCP Server running on stdio`);
     
     // Connect to transport after registering all capabilities
     await server.connect(transport);
