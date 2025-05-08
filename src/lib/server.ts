@@ -388,8 +388,7 @@ export async function startServer(repoPath: string): Promise<void> {
             }],
           };
         } catch (error: unknown) {
-          const _err = error as Error;
-          logger.error("Error in reset_provider tool", { error: _err.message });
+          logger.error("Error in reset_provider tool", { error: (error as Error).message });
           return {
             content: [{
               type: "text",
