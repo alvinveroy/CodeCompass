@@ -6,6 +6,7 @@ import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
+import * as deepseek from "./deepseek";
 
 // Initialize MCP-safe logging immediately
 initMcpSafeLogging();
