@@ -26,7 +26,15 @@ export function initMcpSafeLogging(): void {
   console.error = (...args) => logger.error(...args);
   console.debug = (...args) => logger.debug(...args);
   
-  logger.info("MCP-safe logging initialized");
+  // Configure logger to use a file instead of stdout
+  logger.configure({
+    appenders: {
+      file: { type: 'file', filename: 'codecompass.log' }
+    },
+    categories: {
+      default: { appenders: ['file'], level: 'debug' }
+    }
+  });
 }
 
 /**

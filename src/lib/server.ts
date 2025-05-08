@@ -1,22 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { initMcpSafeLogging } from "./mcp-logger";
+import { initMcpSafeLogging, restoreConsole } from "./mcp-logger";
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH } from "./config";
-// Redirect console.log and other logging to avoid interfering with MCP protocol
-const originalConsoleLog = console.log;
-const originalConsoleInfo = console.info;
-const originalConsoleWarn = console.warn;
-const originalConsoleError = console.error;
 
-// Replace console methods to prevent them from writing to stdout
-console.log = (...args) => logger.debug(...args);
-console.info = (...args) => logger.info(...args);
-console.warn = (...args) => logger.warn(...args);
-console.error = (...args) => logger.error(...args);
+// Initialize MCP-safe logging immediately
+initMcpSafeLogging();
 import { QdrantSearchResult } from "./types";
 import { z } from "zod";
 import { checkOllama, checkOllamaModel, generateEmbedding, generateSuggestion, summarizeSnippet, processFeedback } from "./ollama";
@@ -188,9 +180,9 @@ function generateChainId(): string {
 
 // Start Server
 export async function startServer(repoPath: string): Promise<void> {
-  // Initialize MCP-safe logging to prevent console output from interfering with protocol
-  initMcpSafeLogging();
+  // MCP-safe logging is already initialized at the top of the file
   
+  // Use file logging instead of stdout
   logger.info("Starting CodeCompass MCP server...");
 
   try {
@@ -295,7 +287,7 @@ export async function startServer(repoPath: string): Promise<void> {
     // Configure transport to use proper JSON formatting
     const transport = new StdioServerTransport();
     
-    // Log startup info before connecting to avoid stdout pollution
+    // Log startup info to file only, not stdout
     logger.info(`CodeCompass MCP server running for repository: ${repoPath}`);
     logger.info(`CodeCompass server started with tools: ${Object.keys(suggestionModelAvailable ? 
       { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {} } : 
