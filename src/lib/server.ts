@@ -1547,7 +1547,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      const diff = await getRepositoryDiff(repoPath);
+      const _diff = await getRepositoryDiff(repoPath);
       
       // Use iterative query refinement to find relevant code
       const { results: contextResults } = await searchWithRefinement(
