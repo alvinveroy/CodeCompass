@@ -360,7 +360,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
             changelog: "No changelog found"
           };
         }
-      } catch (error) {
+      } catch (_error) {
         return {
           error: "Failed to read changelog",
           changelog: "No changelog available"
