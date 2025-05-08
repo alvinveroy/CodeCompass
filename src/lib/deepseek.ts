@@ -29,37 +29,51 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
  */
 export async function testDeepSeekConnection(): Promise<boolean> {
   try {
-    if (!await checkDeepSeekApiKey()) {
+    // Check if API key is configured
+    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+    if (!apiKey) {
+      logger.error("DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable.");
       return false;
     }
 
-    logger.info("Testing DeepSeek API connection...");
+    logger.info(`Testing DeepSeek API connection with key length: ${apiKey.length}...`);
     const apiUrl = process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
-    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+    logger.info(`Using DeepSeek API URL: ${apiUrl}`);
     
-    const response = await axios.post(
-      apiUrl,
-      {
-        model: DEEPSEEK_MODEL,
-        messages: [{ role: "user", content: "Hello" }],
-        max_tokens: 10
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+    try {
+      const response = await axios.post(
+        apiUrl,
+        {
+          model: DEEPSEEK_MODEL,
+          messages: [{ role: "user", content: "Hello" }],
+          max_tokens: 10
         },
-        timeout: 10000
-      }
-    );
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          timeout: 10000
+        }
+      );
 
-    if (response.status === 200) {
-      logger.info("DeepSeek API connection successful");
-      return true;
+      if (response.status === 200) {
+        logger.info("DeepSeek API connection successful");
+        return true;
+      }
+      
+      logger.warn(`DeepSeek API test failed with status: ${response.status}`);
+      return false;
+    } catch (requestError: any) {
+      logger.error("DeepSeek API connection test failed", {
+        message: requestError.message,
+        response: requestError.response ? {
+          status: requestError.response.status,
+          data: requestError.response.data
+        } : null
+      });
+      return false;
     }
-    
-    logger.warn(`DeepSeek API test failed with status: ${response.status}`);
-    return false;
   } catch (error: any) {
     logger.error("DeepSeek API connection test failed", {
       message: error.message,
