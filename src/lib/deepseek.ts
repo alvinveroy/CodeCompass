@@ -17,7 +17,7 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
   }
   
   // Log that we found the API key (without revealing it)
-  logger.info("DeepSeek API key is configured");
+  logger.info(`DeepSeek API key is configured: ${apiKey ? "Yes" : "No"}`);
   return true;
 }
 
@@ -87,6 +87,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
       logger.info(`Generating with DeepSeek for prompt (length: ${prompt.length})`);
       
       const apiUrl = process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
+      // Ensure we're getting the latest value from the environment
       const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
       const model = process.env.DEEPSEEK_MODEL || DEEPSEEK_MODEL;
       
@@ -195,7 +196,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
           {
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+              "Authorization": `Bearer ${apiKey}`
             },
             timeout: REQUEST_TIMEOUT
           }
