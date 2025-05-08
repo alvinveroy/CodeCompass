@@ -13,7 +13,8 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES):
       logger.warn(`Retry ${i + 1}/${retries} after error: ${error.message}`);
       
       if (i < retries - 1) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        // Use exponential backoff for retries
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, i)));
       }
     }
   }

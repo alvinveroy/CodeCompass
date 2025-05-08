@@ -10,6 +10,7 @@ export const MAX_RETRIES = 3;
 export const RETRY_DELAY = 1000;
 export const MAX_INPUT_LENGTH = 4096;
 export const MAX_SNIPPET_LENGTH = 500;
+export const REQUEST_TIMEOUT = 60000; // 60 seconds timeout for API requests
 
 // Setup Winston logger
 export const logger = winston.createLogger({

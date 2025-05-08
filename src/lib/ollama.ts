@@ -70,7 +70,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         const res = await axios.post<OllamaEmbeddingResponse>(
           `${OLLAMA_HOST}/api/embeddings`,
           { model: EMBEDDING_MODEL, prompt: truncatedText },
-          { timeout: 10000 }
+          { timeout: REQUEST_TIMEOUT }
         );
         
         if (!res.data.embedding || !Array.isArray(res.data.embedding)) {
@@ -122,7 +122,7 @@ Provide a concise plan with 3-5 steps.`;
         const res = await axios.post<OllamaGenerateResponse>(
           `${OLLAMA_HOST}/api/generate`,
           { model: SUGGESTION_MODEL, prompt: planPrompt, stream: false },
-          { timeout: 30000 }
+          { timeout: REQUEST_TIMEOUT }
         );
         return res.data.response;
       });
@@ -144,7 +144,7 @@ Provide a comprehensive, well-structured response following your plan.`;
         const res = await axios.post<OllamaGenerateResponse>(
           `${OLLAMA_HOST}/api/generate`,
           { model: SUGGESTION_MODEL, prompt: executionPrompt, stream: false },
-          { timeout: 60000 } // Increased timeout to 60 seconds for complex prompts
+          { timeout: REQUEST_TIMEOUT }
         );
         return res.data;
       });
@@ -172,7 +172,7 @@ Please provide an improved version addressing these issues.`;
           const res = await axios.post<OllamaGenerateResponse>(
             `${OLLAMA_HOST}/api/generate`,
             { model: SUGGESTION_MODEL, prompt: refinementPrompt, stream: false },
-            { timeout: 60000 }
+            { timeout: REQUEST_TIMEOUT }
           );
           return res.data.response;
         });
@@ -231,7 +231,7 @@ Feedback: [your detailed feedback]`;
       const res = await axios.post<OllamaGenerateResponse>(
         `${OLLAMA_HOST}/api/generate`,
         { model: SUGGESTION_MODEL, prompt: evaluationPrompt, stream: false },
-        { timeout: 30000 }
+        { timeout: REQUEST_TIMEOUT }
       );
       return res.data.response;
     });
@@ -281,7 +281,7 @@ Please provide an improved response addressing the user's feedback.`;
       const res = await axios.post<OllamaGenerateResponse>(
         `${OLLAMA_HOST}/api/generate`,
         { model: SUGGESTION_MODEL, prompt: feedbackPrompt, stream: false },
-        { timeout: 60000 }
+        { timeout: REQUEST_TIMEOUT }
       );
       return res.data.response;
     });
