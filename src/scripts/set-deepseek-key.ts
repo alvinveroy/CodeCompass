@@ -2,7 +2,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { logger } from '../lib/config';
+// Removed unused logger import
 
 /**
  * This script sets the DeepSeek API key in a way that ensures it's available to all parts of the application.
@@ -41,14 +41,15 @@ async function main() {
   
   // Test the connection
   try {
-    const deepseek = require('../lib/deepseek');
-    console.log('Testing DeepSeek connection...');
-    const connected = await deepseek.testDeepSeekConnection();
-    if (connected) {
-      console.log('✅ Connection successful! The API key is working.');
-    } else {
-      console.log('❌ Connection failed. The API key may be invalid or there may be network issues.');
-    }
+    import('../lib/deepseek').then(async (deepseek) => {
+      console.log('Testing DeepSeek connection...');
+      const connected = await deepseek.testDeepSeekConnection();
+      if (connected) {
+        console.log('✅ Connection successful! The API key is working.');
+      } else {
+        console.log('❌ Connection failed. The API key may be invalid or there may be network issues.');
+      }
+    });
   } catch (error: any) {
     console.error('Error testing connection:', error.message);
   }

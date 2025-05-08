@@ -36,7 +36,7 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
   let apiKeyConfigured = false;
   
   // Import the deepseek module
-  const deepseek = require("../deepseek");
+  import * as deepseek from "../deepseek";
   
   // First, explicitly check and set the DeepSeek API key
   try {
