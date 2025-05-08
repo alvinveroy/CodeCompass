@@ -132,16 +132,19 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
   incrementCounter('deepseek_requests');
   
   try {
-    if (!await checkDeepSeekApiKey()) {
+    // Force check API key and log detailed information
+    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+    if (!apiKey) {
+      logger.error("DeepSeek API key not configured. Set DEEPSEEK_API_KEY environment variable.");
       throw new Error("DeepSeek API key not configured");
     }
+    logger.info(`DeepSeek API key is configured with length: ${apiKey.length}`);
 
     return await timeExecution('deepseek_generation', async () => {
       logger.info(`Generating with DeepSeek for prompt (length: ${prompt.length})`);
       
       const apiUrl = process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
       // Ensure we're getting the latest value from the environment
-      const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
       const model = process.env.DEEPSEEK_MODEL || DEEPSEEK_MODEL;
       
       logger.debug(`Using DeepSeek API URL: ${apiUrl}`);
@@ -253,12 +256,15 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
   incrementCounter('deepseek_embedding_requests');
   
   try {
-    if (!await checkDeepSeekApiKey()) {
+    // Force check API key and log detailed information
+    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+    if (!apiKey) {
+      logger.error("DeepSeek API key not configured. Set DEEPSEEK_API_KEY environment variable.");
       throw new Error("DeepSeek API key not configured");
     }
+    logger.info(`DeepSeek API key is configured with length: ${apiKey.length}`);
 
     const processedText = preprocessText(text);
-    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
     
     return await timeExecution('deepseek_embedding_generation', async () => {
       logger.info(`Generating embedding with DeepSeek for text (length: ${processedText.length})`);
