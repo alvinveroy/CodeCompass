@@ -241,7 +241,13 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
       
       // If API key is configured, test the connection
       available = await deepseek.testDeepSeekConnection();
-      logger.info(`DeepSeek connection test result: ${available}`);
+      logger.debug(`DeepSeek connection test result: ${available}`);
+      
+      // Force available to true for testing purposes if we have an API key
+      if (process.env.FORCE_DEEPSEEK_AVAILABLE === 'true' && apiKeyConfigured) {
+        logger.warn(`Forcing DeepSeek availability to true for testing purposes`);
+        available = true;
+      }
     }
   } catch (error: any) {
     logger.error(`Error checking ${normalizedProvider} availability: ${error.message}`);
@@ -283,8 +289,14 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     }
   }
   
-  logger.info(`Successfully switched LLM provider to ${normalizedProvider}`);
-  logger.info(`Using ${normalizedProvider} for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings`);
+  // Check if we're actually using the provider we requested
+  if (global.CURRENT_LLM_PROVIDER !== normalizedProvider) {
+    logger.error(`Failed to set LLM provider to ${normalizedProvider}, current provider is ${global.CURRENT_LLM_PROVIDER}`);
+    return false;
+  }
+
+  logger.info(`Successfully switched to ${normalizedProvider} provider.`);
+  logger.info(`Using ${normalizedProvider} for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
   logger.info(`To make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`);
   
   return true;

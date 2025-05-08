@@ -13,6 +13,7 @@ const bumpType: BumpType = (args[0] as BumpType) || 'patch';
 const shouldCommit = args.includes('--commit');
 const shouldPush = args.includes('--push');
 const updateChangelog = args.includes('--changelog');
+const shouldPublish = args.includes('--publish');
 
 // Validate bump type
 if (!['major', 'minor', 'patch'].includes(bumpType)) {
@@ -119,5 +120,20 @@ if (shouldCommit) {
     }
   } catch (error) {
     console.error('Failed to commit/push changes:', error);
+  }
+}
+
+// Optionally publish to npm
+if (shouldPublish) {
+  try {
+    console.log('Building project before publishing...');
+    execSync('npm run build', { cwd: projectRoot, stdio: 'inherit' });
+    
+    console.log(`Publishing version ${newVersion} to npm...`);
+    execSync('npm publish', { cwd: projectRoot, stdio: 'inherit' });
+    console.log('Successfully published to npm!');
+  } catch (error) {
+    console.error('Failed to publish to npm:', error);
+    process.exit(1);
   }
 }
