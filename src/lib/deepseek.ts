@@ -1,8 +1,8 @@
 import axios from "axios";
 import { logger, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
-// Use the correct v1 API endpoints
-const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
-const DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/v1/embeddings";
+// Use the correct API endpoints
+const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
+const DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
 
 // Export the constants for use in other modules
 export { DEEPSEEK_API_URL, DEEPSEEK_EMBEDDING_URL };
@@ -51,8 +51,8 @@ export async function testDeepSeekConnection(): Promise<boolean> {
 
     logger.info(`Testing DeepSeek API connection with key length: ${apiKey.length}, key prefix: ${apiKey.substring(0, 5)}...`);
     
-    // Always use the v1 endpoint for testing
-    const apiUrl = "https://api.deepseek.com/v1/chat/completions";
+    // Always use the correct endpoint for testing
+    const apiUrl = "https://api.deepseek.com/chat/completions";
     process.env.DEEPSEEK_API_URL = apiUrl;
     
     logger.info(`Using DeepSeek API URL: ${apiUrl}`);

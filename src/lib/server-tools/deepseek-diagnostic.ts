@@ -10,7 +10,7 @@ export async function deepseekDiagnostic(): Promise<Record<string, any>> {
   // Get environment variables
   const envVars = {
     DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ? `Set (length: ${process.env.DEEPSEEK_API_KEY.length})` : "Not set",
-    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1/chat/completions",
+    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
     DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL || "deepseek-coder",
     SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
     SUGGESTION_MODEL: process.env.SUGGESTION_MODEL,
