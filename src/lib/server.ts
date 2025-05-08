@@ -90,7 +90,7 @@ async function registerGetRepositoryContextTool(
           if (parsed && typeof parsed === 'object') {
             parsedParams = parsed;
           }
-        } catch (_error) {
+        } catch {
           // If it's not valid JSON, keep using it as a string query
           parsedParams = { query: normalizedParams };
         }
@@ -647,7 +647,7 @@ export async function startServer(repoPath: string): Promise<void> {
               // For backward compatibility
               model = parsed.provider === "deepseek" ? "deepseek-coder" : "llama3.1:8b";
             }
-          } catch (_error) {
+          } catch {
             // If not valid JSON, use as is
             model = normalizedParams;
           }
@@ -1408,7 +1408,7 @@ Session ID: ${session.id}`;
             if (parsed && typeof parsed === 'object') {
               parsedParams = parsed;
             }
-          } catch (_error) {
+          } catch {
             // If it's not valid JSON, keep using it as a string query
             parsedParams = { query: normalizedParams };
           }
