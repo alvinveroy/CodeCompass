@@ -38,6 +38,8 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     environment: envVars,
     globals: globals,
     connectionStatus: connectionStatus,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    noteText: `Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
+You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).`
   };
 }
