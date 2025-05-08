@@ -2,6 +2,7 @@ import axios from "axios";
 import { logger, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
 // Use the direct chat completions endpoint
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
+const DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
 import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
 import { preprocessText } from "./utils";
 
@@ -63,6 +64,14 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         }
       );
       
+      // Log more details about the response for debugging
+      logger.debug(`DeepSeek API response: ${JSON.stringify({
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        data: response.data
+      })}`);
+      
       logger.info(`DeepSeek API response status: ${response.status}`);
 
       if (response.status === 200) {
@@ -116,6 +125,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
       const model = process.env.DEEPSEEK_MODEL || DEEPSEEK_MODEL;
       
       const response = await enhancedWithRetry(async () => {
+        logger.debug(`Sending request to DeepSeek API at ${apiUrl} with model ${model}`);
         const res = await axios.post(
           apiUrl,
           {
@@ -127,7 +137,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
           {
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY}`
+              "Authorization": `Bearer ${apiKey}`
             },
             timeout: REQUEST_TIMEOUT
           }
@@ -212,7 +222,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
       
       const response = await enhancedWithRetry(async () => {
         const res = await axios.post(
-          "https://api.deepseek.com/embeddings",
+          DEEPSEEK_EMBEDDING_URL,
           {
             model: "deepseek-embedding",
             input: processedText
