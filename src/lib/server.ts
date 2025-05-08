@@ -357,7 +357,8 @@ export async function startServer(repoPath: string): Promise<void> {
           }
         }
       
-        logger.info(`Using model: ${model}`);
+        logger.info(`Requested model: ${model}`);
+        // Ensure we're using the exact model name provided
         const normalizedModel = model.toLowerCase();
         
         try {
@@ -394,9 +395,10 @@ export async function startServer(repoPath: string): Promise<void> {
             };
           }
         
-          // Get the actual current models and providers after switching
-          const suggestionModel = global.CURRENT_SUGGESTION_MODEL || process.env.SUGGESTION_MODEL || normalizedModel;
-          const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || (isDeepSeekModel ? "deepseek" : "ollama");
+          // Use the exact model that was requested, not what might be in globals
+          // This ensures we report back what the user actually requested
+          const suggestionModel = normalizedModel;
+          const suggestionProvider = isDeepSeekModel ? "deepseek" : "ollama";
           const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
         
           // Log the current models and providers to debug
@@ -405,7 +407,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${model} for suggestions.\n\nUsing ${suggestionModel} (${suggestionProvider} provider) for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`,
+              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${normalizedModel} for suggestions.\n\nUsing ${normalizedModel} (${suggestionProvider} provider) for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`,
             }],
           };
         } catch (error: any) {

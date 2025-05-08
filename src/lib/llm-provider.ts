@@ -193,7 +193,7 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
   
   // Log the requested model for debugging
-  logger.info(`Using model: ${normalizedModel}`);
+  logger.info(`Requested model: ${normalizedModel}, provider: ${provider}`);
   
   // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
   if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
@@ -289,7 +289,7 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     return false;
   }
   
-  // Set suggestion model and provider
+  // Set suggestion model and provider - ensure we're setting the exact model requested
   process.env.SUGGESTION_MODEL = normalizedModel;
   global.CURRENT_SUGGESTION_MODEL = normalizedModel;
   process.env.SUGGESTION_PROVIDER = provider;
@@ -298,6 +298,8 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   // Always keep embedding provider as ollama
   process.env.EMBEDDING_PROVIDER = "ollama";
   global.CURRENT_EMBEDDING_PROVIDER = "ollama";
+  
+  logger.info(`Set model to ${normalizedModel} and provider to ${provider}`);
   
   // Check if Ollama is available for embeddings
   if (provider === 'deepseek') {
