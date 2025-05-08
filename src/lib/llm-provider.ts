@@ -324,15 +324,20 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
 export async function switchLLMProvider(provider: string): Promise<boolean> {
   logger.warn("switchLLMProvider is deprecated, use switchSuggestionModel instead");
   
+  // Validate provider name
+  const normalizedProvider = provider.toLowerCase();
+  if (normalizedProvider !== 'ollama' && normalizedProvider !== 'deepseek') {
+    logger.error(`Invalid LLM provider: ${provider}. Valid options are 'ollama' or 'deepseek'`);
+    return false;
+  }
+  
   // For backward compatibility with tests, also set LLM_PROVIDER
-  // Only set for valid providers (ollama or deepseek)
-  if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && 
-      (provider.toLowerCase() === 'ollama' || provider.toLowerCase() === 'deepseek')) {
-    process.env.LLM_PROVIDER = provider.toLowerCase();
+  if ((process.env.NODE_ENV === 'test' || process.env.VITEST)) {
+    process.env.LLM_PROVIDER = normalizedProvider;
   }
   
   // Map provider to default model
-  const model = provider.toLowerCase() === 'deepseek' ? 'deepseek-coder' : 'llama3.1:8b';
+  const model = normalizedProvider === 'deepseek' ? 'deepseek-coder' : 'llama3.1:8b';
   
   return await switchSuggestionModel(model);
 }
