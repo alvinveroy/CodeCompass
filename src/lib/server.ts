@@ -1,12 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { initMcpSafeLogging, restoreConsole } from "./mcp-logger";
+import { initMcpSafeLogging, _restoreConsole } from "./mcp-logger";
 import fs from "fs/promises";
 import * as fsSync from "fs";
 import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
+import { logger, _COLLECTION_NAME, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
 import * as deepseek from "./deepseek";
 import { loadModelConfig, saveModelConfig, forceUpdateModelConfig } from "./model-persistence";
 
