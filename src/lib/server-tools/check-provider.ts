@@ -48,13 +48,33 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     logger.warn("DeepSeek API key is not available in environment");
   }
   
+  // Import the testDeepSeekConnection function directly
+  const { testDeepSeekConnection } = require("../deepseek");
+  
   try {
-    const provider = await getLLMProvider();
-    const connected = await provider.checkConnection();
-    connectionStatus = connected ? "Connected" : "Failed";
+    // First try direct DeepSeek connection test which is known to work
+    if (global.CURRENT_SUGGESTION_PROVIDER === 'deepseek' || process.env.SUGGESTION_PROVIDER === 'deepseek') {
+      logger.info("Testing DeepSeek connection directly");
+      const connected = await testDeepSeekConnection();
+      connectionStatus = connected ? "Connected" : "Failed";
+      
+      // If direct test succeeded but we still want to check the provider interface
+      if (connected) {
+        hasApiKey = true;
+        apiKeyConfigured = true;
+        logger.info("DeepSeek connection test successful");
+      } else {
+        logger.warn("Direct DeepSeek connection test failed");
+      }
+    } else {
+      // For non-DeepSeek providers, use the standard provider interface
+      const provider = await getLLMProvider();
+      const connected = await provider.checkConnection();
+      connectionStatus = connected ? "Connected" : "Failed";
+    }
     
     // If connection failed but we have an API key, log more details
-    if (!connected && hasApiKey) {
+    if (connectionStatus === "Failed" && hasApiKey) {
       logger.warn("Connection failed despite having API key. Check API URL and network connectivity.");
     }
   } catch (error: any) {
@@ -73,6 +93,7 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     apiKeyConfigured: apiKeyConfigured,
     apiEndpointConfigured: !!process.env.DEEPSEEK_API_URL,
     noteText: `Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
-You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).`
+You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).
+If you're still having issues, try running 'npm run test:deepseek' to test the DeepSeek connection directly.`
   };
 }
