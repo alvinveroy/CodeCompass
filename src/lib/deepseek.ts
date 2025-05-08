@@ -36,11 +36,17 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       return false;
     }
 
-    logger.info(`Testing DeepSeek API connection with key length: ${apiKey.length}...`);
+    logger.info(`Testing DeepSeek API connection with key length: ${apiKey.length}, key prefix: ${apiKey.substring(0, 5)}...`);
     const apiUrl = process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
     logger.info(`Using DeepSeek API URL: ${apiUrl}`);
     
+    // Force set the API key in the environment variable to ensure it's available
+    process.env.DEEPSEEK_API_KEY = apiKey;
+    
     try {
+      logger.info(`Sending test request to DeepSeek API at ${apiUrl}`);
+      logger.info(`Using model: ${DEEPSEEK_MODEL}`);
+      
       const response = await axios.post(
         apiUrl,
         {
@@ -56,6 +62,8 @@ export async function testDeepSeekConnection(): Promise<boolean> {
           timeout: 10000
         }
       );
+      
+      logger.info(`DeepSeek API response status: ${response.status}`);
 
       if (response.status === 200) {
         logger.info("DeepSeek API connection successful");

@@ -63,7 +63,7 @@ export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
     info.apiEndpointConfigured = !!process.env.DEEPSEEK_API_URL;
     
     // Log the API key status for debugging (without revealing it)
-    logger.info(`DeepSeek API key configured: ${!!apiKey}, length: ${apiKey ? apiKey.length : 0}`);
+    logger.info(`DeepSeek API key configured: ${!!apiKey}, length: ${apiKey ? apiKey.length : 0}, value: ${apiKey ? apiKey.substring(0, 5) + '...' : 'none'}`);
   } else {
     info.host = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
     info.embeddingModel = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5";
