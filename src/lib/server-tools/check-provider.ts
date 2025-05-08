@@ -14,7 +14,7 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
     EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER,
     DEEPSEEK_API_KEY: apiKey ? `Set (length: ${apiKey.length})` : "Not set",
-    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
+    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1/chat/completions",
     OLLAMA_HOST: process.env.OLLAMA_HOST,
   };
   
@@ -62,12 +62,12 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     globals: globals,
     connectionStatus: connectionStatus,
     timestamp: new Date().toISOString(),
-    apiUrl: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
+    apiUrl: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1/chat/completions",
     model: process.env.SUGGESTION_MODEL || global.CURRENT_SUGGESTION_MODEL || "deepseek-coder",
     hasApiKey: hasApiKey,
     apiKeyConfigured: apiKeyConfigured,
     apiEndpointConfigured: !!process.env.DEEPSEEK_API_URL,
     noteText: `Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
-You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).`
+You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/v1/chat/completions).`
   };
 }

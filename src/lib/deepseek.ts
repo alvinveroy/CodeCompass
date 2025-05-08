@@ -1,8 +1,8 @@
 import axios from "axios";
 import { logger, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
-// Use the direct chat completions endpoint
-const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-const DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
+// Use the correct v1 API endpoints
+const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
+const DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/v1/embeddings";
 import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
 import { preprocessText } from "./utils";
 
