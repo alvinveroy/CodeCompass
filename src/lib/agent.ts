@@ -137,13 +137,13 @@ Based on both searches, I can provide a comprehensive explanation of error handl
 }
 
 // Parse tool calls from LLM output
-export function parseToolCalls(output: string): { tool: string; parameters: any }[] {
+export function parseToolCalls(output: string): { tool: string; parameters: unknown }[] {
   // Log the output for debugging
   logger.debug("Parsing tool calls from output", { outputLength: output.length });
   
   // Split the output by lines and look for lines starting with TOOL_CALL:
   const lines = output.split('\n');
-  const results: { tool: string; parameters: any }[] = [];
+  const results: { tool: string; parameters: unknown }[] = [];
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -162,8 +162,9 @@ export function parseToolCalls(output: string): { tool: string; parameters: any 
             parameters: parsed.parameters
           });
         }
-      } catch (error) {
-        logger.error("Failed to parse tool call", { line, error });
+      } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        logger.error("Failed to parse tool call", { line, error: err });
       }
     }
   }
@@ -289,10 +290,10 @@ export async function executeToolCall(
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      const diff = await getRepositoryDiff(repoPath);
+      const _diff = await getRepositoryDiff(repoPath);
       
       // Update context in session
-      updateContext(session.id, repoPath, files, diff);
+      updateContext(session.id, repoPath, files);
       
       // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
@@ -560,11 +561,12 @@ export async function runAgentLoop(
           // Update user prompt with tool results
           userPrompt += `\n\nTool: ${toolCall.tool}\nResults: ${JSON.stringify(toolOutput, null, 2)}\n\nBased on these results, what's your next step? If you have enough information, provide a final response to the user.`;
           
-        } catch (error: any) {
-          logger.error(`Error executing tool ${toolCall.tool}`, { error: error.message });
+        } catch (error: unknown) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          logger.error(`Error executing tool ${toolCall.tool}`, { error: err.message });
           
           // Add error to user prompt
-          userPrompt += `\n\nError executing tool ${toolCall.tool}: ${error.message}\n\nPlease try a different approach or provide a response with the information you have.`;
+          userPrompt += `\n\nError executing tool ${toolCall.tool}: ${err.message}\n\nPlease try a different approach or provide a response with the information you have.`;
         }
       }
       

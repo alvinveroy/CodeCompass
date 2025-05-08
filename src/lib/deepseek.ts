@@ -47,7 +47,7 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
   process.env.DEEPSEEK_API_KEY = apiKey;
   
   // Set it in the global scope too for redundancy
-  (global as any).DEEPSEEK_API_KEY = apiKey;
+  (global as unknown).DEEPSEEK_API_KEY = apiKey;
   
   logger.info(`DeepSeek API key is configured and set in environment. Length: ${apiKey.length}`);
   return true;
@@ -124,16 +124,23 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       
       logger.warn(`DeepSeek API test failed with status: ${response.status}`);
       return false;
-    } catch (requestError: any) {
+    } catch (requestError: unknown) {
+      const err = requestError instanceof Error ? requestError : new Error(String(requestError));
+      const axiosError = requestError as { 
+        code?: string; 
+        response?: { status: number; statusText: string; data: unknown }; 
+        request?: unknown 
+      };
+      
       logger.error("DeepSeek API connection test failed", {
-        message: requestError.message,
-        code: requestError.code,
-        response: requestError.response ? {
-          status: requestError.response.status,
-          statusText: requestError.response.statusText,
-          data: JSON.stringify(requestError.response.data)
+        message: err.message,
+        code: axiosError.code,
+        response: axiosError.response ? {
+          status: axiosError.response.status,
+          statusText: axiosError.response.statusText,
+          data: JSON.stringify(axiosError.response.data)
         } : 'No response data',
-        request: requestError.request ? 'Request present' : 'No request data'
+        request: axiosError.request ? 'Request present' : 'No request data'
       });
       
       // Check for specific error types
