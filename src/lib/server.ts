@@ -743,7 +743,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   server.tool(
     "check_provider",
     "Check the current LLM provider status and test the connection.",
-    {},
+    {
+      verbose: z.boolean().optional().describe("Whether to include detailed information")
+    },
     async () => {
       const { testCurrentProvider, getCurrentProviderInfo } = await import("./test-provider");
       
