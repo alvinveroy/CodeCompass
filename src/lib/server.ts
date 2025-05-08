@@ -238,6 +238,7 @@ export async function startServer(repoPath: string): Promise<void> {
           ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
           get_changelog: {},
           agent_query: {}, // New agent tool that works regardless of suggestion model
+          switch_llm_provider: {}, // Add the switch_llm_provider tool to capabilities
         },
       },
     });
@@ -360,8 +361,8 @@ export async function startServer(repoPath: string): Promise<void> {
     // Log startup info to file
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
     logger.info(`CodeCompass server started with tools: ${Object.keys(suggestionModelAvailable ? 
-      { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {} } : 
-      { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, agent_query: {} }
+      { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {}, switch_llm_provider: {} } : 
+      { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, agent_query: {}, switch_llm_provider: {} }
     ).join(', ')}`);
     
     // Display version and status to stderr (similar to Context7)
