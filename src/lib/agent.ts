@@ -287,7 +287,7 @@ export async function executeToolCall(
         sessionId: session.id,
         refinedQuery,
         recentQueries,
-        diff,
+        diff: _diff,
         results: context
       };
     }
