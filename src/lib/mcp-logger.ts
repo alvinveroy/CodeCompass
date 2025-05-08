@@ -1,4 +1,6 @@
 import { logger } from "./config";
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Utility to help debug MCP protocol issues
@@ -31,8 +33,6 @@ export function initMcpSafeLogging(): void {
   // Instead, we'll use a custom file logger implementation
   
   // Create logs directory if it doesn't exist
-  import fs from 'fs';
-  import path from 'path';
   const logsDir = path.join(process.cwd(), 'logs');
   
   try {
