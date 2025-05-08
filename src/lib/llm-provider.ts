@@ -298,5 +298,11 @@ export async function switchSuggestionModel(provider: string): Promise<boolean> 
 // Function to switch LLM provider (kept for backward compatibility)
 export async function switchLLMProvider(provider: string): Promise<boolean> {
   logger.warn("switchLLMProvider is deprecated, use switchSuggestionModel instead");
+  
+  // For backward compatibility with tests, also set LLM_PROVIDER
+  if ((process.env.NODE_ENV === 'test' || process.env.VITEST)) {
+    process.env.LLM_PROVIDER = provider.toLowerCase();
+  }
+  
   return await switchSuggestionModel(provider);
 }
