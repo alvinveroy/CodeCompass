@@ -38,15 +38,13 @@ declare global {
   var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
-// Add NodeJS Global interface augmentation
-declare global {
-  namespace NodeJS {
-    interface Global {
-      CURRENT_LLM_PROVIDER: string;
-      CURRENT_SUGGESTION_PROVIDER: string;
-      CURRENT_EMBEDDING_PROVIDER: string;
-      CURRENT_SUGGESTION_MODEL?: string;
-    }
+// Add NodeJS Global interface augmentation using module augmentation instead of namespace
+declare module 'node:process' {
+  interface Global {
+    CURRENT_LLM_PROVIDER: string;
+    CURRENT_SUGGESTION_PROVIDER: string;
+    CURRENT_EMBEDDING_PROVIDER: string;
+    CURRENT_SUGGESTION_MODEL?: string;
   }
 }
 
