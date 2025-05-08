@@ -780,11 +780,14 @@ export async function startServer(repoPath: string): Promise<void> {
 
     
     // Register custom RPC methods
-    if (typeof server.registerMethod !== "function") {
+    // Note: Using type assertion to handle potential missing method in the type definition
+    const serverWithMethods = server as unknown as { registerMethod?: (name: string, handler: () => Promise<unknown>) => void };
+    
+    if (typeof serverWithMethods.registerMethod !== "function") {
       logger.warn("MCP server does not support 'registerMethod', some functionality may be limited");
     } else {
       // Register prompts/list method
-      server.registerMethod("prompts/list", async () => {
+      serverWithMethods.registerMethod("prompts/list", async () => {
         logger.info("Handling prompts/list request");
         return {
           prompts: [
