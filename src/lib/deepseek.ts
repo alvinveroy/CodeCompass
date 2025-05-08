@@ -190,7 +190,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
       
       const response = await enhancedWithRetry(async () => {
         const res = await axios.post(
-          "https://api.deepseek.com/v1/embeddings",
+          "https://api.deepseek.com/embeddings",
           {
             model: "deepseek-embedding",
             input: processedText
