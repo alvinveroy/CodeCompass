@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved parameter handling for MCP tools
 - Enhanced retry mechanism for API calls with better error handling
 - Refactored provider switching for more reliable model changes
+- Improved LLM provider system with better caching and error handling
+- Reduced excessive logging by changing many info logs to debug level
+- Enhanced model configuration with better defaults and persistence
+- Improved code maintainability by extracting duplicate code into helper functions
+- Standardized model switching logic across the codebase
 
 ### Fixed
 - Fixed MCP logging to prevent JSON parsing errors in Claude Desktop
@@ -36,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed connection issues with DeepSeek API
 - Resolved race conditions in model switching
 - Improved error handling for missing API keys
+- Fixed provider cache implementation for better performance
+- Resolved test failures in LLM provider and model switching tests
 
 ## [1.1.0] - 2025-05-06
 
