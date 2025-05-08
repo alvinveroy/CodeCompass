@@ -72,7 +72,7 @@ export function initMcpSafeLogging(): void {
       logStream.write(`${new Date().toISOString()} [DEBUG] ${message}\n`);
       
       // Format as JSON string for MCP protocol
-      const jsonMessage = formatLogAsJson("debug", args[0] || {});
+      const jsonMessage = JSON.parse(formatLogAsJson("debug", args[0] || {}));
       return originalDebug.call(logger, jsonMessage);
     };
     
@@ -81,7 +81,7 @@ export function initMcpSafeLogging(): void {
       logStream.write(`${new Date().toISOString()} [INFO] ${message}\n`);
       
       // Format as JSON string for MCP protocol
-      const jsonMessage = formatLogAsJson("info", args[0] || {});
+      const jsonMessage = JSON.parse(formatLogAsJson("info", args[0] || {}));
       return originalInfo.call(logger, jsonMessage);
     };
     
@@ -90,7 +90,7 @@ export function initMcpSafeLogging(): void {
       logStream.write(`${new Date().toISOString()} [WARN] ${message}\n`);
       
       // Format as JSON string for MCP protocol
-      const jsonMessage = formatLogAsJson("warn", args[0] || {});
+      const jsonMessage = JSON.parse(formatLogAsJson("warn", args[0] || {}));
       return originalWarn.call(logger, jsonMessage);
     };
     
@@ -99,7 +99,7 @@ export function initMcpSafeLogging(): void {
       logStream.write(`${new Date().toISOString()} [ERROR] ${message}\n`);
       
       // Format as JSON string for MCP protocol
-      const jsonMessage = formatLogAsJson("error", args[0] || {});
+      const jsonMessage = JSON.parse(formatLogAsJson("error", args[0] || {}));
       return originalError.call(logger, jsonMessage);
     };
   } catch (error) {
