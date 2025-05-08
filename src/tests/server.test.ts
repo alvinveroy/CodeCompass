@@ -1,7 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { normalizeToolParams } from '../lib/server';
-import { logger } from '../lib/config';
 
 // Mock dependencies
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({

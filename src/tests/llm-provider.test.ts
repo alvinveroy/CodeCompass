@@ -261,10 +261,7 @@ describe('LLM Provider', () => {
       clearProviderCache();
       
       // Get the provider first time
-      const provider1 = await getLLMProvider();
-      
-      // Set a short cache timeout to ensure we're testing the cache logic
-      const cacheMaxAge = 1000; // 1 second max cache age
+      await getLLMProvider();
       
       // Reset mocks but don't clear the cache
       vi.resetAllMocks();

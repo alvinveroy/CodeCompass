@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH } from "./config";
 import { generateEmbedding } from "./ollama";
-import type { QdrantSearchResult } from "./types";
 
 // Validate Git Repository
 export async function validateGitRepository(repoPath: string): Promise<boolean> {

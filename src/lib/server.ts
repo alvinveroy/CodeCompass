@@ -90,7 +90,7 @@ async function registerGetRepositoryContextTool(
           if (parsed && typeof parsed === 'object') {
             parsedParams = parsed;
           }
-        } catch (_e) {
+        } catch (_) {
           // If it's not valid JSON, keep using it as a string query
           parsedParams = { query: normalizedParams };
         }
@@ -226,7 +226,7 @@ export async function startServer(repoPath: string): Promise<void> {
         // For DeepSeek, we assume the model is available if the connection test passed
         suggestionModelAvailable = isLlmAvailable;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.warn(`Warning: Model not available. Suggestion tools may be limited: ${error.message}`);
     }
     
@@ -456,7 +456,7 @@ export async function startServer(repoPath: string): Promise<void> {
             
             // Force a test generation to ensure the provider is working
             try {
-              const testResult = await llmProvider.generateText("Test message");
+              await llmProvider.generateText("Test message");
               logger.info(`Test generation successful with provider ${global.CURRENT_SUGGESTION_PROVIDER}`);
             } catch (error) {
               logger.error(`Test generation failed with provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
@@ -863,7 +863,7 @@ async function registerTools(
             
             logger.info(`Loaded saved model configuration from ${configFile}`);
           }
-        } catch (fsError: any) {
+        } catch (fsError: unknown) {
           logger.warn(`Failed to read model configuration file: ${fsError.message}`);
         }
       } catch (error: unknown) {
@@ -1163,7 +1163,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
 `).join('')}`,
         }],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [{
           type: "text",
@@ -1409,7 +1409,7 @@ Session ID: ${session.id}`;
             if (parsed && typeof parsed === 'object') {
               parsedParams = parsed;
             }
-          } catch (_e) {
+          } catch (_) {
             // If it's not valid JSON, keep using it as a string query
             parsedParams = { query: normalizedParams };
           }
@@ -1435,7 +1435,7 @@ Session ID: ${session.id}`;
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      const diff = await getRepositoryDiff(repoPath);
+      await getRepositoryDiff(repoPath);
       
       // Update context in session
       updateContext(session.id, repoPath, files, diff);

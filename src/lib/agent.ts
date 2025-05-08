@@ -290,7 +290,7 @@ export async function executeToolCall(
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      const _diff = await getRepositoryDiff(repoPath); // Unused but needed for context
+      await getRepositoryDiff(repoPath); // Call for side effects but don't store result
       
       // Update context in session
       updateContext(session.id, repoPath, files);
@@ -481,8 +481,7 @@ export async function runAgentLoop(
     const _testResult = await currentProvider.generateText("Test message");
     logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
   } catch (error: unknown) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error: err });
+    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
   }
   
   return await timeExecution('agent_loop', async () => {

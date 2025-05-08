@@ -213,7 +213,7 @@ describe('Metrics Module', () => {
       const setIntervalSpy = vi.spyOn(global, 'setInterval');
       
       // Spy on logMetrics to verify it's passed to setInterval
-      const logMetricsSpy = vi.spyOn(metricsModule, 'logMetrics');
+      vi.spyOn(metricsModule, 'logMetrics');
       
       const interval = 60000; // 1 minute
       const timer = startMetricsLogging(interval);

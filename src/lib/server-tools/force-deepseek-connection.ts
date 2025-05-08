@@ -1,6 +1,5 @@
 import { logger } from "../config";
 import axios from "axios";
-import { DEEPSEEK_API_URL } from "../deepseek";
 
 /**
  * Force a connection to the DeepSeek API with explicit parameters

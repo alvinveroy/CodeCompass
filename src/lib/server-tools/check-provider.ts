@@ -4,7 +4,7 @@ import { getLLMProvider } from "../llm-provider";
 /**
  * Checks the current LLM provider status in detail
  */
-export async function checkProviderDetailed(): Promise<Record<string, any>> {
+export async function checkProviderDetailed(): Promise<Record<string, unknown>> {
   logger.info("Checking LLM provider status in detail");
   
   // Get environment variables and force read from process.env
