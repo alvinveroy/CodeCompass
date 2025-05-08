@@ -14,7 +14,8 @@ vi.mock('../lib/ollama', () => ({
 vi.mock('../lib/deepseek', () => ({
   testDeepSeekConnection: vi.fn(),
   generateWithDeepSeek: vi.fn(),
-  generateEmbeddingWithDeepSeek: vi.fn()
+  generateEmbeddingWithDeepSeek: vi.fn(),
+  checkDeepSeekApiKey: vi.fn().mockResolvedValue(true)
 }));
 
 describe('LLM Provider', () => {
