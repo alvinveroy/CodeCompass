@@ -1,6 +1,8 @@
 import { logger, LLM_PROVIDER } from "./config";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Interface for LLM Provider
 export interface LLMProvider {
@@ -115,8 +117,44 @@ declare global {
   var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
+// Load saved model configuration if available
+function loadSavedModelConfig(): void {
+  try {
+    const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
+    const configFile = path.join(configDir, 'model-config.json');
+    
+    if (fs.existsSync(configFile)) {
+      const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      
+      // Only set if not already set in environment or globals
+      if (!global.CURRENT_SUGGESTION_MODEL && !process.env.SUGGESTION_MODEL && config.SUGGESTION_MODEL) {
+        global.CURRENT_SUGGESTION_MODEL = config.SUGGESTION_MODEL;
+        process.env.SUGGESTION_MODEL = config.SUGGESTION_MODEL;
+        logger.info(`Loaded saved suggestion model: ${config.SUGGESTION_MODEL}`);
+      }
+      
+      if (!global.CURRENT_SUGGESTION_PROVIDER && !process.env.SUGGESTION_PROVIDER && config.SUGGESTION_PROVIDER) {
+        global.CURRENT_SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
+        process.env.SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
+        logger.info(`Loaded saved suggestion provider: ${config.SUGGESTION_PROVIDER}`);
+      }
+      
+      if (!global.CURRENT_EMBEDDING_PROVIDER && !process.env.EMBEDDING_PROVIDER && config.EMBEDDING_PROVIDER) {
+        global.CURRENT_EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
+        process.env.EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
+        logger.info(`Loaded saved embedding provider: ${config.EMBEDDING_PROVIDER}`);
+      }
+    }
+  } catch (error: any) {
+    logger.warn(`Failed to load saved model configuration: ${error.message}`);
+  }
+}
+
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
+  // Load saved configuration first
+  loadSavedModelConfig();
+  
   // Prioritize suggestion model and provider settings
   const suggestionModel = global.CURRENT_SUGGESTION_MODEL || process.env.SUGGESTION_MODEL || "llama3.1:8b";
   const isDeepSeekModel = suggestionModel.toLowerCase().includes('deepseek');
@@ -352,6 +390,31 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
 
   logger.info(`Successfully switched to ${normalizedModel} (${provider} provider) for suggestions.`);
   logger.info(`Using ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
+  
+  // Save the configuration to a persistent file
+  try {
+    const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
+    const configFile = path.join(configDir, 'model-config.json');
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    
+    // Write the configuration to a file
+    const config = {
+      SUGGESTION_MODEL: normalizedModel,
+      SUGGESTION_PROVIDER: provider,
+      EMBEDDING_PROVIDER: global.CURRENT_EMBEDDING_PROVIDER,
+      timestamp: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+    logger.info(`Saved model configuration to ${configFile}`);
+  } catch (error: any) {
+    logger.warn(`Failed to save model configuration: ${error.message}`);
+  }
+  
   logger.info(`To make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`);
   logger.info(`Current suggestion model: ${global.CURRENT_SUGGESTION_MODEL}, provider: ${global.CURRENT_SUGGESTION_PROVIDER}, embedding: ${global.CURRENT_EMBEDDING_PROVIDER}`);
   

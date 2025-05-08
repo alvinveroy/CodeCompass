@@ -1,4 +1,6 @@
 import { logger } from "../config";
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Directly switches the model without going through the regular switchSuggestionModel function
@@ -33,6 +35,26 @@ export async function directModelSwitch(model: string): Promise<Record<string, a
     process.env.SUGGESTION_MODEL = normalizedModel;
     process.env.SUGGESTION_PROVIDER = provider;
     process.env.EMBEDDING_PROVIDER = "ollama";
+    
+    // Save the settings to a persistent file
+    const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
+    const configFile = path.join(configDir, 'model-config.json');
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    
+    // Write the configuration to a file
+    const config = {
+      SUGGESTION_MODEL: normalizedModel,
+      SUGGESTION_PROVIDER: provider,
+      EMBEDDING_PROVIDER: "ollama",
+      timestamp: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+    logger.info(`Saved model configuration to ${configFile}`);
     
     logger.info(`Directly set model to ${normalizedModel} and provider to ${provider}`);
   } catch (error: any) {
