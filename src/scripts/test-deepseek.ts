@@ -19,17 +19,9 @@ async function main() {
       console.log(`Generation Test: ${result ? '✅ Successful' : '❌ Failed'}`);
       console.log(`Result: ${result}`);
       
-      // Test embedding generation
-      console.log('\n3. Testing embedding generation:');
-      try {
-        const embedding = await generateEmbeddingWithDeepSeek('Hello world');
-        console.log(`Embedding Test: ✅ Successful`);
-        console.log(`Embedding length: ${embedding.length}`);
-        console.log(`First 5 values: [${embedding.slice(0, 5).join(', ')}]`);
-      } catch (embeddingError: any) {
-        console.log(`Embedding Test: ❌ Failed`);
-        console.log(`Error: ${embeddingError.message}`);
-      }
+      // Note: We don't test DeepSeek embeddings anymore as we use Ollama for all embeddings
+      console.log('\n3. Note: DeepSeek is no longer used for embeddings');
+      console.log('   All embeddings now use Ollama with nomic-embed-text:v1.5 model');
     }
     
     console.log('\n🔍 DeepSeek test complete');

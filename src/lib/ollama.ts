@@ -122,7 +122,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   try {
     return await timeExecution('embedding_generation', async () => {
       const host = process.env.OLLAMA_HOST || OLLAMA_HOST;
-      const model = process.env.EMBEDDING_MODEL || EMBEDDING_MODEL;
+      // Always use nomic-embed-text:v1.5 for embeddings
+      const model = "nomic-embed-text:v1.5";
       
       const response = await enhancedWithRetry(async () => {
         logger.info(`Generating embedding for text (length: ${truncatedText.length}, snippet: "${truncatedText.slice(0, 100)}...")`);

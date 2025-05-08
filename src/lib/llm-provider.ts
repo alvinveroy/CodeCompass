@@ -67,8 +67,8 @@ class HybridProvider implements LLMProvider {
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
-    // Use the embedding provider for embeddings
-    return await this.embeddingProvider.generateEmbedding(text);
+    // Always use Ollama for embeddings regardless of provider settings
+    return await ollama.generateEmbedding(text);
   }
 
   async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
@@ -88,7 +88,8 @@ class DeepSeekProvider implements LLMProvider {
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
-    return await deepseek.generateEmbeddingWithDeepSeek(text);
+    // Always use Ollama for embeddings
+    return await ollama.generateEmbedding(text);
   }
 
   async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
@@ -408,16 +409,17 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     logger.info(`Forced provider to ${provider}`);
   }
   
-  // Check if Ollama is available for embeddings
+  // Always use Ollama for embeddings
   if (provider === 'deepseek') {
     const ollamaAvailable = await ollama.checkOllama();
     if (!ollamaAvailable) {
-      logger.warn("Ollama is not available for embeddings. Using DeepSeek for both suggestions and embeddings.");
-      process.env.EMBEDDING_PROVIDER = "deepseek";
-      global.CURRENT_EMBEDDING_PROVIDER = "deepseek";
+      logger.warn("Ollama is not available for embeddings. This may cause embedding-related features to fail.");
     } else {
       logger.info("Using DeepSeek for suggestions and Ollama for embeddings");
     }
+    // Always set embedding provider to ollama
+    process.env.EMBEDDING_PROVIDER = "ollama";
+    global.CURRENT_EMBEDDING_PROVIDER = "ollama";
   }
   
   // Check if we're actually using the model we requested
