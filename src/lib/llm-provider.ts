@@ -159,8 +159,8 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   
   const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
   
-  // Log the actual values being used
-  logger.info(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
+  // Log the provider configuration
+  logger.debug(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
   
   // Check if we have a cached provider and if it's still valid
   const cacheMaxAge = 2000; // 2 seconds max cache age
@@ -284,8 +284,8 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   const isDeepSeekModel = normalizedModel.includes('deepseek');
   const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
   
-  // Log the requested model for debugging
-  logger.info(`Requested model: ${normalizedModel}, provider: ${provider}`);
+  // Log the requested model
+  logger.debug(`Requested model: ${normalizedModel}, provider: ${provider}`);
   
   // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
   if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
@@ -310,8 +310,8 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     return true;
   }
   
-  // Force reset any existing model settings to ensure a clean switch
-  logger.info(`Resetting existing model settings before switch`);
+  // Reset existing model settings to ensure a clean switch
+  logger.debug(`Resetting existing model settings before switch`);
   delete process.env.SUGGESTION_MODEL;
   delete process.env.SUGGESTION_PROVIDER;
   global.CURRENT_SUGGESTION_MODEL = undefined;
@@ -327,8 +327,7 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     return false;
   }
   
-  // Log the requested model and provider
-  logger.info(`Attempting to switch suggestion model to: ${normalizedModel} (provider: ${provider})`);
+  logger.info(`Switching suggestion model to: ${normalizedModel} (provider: ${provider})`);
   
   // Check if the provider is available before switching
   let available = false;
@@ -398,34 +397,23 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   process.env.EMBEDDING_PROVIDER = "ollama";
   global.CURRENT_EMBEDDING_PROVIDER = "ollama";
   
-  logger.info(`Set model to ${normalizedModel} and provider to ${provider}`);
-  
-  
   // Always use Ollama for embeddings
   if (provider === 'deepseek') {
     const ollamaAvailable = await ollama.checkOllama();
     if (!ollamaAvailable) {
       logger.warn("Ollama is not available for embeddings. This may cause embedding-related features to fail.");
-    } else {
-      logger.info("Using DeepSeek for suggestions and Ollama for embeddings");
     }
     // Always set embedding provider to ollama
     process.env.EMBEDDING_PROVIDER = "ollama";
     global.CURRENT_EMBEDDING_PROVIDER = "ollama";
   }
-  
 
-  logger.info(`Successfully switched to ${normalizedModel} (${provider} provider) for suggestions.`);
-  logger.info(`Using ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
+  logger.info(`Successfully switched to ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
   
   // Save the configuration to a persistent file
   saveModelConfig();
   
-  logger.info(`To make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`);
-  logger.info(`Current suggestion model: ${global.CURRENT_SUGGESTION_MODEL}, provider: ${global.CURRENT_SUGGESTION_PROVIDER}, embedding: ${global.CURRENT_EMBEDDING_PROVIDER}`);
-  
-  // Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
-  // You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).
+  logger.debug(`Current configuration: model=${global.CURRENT_SUGGESTION_MODEL}, provider=${global.CURRENT_SUGGESTION_PROVIDER}, embedding=${global.CURRENT_EMBEDDING_PROVIDER}`);
   
   return true;
 }

@@ -22,11 +22,11 @@ export function saveModelConfig(): void {
       fs.mkdirSync(CONFIG_DIR, { recursive: true });
     }
     
-    // Get current settings
+    // Get current settings, prioritizing global variables over environment variables
     const config = {
-      SUGGESTION_MODEL: global.CURRENT_SUGGESTION_MODEL || process.env.SUGGESTION_MODEL,
-      SUGGESTION_PROVIDER: global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER,
-      EMBEDDING_PROVIDER: global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER,
+      SUGGESTION_MODEL: global.CURRENT_SUGGESTION_MODEL || process.env.SUGGESTION_MODEL || "llama3.1:8b",
+      SUGGESTION_PROVIDER: global.CURRENT_SUGGESTION_PROVIDER || process.env.SUGGESTION_PROVIDER || "ollama",
+      EMBEDDING_PROVIDER: global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama",
       timestamp: new Date().toISOString()
     };
     
@@ -54,26 +54,26 @@ export function loadModelConfig(forceSet: boolean = false): void {
     
     const config = JSON.parse(fs.readFileSync(MODEL_CONFIG_FILE, 'utf8'));
     
-    // Set global variables
+    // Set global and environment variables if they're not already set or if force set is enabled
     if (config.SUGGESTION_MODEL && (forceSet || !global.CURRENT_SUGGESTION_MODEL)) {
       global.CURRENT_SUGGESTION_MODEL = config.SUGGESTION_MODEL;
       process.env.SUGGESTION_MODEL = config.SUGGESTION_MODEL;
-      logger.info(`Loaded suggestion model: ${config.SUGGESTION_MODEL}`);
+      logger.debug(`Loaded suggestion model: ${config.SUGGESTION_MODEL}`);
     }
     
     if (config.SUGGESTION_PROVIDER && (forceSet || !global.CURRENT_SUGGESTION_PROVIDER)) {
       global.CURRENT_SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
       process.env.SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
-      logger.info(`Loaded suggestion provider: ${config.SUGGESTION_PROVIDER}`);
+      logger.debug(`Loaded suggestion provider: ${config.SUGGESTION_PROVIDER}`);
     }
     
     if (config.EMBEDDING_PROVIDER && (forceSet || !global.CURRENT_EMBEDDING_PROVIDER)) {
       global.CURRENT_EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
       process.env.EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
-      logger.info(`Loaded embedding provider: ${config.EMBEDDING_PROVIDER}`);
+      logger.debug(`Loaded embedding provider: ${config.EMBEDDING_PROVIDER}`);
     }
     
-    logger.info(`Successfully loaded model configuration from ${MODEL_CONFIG_FILE}`);
+    logger.info(`Loaded model configuration from ${MODEL_CONFIG_FILE}`);
   } catch (error: any) {
     logger.warn(`Failed to load model configuration: ${error.message}`);
   }
