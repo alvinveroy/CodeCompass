@@ -241,6 +241,7 @@ export async function startServer(repoPath: string): Promise<void> {
           agent_query: {}, // New agent tool that works regardless of suggestion model
           switch_llm_provider: {}, // Add the switch_llm_provider tool to capabilities
           check_provider: {}, // Add the check_provider tool to capabilities
+          reset_metrics: {}, // Add reset_metrics tool to capabilities
         },
       },
     });
@@ -354,13 +355,16 @@ export async function startServer(repoPath: string): Promise<void> {
             };
           }
           
+          // Get the actual current provider after switching
+          const actualProvider = global.CURRENT_LLM_PROVIDER || process.env.LLM_PROVIDER || normalizedProvider;
+          
           // Log the current provider to debug
-          logger.info(`Current LLM provider: ${normalizedProvider}`);
+          logger.info(`Current LLM provider: ${actualProvider}`);
           
           return {
             content: [{
               type: "text",
-              text: `# LLM Provider Switched\n\nSuccessfully switched to ${normalizedProvider} provider.\n\nTo make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`,
+              text: `# LLM Provider Switched\n\nSuccessfully switched to ${actualProvider} provider.\n\nTo make this change permanent, set the LLM_PROVIDER environment variable to '${actualProvider}'`,
             }],
           };
         } catch (error: any) {

@@ -5,10 +5,16 @@ import { preprocessText } from "./utils";
 
 // Check if DeepSeek API key is configured
 export async function checkDeepSeekApiKey(): Promise<boolean> {
-  if (!DEEPSEEK_API_KEY) {
+  // Check if the API key is set in the environment
+  const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+  
+  if (!apiKey) {
     logger.error("DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable.");
     return false;
   }
+  
+  // Log that we found the API key (without revealing it)
+  logger.info("DeepSeek API key is configured");
   return true;
 }
 
