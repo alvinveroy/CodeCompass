@@ -315,6 +315,62 @@ export async function startServer(repoPath: string): Promise<void> {
       registerGetRepositoryContextTool(server, qdrantClient, repoPath);
     }
   
+    // Register model_switch_diagnostic tool
+    server.tool(
+      "model_switch_diagnostic",
+      "Comprehensive diagnostic tool for model switching issues",
+      {},
+      async () => {
+        logger.info("Running model switch diagnostic tool");
+      
+        try {
+          // Run the diagnostic
+          const diagnosticResult = await import("./server-tools/model-switch-diagnostic").then(
+            module => module.modelSwitchDiagnostic()
+          );
+        
+          return {
+            content: [{
+              type: "text",
+              text: `# Model Switch Diagnostic Results\n\n` +
+                `## Current State\n` +
+                `### Environment Variables\n` +
+                `- SUGGESTION_MODEL: ${diagnosticResult.currentState.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${diagnosticResult.currentState.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${diagnosticResult.currentState.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${diagnosticResult.currentState.environment.DEEPSEEK_API_KEY}\n` +
+                `- DEEPSEEK_API_URL: ${diagnosticResult.currentState.environment.DEEPSEEK_API_URL || "Not set"}\n` +
+                `- OLLAMA_HOST: ${diagnosticResult.currentState.environment.OLLAMA_HOST || "Not set"}\n` +
+                `- NODE_ENV: ${diagnosticResult.currentState.environment.NODE_ENV || "Not set"}\n` +
+                `- VITEST: ${diagnosticResult.currentState.environment.VITEST || "Not set"}\n\n` +
+                `### Global Variables\n` +
+                `- CURRENT_SUGGESTION_MODEL: ${diagnosticResult.currentState.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- CURRENT_SUGGESTION_PROVIDER: ${diagnosticResult.currentState.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- CURRENT_EMBEDDING_PROVIDER: ${diagnosticResult.currentState.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `## Test Results\n` +
+                `### DeepSeek Test\n` +
+                `- Expected: model=${diagnosticResult.tests.deepseek.expected.model}, provider=${diagnosticResult.tests.deepseek.expected.provider}\n` +
+                `- Actual: model=${diagnosticResult.tests.deepseek.actual.model}, provider=${diagnosticResult.tests.deepseek.actual.provider}\n` +
+                `- Success: ${diagnosticResult.tests.deepseek.success ? "✅" : "❌"}\n\n` +
+                `### Ollama Test\n` +
+                `- Expected: model=${diagnosticResult.tests.ollama.expected.model}, provider=${diagnosticResult.tests.ollama.expected.provider}\n` +
+                `- Actual: model=${diagnosticResult.tests.ollama.actual.model}, provider=${diagnosticResult.tests.ollama.actual.provider}\n` +
+                `- Success: ${diagnosticResult.tests.ollama.success ? "✅" : "❌"}\n\n` +
+                `Timestamp: ${diagnosticResult.timestamp}`
+            }],
+          };
+        } catch (error: any) {
+          logger.error("Error in model_switch_diagnostic tool", { error: error.message });
+          return {
+            content: [{
+              type: "text",
+              text: `# Error in Model Switch Diagnostic\n\n${error.message}`,
+            }],
+          };
+        }
+      }
+    );
+
     // Register debug_model_switch tool
     server.tool(
       "debug_model_switch",
@@ -428,6 +484,13 @@ export async function startServer(repoPath: string): Promise<void> {
         }
       
         logger.info(`Requested model: ${model}`);
+        
+        // Force clear any existing model settings to ensure a clean switch
+        delete process.env.SUGGESTION_MODEL;
+        delete process.env.SUGGESTION_PROVIDER;
+        global.CURRENT_SUGGESTION_MODEL = undefined;
+        global.CURRENT_SUGGESTION_PROVIDER = undefined;
+        
         // Ensure we're using the exact model name provided
         const normalizedModel = model.toLowerCase();
         
@@ -465,19 +528,29 @@ export async function startServer(repoPath: string): Promise<void> {
             };
           }
         
-          // Use the exact model that was requested, not what might be in globals
-          // This ensures we report back what the user actually requested
-          const suggestionModel = normalizedModel;
-          const suggestionProvider = isDeepSeekModel ? "deepseek" : "ollama";
+          // Get the actual values from the global variables to ensure we're reporting what was actually set
+          const actualModel = global.CURRENT_SUGGESTION_MODEL;
+          const actualProvider = global.CURRENT_SUGGESTION_PROVIDER;
           const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
         
           // Log the current models and providers to debug
-          logger.info(`Current suggestion model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
+          logger.info(`Current suggestion model: ${actualModel}, provider: ${actualProvider}, embedding: ${embeddingProvider}`);
+          
+          // Verify that the model was actually changed
+          if (actualModel !== normalizedModel) {
+            logger.error(`Model switch failed: requested ${normalizedModel} but got ${actualModel}`);
+            return {
+              content: [{
+                type: "text",
+                text: `# Error Switching Suggestion Model\n\nFailed to switch to ${normalizedModel}. The model is still set to ${actualModel}.\n\nPlease check the logs for more details.`,
+              }],
+            };
+          }
         
           return {
             content: [{
               type: "text",
-              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${normalizedModel} for suggestions.\n\nUsing ${normalizedModel} (${suggestionProvider} provider) for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`,
+              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${actualModel} for suggestions.\n\nUsing ${actualModel} (${actualProvider} provider) for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${actualModel}'`,
             }],
           };
         } catch (error: any) {

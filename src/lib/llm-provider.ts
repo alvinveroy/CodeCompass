@@ -316,7 +316,16 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   // Check if we're actually using the model we requested
   if (global.CURRENT_SUGGESTION_MODEL !== normalizedModel) {
     logger.error(`Failed to set suggestion model to ${normalizedModel}, current model is ${global.CURRENT_SUGGESTION_MODEL}`);
-    return false;
+    // Force set the model again to ensure it's properly set
+    global.CURRENT_SUGGESTION_MODEL = normalizedModel;
+    process.env.SUGGESTION_MODEL = normalizedModel;
+    logger.info(`Forced model to ${normalizedModel} after detection of incorrect setting`);
+    
+    // Double-check that it's now set correctly
+    if (global.CURRENT_SUGGESTION_MODEL !== normalizedModel) {
+      logger.error(`Still failed to set suggestion model to ${normalizedModel}, current model is ${global.CURRENT_SUGGESTION_MODEL}`);
+      return false;
+    }
   }
 
   logger.info(`Successfully switched to ${normalizedModel} (${provider} provider) for suggestions.`);
