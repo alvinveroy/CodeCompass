@@ -48,8 +48,10 @@ interface GlobalWithProviders {
 
 // Extend the NodeJS global type
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-empty-interface
-  interface Global extends GlobalWithProviders {}
+  var CURRENT_LLM_PROVIDER: string;
+  var CURRENT_SUGGESTION_PROVIDER: string;
+  var CURRENT_EMBEDDING_PROVIDER: string;
+  var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
 // Initialize global provider state

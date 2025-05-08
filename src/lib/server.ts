@@ -333,29 +333,56 @@ export async function startServer(repoPath: string): Promise<void> {
           const { debugProvider } = await import("./provider-debug");
           const debugResult = await debugProvider();
           
+          // Define type for debug result structure
+          interface DebugResultType {
+            globals: {
+              CURRENT_SUGGESTION_MODEL?: string;
+              CURRENT_SUGGESTION_PROVIDER?: string;
+              CURRENT_EMBEDDING_PROVIDER?: string;
+            };
+            environment: {
+              SUGGESTION_MODEL?: string;
+              SUGGESTION_PROVIDER?: string;
+              EMBEDDING_PROVIDER?: string;
+              DEEPSEEK_API_KEY?: string;
+              DEEPSEEK_API_URL?: string;
+              OLLAMA_HOST?: string;
+            };
+            provider: {
+              type?: string;
+              model?: string;
+              connectionTest?: boolean;
+              generationTest?: boolean;
+              generationError?: string;
+            };
+            timestamp: string;
+          }
+          
+          const typedResult = debugResult as DebugResultType;
+          
           return {
             content: [{
               type: "text",
               text: `# Provider Debug Results\n\n` +
                 `## Current State\n` +
-                `- Suggestion Model: ${(debugResult as Record<string, { CURRENT_SUGGESTION_MODEL?: string }>).globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
-                `- Suggestion Provider: ${(debugResult as Record<string, { CURRENT_SUGGESTION_PROVIDER?: string }>).globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- Embedding Provider: ${(debugResult as Record<string, { CURRENT_EMBEDDING_PROVIDER?: string }>).globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `- Suggestion Model: ${typedResult.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- Suggestion Provider: ${typedResult.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- Embedding Provider: ${typedResult.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
                 `## Environment Variables\n` +
-                `- SUGGESTION_MODEL: ${(debugResult as Record<string, { SUGGESTION_MODEL?: string }>).environment.SUGGESTION_MODEL || "Not set"}\n` +
-                `- SUGGESTION_PROVIDER: ${(debugResult as Record<string, { SUGGESTION_PROVIDER?: string }>).environment.SUGGESTION_PROVIDER || "Not set"}\n` +
-                `- EMBEDDING_PROVIDER: ${(debugResult as Record<string, { EMBEDDING_PROVIDER?: string }>).environment.EMBEDDING_PROVIDER || "Not set"}\n` +
-                `- DEEPSEEK_API_KEY: ${(debugResult as Record<string, { DEEPSEEK_API_KEY?: string }>).environment.DEEPSEEK_API_KEY}\n` +
-                `- DEEPSEEK_API_URL: ${(debugResult as Record<string, { DEEPSEEK_API_URL?: string }>).environment.DEEPSEEK_API_URL || "Not set"}\n` +
-                `- OLLAMA_HOST: ${(debugResult as Record<string, { OLLAMA_HOST?: string }>).environment.OLLAMA_HOST || "Not set"}\n\n` +
+                `- SUGGESTION_MODEL: ${typedResult.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${typedResult.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${typedResult.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${typedResult.environment.DEEPSEEK_API_KEY}\n` +
+                `- DEEPSEEK_API_URL: ${typedResult.environment.DEEPSEEK_API_URL || "Not set"}\n` +
+                `- OLLAMA_HOST: ${typedResult.environment.OLLAMA_HOST || "Not set"}\n\n` +
                 `## Provider Tests\n` +
-                `- Provider Type: ${(debugResult as Record<string, { type?: string }>).provider.type}\n` +
-                `- Provider Model: ${(debugResult as Record<string, { model?: string }>).provider.model}\n` +
-                `- Connection Test: ${(debugResult as Record<string, { connectionTest?: boolean }>).provider.connectionTest ? "✅ Successful" : "❌ Failed"}\n` +
-                `- Generation Test: ${(debugResult as Record<string, { generationTest?: boolean }>).provider.generationTest ? "✅ Successful" : "❌ Failed"}\n` +
-                `${(debugResult as Record<string, { generationError?: string }>).provider.generationError ? `- Generation Error: ${(debugResult as Record<string, { generationError?: string }>).provider.generationError}\n` : ""}` +
+                `- Provider Type: ${typedResult.provider.type}\n` +
+                `- Provider Model: ${typedResult.provider.model}\n` +
+                `- Connection Test: ${typedResult.provider.connectionTest ? "✅ Successful" : "❌ Failed"}\n` +
+                `- Generation Test: ${typedResult.provider.generationTest ? "✅ Successful" : "❌ Failed"}\n` +
+                `${typedResult.provider.generationError ? `- Generation Error: ${typedResult.provider.generationError}\n` : ""}` +
                 `\n` +
-                `Timestamp: ${debugResult.timestamp}`
+                `Timestamp: ${typedResult.timestamp}`
             }],
           };
         } catch (error: unknown) {
@@ -778,7 +805,12 @@ export async function startServer(repoPath: string): Promise<void> {
       process.exit(0);
     });
     
-    await new Promise<void>(() => {});
+    await new Promise<void>((resolve) => {
+      // This promise intentionally never resolves to keep the server running
+      process.on('SIGINT', () => {
+        resolve();
+      });
+    });
   } catch (error: unknown) {
     const err = error as Error;
     logger.error("Failed to start CodeCompass", { message: err.message });
