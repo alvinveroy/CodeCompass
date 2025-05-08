@@ -442,8 +442,9 @@ async function checkProviderAvailability(provider: string, normalizedModel: stri
           // We're not checking the actual model here since that would require loading it
           // Just check if Ollama is running
           logger.debug(`Assuming Ollama model ${normalizedModel} is available`);
-        } catch (modelError: any) {
-          logger.error(`Error checking Ollama model ${normalizedModel}: ${modelError.message}`);
+        } catch (modelError) {
+          const errorMsg = modelError instanceof Error ? modelError.message : String(modelError);
+          logger.error(`Error checking Ollama model ${normalizedModel}: ${errorMsg}`);
           return false;
         }
       }
