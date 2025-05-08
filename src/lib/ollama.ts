@@ -18,8 +18,9 @@ export async function checkOllama(): Promise<boolean> {
       logger.info(`Ollama status: ${response.status}`);
     });
     return true;
-  } catch (error) {
-    logger.error(`Failed to connect to Ollama: ${error}`);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Failed to connect to Ollama: ${err.message}`);
     return false;
   }
 }
