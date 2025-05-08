@@ -1297,7 +1297,7 @@ ${c.snippet}
 
 ## Recent Changes
 \`\`\`
-${diff}
+${_diff}
 \`\`\`
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)
