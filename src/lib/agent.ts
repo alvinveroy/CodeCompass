@@ -163,8 +163,8 @@ export function parseToolCalls(output: string): { tool: string; parameters: unkn
           });
         }
       } catch (error: unknown) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        logger.error("Failed to parse tool call", { line, error: err });
+        const _err = error instanceof Error ? error : new Error(String(error));
+        logger.error("Failed to parse tool call", { line, error: _err });
       }
     }
   }
