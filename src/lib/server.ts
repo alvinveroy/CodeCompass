@@ -779,6 +779,38 @@ export async function startServer(repoPath: string): Promise<void> {
     );
 
     
+    // Register custom RPC methods
+    if (typeof server.registerMethod !== "function") {
+      logger.warn("MCP server does not support 'registerMethod', some functionality may be limited");
+    } else {
+      // Register prompts/list method
+      server.registerMethod("prompts/list", async () => {
+        logger.info("Handling prompts/list request");
+        return {
+          prompts: [
+            {
+              id: "repository-context",
+              name: "Repository Context",
+              description: "Get context about your repository",
+              template: "Provide context about {{query}} in this repository"
+            },
+            {
+              id: "code-suggestion",
+              name: "Code Suggestion",
+              description: "Generate code suggestions",
+              template: "Suggest code for {{query}}"
+            },
+            {
+              id: "code-analysis",
+              name: "Code Analysis",
+              description: "Analyze code problems",
+              template: "Analyze this code problem: {{query}}"
+            }
+          ]
+        };
+      });
+    }
+    
     // Start metrics logging
     const metricsInterval = startMetricsLogging(300000); // Log metrics every 5 minutes
     
