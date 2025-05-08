@@ -35,7 +35,7 @@ declare global {
   // eslint-disable-next-line no-var
   var CURRENT_EMBEDDING_PROVIDER: string;
   // eslint-disable-next-line no-var
-  var CURRENT_SUGGESTION_MODEL?: string;
+  var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
 // Declare NodeJS namespace separately to avoid syntax errors
