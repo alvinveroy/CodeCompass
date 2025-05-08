@@ -192,7 +192,8 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   const isDeepSeekModel = normalizedModel.includes('deepseek');
   const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
   
-  logger.debug(`Attempting to switch suggestion model to: ${normalizedModel} (provider: ${provider})`);
+  // Log the requested model for debugging
+  logger.info(`Using model: ${normalizedModel}`);
   
   // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
   if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
@@ -226,6 +227,9 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
     logger.error(`[TEST] Simulating unavailable ${provider} provider for model ${normalizedModel}`);
     return false;
   }
+  
+  // Log the requested model and provider
+  logger.info(`Attempting to switch suggestion model to: ${normalizedModel} (provider: ${provider})`);
   
   // Check if the provider is available before switching
   let available = false;
@@ -316,6 +320,7 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   logger.info(`Successfully switched to ${normalizedModel} (${provider} provider) for suggestions.`);
   logger.info(`Using ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
   logger.info(`To make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`);
+  logger.info(`Current suggestion model: ${global.CURRENT_SUGGESTION_MODEL}, provider: ${global.CURRENT_SUGGESTION_PROVIDER}, embedding: ${global.CURRENT_EMBEDDING_PROVIDER}`);
   
   return true;
 }
