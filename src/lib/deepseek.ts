@@ -227,7 +227,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${apiKey}`
             },
-            timeout: REQUEST_TIMEOUT
+            timeout: REQUEST_TIMEOUT * 2 // Double the timeout for generation requests
           }
         );
         
@@ -279,7 +279,8 @@ async function enhancedWithRetry<T>(
       // Check if it's a timeout error or rate limit error
       const axiosError = error as { code?: string; response?: { status: number } };
       const isTimeout = axiosError.code === 'ECONNABORTED' || 
-                        err.message.includes('timeout');
+                        err.message.includes('timeout') ||
+                        err.message.toLowerCase().includes('etimedout');
       const isRateLimit = axiosError.response?.status === 429;
       
       if (isTimeout) {
@@ -308,7 +309,8 @@ async function enhancedWithRetry<T>(
       
       // Wait before retrying with exponential backoff
       await new Promise(resolve => setTimeout(resolve, currentDelay));
-      currentDelay *= 2; // Exponential backoff
+      // More aggressive backoff for timeouts
+      currentDelay *= isTimeout ? 1.5 : 2; // Less aggressive for timeouts to retry faster
     }
   }
   
@@ -348,7 +350,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
               "Content-Type": "application/json",
               "Authorization": `Bearer ${apiKey}`
             },
-            timeout: REQUEST_TIMEOUT
+            timeout: REQUEST_TIMEOUT * 1.5 // Increase timeout for embedding requests
           }
         );
         

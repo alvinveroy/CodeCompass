@@ -539,8 +539,27 @@ export async function runAgentLoop(
       // Get the current LLM provider
       const llmProvider = await getLLMProvider();
       
-      // Get agent reasoning
-      const agentOutput = await llmProvider.generateText(agentPrompt);
+      // Get agent reasoning with timeout handling
+      let agentOutput: string;
+      try {
+        // Set a timeout promise
+        const timeoutPromise = new Promise<string>((_, reject) => {
+          setTimeout(() => reject(new Error("Agent reasoning timed out")), 60000); // 60 second timeout
+        });
+        
+        // Race the LLM generation against the timeout
+        agentOutput = await Promise.race([
+          llmProvider.generateText(agentPrompt),
+          timeoutPromise
+        ]);
+      } catch (error) {
+        logger.warn(`Agent reasoning timed out or failed: ${error instanceof Error ? error.message : String(error)}`);
+        // Provide a fallback response that continues the agent loop
+        agentOutput = "TOOL_CALL: " + JSON.stringify({
+          tool: "search_code",
+          parameters: { query: query, sessionId: session.id }
+        });
+      }
       
       // Check if the agent wants to make tool calls
       const toolCalls = parseToolCalls(agentOutput);
@@ -557,12 +576,18 @@ export async function runAgentLoop(
         try {
           logger.info(`Executing tool: ${toolCall.tool}`, { parameters: toolCall.parameters });
           
-          const toolOutput = await executeToolCall(
-            toolCall,
-            qdrantClient,
-            repoPath,
-            suggestionModelAvailable
-          );
+          // Execute tool call with timeout
+          const toolOutput = await Promise.race([
+            executeToolCall(
+              toolCall,
+              qdrantClient,
+              repoPath,
+              suggestionModelAvailable
+            ),
+            new Promise((_, reject) => {
+              setTimeout(() => reject(new Error(`Tool execution timed out: ${toolCall.tool}`)), 90000); // 90 second timeout
+            })
+          ]);
           
           // Add step to agent state
           agentState.steps.push({
@@ -602,7 +627,21 @@ export async function runAgentLoop(
     if (!agentState.finalResponse) {
       const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nPlease provide your final response to the user based on the information collected so far.`;
       const llmProvider = await getLLMProvider();
-      agentState.finalResponse = await llmProvider.generateText(finalPrompt);
+      try {
+        // Set a timeout for final response generation
+        agentState.finalResponse = await Promise.race([
+          llmProvider.generateText(finalPrompt),
+          new Promise<string>((_, reject) => {
+            setTimeout(() => reject(new Error("Final response generation timed out")), 60000); // 60 second timeout
+          })
+        ]);
+      } catch (error) {
+        logger.warn(`Final response generation timed out: ${error instanceof Error ? error.message : String(error)}`);
+        // Provide a fallback response
+        agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
+          "Here's what I found so far: " + 
+          agentState.steps.map(s => `Used ${s.tool} and found: ${JSON.stringify(s.output).substring(0, 200)}...`).join("\n\n");
+      }
     }
     
     // Add the final response as a suggestion in the session
