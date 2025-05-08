@@ -124,8 +124,8 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     return false;
   }
   
-  // Skip availability check in test environment
-  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+  // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
+  if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
     process.env.LLM_PROVIDER = normalizedProvider;
     global.CURRENT_LLM_PROVIDER = normalizedProvider;
     
@@ -138,6 +138,12 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     
     logger.info(`[TEST] Switched LLM provider to ${normalizedProvider} without availability check`);
     return true;
+  }
+  
+  // Special case for testing unavailability
+  if (process.env.TEST_PROVIDER_UNAVAILABLE === 'true') {
+    logger.error(`[TEST] Simulating unavailable ${normalizedProvider} provider`);
+    return false;
   }
   
   // Check if the provider is available before switching
