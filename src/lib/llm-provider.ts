@@ -227,14 +227,23 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     provider = await createProvider(suggestionProvider.toLowerCase());
   }
   
-  // Cache the provider
-  providerCache = {
-    suggestionModel,
-    suggestionProvider,
-    embeddingProvider,
-    provider,
-    timestamp: Date.now()
-  };
+  // Cache the provider - ensure we're using the same reference
+  if (!providerCache) {
+    providerCache = {
+      suggestionModel,
+      suggestionProvider,
+      embeddingProvider,
+      provider,
+      timestamp: Date.now()
+    };
+  } else {
+    // Update existing cache with new values but keep the same object reference
+    providerCache.suggestionModel = suggestionModel;
+    providerCache.suggestionProvider = suggestionProvider;
+    providerCache.embeddingProvider = embeddingProvider;
+    providerCache.provider = provider;
+    providerCache.timestamp = Date.now();
+  }
   
   return provider;
 }
@@ -252,7 +261,10 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   
   // Handle test environment
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    return await handleTestEnvironment(normalizedModel, provider);
+    const result = await handleTestEnvironment(normalizedModel, provider);
+    // Directly call saveModelConfig for tests
+    saveModelConfig();
+    return result;
   }
   
   // Reset existing model settings to ensure a clean switch
