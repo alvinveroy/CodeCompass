@@ -34,7 +34,7 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
   let apiKeyConfigured = false;
   
   // Check if DeepSeek API key is available
-  const apiKey = process.env.DEEPSEEK_API_KEY || "";
+  // We already have apiKey defined above, so use it here
   if (apiKey) {
     hasApiKey = true;
     apiKeyConfigured = true;
