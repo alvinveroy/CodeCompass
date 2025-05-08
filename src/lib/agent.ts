@@ -448,8 +448,28 @@ export async function runAgentLoop(
   logger.info(`Agent running with provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
   
   // Force refresh the provider to ensure we're using the latest settings
+  // First clear any cached modules
+  Object.keys(require.cache).forEach(key => {
+    if (key.includes('llm-provider') || key.includes('deepseek') || key.includes('ollama')) {
+      delete require.cache[key];
+    }
+  });
+  
+  // Import the clearProviderCache function and use it
+  const { clearProviderCache } = await import('./llm-provider');
+  clearProviderCache();
+  
   const currentProvider = await getLLMProvider();
-  logger.info(`Agent confirmed provider: ${await currentProvider.checkConnection() ? "connected" : "disconnected"}`);
+  const isConnected = await currentProvider.checkConnection();
+  logger.info(`Agent confirmed provider: ${isConnected ? "connected" : "disconnected"}`);
+  
+  // Verify the provider is working with a test generation
+  try {
+    const testResult = await currentProvider.generateText("Test message");
+    logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
+  } catch (error) {
+    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
+  }
   
   return await timeExecution('agent_loop', async () => {
     // Get or create session

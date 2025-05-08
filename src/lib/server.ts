@@ -249,6 +249,8 @@ export async function startServer(repoPath: string): Promise<void> {
           switch_suggestion_model: {}, // Add the switch_suggestion_model tool to capabilities
           check_provider: {}, // Add the check_provider tool to capabilities
           reset_metrics: {}, // Add reset_metrics tool to capabilities
+          debug_provider: {}, // Add debug_provider tool to capabilities
+          reset_provider: {}, // Add reset_provider tool to capabilities
         },
       },
     });
@@ -314,6 +316,81 @@ export async function startServer(repoPath: string): Promise<void> {
       logger.info("Registering get_repository_context tool separately");
       registerGetRepositoryContextTool(server, qdrantClient, repoPath);
     }
+    
+    // Register debug_provider tool
+    server.tool(
+      "debug_provider",
+      "Debug the current provider configuration and test its functionality",
+      {},
+      async () => {
+        try {
+          const { debugProvider } = await import("./provider-debug");
+          const debugResult = await debugProvider();
+          
+          return {
+            content: [{
+              type: "text",
+              text: `# Provider Debug Results\n\n` +
+                `## Current State\n` +
+                `- Suggestion Model: ${debugResult.globals.CURRENT_SUGGESTION_MODEL || "Not set"}\n` +
+                `- Suggestion Provider: ${debugResult.globals.CURRENT_SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- Embedding Provider: ${debugResult.globals.CURRENT_EMBEDDING_PROVIDER || "Not set"}\n\n` +
+                `## Environment Variables\n` +
+                `- SUGGESTION_MODEL: ${debugResult.environment.SUGGESTION_MODEL || "Not set"}\n` +
+                `- SUGGESTION_PROVIDER: ${debugResult.environment.SUGGESTION_PROVIDER || "Not set"}\n` +
+                `- EMBEDDING_PROVIDER: ${debugResult.environment.EMBEDDING_PROVIDER || "Not set"}\n` +
+                `- DEEPSEEK_API_KEY: ${debugResult.environment.DEEPSEEK_API_KEY}\n` +
+                `- DEEPSEEK_API_URL: ${debugResult.environment.DEEPSEEK_API_URL || "Not set"}\n` +
+                `- OLLAMA_HOST: ${debugResult.environment.OLLAMA_HOST || "Not set"}\n\n` +
+                `## Provider Tests\n` +
+                `- Provider Type: ${debugResult.provider.type}\n` +
+                `- Provider Model: ${debugResult.provider.model}\n` +
+                `- Connection Test: ${debugResult.provider.connectionTest ? "✅ Successful" : "❌ Failed"}\n` +
+                `- Generation Test: ${debugResult.provider.generationTest ? "✅ Successful" : "❌ Failed"}\n` +
+                `${debugResult.provider.generationError ? `- Generation Error: ${debugResult.provider.generationError}\n` : ""}` +
+                `\n` +
+                `Timestamp: ${debugResult.timestamp}`
+            }],
+          };
+        } catch (error: any) {
+          logger.error("Error in debug_provider tool", { error: error.message });
+          return {
+            content: [{
+              type: "text",
+              text: `# Error in Provider Debug\n\n${error.message}`,
+            }],
+          };
+        }
+      }
+    );
+    
+    // Register reset_provider tool
+    server.tool(
+      "reset_provider",
+      "Reset all provider settings and cache",
+      {},
+      async () => {
+        try {
+          const { resetProvider } = await import("./provider-debug");
+          await resetProvider();
+          
+          return {
+            content: [{
+              type: "text",
+              text: `# Provider Reset Complete\n\nAll provider settings and cache have been reset.\n\nUse the switch_suggestion_model tool to set a new provider.`
+            }],
+          };
+        } catch (error: any) {
+          logger.error("Error in reset_provider tool", { error: error.message });
+          return {
+            content: [{
+              type: "text",
+              text: `# Error in Provider Reset\n\n${error.message}`,
+            }],
+          };
+        }
+      }
+    );
   
     // Register direct_model_switch tool
     server.tool(
@@ -349,8 +426,15 @@ export async function startServer(repoPath: string): Promise<void> {
             global.CURRENT_SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
             process.env.SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
             
-            // Clear any cached provider instances
-            delete require.cache[require.resolve('./llm-provider')];
+            // Force set environment variables to ensure they're properly set
+            process.env.SUGGESTION_MODEL = model.toLowerCase();
+            
+            // Clear any cached provider instances and modules
+            Object.keys(require.cache).forEach(key => {
+              if (key.includes('llm-provider') || key.includes('deepseek') || key.includes('ollama')) {
+                delete require.cache[key];
+              }
+            });
             
             // Ensure the LLM provider is updated immediately
             const llmProvider = await getLLMProvider();
@@ -361,6 +445,14 @@ export async function startServer(repoPath: string): Promise<void> {
             // Verify the provider was actually set correctly
             logger.info(`Verification - Current suggestion provider: ${global.CURRENT_SUGGESTION_PROVIDER}`);
             logger.info(`Verification - Current suggestion model: ${global.CURRENT_SUGGESTION_MODEL}`);
+            
+            // Force a test generation to ensure the provider is working
+            try {
+              const testResult = await llmProvider.generateText("Test message");
+              logger.info(`Test generation successful with provider ${global.CURRENT_SUGGESTION_PROVIDER}`);
+            } catch (error) {
+              logger.error(`Test generation failed with provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
+            }
           }
         
           if (!switchResult.success) {
@@ -720,7 +812,15 @@ async function registerTools(
     
     try {
       // Force clear any cached providers
-      delete require.cache[require.resolve('./llm-provider')];
+      Object.keys(require.cache).forEach(key => {
+        if (key.includes('llm-provider') || key.includes('deepseek') || key.includes('ollama')) {
+          delete require.cache[key];
+        }
+      });
+      
+      // Import the clearProviderCache function and use it
+      const { clearProviderCache } = await import('./llm-provider');
+      clearProviderCache();
       
       // Ensure we have the latest LLM provider
       const llmProvider = await getLLMProvider();
@@ -728,6 +828,14 @@ async function registerTools(
       // Log detailed provider information
       logger.info(`Agent using provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
       logger.info(`Provider details - suggestionProvider: ${process.env.SUGGESTION_PROVIDER}, suggestionModel: ${process.env.SUGGESTION_MODEL}`);
+      
+      // Verify the provider is working with a test generation
+      try {
+        const testResult = await llmProvider.generateText("Test message");
+        logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
+      } catch (error) {
+        logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
+      }
       
       // Create a timeout promise
       const timeoutPromise = new Promise<string>((_, reject) => {

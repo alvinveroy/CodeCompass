@@ -159,6 +159,12 @@ let providerCache: {
   timestamp: number;
 } | null = null;
 
+// Force clear the provider cache
+export function clearProviderCache(): void {
+  providerCache = null;
+  logger.info("Provider cache cleared");
+}
+
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
   // Load saved configuration first
@@ -178,8 +184,11 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   logger.info(`Getting LLM provider: ${currentProvider} (model: ${suggestionModel}, suggestion: ${suggestionProvider}, embedding: ${embeddingProvider})`);
   
   // Check if we have a cached provider and if it's still valid
-  const cacheMaxAge = 5000; // 5 seconds max cache age
+  const cacheMaxAge = 2000; // 2 seconds max cache age (reduced from 5s)
   const now = Date.now();
+  
+  // Always log the current provider settings for debugging
+  logger.info(`Provider request - model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
   
   if (providerCache && 
       providerCache.suggestionModel === suggestionModel &&
@@ -192,6 +201,7 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   
   // Clear the cache
   providerCache = null;
+  logger.info("Provider cache invalidated, creating new provider instance");
   
   // In test environment, skip API key check but still call the check functions for test spies
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
@@ -236,6 +246,9 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   // Use a single provider for all operations
   let provider: LLMProvider;
   
+  // Log the actual provider being used
+  logger.info(`Creating provider instance for: ${suggestionProvider.toLowerCase()}`);
+  
   switch (suggestionProvider.toLowerCase()) {
     case 'deepseek':
       // Check if DeepSeek API key is configured
@@ -245,12 +258,25 @@ export async function getLLMProvider(): Promise<LLMProvider> {
       } else {
         logger.info("Using DeepSeek as LLM provider");
         provider = new DeepSeekProvider();
+        
+        // Verify DeepSeek connection
+        const isConnected = await provider.checkConnection();
+        logger.info(`DeepSeek provider connection test: ${isConnected ? "successful" : "failed"}`);
+        
+        if (!isConnected) {
+          logger.warn("DeepSeek connection failed, falling back to Ollama");
+          provider = new OllamaProvider();
+        }
       }
       break;
     case 'ollama':
     default:
       logger.info("Using Ollama as LLM provider");
       provider = new OllamaProvider();
+      
+      // Verify Ollama connection
+      const isConnected = await provider.checkConnection();
+      logger.info(`Ollama provider connection test: ${isConnected ? "successful" : "failed"}`);
       break;
   }
   
