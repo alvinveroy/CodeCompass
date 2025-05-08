@@ -18,10 +18,22 @@ export const USE_MIXED_PROVIDERS = process.env.USE_MIXED_PROVIDERS === "true" ||
 export const SUGGESTION_PROVIDER = process.env.SUGGESTION_PROVIDER || process.env.LLM_PROVIDER || "ollama";
 export const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "ollama";
 
+// Declare global variables for TypeScript
+declare global {
+  namespace NodeJS {
+    interface Global {
+      CURRENT_LLM_PROVIDER: string;
+      CURRENT_SUGGESTION_PROVIDER: string;
+      CURRENT_EMBEDDING_PROVIDER: string;
+      CURRENT_SUGGESTION_MODEL?: string;
+    }
+  }
+}
+
 // Initialize global provider state
-global.CURRENT_LLM_PROVIDER = process.env.LLM_PROVIDER || LLM_PROVIDER;
-global.CURRENT_SUGGESTION_PROVIDER = process.env.SUGGESTION_PROVIDER || process.env.LLM_PROVIDER || LLM_PROVIDER;
-global.CURRENT_EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "ollama";
+(global as any).CURRENT_LLM_PROVIDER = process.env.LLM_PROVIDER || LLM_PROVIDER;
+(global as any).CURRENT_SUGGESTION_PROVIDER = process.env.SUGGESTION_PROVIDER || process.env.LLM_PROVIDER || LLM_PROVIDER;
+(global as any).CURRENT_EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "ollama";
 
 // Request Configuration
 export const MAX_INPUT_LENGTH = 4096;
