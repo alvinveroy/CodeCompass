@@ -69,14 +69,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       successCount++;
     } catch (error: unknown) {
       logger.error(`Failed to index ${filepath}`, {
-        message: error.message,
-        code: error.code,
-        response: error.response
-          ? {
-              status: error.response.status,
-              data: error.response.data,
-            }
-          : null,
+        message: error instanceof Error ? error.message : String(error)
       });
       errorCount++;
     }

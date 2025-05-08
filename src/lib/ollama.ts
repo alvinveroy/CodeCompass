@@ -154,14 +154,12 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     const err = error instanceof Error ? error : new Error(String(error));
     const axiosError = error as { 
       code?: string; 
-      config?: unknown; 
       response?: { status: number; data: unknown } 
     };
     
     logger.error("Ollama embedding error", {
       message: err.message,
       code: axiosError.code,
-      config: axiosError.config,
       response: axiosError.response
         ? {
             status: axiosError.response.status,

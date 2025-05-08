@@ -216,7 +216,6 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     return createTestProvider(suggestionProvider);
   }
   
-  
   // Create the appropriate provider based on the configuration
   let provider: LLMProvider;
   

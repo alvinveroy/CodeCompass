@@ -1,12 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { initMcpSafeLogging, _restoreConsole } from "./mcp-logger";
+import { initMcpSafeLogging } from "./mcp-logger";
 import fs from "fs/promises";
 import * as fsSync from "fs";
 import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { logger, _COLLECTION_NAME, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
+import { logger, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
 import * as deepseek from "./deepseek";
 import { loadModelConfig, forceUpdateModelConfig } from "./model-persistence";
 
@@ -1435,7 +1435,7 @@ Session ID: ${session.id}`;
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      await getRepositoryDiff(repoPath);
+      const diff = await getRepositoryDiff(repoPath);
       
       // Update context in session
       updateContext(session.id, repoPath, files, diff);
