@@ -44,6 +44,26 @@ export function saveModelConfig(): void {
  */
 export function loadModelConfig(forceSet: boolean = false): void {
   try {
+    // First try to load DeepSeek API key from config
+    const deepseekConfigFile = path.join(CONFIG_DIR, 'deepseek-config.json');
+    if (fs.existsSync(deepseekConfigFile)) {
+      try {
+        const deepseekConfig = JSON.parse(fs.readFileSync(deepseekConfigFile, 'utf8'));
+        if (deepseekConfig.DEEPSEEK_API_KEY) {
+          process.env.DEEPSEEK_API_KEY = deepseekConfig.DEEPSEEK_API_KEY;
+          logger.info(`Loaded DeepSeek API key from ${deepseekConfigFile}`);
+          
+          if (deepseekConfig.DEEPSEEK_API_URL) {
+            process.env.DEEPSEEK_API_URL = deepseekConfig.DEEPSEEK_API_URL;
+            logger.info(`Loaded DeepSeek API URL from config: ${deepseekConfig.DEEPSEEK_API_URL}`);
+          }
+        }
+      } catch (error: any) {
+        logger.warn(`Failed to load DeepSeek config: ${error.message}`);
+      }
+    }
+    
+    // Then load model config
     if (!fs.existsSync(MODEL_CONFIG_FILE)) {
       logger.debug(`Model configuration file not found: ${MODEL_CONFIG_FILE}`);
       return;

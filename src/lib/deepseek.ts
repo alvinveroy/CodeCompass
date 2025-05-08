@@ -1,4 +1,6 @@
 import axios from "axios";
+import * as fs from 'fs';
+import * as path from 'path';
 import { logger, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
 // Use the correct API endpoints
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
@@ -14,11 +16,28 @@ import { preprocessText } from "./utils";
  * @returns Promise<boolean> - True if API key is configured, false otherwise
  */
 export async function checkDeepSeekApiKey(): Promise<boolean> {
+  // First try to load from config file
+  try {
+    const configPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass', 'deepseek-config.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.DEEPSEEK_API_KEY) {
+        logger.info(`Loaded DeepSeek API key from config file: ${configPath}`);
+        process.env.DEEPSEEK_API_KEY = config.DEEPSEEK_API_KEY;
+        if (config.DEEPSEEK_API_URL) {
+          process.env.DEEPSEEK_API_URL = config.DEEPSEEK_API_URL;
+        }
+      }
+    }
+  } catch (error: any) {
+    logger.warn(`Failed to load DeepSeek config: ${error.message}`);
+  }
+
   // Check if the API key is set in the environment
   const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
   
   if (!apiKey) {
-    logger.error("DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable.");
+    logger.error("DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable or run 'npm run set-deepseek-key'.");
     return false;
   }
   

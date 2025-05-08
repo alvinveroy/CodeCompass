@@ -35,21 +35,24 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
   let hasApiKey = false;
   let apiKeyConfigured = false;
   
-  // Check if DeepSeek API key is available
-  if (apiKey) {
-    hasApiKey = true;
-    apiKeyConfigured = true;
-    logger.info(`DeepSeek API key is available with length: ${apiKey.length}`);
-    
-    // Force set the API key in the environment variable to ensure it's available to the provider
-    process.env.DEEPSEEK_API_KEY = apiKey;
-    logger.info("Forced set DEEPSEEK_API_KEY in environment");
-  } else {
-    logger.warn("DeepSeek API key is not available in environment");
-  }
-  
   // Import the deepseek module
   const deepseek = require("../deepseek");
+  
+  // First, explicitly check and set the DeepSeek API key
+  try {
+    const keyConfigured = await deepseek.checkDeepSeekApiKey();
+    if (keyConfigured) {
+      hasApiKey = true;
+      apiKeyConfigured = true;
+      // Re-read the key from environment after it's been set by checkDeepSeekApiKey
+      const apiKey = process.env.DEEPSEEK_API_KEY || "";
+      logger.info(`DeepSeek API key is available with length: ${apiKey.length}`);
+    } else {
+      logger.warn("DeepSeek API key configuration failed");
+    }
+  } catch (error: any) {
+    logger.error(`Error checking DeepSeek API key: ${error.message}`);
+  }
   
   try {
     // First try direct DeepSeek connection test which is known to work
@@ -94,6 +97,7 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     apiEndpointConfigured: !!process.env.DEEPSEEK_API_URL,
     noteText: `Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
 You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).
+To set your API key permanently, run: npm run set-deepseek-key YOUR_API_KEY
 If you're still having issues, try running 'npm run test:deepseek' to test the DeepSeek connection directly.`
   };
 }
