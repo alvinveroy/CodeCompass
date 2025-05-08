@@ -22,6 +22,9 @@ The [Model Context Protocol (MCP)](https://www.anthropic.com/news/model-context-
 - **Project Management**: Integration with TaskMaster AI for task tracking and management.
 - **Knowledge Graph**: Build and query knowledge graphs about your codebase with MCP Memory.
 - **Library Documentation**: Access up-to-date documentation for libraries with Context7.
+- **Project Management**: Integration with TaskMaster AI for task tracking and management.
+- **Knowledge Graph**: Build and query knowledge graphs about your codebase with MCP Memory.
+- **Library Documentation**: Access up-to-date documentation for libraries with Context7.
 
 ## Installation
 ### Prerequisites
@@ -134,6 +137,22 @@ Interact with CodeCompass via MCP using tools optimized for Vibe Coding:
 - **Switch Models**:
   ```javascript
   server.tool("switch_suggestion_model", { model: "llama3.1:8b" })
+  ```
+- **Access Changelog**:
+  ```javascript
+  server.tool("get_changelog", {})
+  ```
+- **Manage Tasks with TaskMaster**:
+  ```javascript
+  server.tool("taskmaster-ai", "get_tasks", { projectRoot: "/path/to/project" })
+  ```
+- **Build Knowledge Graph**:
+  ```javascript
+  server.tool("@modelcontextprotocol/memory", "create_entities", { entities: [...] })
+  ```
+- **Get Library Documentation**:
+  ```javascript
+  server.tool("context7", "get-library-docs", { context7CompatibleLibraryID: "vercel/nextjs" })
   ```
 - **Access Changelog**:
   ```javascript
@@ -319,6 +338,10 @@ CodeCompass includes several diagnostic tools to help troubleshoot issues:
   ```javascript
   server.tool("get_session_history", { sessionId: "your-session-id" })
   ```
+- **Get Session History**: View detailed session information
+  ```javascript
+  server.tool("get_session_history", { sessionId: "your-session-id" })
+  ```
 
 ## Why CodeCompass for the Vibe Coder Arsenal?
 CodeCompass is a must-have in the Vibe coder arsenal, a collection of tools for AI-driven development. By implementing [MCP](https://www.anthropic.com/news/model-context-protocol), it connects your repository to AI assistants, enabling Vibe Coding with:
@@ -327,6 +350,9 @@ CodeCompass is a must-have in the Vibe coder arsenal, a collection of tools for 
 - **Seamless Integration**: Enhances IDEs for efficient workflows.
 - **Democratized Coding**: Makes coding accessible via natural language.
 - **Metrics & Diagnostics**: Built-in tools for performance monitoring and troubleshooting.
+- **Project Management**: Integrated TaskMaster AI for comprehensive project tracking.
+- **Knowledge Representation**: Build and query knowledge graphs about your codebase.
+- **Documentation Access**: Retrieve up-to-date library documentation with Context7.
 - **Project Management**: Integrated TaskMaster AI for comprehensive project tracking.
 - **Knowledge Representation**: Build and query knowledge graphs about your codebase.
 - **Documentation Access**: Retrieve up-to-date library documentation with Context7.
