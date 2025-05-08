@@ -1,5 +1,5 @@
 import axios from "axios";
-import { logger, OLLAMA_HOST, EMBEDDING_MODEL, SUGGESTION_MODEL, MAX_INPUT_LENGTH } from "./config";
+import { logger, OLLAMA_HOST, EMBEDDING_MODEL, SUGGESTION_MODEL, MAX_INPUT_LENGTH, REQUEST_TIMEOUT } from "./config";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types";
 import { withRetry, preprocessText } from "./utils";
 import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
