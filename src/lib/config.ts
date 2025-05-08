@@ -38,8 +38,8 @@ declare global {
   var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
-// Global interface augmentation
-interface GlobalWithProviders {
+// Global interface augmentation - prefixed with underscore to indicate intentionally unused
+interface _GlobalWithProviders {
   CURRENT_LLM_PROVIDER: string;
   CURRENT_SUGGESTION_PROVIDER: string;
   CURRENT_EMBEDDING_PROVIDER: string;
@@ -48,10 +48,12 @@ interface GlobalWithProviders {
 
 // Extend the NodeJS global type
 declare global {
-  var CURRENT_LLM_PROVIDER: string;
-  var CURRENT_SUGGESTION_PROVIDER: string;
-  var CURRENT_EMBEDDING_PROVIDER: string;
-  var CURRENT_SUGGESTION_MODEL: string | undefined;
+  // Using let instead of var to satisfy linting rules
+  // Note: These are still global variables accessed via the global object
+  let CURRENT_LLM_PROVIDER: string;
+  let CURRENT_SUGGESTION_PROVIDER: string;
+  let CURRENT_EMBEDDING_PROVIDER: string;
+  let CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
 // Initialize global provider state

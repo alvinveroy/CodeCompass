@@ -83,7 +83,7 @@ export function addQuery(
   sessionId: string, 
   query: string, 
   results: unknown[] = [], 
-  relevanceScore: number = 0
+  relevanceScore = 0
 ): SessionState {
   const session = getOrCreateSession(sessionId);
   

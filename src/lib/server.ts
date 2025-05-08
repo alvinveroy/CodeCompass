@@ -1268,13 +1268,13 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       // Include previous relevant results if current results are limited
       if (context.length < 2 && relevantResults.length > 0) {
         const additionalContext = relevantResults
-          .filter(r => !context.some(c => c.filepath === (r as any).payload?.filepath))
+          .filter(r => !context.some(c => c.filepath === (r as unknown as QdrantSearchResult).payload?.filepath))
           .slice(0, 2)
           .map(r => ({
-            filepath: (r as any).payload?.filepath || "unknown",
-            snippet: (r as any).payload?.content?.slice(0, MAX_SNIPPET_LENGTH) || "",
-            last_modified: (r as any).payload?.last_modified || "unknown",
-            relevance: (r as any).score || 0.5,
+            filepath: (r as unknown as QdrantSearchResult).payload?.filepath || "unknown",
+            snippet: (r as unknown as QdrantSearchResult).payload?.content?.slice(0, MAX_SNIPPET_LENGTH) || "",
+            last_modified: (r as unknown as QdrantSearchResult).payload?.last_modified || "unknown",
+            relevance: (r as unknown as QdrantSearchResult).score || 0.5,
             note: "From previous related query"
           }));
         
