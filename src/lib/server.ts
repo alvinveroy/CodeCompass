@@ -357,15 +357,23 @@ export async function startServer(repoPath: string): Promise<void> {
         try {
           // Determine if this is a DeepSeek model
           const isDeepSeekModel = normalizedModel.includes('deepseek');
-        
-          // Check if we're trying to switch to a DeepSeek model but don't have an API key
-          if (isDeepSeekModel && !await deepseek.checkDeepSeekApiKey()) {
-            return {
-              content: [{
-                type: "text",
-                text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${model}. DeepSeek API key is not configured.\n\nPlease set the DEEPSEEK_API_KEY environment variable and try again.`,
-              }],
-            };
+          
+          // For DeepSeek models, ensure we have the API key and endpoint configured
+          if (isDeepSeekModel) {
+            // Check API key
+            if (!await deepseek.checkDeepSeekApiKey()) {
+              return {
+                content: [{
+                  type: "text",
+                  text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${model}. DeepSeek API key is not configured.\n\nPlease set the DEEPSEEK_API_KEY environment variable and try again.`,
+                }],
+              };
+            }
+            
+            // Check API endpoint
+            if (!process.env.DEEPSEEK_API_URL) {
+              logger.warn("DeepSeek API URL not set, using default endpoint");
+            }
           }
         
           // Switch the suggestion model
@@ -682,7 +690,10 @@ ${Object.entries(providerInfo)
 
 To switch suggestion models, use the \`switch_suggestion_model\` tool with the model parameter:
 - For Ollama models: \`{"model": "llama3.1:8b"}\`
-- For DeepSeek models: \`{"model": "deepseek-coder"}\`
+- For DeepSeek models: \`{"model": "deepseek-coder"}\` (requires DEEPSEEK_API_KEY)
+
+Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
+You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/v1).
 `,
         }],
       };

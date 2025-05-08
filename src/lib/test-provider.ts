@@ -58,6 +58,8 @@ export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
     info.apiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1";
     info.model = suggestionModel;
     info.hasApiKey = !!process.env.DEEPSEEK_API_KEY;
+    info.apiKeyConfigured = !!process.env.DEEPSEEK_API_KEY;
+    info.apiEndpointConfigured = !!process.env.DEEPSEEK_API_URL;
   } else {
     info.host = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
     info.embeddingModel = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5";
