@@ -198,7 +198,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
           {
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${apiKey}`
+              "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY}`
             },
             timeout: REQUEST_TIMEOUT
           }
