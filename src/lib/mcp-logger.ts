@@ -53,25 +53,29 @@ export function initMcpSafeLogging(): void {
     logger.debug = (...args) => {
       const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
       logStream.write(`${new Date().toISOString()} [DEBUG] ${message}\n`);
-      return originalDebug.apply(logger, args);
+      // Call the original function with the first argument or an empty object
+      return originalDebug.call(logger, args[0] || {});
     };
     
     logger.info = (...args) => {
       const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
       logStream.write(`${new Date().toISOString()} [INFO] ${message}\n`);
-      return originalInfo.apply(logger, args);
+      // Call the original function with the first argument or an empty object
+      return originalInfo.call(logger, args[0] || {});
     };
     
     logger.warn = (...args) => {
       const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
       logStream.write(`${new Date().toISOString()} [WARN] ${message}\n`);
-      return originalWarn.apply(logger, args);
+      // Call the original function with the first argument or an empty object
+      return originalWarn.call(logger, args[0] || {});
     };
     
     logger.error = (...args) => {
       const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
       logStream.write(`${new Date().toISOString()} [ERROR] ${message}\n`);
-      return originalError.apply(logger, args);
+      // Call the original function with the first argument or an empty object
+      return originalError.call(logger, args[0] || {});
     };
   } catch (error) {
     console.error("Failed to set up file logging:", error);
