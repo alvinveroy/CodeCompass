@@ -1,322 +1,260 @@
-# CodeCompass: AI-Powered Codebase Navigation
+# CodeCompass: Your AI-Powered Vibe Coding Companion with MCP
 
-CodeCompass is a TypeScript-based MCP server that transforms your Git repository into an AI-driven knowledge base. Using Qdrant for vector storage and Ollama's nomic-embed-text:v1.5 for embeddings and llama3.1:8b for suggestions, it indexes your codebase and documentation, delivering context-aware prompts for LLMs like Claude or Cursor.
+**Introduction**: CodeCompass is an AI coding assistant for Vibe Coding, leveraging the Model Context Protocol (MCP) to connect Git repositories to AI assistants. Run locally with Ollama for privacy or configure with OpenAI for cloud power. Integrate with VSCode, Cursor, and Claude for seamless development.
 
-## Features
+Struggling to debug complex code or implement new features? CodeCompass transforms your Git repositories into an AI-driven knowledge base, empowering [Vibe Coding](https://en.wikipedia.org/wiki/Vibe_coding)—a revolutionary approach where you describe tasks in natural language, and AI generates code. As a [Model Context Protocol (MCP)](https://www.anthropic.com/news/model-context-protocol) server, CodeCompass connects AI assistants like [Claude](https://claude.ai/) to your codebase, delivering context-aware coding assistance. Built with [Qdrant](https://qdrant.tech/) for vector storage and [Ollama](https://ollama.com/) for local privacy, it’s configurable to use cloud models like OpenAI.
 
-- **Codebase Analysis**: Indexes Git repositories, storing code and documentation in Qdrant.
-- **AI-Driven Context**: Generates concise prompts with code summaries, documentation, and metadata.
-- **Diff Tracking**: Includes repository update timestamps for change awareness.
-- **Developer Tools**: Offers resources (repo://structure, repo://files/*) and tools (search_code, generate_suggestion, get_repository_context).
-- **Fully Configurable**: Customize Ollama and Qdrant endpoints through environment variables or client configuration.
-- **Automatic Directory Detection**: Uses the current working directory without requiring manual specification.
+A cornerstone of the Vibe coder arsenal, CodeCompass streamlines debugging, feature implementation, and codebase exploration. Star the [CodeCompass GitHub](https://github.com/alvinveroy/CodeCompass) and join the future of AI-driven development!
 
-## Prerequisites
+## What is Vibe Coding?
+Vibe Coding, coined by Andrej Karpathy in February 2025, lets developers use natural language prompts to instruct AI to generate code. Describe the “vibe” of your project—like “build a login page”—and AI delivers, making coding accessible to all. CodeCompass enhances this by providing AI assistants with deep repository context.
 
-- Node.js (v20+)
-- TypeScript (v5+)
-- Docker (for Qdrant)
-- Ollama (with nomic-embed-text:v1.5 and llama3.1:8b models)
-- A local Git repository
+## What is the Model Context Protocol (MCP)?
+The [Model Context Protocol (MCP)](https://www.anthropic.com/news/model-context-protocol) is an open standard by Anthropic that connects AI assistants to data sources, such as Git repositories, for relevant responses. CodeCompass implements MCP to serve codebase data, enabling precise AI-driven coding assistance for Vibe Coding.
+
+## Why Choose CodeCompass?
+- **Local Privacy with Ollama**: Runs models locally by default for data security, ideal for sensitive projects.
+- **Cloud Flexibility**: Configurable to use online models like OpenAI for enhanced performance.
+- **Agentic RAG**: An AI agent autonomously retrieves code, documentation, and metadata for comprehensive answers.
+- **Vibe Coding Ready**: Supports natural language prompts for intuitive code generation.
+- **Developer-Friendly**: Integrates with VSCode, Cursor, Zed, Claude Desktop, and more.
 
 ## Installation
+### Prerequisites
+- Node.js (v20+)
+- TypeScript (v5+)
+- [Docker](https://www.docker.com/) (for Qdrant)
+- [Ollama](https://ollama.com/download) (for local models: `nomic-embed-text:v1.5`, `llama3.1:8b`) or OpenAI API key (for cloud models)
+- A local Git repository
 
-### Option 1: Clone and Install
-
-1. **Clone the Repository**:
+### Setup
+1. **Start Qdrant**:
    ```bash
-   git clone https://github.com/alvinveroy/codecompass.git
+   docker run -d -p 127.0.0.1:6333:6333 qdrant/qdrant
+   ```
+2. **Set Up AI Models**:
+   - **Local (Ollama)**:
+     ```bash
+     ollama pull nomic-embed-text:v1.5
+     ollama pull llama3.1:8b
+     ollama serve
+     ```
+   - **Cloud (OpenAI)**: Obtain an [OpenAI API key](https://platform.openai.com/account/api-keys).
+
+### Installation Options
+1. **Clone and Install**:
+   ```bash
+   git clone https://github.com/alvinveroy/CodeCompass
    cd codecompass
-   ```
-
-2. **Install Dependencies**:
-   ```bash
    npm install
-   ```
-
-3. **Build the Project**:
-   ```bash
    npm run build
    ```
-
-### Option 2: Install and Run with npx
-Run CodeCompass directly using npx:
-```bash
-npx @alvinveroy/codecompass
-```
-
-Note: The npx command downloads the compiled package from npm and runs the server.
-
-## Setup Instructions
-
-### Start Qdrant:
-```bash
-docker run -d -p 127.0.0.1:6333:6333 qdrant/qdrant
-```
-
-### Start Ollama:
-
-1. Install Ollama ([docs](https://ollama.ai/download)).
-2. Pull models:
+2. **Using npx**:
    ```bash
-   ollama pull nomic-embed-text:v1.5
-   ollama pull llama3.1:8b
-   ```
-3. Run Ollama:
-   ```bash
-   ollama serve
+   npx @alvinveroy/codecompass
    ```
 
 ## Configuration
+Set environment variables in your shell, MCP client, or `.env` file:
 
-CodeCompass can be configured using environment variables either in your shell or in your MCP client configuration:
+| Variable                  | Default Value                     | Description                              |
+|---------------------------|-----------------------------------|------------------------------------------|
+| `LLM_PROVIDER`            | `ollama`                          | AI provider (`ollama` or `openai`)       |
+| `OLLAMA_HOST`             | `http://localhost:11434`          | Ollama server address (for `ollama`)     |
+| `OPENAI_API_KEY`          | None                              | OpenAI API key (for `openai`)            |
+| `QDRANT_HOST`             | `http://localhost:6333`           | Qdrant server address                    |
+| `EMBEDDING_MODEL`         | `nomic-embed-text:v1.5`           | Embedding model (Ollama)                 |
+| `SUGGESTION_MODEL`        | `llama3.1:8b`                     | Suggestion model (Ollama)                |
+| `OPENAI_EMBEDDING_MODEL`  | `text-embedding-ada-002`          | Embedding model (OpenAI)                 |
+| `OPENAI_SUGGESTION_MODEL` | `gpt-4o`                          | Suggestion model (OpenAI)                |
+| `MCP_PORT`                | `3000`                            | MCP server port                          |
+| `LOG_LEVEL`               | `info`                            | Logging level                            |
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OLLAMA_HOST` | Ollama API endpoint | `http://localhost:11434` |
-| `QDRANT_HOST` | Qdrant server endpoint | `http://localhost:6333` |
-| `EMBEDDING_MODEL` | Model for generating embeddings | `nomic-embed-text:v1.5` |
-| `SUGGESTION_MODEL` | Model for generating suggestions | `llama3.1:8b` |
-| `MCP_PORT` | Port for MCP server | `3000` |
-| `LOG_LEVEL` | Logging verbosity | `info` |
-
-You can set these variables:
-1. In your shell before running CodeCompass
-2. In your MCP client configuration (see integration examples below)
-3. In a `.env` file in your project directory
+**Example .env for OpenAI**:
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-xxx
+QDRANT_HOST=http://localhost:6333
+MCP_PORT=3000
+OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+OPENAI_SUGGESTION_MODEL=gpt-4o
+```
 
 ## Usage
+Interact with CodeCompass via MCP using tools optimized for Vibe Coding:
 
-Build and run the MCP server:
-```bash
-npm run build
-node dist/index.js
-```
+- **View Repository Structure**:
+  ```javascript
+  server.resource("repo://structure")
+  ```
+- **Search Code**:
+  ```javascript
+  server.tool("search_code", { query: "authentication endpoint" })
+  ```
+- **Get Repository Context**:
+  ```javascript
+  server.tool("get_repository_context", { query: "Add user login" })
+  ```
+- **Generate Suggestion**:
+  ```javascript
+  server.tool("generate_suggestion", { query: "Fix null pointer in auth", code: "..." })
+  ```
 
-Or, using npx:
-```bash
-npx @alvinveroy/codecompass
-```
+### Vibe Coding Example
+**Scenario**: You want to implement user authentication.
 
-CodeCompass automatically uses the current working directory as the repository path. No need to specify a path manually!
+1. **Prompt AI**: Tell your assistant (e.g., Claude), “Add OAuth authentication to my app.”
+2. **Context Retrieval**: CodeCompass fetches relevant code and documentation via MCP.
+3. **AI Response**: Suggests OAuth implementation with code snippets tailored to your repository.
+4. **Refine**: Ask, “Use Google OAuth,” and CodeCompass updates the context for a refined suggestion.
 
-### Version Information
+## Integration with Development Tools
+CodeCompass integrates seamlessly with popular IDEs and tools, enhancing your Vibe Coding workflow. Below are detailed setup instructions.
 
-To check the current version:
-```bash
-npx @alvinveroy/codecompass --version
-```
+### Cursor
+1. Install [Cursor](https://www.cursor.com/).
+2. Open Cursor settings (`cursor.json`).
+3. Add CodeCompass as a custom command:
+   ```json
+   {
+     "commands": [
+       {
+         "name": "CodeCompass",
+         "command": "npx",
+         "args": ["-y", "@alvinveroy/codecompass@latest"],
+         "env": {
+           "LLM_PROVIDER": "ollama",
+           "OLLAMA_HOST": "http://localhost:11434",
+           "QDRANT_HOST": "http://localhost:6333"
+         }
+       }
+     ]
+   }
+   ```
+4. For OpenAI, update `env`:
+   ```json
+   {
+     "env": {
+       "LLM_PROVIDER": "openai",
+       "OPENAI_API_KEY": "sk-xxx",
+       "QDRANT_HOST": "http://localhost:6333"
+     }
+   }
+   ```
+5. Use via Cursor’s AI interface: Prompt, “Debug my login function,” and CodeCompass provides context.
 
-For a complete changelog, see the [CHANGELOG.md](./CHANGELOG.md) file or run:
-```bash
-npx @alvinveroy/codecompass --changelog
-```
+### VSCode
+1. Install [VSCode](https://code.visualstudio.com/) and the [Codeium](https://codeium.com/) extension for AI support.
+2. Create a `.vscode/settings.json` file:
+   ```json
+   {
+     "codeium.customCommands": [
+       {
+         "name": "CodeCompass",
+         "command": "npx",
+         "args": ["-y", "@alvinveroy/codecompass@latest"],
+         "env": {
+           "LLM_PROVIDER": "ollama",
+           "OLLAMA_HOST": "http://localhost:11434",
+           "QDRANT_HOST": "http://localhost:6333"
+         }
+       }
+     ]
+   }
+   ```
+3. For OpenAI, modify `env` as above.
+4. Access via Codeium’s chat: Ask, “Suggest a REST API structure,” and CodeCompass enhances the response.
 
-## Example Commands
+### Windsurf
+1. Install [Windsurf](https://windsurf.dev/) (AI-powered IDE).
+2. Configure Windsurf’s settings (`windsurf.json`):
+   ```json
+   {
+     "customTools": [
+       {
+         "name": "CodeCompass",
+         "command": "npx",
+         "args": ["-y", "@alvinveroy/codecompass@latest"],
+         "env": {
+           "LLM_PROVIDER": "ollama",
+           "OLLAMA_HOST": "http://localhost:11434",
+           "QDRANT_HOST": "http://localhost:6333"
+         }
+       }
+     ]
+   }
+   ```
+3. For OpenAI, update `env` accordingly.
+4. Prompt Windsurf’s AI: “Explore my codebase for database models,” and CodeCompass provides context.
 
-```typescript
-// View Repository Structure
-const structure = await server.resource("repo://structure");
-console.log(structure.content[0].text);
+### Zed
+1. Install [Zed](https://zed.dev/).
+2. Configure Zed’s settings (`settings.json`):
+   ```json
+   {
+     "assistant": {
+       "custom_commands": [
+         {
+           "name": "CodeCompass",
+           "command": "npx",
+           "args": ["-y", "@alvinveroy/codecompass@latest"],
+           "env": {
+             "LLM_PROVIDER": "ollama",
+             "OLLAMA_HOST": "http://localhost:11434",
+             "QDRANT_HOST": "http://localhost:6333"
+           }
+         }
+       ]
+     }
+   }
+   ```
+3. For OpenAI, adjust `env`.
+4. Use Zed’s assistant: Ask, “Implement a user profile page,” and CodeCompass supplies relevant data.
 
-// Search Code
-const results = await server.tool("search_code", { query: "login function" });
-console.log(results.content[0].text);
+### Claude Desktop
+1. Install [Claude Desktop](https://www.anthropic.com/) (if available).
+2. Configure via a custom script or `.env` file:
+   ```env
+   LLM_PROVIDER=ollama
+   OLLAMA_HOST=http://localhost:11434
+   QDRANT_HOST=http://localhost:6333
+   ```
+3. Run CodeCompass:
+   ```bash
+   npx @alvinveroy/codecompass
+   ```
+4. For OpenAI, update `.env` with `OPENAI_API_KEY`.
+5. Prompt Claude: “Fix my API endpoint,” and CodeCompass enhances the response via MCP.
 
-// Get LLM Context
-const context = await server.tool("get_repository_context", { query: "Implement login" });
-console.log(context.content[0].text);
+### Claude Code
+1. Use [Claude Code](https://www.anthropic.com/) within supported IDEs or standalone.
+2. Install via Smithery:
+   ```bash
+   npx -y @smithery/cli install @alvinveroy/codecompass --client claude
+   ```
+3. Configure environment variables in your IDE or `.env` as above.
+4. Prompt: “Generate a GraphQL schema,” and CodeCompass provides context.
 
-// Get Changelog Information
-const changelog = await server.tool("get_changelog", {});
-console.log(changelog.content[0].text);
+## Use Cases
+| Use Case                | Description                                                                 | Benefit for Vibe Coding                            |
+|-------------------------|-----------------------------------------------------------------------------|----------------------------------------------------|
+| **Debugging**           | Query AI to identify and fix code errors.                                   | Fast, context-aware solutions reduce downtime.     |
+| **Feature Implementation** | Describe features for AI-generated code.                                 | Accelerates development with tailored suggestions. |
+| **Code Exploration**    | Navigate codebases with natural language queries.                           | Simplifies large project understanding.            |
+| **Onboarding**          | Provide new developers with AI-driven codebase insights.                    | Eases integration with contextual explanations.   |
 
-// Reset Metrics
-const reset = await server.tool("reset_metrics", {});
-console.log(reset.content[0].text);
-
-// View Session History
-const history = await server.tool("get_session_history", { sessionId: "session_123456789" });
-console.log(history.content[0].text);
-
-// Analyze Code Problem
-const analysis = await server.tool("agent_query", { 
-  query: "Fix the authentication error in login.ts",
-  sessionId: "session_123456789" 
-});
-console.log(analysis.content[0].text);
-```
-
-## Integration
-
-### 🛠️ Getting Started
-
-Requirements
-
-Node.js >= v20.0.0
-TypeScript >= v5.2.2
-Cursor, VSCode, Claude Desktop, Windsurf, Zed, Claude Code, or another MCP client
-
-Installing via Smithery
-To install CodeCompass MCP Server automatically via Smithery:
-npx -y @smithery/cli install @alvinveroy/codecompass --client claude
-
-Install in Cursor
-Add to ~/.cursor/mcp.json:
-```json
-{
-  "mcpServers": {
-    "codecompass": {
-      "command": "npx",
-      "args": ["-y", "@alvinveroy/codecompass@latest"],
-      "env": {
-        "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333",
-        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
-        "SUGGESTION_MODEL": "llama3.1:8b",
-        "LOG_LEVEL": "info"
-      }
-    }
-  }
-}
-```
-
-Alternative: Use Bun
-```json
-{
-  "mcpServers": {
-    "codecompass": {
-      "command": "bunx",
-      "args": ["-y", "@alvinveroy/codecompass@latest"],
-      "env": {
-        "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333",
-        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
-        "SUGGESTION_MODEL": "llama3.1:8b"
-      }
-    }
-  }
-}
-```
-
-Alternative: Use Deno
-```json
-{
-  "mcpServers": {
-    "codecompass": {
-      "command": "deno",
-      "args": ["run", "--allow-net", "npm:@alvinveroy/codecompass@latest"],
-      "env": {
-        "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333",
-        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
-        "SUGGESTION_MODEL": "llama3.1:8b"
-      }
-    }
-  }
-}
-```
-
-Install in VSCode
-Add to VSCode MCP configuration:
-```json
-{
-  "servers": {
-    "CodeCompass": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@alvinveroy/codecompass@latest"],
-      "env": {
-        "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333",
-        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
-        "SUGGESTION_MODEL": "llama3.1:8b"
-      }
-    }
-  }
-}
-```
-
-Install in Windsurf
-Add to Windsurf MCP config:
-```json
-{
-  "mcpServers": {
-    "codecompass": {
-      "command": "npx",
-      "args": ["-y", "@alvinveroy/codecompass@latest"],
-      "env": {
-        "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333",
-        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
-        "SUGGESTION_MODEL": "llama3.1:8b"
-      }
-    }
-  }
-}
-```
-
-Install in Zed
-Add to Zed settings.json:
-```json
-{
-  "context_servers": {
-    "CodeCompass": {
-      "command": {
-        "path": "npx",
-        "args": ["-y", "@alvinveroy/codecompass@latest"]
-      },
-      "env": {
-        "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333",
-        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
-        "SUGGESTION_MODEL": "llama3.1:8b"
-      },
-      "settings": {}
-    }
-  }
-}
-```
-
-Install in Claude Code
-Run:
-```bash
-claude mcp add codecompass -- npx -y @alvinveroy/codecompass@latest
-```
-
-Install in Claude Desktop
-Add to claude_desktop_config.json:
-```json
-{
-  "mcpServers": {
-    "codecompass": {
-      "command": "npx",
-      "args": ["-y", "@alvinveroy/codecompass@latest"],
-      "env": {
-        "OLLAMA_HOST": "http://localhost:11434",
-        "QDRANT_HOST": "http://localhost:6333",
-        "EMBEDDING_MODEL": "nomic-embed-text:v1.5",
-        "SUGGESTION_MODEL": "llama3.1:8b"
-      }
-    }
-  }
-}
-```
-
-## Version History
-
-For a complete list of changes and version history, please see the [CHANGELOG.md](./CHANGELOG.md) file.
-
-You can also access the changelog information programmatically through the MCP tool:
-```typescript
-const changelog = await server.tool("get_changelog", {});
-console.log(changelog.content[0].text);
-```
+## Why CodeCompass for the Vibe Coder Arsenal?
+CodeCompass is a must-have in the Vibe coder arsenal, a collection of tools for AI-driven development. By implementing [MCP](https://www.anthropic.com/news/model-context-protocol), it connects your repository to AI assistants, enabling Vibe Coding with:
+- **Privacy-First**: Local Ollama models keep data secure.
+- **Flexible AI**: Supports cloud models like OpenAI for versatility.
+- **Seamless Integration**: Enhances IDEs for efficient workflows.
+- **Democratized Coding**: Makes coding accessible via natural language.
 
 ## Contributing
+Join our community! See [CONTRIBUTING.md](https://github.com/alvinveroy/CodeCompass/blob/main/CONTRIBUTING.md) for guidelines.
 
-See CONTRIBUTING.md for guidelines. Submit pull requests or issues on GitHub.
-License
-MIT License. See LICENSE.md.
+## License
+[MIT License](https://github.com/alvinveroy/CodeCompass/blob/main/LICENSE.md)
 
-Star this repo to stay updated with CodeCompass, your ultimate AI coding companion!
+## Repository
+[CodeCompass GitHub](https://github.com/alvinveroy/CodeCompass)
