@@ -122,16 +122,18 @@ declare global {
   var CURRENT_SUGGESTION_MODEL: string | undefined;
 }
 
-import { loadModelConfig } from './model-persistence';
+import { loadModelConfig, saveModelConfig } from './model-persistence';
 
 // Cache for LLM providers to avoid creating new instances unnecessarily
-let providerCache: {
+interface ProviderCache {
   suggestionModel: string;
   suggestionProvider: string;
   embeddingProvider: string;
   provider: LLMProvider;
   timestamp: number;
-} | null = null;
+}
+
+let providerCache: ProviderCache | null = null;
 
 // Force clear the provider cache
 export function clearProviderCache(): void {
@@ -163,11 +165,8 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   logger.info(`Environment variables: model=${process.env.SUGGESTION_MODEL}, provider=${process.env.SUGGESTION_PROVIDER}`);
   
   // Check if we have a cached provider and if it's still valid
-  const cacheMaxAge = 2000; // 2 seconds max cache age (reduced from 5s)
+  const cacheMaxAge = 2000; // 2 seconds max cache age
   const now = Date.now();
-  
-  // Always log the current provider settings for debugging
-  logger.info(`Provider request - model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
   
   if (providerCache && 
       providerCache.suggestionModel === suggestionModel &&
@@ -180,7 +179,7 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   
   // Clear the cache
   providerCache = null;
-  logger.info("Provider cache invalidated, creating new provider instance");
+  logger.info("Creating new provider instance");
   
   // In test environment, skip API key check but still call the check functions for test spies
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
@@ -452,28 +451,8 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   logger.info(`Using ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
   
   // Save the configuration to a persistent file
-  try {
-    const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
-    const configFile = path.join(configDir, 'model-config.json');
-    
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
-    }
-    
-    // Write the configuration to a file
-    const config = {
-      SUGGESTION_MODEL: normalizedModel,
-      SUGGESTION_PROVIDER: provider,
-      EMBEDDING_PROVIDER: global.CURRENT_EMBEDDING_PROVIDER,
-      timestamp: new Date().toISOString()
-    };
-    
-    fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-    logger.info(`Saved model configuration to ${configFile}`);
-  } catch (error: any) {
-    logger.warn(`Failed to save model configuration: ${error.message}`);
-  }
+  import { saveModelConfig } from './model-persistence';
+  saveModelConfig();
   
   logger.info(`To make this change permanent, set the SUGGESTION_MODEL environment variable to '${normalizedModel}'`);
   logger.info(`Current suggestion model: ${global.CURRENT_SUGGESTION_MODEL}, provider: ${global.CURRENT_SUGGESTION_PROVIDER}, embedding: ${global.CURRENT_EMBEDDING_PROVIDER}`);
@@ -484,24 +463,3 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   return true;
 }
 
-// Function to switch LLM provider (kept for backward compatibility)
-export async function switchLLMProvider(provider: string): Promise<boolean> {
-  logger.warn("switchLLMProvider is deprecated, use switchSuggestionModel instead");
-  
-  // Validate provider name
-  const normalizedProvider = provider.toLowerCase();
-  if (normalizedProvider !== 'ollama' && normalizedProvider !== 'deepseek') {
-    logger.error(`Invalid LLM provider: ${provider}. Valid options are 'ollama' or 'deepseek'`);
-    return false;
-  }
-  
-  // For backward compatibility with tests, also set LLM_PROVIDER
-  if ((process.env.NODE_ENV === 'test' || process.env.VITEST)) {
-    process.env.LLM_PROVIDER = normalizedProvider;
-  }
-  
-  // Map provider to default model
-  const model = normalizedProvider === 'deepseek' ? 'deepseek-coder' : 'llama3.1:8b';
-  
-  return await switchSuggestionModel(model);
-}

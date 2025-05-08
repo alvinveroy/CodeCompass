@@ -44,24 +44,7 @@ export function saveModelConfig(): void {
  */
 export function loadModelConfig(forceSet: boolean = false): void {
   try {
-    // First try to load DeepSeek API key from config
-    const deepseekConfigFile = path.join(CONFIG_DIR, 'deepseek-config.json');
-    if (fs.existsSync(deepseekConfigFile)) {
-      try {
-        const deepseekConfig = JSON.parse(fs.readFileSync(deepseekConfigFile, 'utf8'));
-        if (deepseekConfig.DEEPSEEK_API_KEY) {
-          process.env.DEEPSEEK_API_KEY = deepseekConfig.DEEPSEEK_API_KEY;
-          logger.info(`Loaded DeepSeek API key from ${deepseekConfigFile}`);
-          
-          if (deepseekConfig.DEEPSEEK_API_URL) {
-            process.env.DEEPSEEK_API_URL = deepseekConfig.DEEPSEEK_API_URL;
-            logger.info(`Loaded DeepSeek API URL from config: ${deepseekConfig.DEEPSEEK_API_URL}`);
-          }
-        }
-      } catch (error: any) {
-        logger.warn(`Failed to load DeepSeek config: ${error.message}`);
-      }
-    }
+    // DeepSeek API key is loaded by the deepseek module directly
     
     // Then load model config
     if (!fs.existsSync(MODEL_CONFIG_FILE)) {
@@ -101,18 +84,24 @@ export function loadModelConfig(forceSet: boolean = false): void {
  * @param model The model name to set
  */
 export function forceUpdateModelConfig(model: string): void {
-  const isDeepSeekModel = model.toLowerCase().includes('deepseek');
+  const normalizedModel = model.toLowerCase();
+  const isDeepSeekModel = normalizedModel.includes('deepseek');
+  const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
   
   // Set global variables
-  global.CURRENT_SUGGESTION_MODEL = model.toLowerCase();
-  global.CURRENT_SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
+  global.CURRENT_SUGGESTION_MODEL = normalizedModel;
+  global.CURRENT_SUGGESTION_PROVIDER = provider;
   
   // Set environment variables
-  process.env.SUGGESTION_MODEL = model.toLowerCase();
-  process.env.SUGGESTION_PROVIDER = isDeepSeekModel ? 'deepseek' : 'ollama';
+  process.env.SUGGESTION_MODEL = normalizedModel;
+  process.env.SUGGESTION_PROVIDER = provider;
+  
+  // Always use Ollama for embeddings
+  global.CURRENT_EMBEDDING_PROVIDER = "ollama";
+  process.env.EMBEDDING_PROVIDER = "ollama";
   
   // Save to persistent storage
   saveModelConfig();
   
-  logger.info(`Forced model to ${model.toLowerCase()} and provider to ${global.CURRENT_SUGGESTION_PROVIDER}`);
+  logger.info(`Forced model to ${normalizedModel} and provider to ${provider}`);
 }
