@@ -17,17 +17,22 @@ const originalConsole = {
 };
 
 /**
- * Format log message as JSON for MCP protocol
+ * Format log message as JSON for MCP protocol using JSON-RPC 2.0 format
  * @param level Log level
  * @param message Message to log
- * @returns JSON formatted log string
+ * @returns JSON formatted log string in JSON-RPC 2.0 format
  */
 function formatLogAsJson(level: string, message: unknown): string {
+  // Use JSON-RPC 2.0 format for compatibility with Claude Desktop
   const logObject = {
-    type: "log",
-    level,
-    message: typeof message === 'object' ? JSON.stringify(message) : String(message),
-    timestamp: new Date().toISOString()
+    jsonrpc: "2.0",
+    method: "log",
+    id: Date.now().toString(),
+    params: {
+      level,
+      message: typeof message === 'object' ? JSON.stringify(message) : String(message),
+      timestamp: new Date().toISOString()
+    }
   };
   return JSON.stringify(logObject);
 }
@@ -215,11 +220,16 @@ export function _restoreConsole(): void {
  * @param message The message content
  */
 export function logMcpMessage(direction: 'sent' | 'received', message: unknown): void {
+  // Use JSON-RPC 2.0 format for compatibility with Claude Desktop
   const logObject = {
-    type: "mcp_message",
-    direction,
-    content: typeof message === 'string' ? message : JSON.stringify(message),
-    timestamp: new Date().toISOString()
+    jsonrpc: "2.0",
+    method: "mcp_message",
+    id: Date.now().toString(),
+    params: {
+      direction,
+      content: typeof message === 'string' ? message : JSON.stringify(message),
+      timestamp: new Date().toISOString()
+    }
   };
   
   // Write to file log
