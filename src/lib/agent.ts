@@ -75,8 +75,8 @@ export const toolRegistry: Tool[] = [
 // Create a new agent state
 export function createAgentState(sessionId: string, query: string): AgentState {
   return {
-    sessionId as string | undefined,
-    query: query as string,
+    sessionId: sessionId,
+    query: query,
     steps: [],
     context: [],
     isComplete: false
@@ -356,7 +356,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
       
       return {
         sessionId: session.id,
-        suggestion as string,
+        suggestion: suggestion,
         context: context.slice(0, 3) // Return only top 3 context items to avoid overwhelming the agent
       };
     }
