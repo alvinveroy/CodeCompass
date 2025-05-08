@@ -55,7 +55,7 @@ export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
   
   // Add provider-specific information
   if (suggestionProvider === "deepseek") {
-    info.apiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1";
+    info.apiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
     info.model = suggestionModel;
     info.hasApiKey = !!process.env.DEEPSEEK_API_KEY;
     info.apiKeyConfigured = !!process.env.DEEPSEEK_API_KEY;
