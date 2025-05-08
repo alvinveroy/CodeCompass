@@ -63,7 +63,10 @@ Please provide an improved response addressing the user's feedback.`;
 
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
-  switch (LLM_PROVIDER.toLowerCase()) {
+  // Use the current environment variable value, not the imported constant
+  const currentProvider = process.env.LLM_PROVIDER || LLM_PROVIDER;
+  
+  switch (currentProvider.toLowerCase()) {
     case 'deepseek':
       logger.info("Using DeepSeek as LLM provider");
       return new DeepSeekProvider();
@@ -81,7 +84,8 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     return false;
   }
   
-  // We're not actually changing the environment variable here, just logging what would happen
+  // Actually change the environment variable
+  process.env.LLM_PROVIDER = provider.toLowerCase();
   logger.info(`Switching LLM provider to ${provider}`);
   logger.info(`To make this change permanent, set the LLM_PROVIDER environment variable to '${provider}'`);
   

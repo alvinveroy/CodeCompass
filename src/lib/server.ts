@@ -334,6 +334,9 @@ export async function startServer(repoPath: string): Promise<void> {
             };
           }
           
+          // Log the current environment variable to debug
+          logger.info(`Current LLM_PROVIDER environment variable: ${process.env.LLM_PROVIDER}`);
+          
           return {
             content: [{
               type: "text",
