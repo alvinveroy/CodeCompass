@@ -355,7 +355,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
           return {
             changelog: changelog.substring(0, 2000) // Limit size
           };
-        } catch (error) {
+        } catch (_error) {
           return {
             changelog: "No changelog found"
           };
