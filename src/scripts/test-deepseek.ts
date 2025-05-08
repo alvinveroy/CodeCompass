@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { testDeepSeekConnection, generateWithDeepSeek, generateEmbeddingWithDeepSeek } from '../lib/deepseek';
-import { logger } from '../lib/config';
+import { testDeepSeekConnection, generateWithDeepSeek } from '../lib/deepseek';
 
 async function main() {
   console.log('🔍 Testing DeepSeek connection...');
