@@ -43,19 +43,7 @@ function formatLogAsJson(level: string, message: unknown): string {
  */
 export function initMcpSafeLogging(): void {
   // Create logs directory if it doesn't exist
-  let logsDir = path.join(process.cwd(), 'logs');
-  
-  // Ensure we never use absolute paths starting with /logs
-  if (logsDir.startsWith('/logs')) {
-    logsDir = path.join(process.cwd(), 'logs');
-  }
-  try {
-    if (!fs.existsSync(logsDir)) {
-      fs.mkdirSync(logsDir, { recursive: true });
-    }
-  } catch (error) {
-    // Silent fail - we'll try to log to file but won't crash if we can't
-  }
+  const logsDir = getLogsDir();
 
   // Replace console methods to write directly to stdout as JSON
   console.log = (...args: unknown[]) => {
@@ -63,13 +51,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [DEBUG] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [DEBUG] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
   };
   
   console.info = (...args: unknown[]) => {
@@ -77,13 +59,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [INFO] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [INFO] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
   };
   
   console.warn = (...args: unknown[]) => {
@@ -91,13 +67,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [WARN] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [WARN] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
   };
   
   console.error = (...args: unknown[]) => {
@@ -105,13 +75,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [ERROR] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [ERROR] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
   };
   
   console.debug = (...args: unknown[]) => {
@@ -119,13 +83,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [DEBUG] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [DEBUG] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
   };
   
   // Redirect logging to a file instead of stdout
@@ -148,13 +106,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [DEBUG] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [DEBUG] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
     
     return logger;
   };
@@ -164,13 +116,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [INFO] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [INFO] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
     
     return logger;
   };
@@ -180,13 +126,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [WARN] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [WARN] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
     
     return logger;
   };
@@ -196,13 +136,7 @@ export function initMcpSafeLogging(): void {
     process.stdout.write(jsonStr + '\n');
     
     // Also log to file
-    try {
-      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-      logStream.write(`${new Date().toISOString()} [ERROR] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
-      logStream.end();
-    } catch (error) {
-      // Silent fail for file logging
-    }
+    safeWriteToLog(`${new Date().toISOString()} [ERROR] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
     
     return logger;
   };
@@ -217,6 +151,50 @@ export function _restoreConsole(): void {
   console.warn = originalConsole.warn;
   console.error = originalConsole.error;
   console.debug = originalConsole.debug;
+}
+
+/**
+ * Get the logs directory path
+ * @returns The logs directory path
+ */
+function getLogsDir(): string {
+  // Create a logs directory in the current working directory
+  const logsDir = path.join(process.cwd(), 'logs');
+  
+  // Ensure the directory exists
+  try {
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+  } catch (error) {
+    // If we can't create the directory, use a fallback
+    console.error(`Failed to create logs directory: ${error}`);
+  }
+  
+  return logsDir;
+}
+
+/**
+ * Safely write to log file
+ * @param content Content to write to log file
+ */
+function safeWriteToLog(content: string): void {
+  try {
+    const logsDir = getLogsDir();
+    const logPath = path.join(logsDir, 'codecompass.log');
+    
+    // Ensure we're not trying to write to an absolute path starting with /logs
+    if (logPath.startsWith('/logs/')) {
+      throw new Error(`Invalid log path: ${logPath}`);
+    }
+    
+    const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+    logStream.write(content);
+    logStream.end();
+  } catch (error) {
+    // Silent fail for file logging
+    console.error(`Failed to write to log file: ${error}`);
+  }
 }
 
 /**
@@ -238,17 +216,7 @@ export function logMcpMessage(direction: 'sent' | 'received', message: unknown):
   };
   
   // Write to file log
-  try {
-    let logsDir = path.join(process.cwd(), 'logs');
-    if (!fs.existsSync(logsDir)) {
-      fs.mkdirSync(logsDir, { recursive: true });
-    }
-    const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
-    logStream.write(`${new Date().toISOString()} [DEBUG] MCP ${direction}: ${JSON.stringify(logObject)}\n`);
-    logStream.end();
-  } catch (error) {
-    // Silent fail for file logging
-  }
+  safeWriteToLog(`${new Date().toISOString()} [DEBUG] MCP ${direction}: ${JSON.stringify(logObject)}\n`);
   
   // Send properly formatted JSON to console
   console.log(JSON.stringify(logObject));
