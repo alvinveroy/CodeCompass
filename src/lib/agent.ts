@@ -76,7 +76,7 @@ export const toolRegistry: Tool[] = [
 export function createAgentState(sessionId: string, query: string): AgentState {
   return {
     sessionId,
-    query as string,
+    query: query as string,
     steps: [],
     context: [],
     isComplete: false
