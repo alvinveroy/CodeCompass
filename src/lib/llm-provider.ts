@@ -179,7 +179,10 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   
   // In test environment, skip API key check but still call the check functions for test spies
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    if (currentProvider.toLowerCase() === 'deepseek') {
+    // Get the provider from environment or global variables
+    const testProvider = suggestionProvider.toLowerCase();
+    
+    if (testProvider === 'deepseek') {
       logger.info("[TEST] Using DeepSeek as LLM provider");
       
       // Log the API key status (without revealing it)

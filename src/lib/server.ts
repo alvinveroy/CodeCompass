@@ -832,26 +832,31 @@ async function registerTools(
         const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
         const configFile = path.join(configDir, 'model-config.json');
         
-        if (fs.existsSync(configFile)) {
-          const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-          
-          // Force set global variables from saved config
-          if (config.SUGGESTION_MODEL) {
-            global.CURRENT_SUGGESTION_MODEL = config.SUGGESTION_MODEL;
-            process.env.SUGGESTION_MODEL = config.SUGGESTION_MODEL;
+        try {
+          // Use fsSync instead of fs for synchronous operations
+          if (fsSync.existsSync(configFile)) {
+            const config = JSON.parse(fsSync.readFileSync(configFile, 'utf8'));
+            
+            // Force set global variables from saved config
+            if (config.SUGGESTION_MODEL) {
+              global.CURRENT_SUGGESTION_MODEL = config.SUGGESTION_MODEL;
+              process.env.SUGGESTION_MODEL = config.SUGGESTION_MODEL;
+            }
+            
+            if (config.SUGGESTION_PROVIDER) {
+              global.CURRENT_SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
+              process.env.SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
+            }
+            
+            if (config.EMBEDDING_PROVIDER) {
+              global.CURRENT_EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
+              process.env.EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
+            }
+            
+            logger.info(`Loaded saved model configuration from ${configFile}`);
           }
-          
-          if (config.SUGGESTION_PROVIDER) {
-            global.CURRENT_SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
-            process.env.SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
-          }
-          
-          if (config.EMBEDDING_PROVIDER) {
-            global.CURRENT_EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
-            process.env.EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
-          }
-          
-          logger.info(`Loaded saved model configuration from ${configFile}`);
+        } catch (fsError: any) {
+          logger.warn(`Failed to read model configuration file: ${fsError.message}`);
         }
       } catch (error: any) {
         logger.warn(`Failed to load saved model configuration: ${error.message}`);

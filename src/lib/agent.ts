@@ -351,11 +351,16 @@ Based on the provided context and snippets, generate a detailed code suggestion 
     case "get_changelog": {
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
-        const changelog = await fs.readFile(changelogPath, 'utf8').catch(() => "No changelog found");
-        
-        return {
-          changelog: changelog.substring(0, 2000) // Limit size
-        };
+        try {
+          const changelog = await fs.readFile(changelogPath, 'utf8');
+          return {
+            changelog: changelog.substring(0, 2000) // Limit size
+          };
+        } catch (error) {
+          return {
+            changelog: "No changelog found"
+          };
+        }
       } catch (error) {
         return {
           error: "Failed to read changelog",
