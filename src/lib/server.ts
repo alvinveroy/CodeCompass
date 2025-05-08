@@ -881,8 +881,8 @@ async function registerTools(
       try {
         const _testResult = await llmProvider.generateText("Test message");
         logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
-      } catch (error) {
-        logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error });
+      } catch (_error) {
+        logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error: _error });
       }
       
       // Create a timeout promise
