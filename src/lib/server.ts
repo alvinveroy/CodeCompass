@@ -324,13 +324,28 @@ export async function startServer(repoPath: string): Promise<void> {
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
         
-        // Ensure provider exists
-        if (!normalizedParams.provider && typeof normalizedParams === 'object') {
-          normalizedParams.provider = "ollama";
-          logger.warn("No provider specified, defaulting to ollama");
+        // Extract provider from params, handling different input formats
+        let provider = "ollama";
+        
+        if (typeof normalizedParams === 'string') {
+          try {
+            // Try to parse as JSON if it's a string
+            const parsed = JSON.parse(normalizedParams);
+            if (parsed && typeof parsed === 'object' && parsed.provider) {
+              provider = parsed.provider;
+            }
+          } catch (e) {
+            // If not valid JSON, use as is
+            provider = normalizedParams;
+          }
+        } else if (typeof normalizedParams === 'object' && normalizedParams !== null) {
+          // Handle object input
+          if (normalizedParams.provider) {
+            provider = normalizedParams.provider;
+          }
         }
         
-        const provider = normalizedParams.provider;
+        logger.info(`Using provider: ${provider}`);
         const normalizedProvider = provider.toLowerCase();
         
         try {
