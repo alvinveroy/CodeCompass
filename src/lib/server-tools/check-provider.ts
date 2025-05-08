@@ -7,8 +7,13 @@ import { getLLMProvider } from "../llm-provider";
 export async function checkProviderDetailed(): Promise<Record<string, any>> {
   logger.info("Checking LLM provider status in detail");
   
-  // Get environment variables
+  // Get environment variables and force read from process.env
   const apiKey = process.env.DEEPSEEK_API_KEY || "";
+  
+  // Log API key details for debugging
+  logger.info(`DEEPSEEK_API_KEY in environment: ${apiKey ? `Present (length: ${apiKey.length})` : "Not present"}`);
+  logger.info(`DEEPSEEK_API_KEY first 5 chars: ${apiKey ? apiKey.substring(0, 5) : "N/A"}`);
+  
   const envVars = {
     SUGGESTION_MODEL: process.env.SUGGESTION_MODEL,
     SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
@@ -17,9 +22,6 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1/chat/completions",
     OLLAMA_HOST: process.env.OLLAMA_HOST,
   };
-  
-  // Log the API key details for debugging
-  logger.info(`DEEPSEEK_API_KEY in environment: ${apiKey ? `Present (length: ${apiKey.length})` : "Not present"}`);
   
   // Get global variables
   const globals = {
@@ -34,11 +36,14 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
   let apiKeyConfigured = false;
   
   // Check if DeepSeek API key is available
-  // We already have apiKey defined above, so use it here
   if (apiKey) {
     hasApiKey = true;
     apiKeyConfigured = true;
     logger.info(`DeepSeek API key is available with length: ${apiKey.length}`);
+    
+    // Force set the API key in the environment variable to ensure it's available to the provider
+    process.env.DEEPSEEK_API_KEY = apiKey;
+    logger.info("Forced set DEEPSEEK_API_KEY in environment");
   } else {
     logger.warn("DeepSeek API key is not available in environment");
   }

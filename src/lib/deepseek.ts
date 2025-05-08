@@ -3,6 +3,9 @@ import { logger, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REQUEST_TIMEOUT, MAX_RETRIES,
 // Use the correct v1 API endpoints
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/v1/embeddings";
+
+// Export the constants for use in other modules
+export { DEEPSEEK_API_URL, DEEPSEEK_EMBEDDING_URL };
 import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
 import { preprocessText } from "./utils";
 
@@ -43,8 +46,15 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       return false;
     }
 
+    // Force set the API key in the environment variable to ensure it's available
+    process.env.DEEPSEEK_API_KEY = apiKey;
+
     logger.info(`Testing DeepSeek API connection with key length: ${apiKey.length}, key prefix: ${apiKey.substring(0, 5)}...`);
-    const apiUrl = process.env.DEEPSEEK_API_URL || DEEPSEEK_API_URL;
+    
+    // Always use the v1 endpoint for testing
+    const apiUrl = "https://api.deepseek.com/v1/chat/completions";
+    process.env.DEEPSEEK_API_URL = apiUrl;
+    
     logger.info(`Using DeepSeek API URL: ${apiUrl}`);
     
     // Force set the API key in the environment variable to ensure it's available
