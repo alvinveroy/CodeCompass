@@ -57,11 +57,12 @@ export async function directModelSwitch(model: string): Promise<Record<string, u
     logger.info(`Saved model configuration to ${configFile}`);
     
     logger.info(`Directly set model to ${normalizedModel} and provider to ${provider}`);
-  } catch (error: Error | unknown) {
-    logger.error(`Error in direct model switch: ${error.message}`);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Error in direct model switch: ${err.message}`);
     return {
       success: false,
-      error: error.message,
+      error: err.message,
       before: beforeState,
       after: {
         model: global.CURRENT_SUGGESTION_MODEL,

@@ -47,7 +47,8 @@ export async function debugProvider(): Promise<Record<string, unknown>> {
     const result = await llmProvider.generateText("Test message for provider debug");
     generationTest = result.length > 0;
   } catch (error: unknown) {
-    generationError = error.message;
+    const err = error instanceof Error ? error : new Error(String(error));
+    generationError = err.message;
   }
   
   return {
@@ -82,8 +83,9 @@ export async function resetProvider(): Promise<void> {
   
   // Reset global variables
   global.CURRENT_SUGGESTION_MODEL = undefined;
-  global.CURRENT_SUGGESTION_PROVIDER = undefined;
-  global.CURRENT_EMBEDDING_PROVIDER = undefined;
+  // Use empty string instead of undefined for string types
+  global.CURRENT_SUGGESTION_PROVIDER = "";
+  global.CURRENT_EMBEDDING_PROVIDER = "";
   
   // Reset environment variables
   delete process.env.SUGGESTION_MODEL;

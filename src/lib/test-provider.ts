@@ -17,8 +17,9 @@ export async function testCurrentProvider(): Promise<boolean> {
     
     logger.info(`LLM provider test result: ${result.substring(0, 50)}...`);
     return true;
-  } catch (error: Error | unknown) {
-    logger.error(`LLM provider test failed: ${error.message}`);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`LLM provider test failed: ${err.message}`);
     return false;
   }
 }

@@ -102,7 +102,7 @@ async function enhancedWithRetry<T>(
       if (isTimeout) {
         logger.warn(`Request timed out (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
       } else {
-        logger.warn(`Retry ${i + 1}/${retries} after error: ${error.message}`);
+        logger.warn(`Retry ${i + 1}/${retries} after error: ${err.message}`);
       }
       
       // Wait before retrying with exponential backoff

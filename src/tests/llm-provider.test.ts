@@ -42,8 +42,8 @@ describe('LLM Provider', () => {
     
     // Reset global variables
     global.CURRENT_SUGGESTION_MODEL = undefined;
-    global.CURRENT_SUGGESTION_PROVIDER = undefined;
-    global.CURRENT_EMBEDDING_PROVIDER = undefined;
+    global.CURRENT_SUGGESTION_PROVIDER = "";
+    global.CURRENT_EMBEDDING_PROVIDER = "";
     
     // Clear provider cache
     clearProviderCache();

@@ -162,7 +162,7 @@ ${c.snippet}
 
 ## Recent Changes
 \`\`\`
-${_diff}
+${diff}
 \`\`\`
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
@@ -895,7 +895,7 @@ async function registerTools(
       const response = await Promise.race([
         runAgentLoop(
           query as string,
-          sessionId,
+          sessionId as string | undefined,
           qdrantClient,
           repoPath,
           suggestionModelAvailable,
@@ -1343,7 +1343,7 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
         // Process feedback to improve the suggestion
         const improvedSuggestion = await llmProvider.processFeedback(
           originalQuery as string,
-          suggestion,
+          suggestion as string,
           comments,
           score
         );

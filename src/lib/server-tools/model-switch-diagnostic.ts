@@ -35,7 +35,7 @@ export async function modelSwitchDiagnostic(): Promise<Record<string, unknown>> 
     delete process.env.SUGGESTION_MODEL;
     delete process.env.SUGGESTION_PROVIDER;
     global.CURRENT_SUGGESTION_MODEL = undefined;
-    global.CURRENT_SUGGESTION_PROVIDER = undefined;
+    global.CURRENT_SUGGESTION_PROVIDER = "";
     
     // Now set the new values
     global.CURRENT_SUGGESTION_MODEL = testDeepseek;
@@ -64,7 +64,7 @@ export async function modelSwitchDiagnostic(): Promise<Record<string, unknown>> 
     delete process.env.SUGGESTION_MODEL;
     delete process.env.SUGGESTION_PROVIDER;
     global.CURRENT_SUGGESTION_MODEL = undefined;
-    global.CURRENT_SUGGESTION_PROVIDER = undefined;
+    global.CURRENT_SUGGESTION_PROVIDER = "";
     
     // Now set the new values
     global.CURRENT_SUGGESTION_MODEL = testOllama;

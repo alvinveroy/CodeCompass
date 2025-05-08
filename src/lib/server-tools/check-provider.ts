@@ -1,5 +1,6 @@
 import { logger } from "../config";
 import { getLLMProvider } from "../llm-provider";
+import * as deepseek from "../deepseek";
 
 /**
  * Checks the current LLM provider status in detail
@@ -35,9 +36,6 @@ export async function checkProviderDetailed(): Promise<Record<string, unknown>> 
   let hasApiKey = false;
   let apiKeyConfigured = false;
   
-  // Import the deepseek module
-  import * as deepseek from "../deepseek";
-  
   // First, explicitly check and set the DeepSeek API key
   try {
     const keyConfigured = await deepseek.checkDeepSeekApiKey();
@@ -50,8 +48,9 @@ export async function checkProviderDetailed(): Promise<Record<string, unknown>> 
     } else {
       logger.warn("DeepSeek API key configuration failed");
     }
-  } catch (error: Error | unknown) {
-    logger.error(`Error checking DeepSeek API key: ${error.message}`);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Error checking DeepSeek API key: ${err.message}`);
   }
   
   try {
@@ -80,9 +79,10 @@ export async function checkProviderDetailed(): Promise<Record<string, unknown>> 
     if (connectionStatus === "Failed" && hasApiKey) {
       logger.warn("Connection failed despite having API key. Check API URL and network connectivity.");
     }
-  } catch (error: Error | unknown) {
-    connectionStatus = `Error: ${error.message}`;
-    logger.error(`Provider connection error: ${error.message}`);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    connectionStatus = `Error: ${err.message}`;
+    logger.error(`Provider connection error: ${err.message}`);
   }
   
   return {

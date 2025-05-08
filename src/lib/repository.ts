@@ -15,7 +15,8 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
     logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
   } catch (error: unknown) {
-    logger.warn(`Failed to validate Git repository at ${repoPath}: ${error.message}`);
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.warn(`Failed to validate Git repository at ${repoPath}: ${err.message}`);
     return false;
   }
 }
@@ -103,7 +104,8 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
     });
     return changes.join('\n') || "No changes since last commit";
   } catch (error: unknown) {
-    logger.error("Diff error", { message: error.message });
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("Diff error", { message: err.message });
     return "Failed to retrieve diff";
   }
 }

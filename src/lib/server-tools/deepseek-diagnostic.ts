@@ -21,8 +21,9 @@ export async function deepseekDiagnostic(): Promise<Record<string, unknown>> {
   try {
     const hasApiKey = await checkDeepSeekApiKey();
     apiKeyStatus = hasApiKey ? "Configured" : "Not configured";
-  } catch (error: Error | unknown) {
-    apiKeyStatus = `Error: ${error.message}`;
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    apiKeyStatus = `Error: ${err.message}`;
   }
   
   // Test connection
@@ -35,8 +36,9 @@ export async function deepseekDiagnostic(): Promise<Record<string, unknown>> {
     if (!connected && apiKeyStatus === "Configured") {
       connectionStatus = "Failed - API key is configured but connection test failed. Check API URL and network connectivity.";
     }
-  } catch (error: Error | unknown) {
-    connectionStatus = `Error: ${error.message}`;
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    connectionStatus = `Error: ${err.message}`;
   }
   
   return {
