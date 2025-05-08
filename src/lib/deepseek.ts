@@ -19,6 +19,12 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
     return false;
   }
   
+  // Force set the API key in the environment variable to ensure it's available
+  if (apiKey && !process.env.DEEPSEEK_API_KEY) {
+    process.env.DEEPSEEK_API_KEY = apiKey;
+    logger.info("Set DEEPSEEK_API_KEY in environment from config");
+  }
+  
   // Log that we found the API key (without revealing it)
   logger.info(`DeepSeek API key is configured: ${apiKey ? "Yes" : "No"}, value length: ${apiKey.length}`);
   return true;

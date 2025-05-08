@@ -8,14 +8,18 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
   logger.info("Checking LLM provider status in detail");
   
   // Get environment variables
+  const apiKey = process.env.DEEPSEEK_API_KEY || "";
   const envVars = {
     SUGGESTION_MODEL: process.env.SUGGESTION_MODEL,
     SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
     EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER,
-    DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ? "Set" : "Not set",
+    DEEPSEEK_API_KEY: apiKey ? `Set (length: ${apiKey.length})` : "Not set",
     DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
     OLLAMA_HOST: process.env.OLLAMA_HOST,
   };
+  
+  // Log the API key details for debugging
+  logger.info(`DEEPSEEK_API_KEY in environment: ${apiKey ? `Present (length: ${apiKey.length})` : "Not present"}`);
   
   // Get global variables
   const globals = {
@@ -26,12 +30,31 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
   
   // Test provider connection
   let connectionStatus = "Unknown";
+  let hasApiKey = false;
+  let apiKeyConfigured = false;
+  
+  // Check if DeepSeek API key is available
+  const apiKey = process.env.DEEPSEEK_API_KEY || "";
+  if (apiKey) {
+    hasApiKey = true;
+    apiKeyConfigured = true;
+    logger.info(`DeepSeek API key is available with length: ${apiKey.length}`);
+  } else {
+    logger.warn("DeepSeek API key is not available in environment");
+  }
+  
   try {
     const provider = await getLLMProvider();
     const connected = await provider.checkConnection();
     connectionStatus = connected ? "Connected" : "Failed";
+    
+    // If connection failed but we have an API key, log more details
+    if (!connected && hasApiKey) {
+      logger.warn("Connection failed despite having API key. Check API URL and network connectivity.");
+    }
   } catch (error: any) {
     connectionStatus = `Error: ${error.message}`;
+    logger.error(`Provider connection error: ${error.message}`);
   }
   
   return {
@@ -39,6 +62,11 @@ export async function checkProviderDetailed(): Promise<Record<string, any>> {
     globals: globals,
     connectionStatus: connectionStatus,
     timestamp: new Date().toISOString(),
+    apiUrl: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
+    model: process.env.SUGGESTION_MODEL || global.CURRENT_SUGGESTION_MODEL || "deepseek-coder",
+    hasApiKey: hasApiKey,
+    apiKeyConfigured: apiKeyConfigured,
+    apiEndpointConfigured: !!process.env.DEEPSEEK_API_URL,
     noteText: `Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
 You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).`
   };
