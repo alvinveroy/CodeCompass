@@ -16,7 +16,7 @@ import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant, searchWithRefinement } from "./qdrant";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
 import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun, trackAgentCompletion, trackAgentToolUsage } from "./metrics";
-import { getLLMProvider, switchLLMProvider } from "./llm-provider";
+import { getLLMProvider, switchLLMProvider, switchSuggestionModel } from "./llm-provider";
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults, addAgentSteps } from "./state";
 import { runAgentLoop, parseToolCalls } from "./agent";

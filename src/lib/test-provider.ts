@@ -41,7 +41,7 @@ export async function getCurrentProviderInfo(): Promise<Record<string, any>> {
   const currentProvider = suggestionProvider; // For backward compatibility
   
   const info: Record<string, any> = {
-    provider: currentProvider,
+    provider: suggestionProvider, // Use suggestionProvider as the main provider
     suggestionProvider: suggestionProvider,
     embeddingProvider: embeddingProvider,
     timestamp: new Date().toISOString()
