@@ -144,7 +144,7 @@ export function initMcpSafeLogging(): void {
     
     // Also log to file
     try {
-      const logStream = fs.createWriteStream(path.join(process.cwd(), 'logs', 'codecompass.log'), { flags: 'a' });
+      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
       logStream.write(`${new Date().toISOString()} [DEBUG] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
       logStream.end();
     } catch (error) {
@@ -160,7 +160,7 @@ export function initMcpSafeLogging(): void {
     
     // Also log to file
     try {
-      const logStream = fs.createWriteStream(path.join(process.cwd(), 'logs', 'codecompass.log'), { flags: 'a' });
+      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
       logStream.write(`${new Date().toISOString()} [INFO] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
       logStream.end();
     } catch (error) {
@@ -176,7 +176,7 @@ export function initMcpSafeLogging(): void {
     
     // Also log to file
     try {
-      const logStream = fs.createWriteStream(path.join(process.cwd(), 'logs', 'codecompass.log'), { flags: 'a' });
+      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
       logStream.write(`${new Date().toISOString()} [WARN] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
       logStream.end();
     } catch (error) {
@@ -192,7 +192,7 @@ export function initMcpSafeLogging(): void {
     
     // Also log to file
     try {
-      const logStream = fs.createWriteStream(path.join(process.cwd(), 'logs', 'codecompass.log'), { flags: 'a' });
+      const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
       logStream.write(`${new Date().toISOString()} [ERROR] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}\n`);
       logStream.end();
     } catch (error) {
@@ -233,9 +233,17 @@ export function logMcpMessage(direction: 'sent' | 'received', message: unknown):
   };
   
   // Write to file log
-  const logStream = fs.createWriteStream(path.join(process.cwd(), 'logs', 'codecompass.log'), { flags: 'a' });
-  logStream.write(`${new Date().toISOString()} [DEBUG] MCP ${direction}: ${JSON.stringify(logObject)}\n`);
-  logStream.end();
+  try {
+    const logsDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    const logStream = fs.createWriteStream(path.join(logsDir, 'codecompass.log'), { flags: 'a' });
+    logStream.write(`${new Date().toISOString()} [DEBUG] MCP ${direction}: ${JSON.stringify(logObject)}\n`);
+    logStream.end();
+  } catch (error) {
+    // Silent fail for file logging
+  }
   
   // Send properly formatted JSON to console
   console.log(JSON.stringify(logObject));
