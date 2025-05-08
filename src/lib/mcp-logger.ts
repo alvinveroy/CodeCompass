@@ -122,8 +122,18 @@ export function initMcpSafeLogging(): void {
   // Note: We can't use logger.configure as it's not available
   // Instead, we'll use a custom file logger implementation
   
+  // Store original logger methods
+  const originalLoggerMethods = {
+    debug: logger.debug,
+    info: logger.info,
+    warn: logger.warn,
+    error: logger.error
+  };
+
   // Override logger methods to write directly to stdout as JSON
-  logger.debug = (...args) => {
+  // We need to use any type here to bypass TypeScript's type checking
+  // as we're doing something unconventional with the logger
+  (logger.debug as any) = function(...args: any[]) {
     const jsonStr = formatLogAsJson("debug", args[0] || {});
     process.stdout.write(jsonStr + '\n');
     
@@ -136,10 +146,10 @@ export function initMcpSafeLogging(): void {
       // Silent fail for file logging
     }
     
-    return true;
+    return logger;
   };
   
-  logger.info = (...args) => {
+  (logger.info as any) = function(...args: any[]) {
     const jsonStr = formatLogAsJson("info", args[0] || {});
     process.stdout.write(jsonStr + '\n');
     
@@ -152,10 +162,10 @@ export function initMcpSafeLogging(): void {
       // Silent fail for file logging
     }
     
-    return true;
+    return logger;
   };
   
-  logger.warn = (...args) => {
+  (logger.warn as any) = function(...args: any[]) {
     const jsonStr = formatLogAsJson("warn", args[0] || {});
     process.stdout.write(jsonStr + '\n');
     
@@ -168,10 +178,10 @@ export function initMcpSafeLogging(): void {
       // Silent fail for file logging
     }
     
-    return true;
+    return logger;
   };
   
-  logger.error = (...args) => {
+  (logger.error as any) = function(...args: any[]) {
     const jsonStr = formatLogAsJson("error", args[0] || {});
     process.stdout.write(jsonStr + '\n');
     
@@ -184,7 +194,7 @@ export function initMcpSafeLogging(): void {
       // Silent fail for file logging
     }
     
-    return true;
+    return logger;
   };
 }
 
