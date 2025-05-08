@@ -236,7 +236,7 @@ export async function getLLMProvider(): Promise<LLMProvider> {
       provider,
       timestamp: Date.now()
     };
-  } else {
+  } else if (providerCache) {
     // Update existing cache with new values but keep the same object reference
     providerCache.suggestionModel = suggestionModel;
     providerCache.suggestionProvider = suggestionProvider;
