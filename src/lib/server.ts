@@ -90,7 +90,7 @@ async function registerGetRepositoryContextTool(
           if (parsed && typeof parsed === 'object') {
             parsedParams = parsed;
           }
-        } catch (_) {
+        } catch (_error) {
           // If it's not valid JSON, keep using it as a string query
           parsedParams = { query: normalizedParams };
         }
@@ -647,7 +647,7 @@ export async function startServer(repoPath: string): Promise<void> {
               // For backward compatibility
               model = parsed.provider === "deepseek" ? "deepseek-coder" : "llama3.1:8b";
             }
-          } catch (_e) {
+          } catch (_error) {
             // If not valid JSON, use as is
             model = normalizedParams;
           }
@@ -912,8 +912,7 @@ async function registerTools(
         }],
       };
     } catch (error: unknown) {
-      const err = error as Error;
-      logger.error("Error in agent_query", { error: err.message });
+      logger.error("Error in agent_query", { error: error instanceof Error ? error.message : String(error) });
       
       return {
         content: [{
@@ -1409,7 +1408,7 @@ Session ID: ${session.id}`;
             if (parsed && typeof parsed === 'object') {
               parsedParams = parsed;
             }
-          } catch (_) {
+          } catch (_error) {
             // If it's not valid JSON, keep using it as a string query
             parsedParams = { query: normalizedParams };
           }
@@ -1435,7 +1434,7 @@ Session ID: ${session.id}`;
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      const diff = await getRepositoryDiff(repoPath);
+      const _diff = await getRepositoryDiff(repoPath);
       
       // Update context in session
       updateContext(session.id, repoPath, files, diff);
