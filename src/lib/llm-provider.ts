@@ -187,6 +187,8 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     return false;
   }
   
+  logger.debug(`Attempting to switch LLM provider to: ${normalizedProvider}`);
+  
   // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
   if ((process.env.NODE_ENV === 'test' || process.env.VITEST) && process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
     process.env.LLM_PROVIDER = normalizedProvider;
@@ -226,12 +228,17 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
   try {
     if (normalizedProvider === 'ollama') {
       available = await ollama.checkOllama();
+      logger.debug(`Ollama availability check result: ${available}`);
     } else if (normalizedProvider === 'deepseek') {
       // For DeepSeek, we need to check if the API key is configured
-      if (!await deepseek.checkDeepSeekApiKey()) {
+      const apiKeyConfigured = await deepseek.checkDeepSeekApiKey();
+      logger.debug(`DeepSeek API key configured: ${apiKeyConfigured}`);
+      
+      if (!apiKeyConfigured) {
         logger.error(`DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable.`);
         return false;
       }
+      
       // If API key is configured, test the connection
       available = await deepseek.testDeepSeekConnection();
       logger.info(`DeepSeek connection test result: ${available}`);
@@ -277,7 +284,7 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
   }
   
   logger.info(`Successfully switched LLM provider to ${normalizedProvider}`);
-  logger.info(`Using ${global.CURRENT_SUGGESTION_PROVIDER} for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings`);
+  logger.info(`Using ${normalizedProvider} for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings`);
   logger.info(`To make this change permanent, set the LLM_PROVIDER environment variable to '${normalizedProvider}'`);
   
   return true;
