@@ -8,7 +8,7 @@ import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, _COLLECTION_NAME, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
 import * as deepseek from "./deepseek";
-import { loadModelConfig, saveModelConfig, forceUpdateModelConfig } from "./model-persistence";
+import { loadModelConfig, forceUpdateModelConfig } from "./model-persistence";
 
 // Initialize MCP-safe logging immediately
 initMcpSafeLogging();
@@ -20,8 +20,8 @@ import { validateGitRepository, indexRepository, getRepositoryDiff } from "./rep
 import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun } from "./metrics";
 import { getLLMProvider, switchSuggestionModel } from "./llm-provider";
 import { VERSION } from "./version";
-import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults, addAgentSteps } from "./state";
-import { runAgentLoop, parseToolCalls } from "./agent";
+import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults } from "./state";
+import { runAgentLoop } from "./agent";
 
 // Normalize tool parameters to handle various input formats
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
