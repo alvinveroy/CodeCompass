@@ -480,8 +480,9 @@ export async function runAgentLoop(
   try {
     const _testResult = await currentProvider.generateText("Test message");
     logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (_error: unknown) {
-    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error: _error });
+    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`);
   }
   
   return await timeExecution('agent_loop', async () => {
