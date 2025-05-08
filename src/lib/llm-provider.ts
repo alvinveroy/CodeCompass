@@ -352,7 +352,7 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
       }
       
       // Ensure API endpoint is set
-      const apiEndpoint = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1";
+      const apiEndpoint = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
       logger.debug(`Using DeepSeek API endpoint: ${apiEndpoint}`);
       
       // If API key is configured, test the connection

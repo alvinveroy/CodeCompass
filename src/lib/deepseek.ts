@@ -1,5 +1,7 @@
 import axios from "axios";
-import { logger, DEEPSEEK_API_KEY, DEEPSEEK_API_URL, DEEPSEEK_MODEL, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
+import { logger, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
+// Use the direct chat completions endpoint
+const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 import { incrementCounter, recordTiming, timeExecution, trackFeedbackScore } from "./metrics";
 import { preprocessText } from "./utils";
 
@@ -36,7 +38,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
     
     const response = await axios.post(
-      `${apiUrl}/chat/completions`,
+      apiUrl,
       {
         model: DEEPSEEK_MODEL,
         messages: [{ role: "user", content: "Hello" }],
@@ -93,7 +95,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
       
       const response = await enhancedWithRetry(async () => {
         const res = await axios.post(
-          `${apiUrl}/chat/completions`,
+          apiUrl,
           {
             model: model,
             messages: [{ role: "user", content: prompt }],
@@ -188,7 +190,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
       
       const response = await enhancedWithRetry(async () => {
         const res = await axios.post(
-          `${DEEPSEEK_API_URL}/embeddings`,
+          "https://api.deepseek.com/v1/embeddings",
           {
             model: "deepseek-embedding",
             input: processedText
