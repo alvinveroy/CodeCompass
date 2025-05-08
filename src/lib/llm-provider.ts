@@ -77,12 +77,9 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
     if (currentProvider.toLowerCase() === 'deepseek') {
       logger.info("[TEST] Using DeepSeek as LLM provider");
-      // Call the spy directly to ensure it's registered
-      deepseek.testDeepSeekConnection();
       
       const provider = new DeepSeekProvider();
       // Override checkConnection to call the test function but always return true
-      const originalCheck = provider.checkConnection;
       provider.checkConnection = async () => {
         // Make sure the spy is called
         await deepseek.testDeepSeekConnection();
@@ -91,12 +88,9 @@ export async function getLLMProvider(): Promise<LLMProvider> {
       return provider;
     } else {
       logger.info("[TEST] Using Ollama as LLM provider");
-      // Call the spy directly to ensure it's registered
-      ollama.checkOllama();
       
       const provider = new OllamaProvider();
       // Override checkConnection to call the test function but always return true
-      const originalCheck = provider.checkConnection;
       provider.checkConnection = async () => {
         // Make sure the spy is called
         await ollama.checkOllama();

@@ -117,7 +117,7 @@ describe('LLM Provider', () => {
       process.env.LLM_PROVIDER = 'deepseek';
       process.env.NODE_ENV = 'test';
       
-      // Reset mocks to ensure clean state
+      // Reset mocks before test
       vi.resetAllMocks();
       
       // Mock the DeepSeek connection test
@@ -132,10 +132,10 @@ describe('LLM Provider', () => {
       expect(typeof provider.generateText).toBe('function');
       expect(typeof provider.generateEmbedding).toBe('function');
       
-      // Force a call to testDeepSeekConnection to ensure the spy is triggered
-      await deepseek.testDeepSeekConnection();
+      // Call the checkConnection method to trigger the spy
+      await provider.checkConnection();
       
-      // Verify the spy was called
+      // Verify the DeepSeek spy was called and Ollama spy was not
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
       expect(ollama.checkOllama).not.toHaveBeenCalled();
     });
@@ -170,7 +170,7 @@ describe('LLM Provider', () => {
       process.env.LLM_PROVIDER = 'deepseek';
       process.env.NODE_ENV = 'test';
       
-      // Reset mocks to ensure clean state
+      // Reset mocks before test
       vi.resetAllMocks();
       
       // Mock the DeepSeek connection test
@@ -179,10 +179,10 @@ describe('LLM Provider', () => {
       // Get the provider
       const provider = await getLLMProvider();
       
-      // Force a call to testDeepSeekConnection to ensure the spy is triggered
-      await deepseek.testDeepSeekConnection();
+      // Call the checkConnection method to trigger the spy
+      await provider.checkConnection();
       
-      // Verify the spy was called
+      // Verify the DeepSeek spy was called and Ollama spy was not
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
       expect(ollama.checkOllama).not.toHaveBeenCalled();
     });
