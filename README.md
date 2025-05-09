@@ -316,29 +316,18 @@ CodeCompass integrates seamlessly with popular IDEs and tools, enhancing your Vi
 
 ## Diagnostics and Troubleshooting
 
-CodeCompass includes several diagnostic tools to help troubleshoot issues:
+CodeCompass provides tools to help monitor and troubleshoot:
 
-- **Reset Metrics**: Clear all performance counters
+- **Check Provider Status**: Test your LLM provider connection and configuration (see `check_provider` in the Usage section).
+- **Reset Metrics**: Clear all performance and usage counters.
   ```javascript
   server.tool("reset_metrics", {})
   ```
-- **Debug Provider**: Test provider configuration
-  ```javascript
-  server.tool("debug_provider", {})
-  ```
-- **Model Switch Diagnostic**: Diagnose model switching issues
-  ```javascript
-  server.tool("model_switch_diagnostic", {})
-  ```
-- **Get Changelog**: View version history
+- **Get Changelog**: View the project's version history.
   ```javascript
   server.tool("get_changelog", {})
   ```
-- **Get Session History**: View detailed session information
-  ```javascript
-  server.tool("get_session_history", { sessionId: "your-session-id" })
-  ```
-- **Get Session History**: View detailed session information
+- **Get Session History**: Retrieve detailed information about a specific user session.
   ```javascript
   server.tool("get_session_history", { sessionId: "your-session-id" })
   ```

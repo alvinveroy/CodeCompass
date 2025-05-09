@@ -16,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New MCP tool: `agent_query` for multi-step reasoning and problem analysis
 - Version number display in console when server starts
 - DeepSeek API integration as an alternative to OpenAI
-- New diagnostic tools: `debug_provider`, `reset_provider`, `model_switch_diagnostic`
 - Docker support for containerized deployment
 - CLI tool for setting DeepSeek API key
 - Integration with TaskMaster AI for project management
@@ -38,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved code maintainability by extracting duplicate code into helper functions
 - Standardized model switching logic across the codebase
 - Extended agent capabilities with multi-tool reasoning
+
+### Removed
+- Removed granular diagnostic tools: `debug_provider`, `reset_provider`, `direct_model_switch`, `model_switch_diagnostic`, and `debug_model_switch` to simplify the toolset. Core diagnostics are covered by `check_provider`.
 
 ### Fixed
 - Fixed MCP logging to prevent JSON parsing errors in Claude Desktop
