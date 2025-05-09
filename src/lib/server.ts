@@ -994,10 +994,12 @@ async function registerTools(
       }
       
       // Create a timeout promise
+      const agentTimeoutMs = configService.AGENT_QUERY_TIMEOUT;
+      logger.info(`Agent query will timeout after ${agentTimeoutMs / 1000} seconds.`);
       const timeoutPromise = new Promise<string>((_, reject) => {
         setTimeout(() => {
-          reject(new Error("Agent query timed out after 60 seconds"));
-        }, 60000); // 60 second timeout
+          reject(new Error(`Agent query timed out after ${agentTimeoutMs / 1000} seconds`));
+        }, agentTimeoutMs);
       });
       
       // Run the agent loop with timeout

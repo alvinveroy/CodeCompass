@@ -30,6 +30,7 @@ class OllamaProvider implements LLMProvider {
     let currentDelay = initialDelay;
 
     for (let i = 0; i < retries; i++) {
+      logger.debug(`OllamaProvider API call attempt ${i + 1}/${retries}. Current delay: ${currentDelay}ms.`);
       try {
         return await fn();
       } catch (error: unknown) {

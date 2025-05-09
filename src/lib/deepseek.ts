@@ -272,6 +272,7 @@ async function enhancedWithRetry<T>(
   let currentDelay = initialDelay;
   
   for (let i = 0; i < retries; i++) {
+    logger.debug(`DeepSeek API call attempt ${i + 1}/${retries}. Current delay: ${currentDelay}ms.`);
     try {
       return await fn();
     } catch (error: unknown) {
