@@ -459,8 +459,8 @@ export async function runAgentLoop(
 ): Promise<string> {
   incrementCounter('agent_runs');
   
-  // Log the current provider and model being used by the agent
-  logger.info(`Agent running with provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
+  // Log the current provider and model being used by the agent, sourced from ConfigService
+  logger.info(`Agent running with provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
   
   // Force refresh the provider to ensure we're using the latest settings
   // First clear any cached modules
