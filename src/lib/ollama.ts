@@ -3,6 +3,7 @@ import { configService, logger } from "./config-service";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types"; // OllamaGenerateResponse might be used by OllamaProvider
 import { preprocessText } from "../utils/text-utils";
 import { incrementCounter, timeExecution } from "./metrics";
+import { withRetry } from "../../utils/retry-utils";
 
 /**
  * Check if Ollama server is running and accessible
@@ -13,7 +14,7 @@ export async function checkOllama(): Promise<boolean> {
   logger.info(`Checking Ollama at ${host}`);
   
   try {
-    await enhancedWithRetry(async () => {
+    await withRetry(async () => {
       const response = await axios.get(host, { timeout: 10000 }); // Specific timeout for check
       logger.info(`Ollama status: ${response.status}`);
     });
@@ -77,43 +78,6 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
   }
 }
 
-// Enhanced withRetry function with exponential backoff
-async function enhancedWithRetry<T>(
-  fn: () => Promise<T>, 
-  retries = configService.MAX_RETRIES, 
-  initialDelay = configService.RETRY_DELAY
-): Promise<T> {
-  let lastError: Error | undefined;
-  let currentDelay = initialDelay;
-  
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      lastError = err;
-      
-      // Check if it's a timeout error
-      const axiosError = error as { code?: string; response?: { status: number } };
-      const isTimeout = axiosError.code === 'ECONNABORTED' || 
-                        err.message.includes('timeout') ||
-                        axiosError.response?.status === 500;
-      
-      if (isTimeout) {
-        logger.warn(`Request timed out (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
-      } else {
-        logger.warn(`Retry ${i + 1}/${retries} after error: ${err.message}`);
-      }
-      
-      // Wait before retrying with exponential backoff
-      await new Promise(resolve => setTimeout(resolve, currentDelay));
-      currentDelay *= 2; // Exponential backoff
-    }
-  }
-  
-  throw lastError || new Error("All retries failed");
-}
-
 /**
  * Generate embeddings for text using Ollama
  * @param text - The text to generate embeddings for
@@ -130,7 +94,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       const host = configService.OLLAMA_HOST;
       const model = configService.EMBEDDING_MODEL; // Use configured embedding model
       
-      const response = await enhancedWithRetry(async () => {
+      const response = await withRetry(async () => {
         logger.info(`Generating embedding for text (length: ${truncatedText.length}, snippet: "${truncatedText.slice(0, 100)}...")`);
         const res = await axios.post<OllamaEmbeddingResponse>(
           `${host}/api/embeddings`,

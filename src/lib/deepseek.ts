@@ -14,6 +14,7 @@ const LOCAL_DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
 export { LOCAL_DEEPSEEK_API_URL as DEEPSEEK_API_URL, LOCAL_DEEPSEEK_EMBEDDING_URL as DEEPSEEK_EMBEDDING_URL };
 import { incrementCounter, recordTiming, timeExecution } from "./metrics";
 import { preprocessText } from "../utils/text-utils";
+import { withRetry } from "../../utils/retry-utils";
 
 // Rate limiting state
 const requestTimestamps: number[] = [];
@@ -205,7 +206,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
       logger.debug(`Using DeepSeek API URL: ${apiUrl}`);
       logger.debug(`Using model: ${model}`);
       
-      const response = await enhancedWithRetry(async () => {
+      const response = await withRetry(async () => {
         logger.debug(`Sending request to DeepSeek API at ${apiUrl} with model ${model}`);
         
         // Log request payload for debugging (without the full prompt)
@@ -263,64 +264,6 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
   }
 }
 
-// Enhanced retry function with exponential backoff
-async function enhancedWithRetry<T>(
-  fn: () => Promise<T>, 
-  retries = configService.MAX_RETRIES, 
-  initialDelay = configService.RETRY_DELAY
-): Promise<T> {
-  let lastError: Error | undefined;
-  let currentDelay = initialDelay;
-  
-  for (let i = 0; i < retries; i++) {
-    logger.debug(`DeepSeek API call attempt ${i + 1}/${retries}. Current delay: ${currentDelay}ms.`);
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      lastError = err;
-      
-      // Check if it's a timeout error or rate limit error
-      const axiosError = error as { code?: string; response?: { status: number } };
-      const isTimeout = axiosError.code === 'ECONNABORTED' || 
-                        err.message.includes('timeout') ||
-                        err.message.toLowerCase().includes('etimedout');
-      const isRateLimit = axiosError.response?.status === 429;
-      
-      if (isTimeout) {
-        logger.warn(`DeepSeek request timed out (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
-      } else if (isRateLimit) {
-        logger.warn(`DeepSeek rate limit exceeded (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
-      } else {
-        const typedError = error as { 
-          code?: string; 
-          message: string;
-          response?: { status: number; statusText: string; data: unknown }; 
-        };
-        
-        logger.warn(`DeepSeek retry ${i + 1}/${retries} after error: ${typedError.message}`);
-        // Log more detailed error information
-        logger.debug(`DeepSeek error details:`, {
-          code: typedError.code,
-          message: typedError.message,
-          response: typedError.response ? {
-            status: typedError.response.status,
-            statusText: typedError.response.statusText,
-            data: typedError.response.data
-          } : 'No response data'
-        });
-      }
-      
-      // Wait before retrying with exponential backoff
-      await new Promise(resolve => setTimeout(resolve, currentDelay));
-      // More aggressive backoff for timeouts
-      currentDelay *= isTimeout ? 1.5 : 2; // Less aggressive for timeouts to retry faster
-    }
-  }
-  
-  throw lastError || new Error("All retries failed");
-}
-
 // Generate embeddings with DeepSeek API
 export async function generateEmbeddingWithDeepSeek(text: string): Promise<number[]> {
   incrementCounter('deepseek_embedding_requests');
@@ -346,7 +289,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
       logger.info(`Generating embedding with DeepSeek for text (length: ${processedText.length})`);
       logger.debug(`Using DeepSeek embedding URL: ${embeddingUrl}`);
       
-      const response = await enhancedWithRetry(async () => {
+      const response = await withRetry(async () => {
         logger.debug(`Sending embedding request to DeepSeek API with model: deepseek-embedding`);
         
         const res = await axios.post(

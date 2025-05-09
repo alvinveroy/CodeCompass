@@ -2,6 +2,7 @@ import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
 import { incrementCounter, trackFeedbackScore } from "./metrics"; // Added for processFeedback
+import { withRetry } from "../../utils/retry-utils"; // Added for centralized retry logic
 
 import axios from "axios"; // For OllamaProvider.generateText
 import { OllamaGenerateResponse } from "./types"; // For OllamaProvider.generateText
@@ -20,44 +21,11 @@ class OllamaProvider implements LLMProvider {
     return await ollama.checkOllama();
   }
 
-  // Simplified enhancedWithRetry for direct use in OllamaProvider.generateText
-  // This is a copy of the one previously in ollama.ts, adapted for direct use.
-  private async enhancedWithRetry<T>(
-    fn: () => Promise<T>,
-    retries = configService.MAX_RETRIES,
-    initialDelay = configService.RETRY_DELAY
-  ): Promise<T> {
-    let lastError: Error | undefined;
-    let currentDelay = initialDelay;
-
-    for (let i = 0; i < retries; i++) {
-      logger.debug(`OllamaProvider API call attempt ${i + 1}/${retries}. Current delay: ${currentDelay}ms.`);
-      try {
-        return await fn();
-      } catch (error: unknown) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        lastError = err;
-        const axiosError = error as { code?: string; response?: { status: number } };
-        const isTimeout = axiosError.code === 'ECONNABORTED' ||
-                          err.message.includes('timeout') ||
-                          axiosError.response?.status === 500;
-        if (isTimeout) {
-          logger.warn(`OllamaProvider: Request timed out (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
-        } else {
-          logger.warn(`OllamaProvider: Retry ${i + 1}/${retries} after error: ${err.message}`);
-        }
-        await new Promise(resolve => setTimeout(resolve, currentDelay));
-        currentDelay *= 2;
-      }
-    }
-    throw lastError || new Error("OllamaProvider: All retries failed");
-  }
-
   async generateText(prompt: string): Promise<string> {
     // Direct call to Ollama API for text generation
     logger.debug(`OllamaProvider: Generating text for prompt (length: ${prompt.length})`);
     try {
-      const response = await this.enhancedWithRetry(async () => {
+      const response = await withRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(
           `${configService.OLLAMA_HOST}/api/generate`,
           { model: configService.SUGGESTION_MODEL, prompt: prompt, stream: false },
@@ -100,7 +68,7 @@ ${feedback}
 
 Please provide an improved response addressing the user's feedback.`;
       
-      const improvedResponse = await this.enhancedWithRetry(async () => {
+      const improvedResponse = await withRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(
           `${configService.OLLAMA_HOST}/api/generate`,
           { model: configService.SUGGESTION_MODEL, prompt: feedbackPrompt, stream: false },

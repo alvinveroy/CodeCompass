@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored `src/lib/llm-provider.ts`:
     - Moved the implementation of `processFeedback` for the Ollama provider from `src/lib/ollama.ts` into the `OllamaProvider` class within `llm-provider.ts`. This consolidates the provider-specific logic following the removal of the function from the lower-level client.
     - Added necessary metric tracking imports (`trackFeedbackScore`, `incrementCounter`) to `llm-provider.ts` for use by `OllamaProvider.processFeedback`. (39b8e0f)
+- Consolidated retry logic:
+    - Removed local `enhancedWithRetry` functions from `src/lib/ollama.ts`, `src/lib/deepseek.ts`, and the `OllamaProvider` class in `src/lib/llm-provider.ts`.
+    - All retryable operations in these files now use the centralized `withRetry` function from `src/utils/retry-utils.ts` for consistent retry behavior.
+- Enhanced documentation for environment variable configuration
+    - Moved the implementation of `processFeedback` for the Ollama provider from `src/lib/ollama.ts` into the `OllamaProvider` class within `llm-provider.ts`. This consolidates the provider-specific logic following the removal of the function from the lower-level client.
+    - Added necessary metric tracking imports (`trackFeedbackScore`, `incrementCounter`) to `llm-provider.ts` for use by `OllamaProvider.processFeedback`. (39b8e0f)
 - Enhanced documentation for environment variable configuration
 - Improved client integration examples with all configurable options
 - Improved formatting for all tool outputs using Markdown for better readability
