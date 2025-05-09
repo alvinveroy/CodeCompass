@@ -22,34 +22,61 @@ vi.mock('../lib/deepseek', () => ({
 
 // Mock configService for persistence checks
 vi.mock('../lib/config-service', async (importOriginal) => {
-  const actualConfigService = await importOriginal<typeof import('../lib/config-service')>();
+  const actualConfigServiceModule = await importOriginal<typeof import('../lib/config-service')>();
+  const actualInstance = actualConfigServiceModule.configService; // The real singleton
+
+  const mockConfigServiceInstance = {
+    // Provide constants used by retry-utils and potentially others from the actual instance
+    OLLAMA_HOST: actualInstance.OLLAMA_HOST,
+    QDRANT_HOST: actualInstance.QDRANT_HOST,
+    COLLECTION_NAME: actualInstance.COLLECTION_NAME,
+    MAX_INPUT_LENGTH: actualInstance.MAX_INPUT_LENGTH,
+    MAX_SNIPPET_LENGTH: actualInstance.MAX_SNIPPET_LENGTH,
+    REQUEST_TIMEOUT: actualInstance.REQUEST_TIMEOUT,
+    MAX_RETRIES: actualInstance.MAX_RETRIES,
+    RETRY_DELAY: actualInstance.RETRY_DELAY,
+    CONFIG_DIR: actualInstance.CONFIG_DIR,
+    MODEL_CONFIG_FILE: actualInstance.MODEL_CONFIG_FILE,
+    DEEPSEEK_CONFIG_FILE: actualInstance.DEEPSEEK_CONFIG_FILE,
+    LOG_DIR: actualInstance.LOG_DIR,
+    DEEPSEEK_RPM_LIMIT_DEFAULT: actualInstance.DEEPSEEK_RPM_LIMIT_DEFAULT,
+    AGENT_QUERY_TIMEOUT_DEFAULT: actualInstance.AGENT_QUERY_TIMEOUT_DEFAULT,
+    // Ensure all readonly properties from the actual ConfigService class are here if accessed
+
+    // Mocked Getters that read from process.env
+    get SUGGESTION_MODEL() { return process.env.SUGGESTION_MODEL || 'llama3.1:8b'; },
+    get SUGGESTION_PROVIDER() { return process.env.SUGGESTION_PROVIDER || 'ollama'; },
+    get EMBEDDING_PROVIDER() { return process.env.EMBEDDING_PROVIDER || 'ollama'; },
+    get DEEPSEEK_API_KEY() { return process.env.DEEPSEEK_API_KEY || ''; },
+    get DEEPSEEK_API_URL() { return process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions'; },
+    get DEEPSEEK_MODEL() { return process.env.DEEPSEEK_MODEL || 'deepseek-coder'; }, // Added DEEPSEEK_MODEL getter
+    get LLM_PROVIDER() { return process.env.LLM_PROVIDER || 'ollama'; },
+    // Add other getters if they are accessed by the code under test
+
+    // Mocked Methods/Setters
+    persistModelConfiguration: vi.fn(),
+    reloadConfigsFromFile: vi.fn(), // Mock this as it might be called by other parts
+
+    setSuggestionModel: vi.fn((model: string) => {
+      process.env.SUGGESTION_MODEL = model;
+      global.CURRENT_SUGGESTION_MODEL = model;
+    }),
+    setSuggestionProvider: vi.fn((provider: string) => {
+      process.env.SUGGESTION_PROVIDER = provider;
+      process.env.LLM_PROVIDER = provider; 
+      global.CURRENT_SUGGESTION_PROVIDER = provider;
+      global.CURRENT_LLM_PROVIDER = provider; 
+    }),
+    setEmbeddingProvider: vi.fn((provider: string) => {
+      process.env.EMBEDDING_PROVIDER = provider;
+      global.CURRENT_EMBEDDING_PROVIDER = provider;
+    }),
+    // Add other setters if needed by the code under test
+  };
+  
   return {
-    ...actualConfigService,
-    configService: {
-      ...actualConfigService.configService,
-      persistModelConfiguration: vi.fn(),
-      setSuggestionModel: vi.fn((model: string) => {
-        process.env.SUGGESTION_MODEL = model;
-        global.CURRENT_SUGGESTION_MODEL = model;
-      }),
-      setSuggestionProvider: vi.fn((provider: string) => {
-        process.env.SUGGESTION_PROVIDER = provider;
-        process.env.LLM_PROVIDER = provider;
-        global.CURRENT_SUGGESTION_PROVIDER = provider;
-        global.CURRENT_LLM_PROVIDER = provider;
-      }),
-      setEmbeddingProvider: vi.fn((provider: string) => {
-        process.env.EMBEDDING_PROVIDER = provider;
-      }),
-      // Mock other getters/setters if needed for specific tests
-      // Ensure getters return values consistent with test setup
-      get SUGGESTION_MODEL() { return process.env.SUGGESTION_MODEL || 'llama3.1:8b'; },
-      get SUGGESTION_PROVIDER() { return process.env.SUGGESTION_PROVIDER || 'ollama'; },
-      get EMBEDDING_PROVIDER() { return process.env.EMBEDDING_PROVIDER || 'ollama'; },
-      get DEEPSEEK_API_KEY() { return process.env.DEEPSEEK_API_KEY || ''; },
-      get DEEPSEEK_API_URL() { return process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions'; },
-      // Add other necessary properties or methods used by llm-provider
-    },
+    ...actualConfigServiceModule, // Export other members like 'logger' from the actual module
+    configService: mockConfigServiceInstance, // Override the configService export
   };
 });
 
