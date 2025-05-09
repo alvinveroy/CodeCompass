@@ -86,3 +86,18 @@ export interface AgentState {
   finalResponse?: string;
   isComplete: boolean;
 }
+
+export interface DetailedQdrantSearchResult {
+  id: string | number;
+  score: number;
+  payload: {
+    filepath: string;
+    content: string;
+    last_modified: string;
+    [key: string]: unknown; // Allows for other potential payload fields
+  };
+  version?: number;
+  vector?: number[] | Record<string, unknown> | number[][] | null;
+  shard_key?: string;
+  order_value?: number;
+}

@@ -13,10 +13,11 @@ import { loadModelConfig, forceUpdateModelConfig } from "./model-persistence";
 
 // Initialize MCP-safe logging immediately
 initMcpSafeLogging();
-import { QdrantSearchResult } from "./types";
+import { DetailedQdrantSearchResult } from "./types"; // Changed QdrantSearchResult to DetailedQdrantSearchResult
 import { z } from "zod";
 import { checkOllama, checkOllamaModel } from "./ollama";
-import { initializeQdrant, searchWithRefinement } from "./qdrant";
+import { initializeQdrant } from "./qdrant"; // searchWithRefinement removed from here
+import { searchWithRefinement } from "./query-refinement"; // Added import for searchWithRefinement
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
 import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun } from "./metrics";
 import { getLLMProvider, switchSuggestionModel } from "./llm-provider";
@@ -133,9 +134,9 @@ async function registerGetRepositoryContextTool(
     const _recentQueries = getRecentQueries(session.id);
     
     const context = results.map(r => ({
-      filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-      snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
-      last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+      filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+      snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
+      last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
       relevance: r.score,
     }));
     
@@ -1012,7 +1013,7 @@ async function registerTools(
     
     // Generate summaries for the results
     const summaries = await Promise.all(results.map(async result => {
-      const snippet = (result.payload as QdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH);
+      const snippet = (result.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH);
       let summary = "Summary unavailable";
       
       if (suggestionModelAvailable) {
@@ -1263,9 +1264,9 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       
       // Map search results to context
       const context = results.map(r => ({
-        filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
-        last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
+        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
         relevance: r.score,
         note: ""
       }));
@@ -1273,13 +1274,13 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       // Include previous relevant results if current results are limited
       if (context.length < 2 && relevantResults.length > 0) {
         const additionalContext = relevantResults
-          .filter(r => !context.some(c => c.filepath === (r as unknown as QdrantSearchResult).payload?.filepath))
+          .filter(r => !context.some(c => c.filepath === (r as unknown as DetailedQdrantSearchResult).payload?.filepath))
           .slice(0, 2)
           .map(r => ({
-            filepath: (r as unknown as QdrantSearchResult).payload?.filepath || "unknown",
-            snippet: (r as unknown as QdrantSearchResult).payload?.content?.slice(0, MAX_SNIPPET_LENGTH) || "",
-            last_modified: (r as unknown as QdrantSearchResult).payload?.last_modified || "unknown",
-            relevance: (r as unknown as QdrantSearchResult).score || 0.5,
+            filepath: (r as unknown as DetailedQdrantSearchResult).payload?.filepath || "unknown",
+            snippet: (r as unknown as DetailedQdrantSearchResult).payload?.content?.slice(0, configService.MAX_SNIPPET_LENGTH) || "",
+            last_modified: (r as unknown as DetailedQdrantSearchResult).payload?.last_modified || "unknown",
+            relevance: (r as unknown as DetailedQdrantSearchResult).score || 0.5,
             note: "From previous related query"
           }));
         
@@ -1484,9 +1485,9 @@ Session ID: ${session.id}`;
       const recentQueries = getRecentQueries(session.id);
       
       const context = results.map(r => ({
-        filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
-        last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
+        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
         relevance: r.score,
       }));
       
@@ -1591,9 +1592,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       );
       
       const context = contextResults.map(r => ({
-        filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
-        last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
+        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
         relevance: r.score,
       }));
       

@@ -3,8 +3,8 @@ import { getLLMProvider } from "./llm-provider";
 import { incrementCounter, timeExecution } from "./metrics";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { QdrantSearchResult, AgentState, AgentStep } from "./types";
-import { searchWithRefinement } from "./qdrant";
+import { DetailedQdrantSearchResult, AgentState, AgentStep } from "./types"; // Changed QdrantSearchResult to DetailedQdrantSearchResult
+import { searchWithRefinement } from "./query-refinement"; // Changed import path
 import { validateGitRepository, getRepositoryDiff } from "./repository";
 import git from "isomorphic-git";
 import fs from "fs/promises";
@@ -225,9 +225,9 @@ export async function executeToolCall(
       
       // Format results for the agent
       const formattedResults = results.map(r => ({
-        filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, 2000), // Limit snippet size
-        last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, 2000), // Limit snippet size
+        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
         relevance: r.score,
       }));
       
@@ -266,9 +266,9 @@ export async function executeToolCall(
       const recentQueries = getRecentQueries(session.id);
       
       const context = results.map(r => ({
-        filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, 2000), // Limit snippet size
-        last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, 2000), // Limit snippet size
+        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
         relevance: r.score,
       }));
       
@@ -314,9 +314,9 @@ export async function executeToolCall(
       
       // Map search results to context
       const context = results.map(r => ({
-        filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, 2000),
-        last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, 2000),
+        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
         relevance: r.score,
       }));
       
@@ -398,9 +398,9 @@ Based on the provided context and snippets, generate a detailed code suggestion 
       );
       
       const context = contextResults.map(r => ({
-        filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, 2000),
-        last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
+        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, 2000),
+        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
         relevance: r.score,
       }));
       
