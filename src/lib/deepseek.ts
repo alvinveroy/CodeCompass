@@ -1,13 +1,17 @@
 import axios from "axios";
 import * as fs from 'fs';
-import * as path from 'path';
-import { logger, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
-// Use the correct API endpoints
-const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-const DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
+import * as path from 'path'; // Keep path for join if needed locally, though configService has CONFIG_DIR
+import { configService, logger } from "./config-service";
 
-// Export the constants for use in other modules
-export { DEEPSEEK_API_URL, DEEPSEEK_EMBEDDING_URL };
+// Constants like DEEPSEEK_API_URL are now primarily sourced from configService.
+// Local fallbacks can be defined if necessary but should align with configService defaults.
+const LOCAL_DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
+const LOCAL_DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
+
+
+// Exporting these might still be useful for direct use if configService isn't passed everywhere,
+// but ideally, modules get these from configService.
+export { LOCAL_DEEPSEEK_API_URL as DEEPSEEK_API_URL, LOCAL_DEEPSEEK_EMBEDDING_URL as DEEPSEEK_EMBEDDING_URL };
 import { incrementCounter, timeExecution } from "./metrics";
 import { preprocessText } from "./utils";
 
@@ -16,41 +20,21 @@ import { preprocessText } from "./utils";
  * @returns Promise<boolean> - True if API key is configured, false otherwise
  */
 export async function checkDeepSeekApiKey(): Promise<boolean> {
-  // First try to load from config file
-  try {
-    const configPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass', 'deepseek-config.json');
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      if (config.DEEPSEEK_API_KEY) {
-        logger.info(`Loaded DeepSeek API key from config file: ${configPath}`);
-        process.env.DEEPSEEK_API_KEY = config.DEEPSEEK_API_KEY;
-        if (config.DEEPSEEK_API_URL) {
-          process.env.DEEPSEEK_API_URL = config.DEEPSEEK_API_URL;
-        }
-      }
-    }
-  } catch (error: unknown) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    logger.warn(`Failed to load DeepSeek config: ${err.message}`);
-  }
-
-  // Check if the API key is set in the environment
-  const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+  // ConfigService handles loading the API key from file and environment.
+  // It also updates process.env.DEEPSEEK_API_KEY.
+  // This function now primarily serves to check if the key (from any source) is valid/present.
+  
+  const apiKey = configService.DEEPSEEK_API_KEY; // Gets the effective API key
   
   if (!apiKey) {
     logger.error("DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable or run 'npm run set-deepseek-key'.");
     return false;
   }
   
-  // CRITICAL: Always set the API key in the global environment
-  // This ensures it's available to all parts of the application
-  process.env.DEEPSEEK_API_KEY = apiKey;
+  // process.env.DEEPSEEK_API_KEY is updated by configService.
+  // Global scope setting is not strictly necessary if configService is the source of truth.
   
-  // Set it in the global scope too for redundancy
-  // Note: We don't actually use this global property, just setting for redundancy
-  (global as unknown as Record<string, string>).DEEPSEEK_API_KEY = apiKey;
-  
-  logger.info(`DeepSeek API key is configured and set in environment. Length: ${apiKey.length}`);
+  logger.info(`DeepSeek API key configured (via ConfigService). Length: ${apiKey.length}`);
   return true;
 }
 
@@ -60,34 +44,28 @@ export async function checkDeepSeekApiKey(): Promise<boolean> {
  */
 export async function testDeepSeekConnection(): Promise<boolean> {
   try {
-    // Check if API key is configured
-    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+    const apiKey = configService.DEEPSEEK_API_KEY;
     if (!apiKey) {
-      logger.error("DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable.");
+      logger.error("DeepSeek API key is not configured (via ConfigService). Set DEEPSEEK_API_KEY environment variable or use ~/.codecompass/deepseek-config.json.");
       return false;
     }
-
-    // Force set the API key in the environment variable to ensure it's available
-    process.env.DEEPSEEK_API_KEY = apiKey;
+    // process.env.DEEPSEEK_API_KEY is managed by configService.
 
     logger.info(`Testing DeepSeek API connection with key length: ${apiKey.length}, key prefix: ${apiKey.substring(0, 5)}...`);
     
-    // Always use the correct endpoint for testing
-    const apiUrl = DEEPSEEK_API_URL;
-    process.env.DEEPSEEK_API_URL = apiUrl;
+    const apiUrl = configService.DEEPSEEK_API_URL;
+    // process.env.DEEPSEEK_API_URL is managed by configService.
     
     logger.info(`Using DeepSeek API URL: ${apiUrl}`);
     
-    // Force set the API key in the environment variable to ensure it's available
-    process.env.DEEPSEEK_API_KEY = apiKey;
-    
     try {
+      const modelToTest = configService.DEEPSEEK_MODEL;
       logger.info(`Sending test request to DeepSeek API at ${apiUrl}`);
-      logger.info(`Using model: ${DEEPSEEK_MODEL}`);
+      logger.info(`Using model: ${modelToTest}`);
       
       // Add more detailed request logging
       logger.debug(`DeepSeek test request payload: ${JSON.stringify({
-        model: DEEPSEEK_MODEL,
+        model: modelToTest,
         messages: [{ role: "user", content: "Hello" }],
         max_tokens: 10
       })}`);
@@ -95,7 +73,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       const response = await axios.post(
         apiUrl,
         {
-          model: DEEPSEEK_MODEL,
+          model: modelToTest,
           messages: [{ role: "user", content: "Hello" }],
           max_tokens: 10
         },
@@ -104,7 +82,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
           },
-          timeout: 15000 // Increase timeout for test request
+          timeout: 15000 // Specific timeout for this test is fine
         }
       );
       
@@ -184,10 +162,9 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
   incrementCounter('deepseek_requests');
   
   try {
-    // Force check API key and log detailed information
-    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+    const apiKey = configService.DEEPSEEK_API_KEY;
     if (!apiKey) {
-      logger.error("DeepSeek API key not configured. Set DEEPSEEK_API_KEY environment variable.");
+      logger.error("DeepSeek API key not configured (via ConfigService).");
       throw new Error("DeepSeek API key not configured");
     }
     logger.info(`DeepSeek API key is configured with length: ${apiKey.length}`);
@@ -195,10 +172,8 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
     return await timeExecution('deepseek_generation', async () => {
       logger.info(`Generating with DeepSeek for prompt (length: ${prompt.length})`);
       
-      // Always use the constant to ensure consistency
-      const apiUrl = DEEPSEEK_API_URL;
-      // Ensure we're getting the latest value from the environment
-      const model = process.env.DEEPSEEK_MODEL || DEEPSEEK_MODEL;
+      const apiUrl = configService.DEEPSEEK_API_URL;
+      const model = configService.DEEPSEEK_MODEL;
       
       logger.debug(`Using DeepSeek API URL: ${apiUrl}`);
       logger.debug(`Using model: ${model}`);
@@ -227,7 +202,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${apiKey}`
             },
-            timeout: REQUEST_TIMEOUT * 2 // Double the timeout for generation requests
+            timeout: configService.REQUEST_TIMEOUT * 2 
           }
         );
         
@@ -263,8 +238,8 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
 // Enhanced retry function with exponential backoff
 async function enhancedWithRetry<T>(
   fn: () => Promise<T>, 
-  retries = MAX_RETRIES, 
-  initialDelay = RETRY_DELAY
+  retries = configService.MAX_RETRIES, 
+  initialDelay = configService.RETRY_DELAY
 ): Promise<T> {
   let lastError: Error | undefined;
   let currentDelay = initialDelay;
@@ -322,10 +297,9 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
   incrementCounter('deepseek_embedding_requests');
   
   try {
-    // Force check API key and log detailed information
-    const apiKey = process.env.DEEPSEEK_API_KEY || DEEPSEEK_API_KEY;
+    const apiKey = configService.DEEPSEEK_API_KEY;
     if (!apiKey) {
-      logger.error("DeepSeek API key not configured. Set DEEPSEEK_API_KEY environment variable.");
+      logger.error("DeepSeek API key not configured (via ConfigService).");
       throw new Error("DeepSeek API key not configured");
     }
     logger.info(`DeepSeek API key is configured with length: ${apiKey.length}`);
@@ -333,14 +307,19 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
     const processedText = preprocessText(text);
     
     return await timeExecution('deepseek_embedding_generation', async () => {
+      // Construct embedding URL based on API URL from configService
+      const embeddingUrl = configService.DEEPSEEK_API_URL.includes("api.deepseek.com") 
+        ? "https://api.deepseek.com/embeddings" 
+        : configService.DEEPSEEK_API_URL.replace("/chat/completions", "/embeddings");
+
       logger.info(`Generating embedding with DeepSeek for text (length: ${processedText.length})`);
-      logger.debug(`Using DeepSeek embedding URL: ${DEEPSEEK_EMBEDDING_URL}`);
+      logger.debug(`Using DeepSeek embedding URL: ${embeddingUrl}`);
       
       const response = await enhancedWithRetry(async () => {
         logger.debug(`Sending embedding request to DeepSeek API with model: deepseek-embedding`);
         
         const res = await axios.post(
-          DEEPSEEK_EMBEDDING_URL,
+          embeddingUrl,
           {
             model: "deepseek-embedding",
             input: processedText
@@ -350,7 +329,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
               "Content-Type": "application/json",
               "Authorization": `Bearer ${apiKey}`
             },
-            timeout: REQUEST_TIMEOUT * 1.5 // Increase timeout for embedding requests
+            timeout: configService.REQUEST_TIMEOUT * 1.5
           }
         );
         

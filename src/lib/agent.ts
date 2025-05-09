@@ -1,4 +1,4 @@
-import { logger } from "./config";
+import { logger } from "./config-service";
 import { getLLMProvider } from "./llm-provider";
 import { incrementCounter, timeExecution } from "./metrics";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";

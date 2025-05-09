@@ -1,5 +1,5 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { logger, QDRANT_HOST, COLLECTION_NAME } from "./config";
+import { configService, logger } from "./config-service";
 import { withRetry } from "../utils/retry-utils";
 import { preprocessText } from "../utils/text-utils";
 import { generateEmbedding } from "./ollama";
@@ -7,14 +7,16 @@ import { trackQueryRefinement } from "./metrics";
 
 // Initialize Qdrant
 export async function initializeQdrant(): Promise<QdrantClient> {
-  logger.info(`Checking Qdrant at ${QDRANT_HOST}`);
-  const client = new QdrantClient({ url: QDRANT_HOST });
+  const qdrantHost = configService.QDRANT_HOST;
+  const collectionName = configService.COLLECTION_NAME;
+  logger.info(`Checking Qdrant at ${qdrantHost}`);
+  const client = new QdrantClient({ url: qdrantHost });
   await withRetry(async () => {
     await client.getCollections();
     const collections = await client.getCollections();
-    if (!collections.collections.some(c => c.name === COLLECTION_NAME)) {
-      await client.createCollection(COLLECTION_NAME, { vectors: { size: 768, distance: "Cosine" } });
-      logger.info(`Created collection: ${COLLECTION_NAME}`);
+    if (!collections.collections.some(c => c.name === collectionName)) {
+      await client.createCollection(collectionName, { vectors: { size: 768, distance: "Cosine" } }); // Vector size might need to be dynamic if embedding model changes
+      logger.info(`Created collection: ${collectionName}`);
     }
   });
   return client;
@@ -57,9 +59,9 @@ export async function searchWithRefinement(
     const embedding = await generateEmbedding(currentQuery);
     
     // Search Qdrant
-    const searchResults = await client.search(COLLECTION_NAME, {
+    const searchResults = await client.search(configService.COLLECTION_NAME, {
       vector: embedding,
-      limit: 5,
+      limit: 5, // This limit could also be a config value
       filter: files.length ? { must: [{ key: "filepath", match: { any: files } }] } : undefined,
     });
     

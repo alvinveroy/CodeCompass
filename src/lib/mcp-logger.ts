@@ -1,4 +1,4 @@
-import { logger } from "./config";
+import { logger } from "./config-service"; // Assuming logger is exported from config-service
 import fs from 'fs';
 import path from 'path';
 

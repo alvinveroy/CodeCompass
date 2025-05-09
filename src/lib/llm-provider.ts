@@ -1,4 +1,4 @@
-import { logger } from "./config";
+import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
 
@@ -114,7 +114,11 @@ Please provide an improved response addressing the user's feedback.`;
 
 // Note: Global variables are declared in config.ts
 
-import { loadModelConfig, saveModelConfig } from './model-persistence';
+// loadModelConfig and saveModelConfig are now part of configService's lifecycle or methods
+// For example, configService.reloadConfigsFromFile() and configService.persistModelConfiguration()
+// Direct import might be removed if model-persistence.ts is fully absorbed or refactored.
+// For now, assume model-persistence functions will internally use configService if they still exist.
+import { loadModelConfig, saveModelConfig } from './model-persistence'; 
 
 /**
  * Switch LLM provider (kept for backward compatibility with tests)
@@ -165,21 +169,12 @@ export function clearProviderCache(): void {
 
 // Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
-  // Load saved configuration first
-  loadModelConfig();
-  
-  // Prioritize suggestion model and provider settings
-  const suggestionModel = global.CURRENT_SUGGESTION_MODEL || process.env.SUGGESTION_MODEL || "llama3.1:8b";
-  
-  // Determine provider based on model name first, then use saved provider
-  const isDeepSeekModel = suggestionModel.toLowerCase().includes('deepseek');
-  const defaultProvider = isDeepSeekModel ? "deepseek" : "ollama";
-  
-  const suggestionProvider = global.CURRENT_SUGGESTION_PROVIDER || 
-                             process.env.SUGGESTION_PROVIDER || 
-                             defaultProvider;
-  
-  const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
+  // Ensure ConfigService has the latest from files/env.
+  // configService.reloadConfigsFromFile(); // Call this if there's a chance config changed since service init.
+
+  const suggestionModel = configService.SUGGESTION_MODEL;
+  const suggestionProvider = configService.SUGGESTION_PROVIDER;
+  const embeddingProvider = configService.EMBEDDING_PROVIDER;
   
   // Log the provider configuration at debug level
   logger.debug(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
@@ -276,13 +271,13 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
 
   logger.info(`Successfully switched to ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
   
-  // Save the configuration to a persistent file
-  saveModelConfig();
+  // Save the configuration using ConfigService
+  configService.persistModelConfiguration();
   
   // Ensure the cache is cleared after switching models
   clearProviderCache();
   
-  logger.debug(`Current configuration: model=${global.CURRENT_SUGGESTION_MODEL}, provider=${global.CURRENT_SUGGESTION_PROVIDER}, embedding=${global.CURRENT_EMBEDDING_PROVIDER}`);
+  logger.debug(`Current configuration: model=${configService.SUGGESTION_MODEL}, provider=${configService.SUGGESTION_PROVIDER}, embedding=${configService.EMBEDDING_PROVIDER}`);
   
   return true;
 }
@@ -383,17 +378,19 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
 async function handleTestEnvironment(normalizedModel: string, provider: string): Promise<boolean> {
   // Skip availability check in test environment, but respect TEST_PROVIDER_UNAVAILABLE
   if (process.env.TEST_PROVIDER_UNAVAILABLE !== 'true') {
-    // Set model configuration
-    setModelConfiguration(normalizedModel, provider);
+    // Set model configuration via ConfigService
+    configService.setSuggestionModel(normalizedModel);
+    configService.setSuggestionProvider(provider);
+    // Embedding provider is usually 'ollama', set by setModelConfiguration helper or directly.
     
-    // In test environment, we still want to call the check functions for test spies to work
+    // In test environment, these calls now use configService internally.
     if (provider === 'ollama') {
-      await ollama.checkOllama();
+      await ollama.checkOllama(); 
     } else if (provider === 'deepseek') {
       await deepseek.testDeepSeekConnection();
     }
     
-    logger.info(`[TEST] Switched suggestion model to ${normalizedModel} (provider: ${provider}) without availability check`);
+    logger.info(`[TEST] Switched suggestion model to ${configService.SUGGESTION_MODEL} (provider: ${configService.SUGGESTION_PROVIDER}) without availability check`);
     return true;
   }
   
@@ -411,10 +408,10 @@ async function handleTestEnvironment(normalizedModel: string, provider: string):
  */
 function resetModelSettings(): void {
   logger.debug(`Resetting existing model settings before switch`);
-  delete process.env.SUGGESTION_MODEL;
-  delete process.env.SUGGESTION_PROVIDER;
-  global.CURRENT_SUGGESTION_MODEL = undefined;
-  global.CURRENT_SUGGESTION_PROVIDER = "";
+  // Reset model settings via ConfigService to ensure consistency
+  configService.setSuggestionModel("llama3.1:8b"); // Default model
+  configService.setSuggestionProvider("ollama");   // Default provider
+  // configService also updates process.env and global variables.
 }
 
 /**
@@ -444,21 +441,18 @@ async function checkProviderAvailability(provider: string, normalizedModel: stri
       const apiKeyConfigured = await deepseek.checkDeepSeekApiKey();
       logger.debug(`DeepSeek API key configured: ${apiKeyConfigured}`);
       
-      if (!apiKeyConfigured) {
-        logger.error(`DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable.`);
+      if (!apiKeyConfigured) { // apiKeyConfigured is from deepseek.checkDeepSeekApiKey
+        logger.error(`DeepSeek API key is not configured (via ConfigService). Set DEEPSEEK_API_KEY environment variable or use ~/.codecompass/deepseek-config.json.`);
         return false;
       }
       
-      // Ensure API endpoint is set
-      const apiEndpoint = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
+      const apiEndpoint = configService.DEEPSEEK_API_URL; // From ConfigService
       logger.debug(`Using DeepSeek API endpoint: ${apiEndpoint}`);
       
-      // If API key is configured, test the connection
-      available = await deepseek.testDeepSeekConnection();
+      available = await deepseek.testDeepSeekConnection(); // Uses ConfigService internally
       logger.debug(`DeepSeek connection test result: ${available}`);
       
-      // Force available to true for testing purposes if we have an API key
-      if (process.env.FORCE_DEEPSEEK_AVAILABLE === 'true' && apiKeyConfigured) {
+      if (process.env.FORCE_DEEPSEEK_AVAILABLE === 'true' && apiKeyConfigured) { // Test flag from env is fine
         logger.warn(`Forcing DeepSeek availability to true for testing purposes`);
         available = true;
       }
@@ -487,15 +481,9 @@ async function checkProviderAvailability(provider: string, normalizedModel: stri
  * Sets the model configuration
  */
 function setModelConfiguration(normalizedModel: string, provider: string): void {
-  // Set suggestion model and provider - ensure we're setting the exact model requested
-  global.CURRENT_SUGGESTION_MODEL = normalizedModel;
-  global.CURRENT_SUGGESTION_PROVIDER = provider;
-  process.env.SUGGESTION_MODEL = normalizedModel;
-  process.env.SUGGESTION_PROVIDER = provider;
-  
-  // Always keep embedding provider as ollama
-  global.CURRENT_EMBEDDING_PROVIDER = "ollama";
-  process.env.EMBEDDING_PROVIDER = "ollama";
+  configService.setSuggestionModel(normalizedModel);
+  configService.setSuggestionProvider(provider);
+  configService.setEmbeddingProvider("ollama"); // Policy: embedding provider is ollama
 }
 
 /**
@@ -508,8 +496,7 @@ async function configureEmbeddingProvider(provider: string): Promise<void> {
     if (!ollamaAvailable) {
       logger.warn("Ollama is not available for embeddings. This may cause embedding-related features to fail.");
     }
-    // Always set embedding provider to ollama
-    process.env.EMBEDDING_PROVIDER = "ollama";
-    global.CURRENT_EMBEDDING_PROVIDER = "ollama";
+    // Embedding provider is set to 'ollama' by setModelConfiguration via configService
+    configService.setEmbeddingProvider("ollama");
   }
 }

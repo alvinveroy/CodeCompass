@@ -1,4 +1,4 @@
-import { logger } from "../config";
+import { configService, logger } from "../config-service";
 import { getLLMProvider } from "../llm-provider";
 import * as deepseek from "../deepseek";
 
@@ -7,28 +7,27 @@ import * as deepseek from "../deepseek";
  */
 export async function checkProviderDetailed(): Promise<Record<string, unknown>> {
   logger.info("Checking LLM provider status in detail");
+  configService.reloadConfigsFromFile(true); // Ensure config is fresh
+
+  const apiKey = configService.DEEPSEEK_API_KEY;
   
-  // Get environment variables and force read from process.env
-  const apiKey = process.env.DEEPSEEK_API_KEY || "";
-  
-  // Log API key details for debugging
-  logger.info(`DEEPSEEK_API_KEY in environment: ${apiKey ? `Present (length: ${apiKey.length})` : "Not present"}`);
+  logger.info(`DEEPSEEK_API_KEY from ConfigService: ${apiKey ? `Present (length: ${apiKey.length})` : "Not present"}`);
   logger.info(`DEEPSEEK_API_KEY first 5 chars: ${apiKey ? apiKey.substring(0, 5) : "N/A"}`);
   
-  const envVars = {
-    SUGGESTION_MODEL: process.env.SUGGESTION_MODEL,
-    SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER,
+  const envVars = { // These reflect ConfigService's view of the effective configuration
+    SUGGESTION_MODEL: configService.SUGGESTION_MODEL,
+    SUGGESTION_PROVIDER: configService.SUGGESTION_PROVIDER,
+    EMBEDDING_PROVIDER: configService.EMBEDDING_PROVIDER,
     DEEPSEEK_API_KEY: apiKey ? `Set (length: ${apiKey.length})` : "Not set",
-    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
-    OLLAMA_HOST: process.env.OLLAMA_HOST,
+    DEEPSEEK_API_URL: configService.DEEPSEEK_API_URL,
+    OLLAMA_HOST: configService.OLLAMA_HOST,
   };
   
-  // Get global variables
+  // Globals are set by ConfigService, so they should align
   const globals = {
-    CURRENT_SUGGESTION_MODEL: global.CURRENT_SUGGESTION_MODEL,
-    CURRENT_SUGGESTION_PROVIDER: global.CURRENT_SUGGESTION_PROVIDER,
-    CURRENT_EMBEDDING_PROVIDER: global.CURRENT_EMBEDDING_PROVIDER,
+    CURRENT_SUGGESTION_MODEL: configService.SUGGESTION_MODEL,
+    CURRENT_SUGGESTION_PROVIDER: configService.SUGGESTION_PROVIDER,
+    CURRENT_EMBEDDING_PROVIDER: configService.EMBEDDING_PROVIDER,
   };
   
   // Test provider connection
@@ -36,34 +35,26 @@ export async function checkProviderDetailed(): Promise<Record<string, unknown>> 
   let hasApiKey = false;
   let apiKeyConfigured = false;
   
-  // First, explicitly check and set the DeepSeek API key
-  try {
-    const keyConfigured = await deepseek.checkDeepSeekApiKey();
-    if (keyConfigured) {
-      hasApiKey = true;
-      apiKeyConfigured = true;
-      // Re-read the key from environment after it's been set by checkDeepSeekApiKey
-      const apiKey = process.env.DEEPSEEK_API_KEY || "";
-      logger.info(`DeepSeek API key is available with length: ${apiKey.length}`);
-    } else {
-      logger.warn("DeepSeek API key configuration failed");
-    }
-  } catch (error: unknown) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    logger.error(`Error checking DeepSeek API key: ${err.message}`);
+  // deepseek.checkDeepSeekApiKey() is part of deepseek module, which now uses configService.
+  // We rely on configService.DEEPSEEK_API_KEY for the effective key.
+  apiKeyConfigured = !!configService.DEEPSEEK_API_KEY;
+  hasApiKey = apiKeyConfigured;
+
+  if (apiKeyConfigured) {
+    logger.info(`DeepSeek API key is available (via ConfigService) with length: ${configService.DEEPSEEK_API_KEY.length}`);
+  } else {
+    logger.warn("DeepSeek API key not configured (via ConfigService).");
   }
   
   try {
-    // First try direct DeepSeek connection test which is known to work
-    if (global.CURRENT_SUGGESTION_PROVIDER === 'deepseek' || process.env.SUGGESTION_PROVIDER === 'deepseek') {
+    // Test based on the provider determined by ConfigService
+    if (configService.SUGGESTION_PROVIDER === 'deepseek') {
       logger.info("Testing DeepSeek connection directly");
-      const connected = await deepseek.testDeepSeekConnection();
+      const connected = await deepseek.testDeepSeekConnection(); // Uses configService
       connectionStatus = connected ? "Connected" : "Failed";
       
-      // If direct test succeeded but we still want to check the provider interface
       if (connected) {
-        hasApiKey = true;
-        apiKeyConfigured = true;
+        // apiKeyConfigured and hasApiKey are already set based on configService
         logger.info("DeepSeek connection test successful");
       } else {
         logger.warn("Direct DeepSeek connection test failed");
@@ -87,14 +78,14 @@ export async function checkProviderDetailed(): Promise<Record<string, unknown>> 
   
   return {
     environment: envVars,
-    globals: globals,
+    globals: globals, // Reflects ConfigService state
     connectionStatus: connectionStatus,
     timestamp: new Date().toISOString(),
-    apiUrl: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
-    model: process.env.SUGGESTION_MODEL || global.CURRENT_SUGGESTION_MODEL || "deepseek-coder",
-    hasApiKey: hasApiKey,
-    apiKeyConfigured: apiKeyConfigured,
-    apiEndpointConfigured: !!process.env.DEEPSEEK_API_URL,
+    apiUrl: configService.DEEPSEEK_API_URL,
+    model: configService.SUGGESTION_MODEL,
+    hasApiKey: hasApiKey, // Based on configService.DEEPSEEK_API_KEY
+    apiKeyConfigured: apiKeyConfigured, // Based on configService.DEEPSEEK_API_KEY
+    apiEndpointConfigured: !!configService.DEEPSEEK_API_URL, // Based on configService
     noteText: `Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
 You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).
 To set your API key permanently, run: npm run set-deepseek-key YOUR_API_KEY

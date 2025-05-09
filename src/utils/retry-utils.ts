@@ -1,8 +1,7 @@
-import { logger } from "../lib/config";
-import { MAX_RETRIES, RETRY_DELAY } from "../lib/config";
+import { configService, logger } from "../lib/config-service";
 
 // Utility: Retry logic
-export async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, retries = configService.MAX_RETRIES): Promise<T> {
   let lastError: Error | undefined;
   
   for (let i = 0; i < retries; i++) {
@@ -14,7 +13,7 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES):
       
       if (i < retries - 1) {
         // Use exponential backoff for retries
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, i)));
+        await new Promise(resolve => setTimeout(resolve, configService.RETRY_DELAY * Math.pow(2, i)));
       }
     }
   }

@@ -1,4 +1,4 @@
-import { logger } from "./config";
+import { configService, logger } from "./config-service";
 import { getLLMProvider, clearProviderCache } from "./llm-provider";
 
 /**
@@ -18,20 +18,21 @@ export async function debugProvider(): Promise<Record<string, unknown>> {
   // Clear provider cache
   clearProviderCache();
   
-  // Get current environment and global variables
+  // Get current environment and global variables from ConfigService
+  configService.reloadConfigsFromFile(true); // Ensure it's fresh
   const environment = {
-    SUGGESTION_MODEL: process.env.SUGGESTION_MODEL,
-    SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER,
-    DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ? "Set" : "Not set",
-    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL,
-    OLLAMA_HOST: process.env.OLLAMA_HOST,
+    SUGGESTION_MODEL: configService.SUGGESTION_MODEL,
+    SUGGESTION_PROVIDER: configService.SUGGESTION_PROVIDER,
+    EMBEDDING_PROVIDER: configService.EMBEDDING_PROVIDER,
+    DEEPSEEK_API_KEY: configService.DEEPSEEK_API_KEY ? "Set" : "Not set",
+    DEEPSEEK_API_URL: configService.DEEPSEEK_API_URL,
+    OLLAMA_HOST: configService.OLLAMA_HOST,
   };
   
-  const globals = {
-    CURRENT_SUGGESTION_MODEL: global.CURRENT_SUGGESTION_MODEL,
-    CURRENT_SUGGESTION_PROVIDER: global.CURRENT_SUGGESTION_PROVIDER,
-    CURRENT_EMBEDDING_PROVIDER: global.CURRENT_EMBEDDING_PROVIDER,
+  const globals = { // These globals are set by ConfigService, reflecting its state
+    CURRENT_SUGGESTION_MODEL: configService.SUGGESTION_MODEL,
+    CURRENT_SUGGESTION_PROVIDER: configService.SUGGESTION_PROVIDER,
+    CURRENT_EMBEDDING_PROVIDER: configService.EMBEDDING_PROVIDER,
   };
   
   // Get the current provider
@@ -56,8 +57,8 @@ export async function debugProvider(): Promise<Record<string, unknown>> {
     environment,
     globals,
     provider: {
-      type: global.CURRENT_SUGGESTION_PROVIDER,
-      model: global.CURRENT_SUGGESTION_MODEL,
+      type: configService.SUGGESTION_PROVIDER, // Use getter from configService
+      model: configService.SUGGESTION_MODEL,   // Use getter from configService
       connectionTest,
       generationTest,
       generationError,
@@ -81,16 +82,12 @@ export async function resetProvider(): Promise<void> {
   // Clear provider cache
   clearProviderCache();
   
-  // Reset global variables
-  global.CURRENT_SUGGESTION_MODEL = undefined;
-  // Use empty string instead of undefined for string types
-  global.CURRENT_SUGGESTION_PROVIDER = "";
-  global.CURRENT_EMBEDDING_PROVIDER = "";
-  
-  // Reset environment variables
-  delete process.env.SUGGESTION_MODEL;
-  delete process.env.SUGGESTION_PROVIDER;
-  delete process.env.EMBEDDING_PROVIDER;
+  // Reset configuration via ConfigService to defaults
+  // This involves setting them to typical defaults and persisting.
+  configService.setSuggestionModel("llama3.1:8b"); // A common default
+  configService.setSuggestionProvider("ollama");    // A common default
+  configService.setEmbeddingProvider("ollama");   // A common default
+  // configService setters will update globals and process.env, and persist.
   
   logger.info("Provider reset complete");
 }

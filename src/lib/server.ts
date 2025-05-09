@@ -2,13 +2,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { initMcpSafeLogging } from "./mcp-logger";
 import fs from "fs/promises";
-import * as fsSync from "fs";
-import path from "path";
+import * as fsSync from "fs"; // Keep for sync operations if any remain
+import path from "path"; // Keep for local path operations
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { logger, MAX_SNIPPET_LENGTH, LLM_PROVIDER } from "./config";
+import { configService, logger } from "./config-service";
 import * as deepseek from "./deepseek";
-import { loadModelConfig, forceUpdateModelConfig } from "./model-persistence";
+// model-persistence functions now use configService internally or are replaced by configService methods.
+import { loadModelConfig, forceUpdateModelConfig } from "./model-persistence"; 
 
 // Initialize MCP-safe logging immediately
 initMcpSafeLogging();
@@ -133,7 +134,7 @@ async function registerGetRepositoryContextTool(
     
     const context = results.map(r => ({
       filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-      snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
+      snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
       last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
       relevance: r.score,
     }));
@@ -191,40 +192,42 @@ export async function startServer(repoPath: string): Promise<void> {
   logger.info("Starting CodeCompass MCP server...");
 
   try {
-    // Set default suggestion model if specified in environment
-    if (process.env.SUGGESTION_MODEL) {
-      logger.info(`Using suggestion model from environment: ${process.env.SUGGESTION_MODEL}`);
-      await switchSuggestionModel(process.env.SUGGESTION_MODEL);
-    }
+    // ConfigService constructor loads from env and files.
+    // For server start, ensure it reflects the latest state.
+    configService.reloadConfigsFromFile(true); 
+
+    // If SUGGESTION_MODEL was set in env, switchSuggestionModel might have been intended.
+    // Now, configService handles this initial load. switchSuggestionModel is for dynamic changes.
+    // We can log what's loaded:
+    logger.info(`Initial suggestion model from config: ${configService.SUGGESTION_MODEL}`);
     
     // Validate repoPath
     if (!repoPath || repoPath === "${workspaceFolder}" || repoPath.trim() === "") {
       logger.warn("Invalid repository path provided, defaulting to current directory");
-      repoPath = process.cwd();
+      repoPath = process.cwd(); // process.cwd() is fine
     }
 
-    // Load saved model configuration
-    loadModelConfig(true);
-    
-    // Get and check LLM provider
-    const llmProvider = await getLLMProvider();
+    // loadModelConfig(true); // This is handled by configService.reloadConfigsFromFile(true)
+
+    const llmProvider = await getLLMProvider(); // Uses configService
     const isLlmAvailable = await llmProvider.checkConnection();
     
     if (!isLlmAvailable) {
-      logger.warn(`LLM provider (${global.CURRENT_SUGGESTION_PROVIDER || LLM_PROVIDER}) is not available. Some features may not work.`);
+      logger.warn(`LLM provider (${configService.SUGGESTION_PROVIDER}) is not available. Some features may not work.`);
     }
     
-    // Check if suggestion model is available (only needed for Ollama)
     let suggestionModelAvailable = false;
     try {
-      if (LLM_PROVIDER.toLowerCase() === 'ollama') {
-        await checkOllama();
-        await checkOllamaModel(process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5", true);
-        await checkOllamaModel(process.env.SUGGESTION_MODEL || "llama3.1:8b", false);
+      const currentSuggestionProvider = configService.SUGGESTION_PROVIDER.toLowerCase();
+      if (currentSuggestionProvider === 'ollama') {
+        await checkOllama(); // Uses configService
+        await checkOllamaModel(configService.EMBEDDING_MODEL, true); // Uses configService
+        await checkOllamaModel(configService.SUGGESTION_MODEL, false); // Uses configService
         suggestionModelAvailable = true;
+      } else if (currentSuggestionProvider === 'deepseek') {
+        suggestionModelAvailable = isLlmAvailable; // Assumes connection test implies model for DeepSeek
       } else {
-        // For DeepSeek, we assume the model is available if the connection test passed
-        suggestionModelAvailable = isLlmAvailable;
+        suggestionModelAvailable = isLlmAvailable; // Fallback for other/unknown
       }
     } catch (error: unknown) {
       logger.warn(`Warning: Model not available. Suggestion tools may be limited: ${(error as Error).message}`);
@@ -901,47 +904,14 @@ async function registerTools(
       const { clearProviderCache } = await import('./llm-provider');
       clearProviderCache();
       
-      // Load saved configuration to ensure we're using the correct model
-      try {
-        const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
-        const configFile = path.join(configDir, 'model-config.json');
-        
-        try {
-          // Use fsSync instead of fs for synchronous operations
-          if (fsSync.existsSync(configFile)) {
-            const config = JSON.parse(fsSync.readFileSync(configFile, 'utf8'));
-            
-            // Force set global variables from saved config
-            if (config.SUGGESTION_MODEL) {
-              global.CURRENT_SUGGESTION_MODEL = config.SUGGESTION_MODEL;
-              process.env.SUGGESTION_MODEL = config.SUGGESTION_MODEL;
-            }
-            
-            if (config.SUGGESTION_PROVIDER) {
-              global.CURRENT_SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
-              process.env.SUGGESTION_PROVIDER = config.SUGGESTION_PROVIDER;
-            }
-            
-            if (config.EMBEDDING_PROVIDER) {
-              global.CURRENT_EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
-              process.env.EMBEDDING_PROVIDER = config.EMBEDDING_PROVIDER;
-            }
-            
-            logger.info(`Loaded saved model configuration from ${configFile}`);
-          }
-        } catch (fsError: unknown) {
-          logger.warn(`Failed to read model configuration file: ${(fsError as Error).message}`);
-        }
-      } catch (error: unknown) {
-        logger.warn(`Failed to load saved model configuration: ${(error as Error).message}`);
-      }
+      // Ensure ConfigService reflects the latest state from files.
+      configService.reloadConfigsFromFile(true);
+
+      const llmProvider = await getLLMProvider(); // Uses configService
       
-      // Ensure we have the latest LLM provider
-      const llmProvider = await getLLMProvider();
-      
-      // Log detailed provider information
-      logger.info(`Agent using provider: ${global.CURRENT_SUGGESTION_PROVIDER}, model: ${global.CURRENT_SUGGESTION_MODEL}`);
-      logger.info(`Provider details - suggestionProvider: ${process.env.SUGGESTION_PROVIDER}, suggestionModel: ${process.env.SUGGESTION_MODEL}`);
+      logger.info(`Agent using provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
+      // Logging process.env directly can be for sanity check, but configService is the authority.
+      logger.info(`Provider details from env - suggestionProvider: ${process.env.SUGGESTION_PROVIDER}, suggestionModel: ${process.env.SUGGESTION_MODEL}`);
       
       // Verify the provider is working with a test generation
       try {
@@ -1042,7 +1012,7 @@ async function registerTools(
     
     // Generate summaries for the results
     const summaries = await Promise.all(results.map(async result => {
-      const snippet = (result.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH);
+      const snippet = (result.payload as QdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH);
       let summary = "Summary unavailable";
       
       if (suggestionModelAvailable) {
@@ -1294,7 +1264,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       // Map search results to context
       const context = results.map(r => ({
         filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
+        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
         last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
         relevance: r.score,
         note: ""

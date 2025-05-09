@@ -1,5 +1,5 @@
 import axios from "axios";
-import { logger, OLLAMA_HOST, SUGGESTION_MODEL, MAX_INPUT_LENGTH, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
+import { configService, logger } from "./config-service";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types";
 import { preprocessText } from "../utils/text-utils";
 import { incrementCounter, timeExecution, trackFeedbackScore } from "./metrics";
@@ -9,12 +9,12 @@ import { incrementCounter, timeExecution, trackFeedbackScore } from "./metrics";
  * @returns Promise<boolean> - True if Ollama is accessible, false otherwise
  */
 export async function checkOllama(): Promise<boolean> {
-  const host = process.env.OLLAMA_HOST || OLLAMA_HOST;
+  const host = configService.OLLAMA_HOST;
   logger.info(`Checking Ollama at ${host}`);
   
   try {
     await enhancedWithRetry(async () => {
-      const response = await axios.get(host, { timeout: 10000 });
+      const response = await axios.get(host, { timeout: 10000 }); // Specific timeout for check
       logger.info(`Ollama status: ${response.status}`);
     });
     return true;
@@ -32,7 +32,7 @@ export async function checkOllama(): Promise<boolean> {
  * @returns Promise<boolean> - True if model is available, false otherwise
  */
 export async function checkOllamaModel(model: string, isEmbeddingModel: boolean): Promise<boolean> {
-  const host = process.env.OLLAMA_HOST || OLLAMA_HOST;
+  const host = configService.OLLAMA_HOST;
   logger.info(`Checking Ollama model: ${model}`);
   
   try {
@@ -80,8 +80,8 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
 // Enhanced withRetry function with exponential backoff
 async function enhancedWithRetry<T>(
   fn: () => Promise<T>, 
-  retries = MAX_RETRIES, 
-  initialDelay = RETRY_DELAY
+  retries = configService.MAX_RETRIES, 
+  initialDelay = configService.RETRY_DELAY
 ): Promise<T> {
   let lastError: Error | undefined;
   let currentDelay = initialDelay;
@@ -123,20 +123,19 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   incrementCounter('embedding_requests');
   
   const processedText = preprocessText(text);
-  const truncatedText = processedText.length > MAX_INPUT_LENGTH ? processedText.slice(0, MAX_INPUT_LENGTH) : processedText;
+  const truncatedText = processedText.length > configService.MAX_INPUT_LENGTH ? processedText.slice(0, configService.MAX_INPUT_LENGTH) : processedText;
   
   try {
     return await timeExecution('embedding_generation', async () => {
-      const host = process.env.OLLAMA_HOST || OLLAMA_HOST;
-      // Always use nomic-embed-text:v1.5 for embeddings
-      const model = "nomic-embed-text:v1.5";
+      const host = configService.OLLAMA_HOST;
+      const model = configService.EMBEDDING_MODEL; // Use configured embedding model
       
       const response = await enhancedWithRetry(async () => {
         logger.info(`Generating embedding for text (length: ${truncatedText.length}, snippet: "${truncatedText.slice(0, 100)}...")`);
         const res = await axios.post<OllamaEmbeddingResponse>(
           `${host}/api/embeddings`,
           { model: model, prompt: truncatedText },
-          { timeout: REQUEST_TIMEOUT }
+          { timeout: configService.REQUEST_TIMEOUT }
         );
         
         if (!res.data.embedding || !Array.isArray(res.data.embedding)) {
@@ -191,9 +190,9 @@ Provide a concise plan with 3-5 steps.`;
       
       const plan = await enhancedWithRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(
-          `${OLLAMA_HOST}/api/generate`,
-          { model: SUGGESTION_MODEL, prompt: planPrompt, stream: false },
-          { timeout: REQUEST_TIMEOUT }
+          `${configService.OLLAMA_HOST}/api/generate`,
+          { model: configService.SUGGESTION_MODEL, prompt: planPrompt, stream: false },
+          { timeout: configService.REQUEST_TIMEOUT }
         );
         return res.data.response;
       });
@@ -213,9 +212,9 @@ Provide a comprehensive, well-structured response following your plan.`;
       
       const response = await enhancedWithRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(
-          `${OLLAMA_HOST}/api/generate`,
-          { model: SUGGESTION_MODEL, prompt: executionPrompt, stream: false },
-          { timeout: REQUEST_TIMEOUT }
+          `${configService.OLLAMA_HOST}/api/generate`,
+          { model: configService.SUGGESTION_MODEL, prompt: executionPrompt, stream: false },
+          { timeout: configService.REQUEST_TIMEOUT }
         );
         return res.data;
       });
@@ -241,9 +240,9 @@ Please provide an improved version addressing these issues.`;
         
         const refinedResponse = await enhancedWithRetry(async () => {
           const res = await axios.post<OllamaGenerateResponse>(
-            `${OLLAMA_HOST}/api/generate`,
-            { model: SUGGESTION_MODEL, prompt: refinementPrompt, stream: false },
-            { timeout: REQUEST_TIMEOUT }
+            `${configService.OLLAMA_HOST}/api/generate`,
+            { model: configService.SUGGESTION_MODEL, prompt: refinementPrompt, stream: false },
+            { timeout: configService.REQUEST_TIMEOUT }
           );
           return res.data.response;
         });
@@ -303,9 +302,9 @@ Feedback: [your detailed feedback]`;
     
     const evaluationResponse = await enhancedWithRetry(async () => {
       const res = await axios.post<OllamaGenerateResponse>(
-        `${OLLAMA_HOST}/api/generate`,
-        { model: SUGGESTION_MODEL, prompt: evaluationPrompt, stream: false },
-        { timeout: REQUEST_TIMEOUT }
+        `${configService.OLLAMA_HOST}/api/generate`,
+        { model: configService.SUGGESTION_MODEL, prompt: evaluationPrompt, stream: false },
+        { timeout: configService.REQUEST_TIMEOUT }
       );
       return res.data.response;
     });
@@ -354,9 +353,9 @@ Please provide an improved response addressing the user's feedback.`;
     
     const improvedResponse = await enhancedWithRetry(async () => {
       const res = await axios.post<OllamaGenerateResponse>(
-        `${OLLAMA_HOST}/api/generate`,
-        { model: SUGGESTION_MODEL, prompt: feedbackPrompt, stream: false },
-        { timeout: REQUEST_TIMEOUT }
+        `${configService.OLLAMA_HOST}/api/generate`,
+        { model: configService.SUGGESTION_MODEL, prompt: feedbackPrompt, stream: false },
+        { timeout: configService.REQUEST_TIMEOUT }
       );
       return res.data.response;
     });
