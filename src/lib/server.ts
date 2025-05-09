@@ -1384,9 +1384,8 @@ Ensure the suggestion is concise, practical, and leverages the repository's exis
       // Get the current LLM provider
       const llmProvider: LLMProvider = await getLLMProvider();
       
-      // Use SuggestionPlanner for multi-step suggestion generation
-      const planner = new SuggestionPlanner(llmProvider);
-      const suggestion = await planner.planAndGenerate(prompt);
+      // Generate suggestion directly using the LLM provider
+      const suggestion = await llmProvider.generateText(prompt);
       
       // Add suggestion to session
       addSuggestion(session.id, query as string, suggestion);
