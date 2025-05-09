@@ -39,27 +39,26 @@ vi.mock('../lib/config-service', async () => {
 
 describe('Utils Module', () => {
   let mockedConfigService: MockableConfigService;
-  let originalDefaultValues: { MAX_RETRIES: number; RETRY_DELAY: number; };
+  let originalDefaultRetryValues: { MAX_RETRIES: number; RETRY_DELAY: number; };
 
   beforeEach(async () => {
-    // Import the original config service to get its true default values for resetting
-    // This needs to be done carefully due to potential module caching even with vi.importActual
-    // A safer way is to hardcode defaults or derive them if they are complex.
-    // For simplicity, assuming originalConfigServiceInstance can be obtained for defaults.
-    const { configService: actualOriginalInstance } = await vi.importActual('../lib/config-service') as { configService: any };
-    originalDefaultValues = {
-      MAX_RETRIES: actualOriginalInstance.MAX_RETRIES,
-      RETRY_DELAY: actualOriginalInstance.RETRY_DELAY,
+    // Import the original config service to get its true default values for resetting retry logic.
+    // We only need MAX_RETRIES and RETRY_DELAY from the original for resetting.
+    const { configService: actualOriginalConfigService } = await vi.importActual('../lib/config-service') as { configService: { MAX_RETRIES: number, RETRY_DELAY: number } };
+    originalDefaultRetryValues = {
+      MAX_RETRIES: actualOriginalConfigService.MAX_RETRIES,
+      RETRY_DELAY: actualOriginalConfigService.RETRY_DELAY,
     };
     
-    // Dynamically import the mocked service to get the instance created by the mock factory
+    // Dynamically import the mocked service to get the instance created by the mock factory.
+    // This instance (mockedConfigService) will conform to MockableConfigService.
     const mockedModule = await import('../lib/config-service');
     mockedConfigService = mockedModule.configService as MockableConfigService;
 
     vi.useFakeTimers();
     // Reset the properties of the *actual mocked instance* before each test
-    mockedConfigService.MAX_RETRIES = originalDefaultValues.MAX_RETRIES;
-    mockedConfigService.RETRY_DELAY = originalDefaultValues.RETRY_DELAY;
+    mockedConfigService.MAX_RETRIES = originalDefaultRetryValues.MAX_RETRIES;
+    mockedConfigService.RETRY_DELAY = originalDefaultRetryValues.RETRY_DELAY;
     mockedConfigService.logger.warn.mockClear();
     mockedConfigService.logger.error.mockClear();
     mockedConfigService.logger.info.mockClear();
