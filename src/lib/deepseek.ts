@@ -13,7 +13,7 @@ const LOCAL_DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
 // but ideally, modules get these from configService.
 export { LOCAL_DEEPSEEK_API_URL as DEEPSEEK_API_URL, LOCAL_DEEPSEEK_EMBEDDING_URL as DEEPSEEK_EMBEDDING_URL };
 import { incrementCounter, recordTiming, timeExecution } from "./metrics";
-import { preprocessText } from "./utils";
+import { preprocessText } from "../utils/text-utils";
 
 // Rate limiting state
 const requestTimestamps: number[] = [];

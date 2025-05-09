@@ -25,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Refactored `src/lib/ollama.ts`: Removed `processFeedback` and `summarizeSnippet` functions to streamline the client and improve separation of concerns. (ffa844b)
 - Refactored `src/lib/deepseek.ts`:
-    - Removed local URL constants (`LOCAL_DEEPSEEK_API_URL`, `LOCAL_DEEPSEEK_EMBEDDING_URL`) and their re-export, ensuring `configService` is the single source of truth for API endpoints.
-    - Corrected the import path for `preprocessText` to `../utils/text-utils`.
+    - Removed local URL constants (`LOCAL_DEEPSEEK_API_URL`, `LOCAL_DEEPSEEK_EMBEDDING_URL`) and their re-export, ensuring `configService` is the single source of truth for API endpoints. (Part of 928dd38)
+    - Corrected the import path for `preprocessText` from `./utils` to `../utils/text-utils`.
 - Refactored `src/lib/server.ts` by removing the registration and capability entries for deprecated diagnostic tools (`debug_provider`, `reset_provider`, `direct_model_switch`, `model_switch_diagnostic`, `debug_model_switch`). (ddab05a)
 - Refactored `src/lib/llm-provider.ts`:
     - Moved the implementation of `processFeedback` for the Ollama provider from `src/lib/ollama.ts` into the `OllamaProvider` class within `llm-provider.ts`. This consolidates the provider-specific logic following the removal of the function from the lower-level client.
