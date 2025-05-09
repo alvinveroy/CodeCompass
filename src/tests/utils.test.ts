@@ -53,7 +53,7 @@ describe('Utils Module', () => {
     // Dynamically import the mocked service to get the instance created by the mock factory.
     // This instance (mockedConfigService) will conform to MockableConfigService.
     const mockedModule = await import('../lib/config-service');
-    mockedConfigService = mockedModule.configService as MockableConfigService;
+    mockedConfigService = mockedModule.configService as unknown as MockableConfigService;
 
     vi.useFakeTimers();
     // Reset the properties of the *actual mocked instance* before each test
