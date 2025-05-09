@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored `src/lib/server.ts`:
     - Removed the registration and capability entries for deprecated diagnostic tools (`debug_provider`, `reset_provider`, `direct_model_switch`, `model_switch_diagnostic`, `debug_model_switch`). (ddab05a)
     - Removed redundant registration of the `get_repository_context` tool, ensuring it's registered only once during server startup. (4612652)
-    - Removed unused `registerGetRepositoryContextTool` function (dead code).
+    - Removed unused `registerGetRepositoryContextTool` function (dead code). (20c7bd0)
 - Refactored `src/lib/llm-provider.ts`:
     - Moved the implementation of `processFeedback` for the Ollama provider from `src/lib/ollama.ts` into the `OllamaProvider` class within `llm-provider.ts`. This consolidates the provider-specific logic following the removal of the function from the lower-level client.
     - Added necessary metric tracking imports (`trackFeedbackScore`, `incrementCounter`) to `llm-provider.ts` for use by `OllamaProvider.processFeedback`. (39b8e0f)

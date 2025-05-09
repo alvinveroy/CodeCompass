@@ -338,73 +338,6 @@ export async function startServer(repoPath: string): Promise<void> {
       }
     );
 
-    
-    // Register custom RPC methods
-    // Note: Using type assertion to handle potential missing method in the type definition
-    const serverWithMethods = server as unknown as { registerMethod?: (name: string, handler: () => Promise<unknown>) => void };
-    
-    if (typeof serverWithMethods.registerMethod !== "function") {
-      logger.warn("MCP server does not support 'registerMethod', some functionality may be limited");
-    } else {
-      // Register prompts/list method
-      serverWithMethods.registerMethod("prompts/list", async () => {
-        logger.info("Handling prompts/list request");
-        return {
-          prompts: [
-            {
-              id: "repository-context",
-              name: "Repository Context",
-              description: "Get context about your repository",
-              template: "Provide context about {{query}} in this repository"
-            },
-            {
-              id: "code-suggestion",
-              name: "Code Suggestion",
-              description: "Generate code suggestions",
-              template: "Suggest code for {{query}}"
-            },
-            {
-              id: "code-analysis",
-              name: "Code Analysis",
-              description: "Analyze code problems",
-              template: "Analyze this code problem: {{query}}"
-            }
-          ]
-        };
-      });
-    }
-    
-    // Start metrics logging
-    const metricsInterval = startMetricsLogging(300000); // Log metrics every 5 minutes
-    
-    // Configure transport to use proper JSON formatting
-    const transport = new StdioServerTransport();
-    
-    // Log startup info to file
-    logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
-    const registeredTools = (server as any).capabilities?.tools || {};
-    logger.info(`CodeCompass server started with tools: ${Object.keys(registeredTools).join(', ')}`);
-    
-    // Display version and status to stderr (similar to Context7)
-    console.error(`CodeCompass v${VERSION} MCP Server running on stdio`);
-    
-    // Connect to transport after registering all capabilities
-    await server.connect(transport);
-    
-    // Ensure metrics interval is cleared on shutdown
-    process.on('SIGINT', () => {
-      clearInterval(metricsInterval);
-      logger.info("Server shutting down, metrics logging stopped");
-      process.exit(0);
-    });
-    
-    await new Promise<void>((resolve) => {
-      // This promise intentionally never resolves to keep the server running
-      process.on('SIGINT', () => {
-        resolve();
-      });
-    });
-
     // Register deepseek_diagnostic tool
     server.tool(
       "deepseek_diagnostic",
@@ -479,6 +412,72 @@ export async function startServer(repoPath: string): Promise<void> {
         }
       }
     );
+    
+    // Register custom RPC methods
+    // Note: Using type assertion to handle potential missing method in the type definition
+    const serverWithMethods = server as unknown as { registerMethod?: (name: string, handler: () => Promise<unknown>) => void };
+    
+    if (typeof serverWithMethods.registerMethod !== "function") {
+      logger.warn("MCP server does not support 'registerMethod', some functionality may be limited");
+    } else {
+      // Register prompts/list method
+      serverWithMethods.registerMethod("prompts/list", async () => {
+        logger.info("Handling prompts/list request");
+        return {
+          prompts: [
+            {
+              id: "repository-context",
+              name: "Repository Context",
+              description: "Get context about your repository",
+              template: "Provide context about {{query}} in this repository"
+            },
+            {
+              id: "code-suggestion",
+              name: "Code Suggestion",
+              description: "Generate code suggestions",
+              template: "Suggest code for {{query}}"
+            },
+            {
+              id: "code-analysis",
+              name: "Code Analysis",
+              description: "Analyze code problems",
+              template: "Analyze this code problem: {{query}}"
+            }
+          ]
+        };
+      });
+    }
+    
+    // Start metrics logging
+    const metricsInterval = startMetricsLogging(300000); // Log metrics every 5 minutes
+    
+    // Configure transport to use proper JSON formatting
+    const transport = new StdioServerTransport();
+    
+    // Log startup info to file
+    logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
+    const registeredTools = (server as any).capabilities?.tools || {};
+    logger.info(`CodeCompass server started with tools: ${Object.keys(registeredTools).join(', ')}`);
+    
+    // Display version and status to stderr (similar to Context7)
+    console.error(`CodeCompass v${VERSION} MCP Server running on stdio`);
+    
+    // Connect to transport after registering all capabilities
+    await server.connect(transport);
+    
+    // Ensure metrics interval is cleared on shutdown
+    process.on('SIGINT', () => {
+      clearInterval(metricsInterval);
+      logger.info("Server shutting down, metrics logging stopped");
+      process.exit(0);
+    });
+    
+    await new Promise<void>((resolve) => {
+      // This promise intentionally never resolves to keep the server running
+      process.on('SIGINT', () => {
+        resolve();
+      });
+    });
 
   } catch (error: unknown) {
     const err = error as Error;
