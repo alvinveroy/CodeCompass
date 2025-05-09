@@ -4,14 +4,7 @@ import * as path from 'path'; // Keep path for join if needed locally, though co
 import { configService, logger } from "./config-service";
 
 // Constants like DEEPSEEK_API_URL are now primarily sourced from configService.
-// Local fallbacks can be defined if necessary but should align with configService defaults.
-const LOCAL_DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-const LOCAL_DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
-
-
-// Exporting these might still be useful for direct use if configService isn't passed everywhere,
-// but ideally, modules get these from configService.
-export { LOCAL_DEEPSEEK_API_URL as DEEPSEEK_API_URL, LOCAL_DEEPSEEK_EMBEDDING_URL as DEEPSEEK_EMBEDDING_URL };
+// Local fallbacks are no longer defined here to ensure configService is the single source of truth.
 import { incrementCounter, recordTiming, timeExecution } from "./metrics";
 import { preprocessText } from "../utils/text-utils";
 import { withRetry } from "../../utils/retry-utils";
