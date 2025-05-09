@@ -1180,41 +1180,42 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add check_provider tool
   server.tool(
     "check_provider",
-    "Check the current LLM provider status and test the connection.",
-    {
-      verbose: z.boolean().optional().describe("Whether to include detailed information")
-    },
+    "Check the current LLM provider status, configuration, and test the connection.",
+    {}, // No parameters needed, checkProviderDetailed is always verbose.
     async () => {
-      const { testCurrentProvider, getCurrentProviderInfo } = await import("./test-provider");
-      
-      const providerInfo = await getCurrentProviderInfo();
-      const connectionTest = await testCurrentProvider();
-      
-      return {
-        content: [{
-          type: "text",
-          text: `# LLM Provider Status
+      logger.info("Running check_provider tool");
+      try {
+        const { checkProviderDetailed } = await import("./server-tools/check-provider");
+        const result = await checkProviderDetailed() as any; // Cast to any to access properties
 
-## Current Suggestion Model: ${providerInfo.suggestionModel || "llama3.1:8b"}
-## Current Suggestion Provider: ${providerInfo.suggestionProvider}
-## Current Embedding Provider: ${providerInfo.embeddingProvider}
-
-- Connection Test: ${connectionTest ? "✅ Successful" : "❌ Failed"}
-- Provider Details:
-${Object.entries(providerInfo)
-  .filter(([key]) => key !== 'provider')
-  .map(([key, value]) => `  - ${key}: ${value}`)
-  .join('\n')}
-
-To switch suggestion models, use the \`switch_suggestion_model\` tool with the model parameter:
-- For Ollama models: \`{"model": "llama3.1:8b"}\`
-- For DeepSeek models: \`{"model": "deepseek-coder"}\` (requires DEEPSEEK_API_KEY)
-
-Note: For DeepSeek models, ensure you have set the DEEPSEEK_API_KEY environment variable.
-You can also set DEEPSEEK_API_URL to use a custom endpoint (defaults to https://api.deepseek.com/chat/completions).
-`,
-        }],
-      };
+        const text = `# LLM Provider Status Report\n\n` +
+                     `**Timestamp:** ${result.timestamp}\n\n` +
+                     `## Effective Configuration (from ConfigService):\n` +
+                     `- Suggestion Model: ${result.environment.SUGGESTION_MODEL}\n` +
+                     `- Suggestion Provider: ${result.environment.SUGGESTION_PROVIDER}\n` +
+                     `- Embedding Provider: ${result.environment.EMBEDDING_PROVIDER}\n` +
+                     `- DeepSeek API Key: ${result.environment.DEEPSEEK_API_KEY}\n` +
+                     `- DeepSeek API URL: ${result.environment.DEEPSEEK_API_URL}\n` +
+                     `- DeepSeek Model (for tests): ${result.model}\n` +
+                     `- Ollama Host: ${result.environment.OLLAMA_HOST}\n\n` +
+                     `## Global Variables (set by ConfigService):\n` +
+                     `- CURRENT_SUGGESTION_MODEL: ${result.globals.CURRENT_SUGGESTION_MODEL}\n` +
+                     `- CURRENT_SUGGESTION_PROVIDER: ${result.globals.CURRENT_SUGGESTION_PROVIDER}\n` +
+                     `- CURRENT_EMBEDDING_PROVIDER: ${result.globals.CURRENT_EMBEDDING_PROVIDER}\n\n` +
+                     `## Connectivity & Status:\n` +
+                     `- API Key Configured (for DeepSeek): ${result.apiKeyConfigured ? "✅ Yes" : "❌ No"}\n` +
+                     `- API Endpoint Configured (for DeepSeek): ${result.apiEndpointConfigured ? "✅ Yes" : "❌ No"}\n` +
+                     `- Connection Status: ${result.connectionStatus}\n\n` +
+                     `## Notes:\n${result.noteText}\n\n` +
+                     `To switch suggestion models, use the \`switch_suggestion_model\` tool.\n` +
+                     `For more detailed DeepSeek diagnostics, use the \`deepseek_diagnostic\` tool.`;
+        
+        return { content: [{ type: "text", text }] };
+      } catch (error: unknown) {
+        const err = error as Error;
+        logger.error("Error in check_provider tool", { error: err.message });
+        return { content: [{ type: "text", text: `# Error in Provider Check\n\n${err.message}` }] };
+      }
     }
   );
   
