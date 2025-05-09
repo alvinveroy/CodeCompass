@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Removed the registration and capability entries for deprecated diagnostic tools (`debug_provider`, `reset_provider`, `direct_model_switch`, `model_switch_diagnostic`, `debug_model_switch`). (ddab05a)
     - Removed redundant registration of the `get_repository_context` tool, ensuring it's registered only once during server startup. (4612652)
     - Removed unused `registerGetRepositoryContextTool` function (dead code). (20c7bd0)
+    - Fixed misplaced `generateChainId` function definition, moving it to the module's top level.
+    - Refactored `normalizeToolParams` to correctly handle structured object parameters and simplify its logic.
+    - Simplified parameter extraction in the `switch_suggestion_model` tool by relying on the Zod schema and the improved `normalizeToolParams`.
 - Fixed tool registration order in `src/lib/server.ts`: Moved `deepseek_diagnostic` and `force_deepseek_connection` tool registrations to occur before the server connects to the transport, ensuring they are available immediately upon server startup. (a50162f)
 - Refactored `src/lib/llm-provider.ts`:
     - Removed deprecated `switchLLMProvider` function and its associated unused import of `saveModelConfig` and `loadModelConfig` from `model-persistence.ts`.

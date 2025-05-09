@@ -27,39 +27,39 @@ import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults } from "./state";
 // import { runAgentLoop } from "./agent"; // This is now unused
 
-// Normalize tool parameters to handle various input formats
-export function normalizeToolParams(params: unknown): Record<string, unknown> {
-  try {
-    // Handle stringified JSON input
-    if (typeof params === "string") {
-      try {
-        const parsed = JSON.parse(params);
-        return parsed;
-      } catch {
-        // If it's not valid JSON, treat it as a query string
-        return { query: params };
-      }
-    } 
-    
-    // Handle object input
-    if (typeof params === 'object' && params !== null) {
-      if ('query' in params || 'prompt' in params || 'sessionId' in params) {
-        return params as Record<string, unknown>;
-      } else {
-        // If no query property exists but we have an object, use the entire object as the query
-        return { query: JSON.stringify(params) };
-      }
-    }
-    
-    // Handle primitive values
-    return { query: String(params) };
-  } catch (error: unknown) {
-    const err = error as Error;
-    logger.error("Failed to normalize parameters", { message: err.message });
-    throw new Error("Invalid input format: parameters must be a valid JSON object or string");
 // Generate a chain ID for tracking tool chains
 function generateChainId(): string {
   return `chain_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+// Normalize tool parameters to handle various input formats
+export function normalizeToolParams(params: unknown): Record<string, unknown> {
+  if (typeof params === 'object' && params !== null) {
+    // If it's already a non-null object, return as is.
+    // The MCP SDK should provide parameters matching the Zod schema.
+    return params as Record<string, unknown>;
+  }
+  if (typeof params === 'string') {
+    // Attempt to parse if it's a JSON string
+    try {
+      const parsed = JSON.parse(params);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed; // Successfully parsed JSON string to object
+      }
+    } catch {
+      // Not a valid JSON string, treat as a simple query string
+    }
+    // Default for non-JSON strings or if JSON parsing results in non-object
+    return { query: params };
+  }
+  
+  // For other primitive values (numbers, booleans, undefined, null), convert to a query string
+  // or handle as an error if they are not expected.
+  // For simplicity, let's wrap them in a query object.
+  if (params === null || params === undefined) {
+    return { query: "" }; // Or throw error, or handle as per tool expectation
+  }
+  return { query: String(params) };
 }
 
 // Start Server
@@ -220,37 +220,30 @@ export async function startServer(repoPath: string): Promise<void> {
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
       
-        // Extract model from params, handling different input formats
-        let model = "llama3.1:8b"; // Default model
-      
-        if (typeof normalizedParams === 'string') {
-          try {
-            // Try to parse as JSON if it's a string
-            const parsed = JSON.parse(normalizedParams);
-            if (parsed && typeof parsed === 'object' && parsed.model) {
-              model = parsed.model;
-            } else if (parsed && typeof parsed === 'object' && parsed.provider) {
-              // For backward compatibility
-              model = parsed.provider === "deepseek" ? "deepseek-coder" : "llama3.1:8b";
-            }
-          } catch {
-            // If not valid JSON, use as is
-            model = normalizedParams;
-          }
-        } else if (typeof normalizedParams === 'object' && normalizedParams !== null) {
-          // Handle object input
-          if (normalizedParams.model) {
-            model = normalizedParams.model as string;
-          } else if (normalizedParams.provider) {
-            // For backward compatibility
-            model = normalizedParams.provider === "deepseek" ? "deepseek-coder" : "llama3.1:8b";
-          }
+        // Parameters should conform to the Zod schema: { model: string }
+        // normalizeToolParams ensures we have an object.
+        let modelToSwitchTo: string;
+
+        if (normalizedParams && typeof normalizedParams.model === 'string') {
+          modelToSwitchTo = normalizedParams.model;
+        } else {
+          // Fallback or error if 'model' parameter is missing or not a string
+          // This case should ideally be caught by Zod validation if params come directly from client
+          // If normalizeToolParams converted a non-object/non-JSON-string to { query: ... },
+          // then .model would be undefined.
+          logger.error("Invalid or missing 'model' parameter for switch_suggestion_model.", { normalizedParams });
+          return {
+            content: [{
+              type: "text",
+              text: "# Error Switching Suggestion Model\n\nInvalid or missing 'model' parameter. Please provide the model name as a string.",
+            }],
+          };
         }
       
-        logger.info(`Requested model: ${model}`);
+        logger.info(`Requested model: ${modelToSwitchTo}`);
         
         // Ensure we're using the exact model name provided
-        const normalizedModel = model.toLowerCase();
+        const normalizedModel = modelToSwitchTo.toLowerCase();
         
         // Store the requested model for verification later
         const requestedModel = normalizedModel;
