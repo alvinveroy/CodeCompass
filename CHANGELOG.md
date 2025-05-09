@@ -64,8 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed granular diagnostic tools: `debug_provider`, `reset_provider`, `direct_model_switch`, `model_switch_diagnostic`, and `debug_model_switch` to simplify the toolset. Core diagnostics are covered by `check_provider`.
 
 ### Fixed
-- Resolved multiple test failures and a build error:
+- Resolved multiple test failures and a build error (f543424):
     - Updated `configService` mock in `tests/llm-provider.test.ts` to include setter methods, fixing `TypeError: configService.setSuggestionModel is not a function`.
+    - Further updated `configService` mock in `tests/llm-provider.test.ts` for `setSuggestionModel` and `setSuggestionProvider` to correctly update `process.env` values, resolving test assertion failures for `switchSuggestionModel`.
     - Corrected `normalizeToolParams` tests in `tests/server.test.ts` and `tests/server-tools.test.ts` to align with its refactored behavior for handling objects and null input.
     - Fixed an incorrect variable name in an error message in `lib/provider-cli.ts`.
 - Fixed MCP logging to prevent JSON parsing errors in Claude Desktop
