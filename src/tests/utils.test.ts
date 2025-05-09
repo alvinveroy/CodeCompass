@@ -3,36 +3,39 @@ import { withRetry, preprocessText } from '../lib/utils';
 // Import the original configService to get its actual default values for resetting
 import { configService as originalConfigServiceInstance } from '../lib/config-service';
 
-// Mock configService for the withRetry tests
-// Define a function that returns the mock values to avoid hoisting issues with vi.mock
-const getMockConfigValues = () => ({
+// This object will be used by the mock factory.
+// We can modify its properties in tests/beforeEach.
+const mutableMockConfigValues = {
   MAX_RETRIES: originalConfigServiceInstance.MAX_RETRIES,
   RETRY_DELAY: originalConfigServiceInstance.RETRY_DELAY,
-  // Mock logger methods used by withRetry
   logger: {
     warn: vi.fn(),
     error: vi.fn(),
     info: vi.fn(),
     debug: vi.fn(),
   }
-});
+};
 
 vi.mock('../lib/config-service', async () => {
-  // Import original to ensure other exports from config-service are maintained if any
   const originalModule = await vi.importActual('../lib/config-service') as any;
-  const mockConfig = getMockConfigValues();
   return {
-    ...originalModule, // Spread original exports
-    configService: mockConfig, // Override configService with our mock
-    logger: mockConfig.logger, // Override logger export with our mock logger
+    ...originalModule,
+    configService: mutableMockConfigValues, // Use the mutable object here
+    logger: mutableMockConfigValues.logger,
   };
 });
 
 describe('Utils Module', () => {
   describe('withRetry', () => {
-    // Mock setTimeout to speed up tests
     beforeEach(() => {
       vi.useFakeTimers();
+      // Reset the properties of the mutable mock object before each test
+      mutableMockConfigValues.MAX_RETRIES = originalConfigServiceInstance.MAX_RETRIES;
+      mutableMockConfigValues.RETRY_DELAY = originalConfigServiceInstance.RETRY_DELAY;
+      mutableMockConfigValues.logger.warn.mockClear();
+      mutableMockConfigValues.logger.error.mockClear();
+      mutableMockConfigValues.logger.info.mockClear();
+      mutableMockConfigValues.logger.debug.mockClear();
     });
 
     afterEach(() => {
