@@ -3,7 +3,7 @@ import { configService, logger } from "./config-service";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types"; // OllamaGenerateResponse might be used by OllamaProvider
 import { preprocessText } from "../utils/text-utils";
 import { incrementCounter, timeExecution } from "./metrics";
-import { withRetry } from "../../utils/retry-utils";
+import { withRetry } from "../utils/retry-utils";
 
 /**
  * Check if Ollama server is running and accessible

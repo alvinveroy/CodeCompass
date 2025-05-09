@@ -471,9 +471,9 @@ export async function runAgentLoop(
     }
   });
   
-  // Load saved configuration to ensure we're using the correct model
-  const { loadModelConfig } = await import('./model-persistence');
-  loadModelConfig(true); // Force set the configuration
+  // Configuration is loaded by configService.reloadConfigsFromFile(true) at server start
+  // and before agent tool execution if needed.
+  // The previous import from './model-persistence' is no longer valid.
   
   // Import the clearProviderCache function and use it
   const { clearProviderCache } = await import('./llm-provider');

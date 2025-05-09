@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
-import { switchLLMProvider, getLLMProvider, switchSuggestionModel, clearProviderCache } from '../lib/llm-provider';
+import { getLLMProvider, switchSuggestionModel, clearProviderCache } from '../lib/llm-provider';
 import * as ollama from '../lib/ollama';
 import * as deepseek from '../lib/deepseek';
-import * as modelPersistence from '../lib/model-persistence';
+// modelPersistence is removed, configService will be used/mocked for persistence checks
+import { configService } from '../lib/config-service';
 
 // Mock the dependencies
 vi.mock('../lib/ollama', () => ({
@@ -19,11 +20,25 @@ vi.mock('../lib/deepseek', () => ({
   checkDeepSeekApiKey: vi.fn().mockResolvedValue(true)
 }));
 
-vi.mock('../lib/model-persistence', () => ({
-  loadModelConfig: vi.fn(),
-  saveModelConfig: vi.fn(),
-  forceUpdateModelConfig: vi.fn()
-}));
+// Mock configService for persistence checks
+vi.mock('../lib/config-service', async (importOriginal) => {
+  const actualConfigService = await importOriginal<typeof import('../lib/config-service')>();
+  return {
+    ...actualConfigService,
+    configService: {
+      ...actualConfigService.configService,
+      persistModelConfiguration: vi.fn(),
+      // Mock other getters/setters if needed for specific tests
+      // Ensure getters return values consistent with test setup
+      get SUGGESTION_MODEL() { return process.env.SUGGESTION_MODEL || 'llama3.1:8b'; },
+      get SUGGESTION_PROVIDER() { return process.env.SUGGESTION_PROVIDER || 'ollama'; },
+      get EMBEDDING_PROVIDER() { return process.env.EMBEDDING_PROVIDER || 'ollama'; },
+      get DEEPSEEK_API_KEY() { return process.env.DEEPSEEK_API_KEY || ''; },
+      get DEEPSEEK_API_URL() { return process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions'; },
+      // Add other necessary properties or methods used by llm-provider
+    },
+  };
+});
 
 describe('LLM Provider', () => {
   const originalEnv = { ...process.env };
@@ -59,87 +74,7 @@ describe('LLM Provider', () => {
     global.CURRENT_EMBEDDING_PROVIDER = originalGlobal.CURRENT_EMBEDDING_PROVIDER;
   });
   
-  describe('switchLLMProvider', () => {
-    it('should switch to deepseek provider and update environment variable', async () => {
-      // Mock the DeepSeek connection test to return true
-      (deepseek.testDeepSeekConnection as Mock).mockResolvedValue(true);
-      (deepseek.checkDeepSeekApiKey as Mock).mockResolvedValue(true);
-      
-      // Call the function to switch to DeepSeek
-      const result = await switchLLMProvider('deepseek');
-      
-      // Verify the result is true (success)
-      expect(result).toBe(true);
-      
-      // Verify the environment variable was updated
-      expect(process.env.LLM_PROVIDER).toBe('deepseek');
-      expect(process.env.SUGGESTION_PROVIDER).toBe('deepseek');
-      expect(process.env.SUGGESTION_MODEL).toBe('deepseek-coder');
-      
-      // Verify the DeepSeek connection was tested
-      expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
-      
-      // Verify model persistence was called
-      expect(modelPersistence.saveModelConfig).toHaveBeenCalled();
-    });
-    
-    it('should switch to ollama provider and update environment variable', async () => {
-      // Mock the Ollama connection test to return true
-      (ollama.checkOllama as Mock).mockResolvedValue(true);
-      
-      // Call the function to switch to Ollama
-      const result = await switchLLMProvider('ollama');
-      
-      // Verify the result is true (success)
-      expect(result).toBe(true);
-      
-      // Verify the environment variable was updated
-      expect(process.env.LLM_PROVIDER).toBe('ollama');
-      expect(process.env.SUGGESTION_PROVIDER).toBe('ollama');
-      expect(process.env.SUGGESTION_MODEL).toBe('llama3.1:8b');
-      
-      // Verify the Ollama connection was tested
-      expect(ollama.checkOllama).toHaveBeenCalled();
-      
-      // Verify model persistence was called
-      expect(modelPersistence.saveModelConfig).toHaveBeenCalled();
-    });
-    
-    it('should return false for invalid provider', async () => {
-      // Call the function with an invalid provider
-      const result = await switchLLMProvider('invalid');
-      
-      // Verify the result is false (failure)
-      expect(result).toBe(false);
-      
-      // Verify the environment variable was not updated
-      expect(process.env.LLM_PROVIDER).toBeUndefined();
-      
-      // Verify no connection tests were called
-      expect(ollama.checkOllama).not.toHaveBeenCalled();
-      expect(deepseek.testDeepSeekConnection).not.toHaveBeenCalled();
-    });
-    
-    it('should return false if provider is unavailable', async () => {
-      // Set up the test environment for unavailability
-      process.env.TEST_PROVIDER_UNAVAILABLE = 'true';
-      
-      // Mock the DeepSeek connection test to return false
-      (deepseek.testDeepSeekConnection as Mock).mockResolvedValue(false);
-      
-      // Call the function to switch to DeepSeek
-      const result = await switchLLMProvider('deepseek');
-      
-      // Verify the result is false (failure)
-      expect(result).toBe(false);
-      
-      // Verify the DeepSeek connection was tested
-      expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
-      
-      // Clean up
-      delete process.env.TEST_PROVIDER_UNAVAILABLE;
-    });
-  });
+  // switchLLMProvider tests are removed as the function is removed.
   
   describe('switchSuggestionModel', () => {
     it('should switch to deepseek model', async () => {
@@ -162,8 +97,8 @@ describe('LLM Provider', () => {
       // Verify the DeepSeek connection was tested
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
       
-      // Verify model persistence was called
-      expect(modelPersistence.saveModelConfig).toHaveBeenCalled();
+      // Verify model persistence was called via configService
+      expect(configService.persistModelConfiguration).toHaveBeenCalled();
     });
     
     it('should switch to ollama model', async () => {
@@ -185,8 +120,8 @@ describe('LLM Provider', () => {
       // Verify the Ollama connection was tested
       expect(ollama.checkOllama).toHaveBeenCalled();
       
-      // Verify model persistence was called
-      expect(modelPersistence.saveModelConfig).toHaveBeenCalled();
+      // Verify model persistence was called via configService
+      expect(configService.persistModelConfiguration).toHaveBeenCalled();
     });
   });
   

@@ -259,7 +259,7 @@ export async function startServer(repoPath: string): Promise<void> {
               return {
                 content: [{
                   type: "text",
-                  text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${model}. DeepSeek API key is not configured.\n\nPlease set the DEEPSEEK_API_KEY environment variable and try again.`,
+                  text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${modelToSwitchTo}. DeepSeek API key is not configured.\n\nPlease set the DEEPSEEK_API_KEY environment variable and try again.`,
                 }],
               };
             }
@@ -277,7 +277,7 @@ export async function startServer(repoPath: string): Promise<void> {
             return {
               content: [{
                 type: "text",
-                text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${model}. Please check your configuration and logs for details.`,
+                text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${modelToSwitchTo}. Please check your configuration and logs for details.`,
               }],
             };
           }

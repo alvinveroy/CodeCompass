@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { switchLLMProvider, getLLMProvider } from './llm-provider';
+import { switchSuggestionModel, getLLMProvider } from './llm-provider';
 import { configService } from './config-service';
 
 async function main() {
@@ -14,14 +14,14 @@ Usage:
   provider-cli [command]
 
 Commands:
-  status              Show current LLM provider
-  switch <provider>   Switch to a different LLM provider (ollama or deepseek)
+  status              Show current suggestion model and provider
+  switch <model_name> Switch to a different suggestion model (e.g., "llama3.1:8b", "deepseek-coder")
   test                Test the current LLM provider connection
 
 Examples:
   provider-cli status
-  provider-cli switch ollama
-  provider-cli switch deepseek
+  provider-cli switch llama3.1:8b
+  provider-cli switch deepseek-coder
   provider-cli test
     `);
     return;
@@ -31,27 +31,25 @@ Examples:
 
   switch (command) {
     case 'status':
-      console.log(`Current LLM provider: ${configService.LLM_PROVIDER}`);
+      console.log(`Current Suggestion Model: ${configService.SUGGESTION_MODEL}`);
+      console.log(`Current Suggestion Provider: ${configService.SUGGESTION_PROVIDER}`);
+      console.log(`Current Embedding Provider: ${configService.EMBEDDING_PROVIDER}`);
       break;
     
     case 'switch': {
       if (args.length < 2) {
-        console.error('Error: Missing provider argument. Use "ollama" or "deepseek"');
+        console.error('Error: Missing model name argument. E.g., "llama3.1:8b" or "deepseek-coder"');
         process.exit(1);
       }
       
-      const provider = args[1].toLowerCase();
-      if (provider !== 'ollama' && provider !== 'deepseek') {
-        console.error('Error: Invalid provider. Use "ollama" or "deepseek"');
-        process.exit(1);
-      }
+      const modelName = args[1]; // Keep original casing, switchSuggestionModel will normalize
       
-      console.log(`Switching to ${provider} provider...`);
-      const success = await switchLLMProvider(provider);
+      console.log(`Switching to suggestion model: ${modelName}...`);
+      const success = await switchSuggestionModel(modelName);
       
       if (success) {
-        console.log(`Successfully switched to ${provider} provider.`);
-        console.log(`To make this change permanent, set the LLM_PROVIDER environment variable to '${provider}'`);
+        console.log(`Successfully switched to suggestion model: ${configService.SUGGESTION_MODEL} (Provider: ${configService.SUGGESTION_PROVIDER}).`);
+        console.log(`To make this change permanent, set the SUGGESTION_MODEL environment variable to '${configService.SUGGESTION_MODEL}' or update ~/.codecompass/model-config.json.`);
       } else {
         console.error(`Failed to switch to ${provider} provider. Check the logs for details.`);
         process.exit(1);

@@ -7,7 +7,7 @@ import { configService, logger } from "./config-service";
 // Local fallbacks are no longer defined here to ensure configService is the single source of truth.
 import { incrementCounter, recordTiming, timeExecution } from "./metrics";
 import { preprocessText } from "../utils/text-utils";
-import { withRetry } from "../../utils/retry-utils";
+import { withRetry } from "../utils/retry-utils";
 
 // Rate limiting state
 const requestTimestamps: number[] = [];

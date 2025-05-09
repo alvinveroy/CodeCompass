@@ -2,7 +2,7 @@ import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
 import { incrementCounter, trackFeedbackScore } from "./metrics"; // Added for processFeedback
-import { withRetry } from "../../utils/retry-utils"; // Added for centralized retry logic
+import { withRetry } from "../utils/retry-utils"; // Added for centralized retry logic
 
 import axios from "axios"; // For OllamaProvider.generateText
 import { OllamaGenerateResponse } from "./types"; // For OllamaProvider.generateText
@@ -285,8 +285,8 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   // Handle test environment
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
     const result = await handleTestEnvironment(normalizedModel, provider);
-    // Directly call saveModelConfig for tests
-    saveModelConfig();
+    // Persist configuration via ConfigService in tests
+    configService.persistModelConfiguration();
     return result;
   }
   
