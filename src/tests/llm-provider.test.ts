@@ -30,12 +30,13 @@ vi.mock('../lib/config-service', async (importOriginal) => {
       persistModelConfiguration: vi.fn(),
       setSuggestionModel: vi.fn((model: string) => {
         process.env.SUGGESTION_MODEL = model;
-        // Actual configService also updates global.CURRENT_SUGGESTION_MODEL
-        // but for these tests, process.env is what's being asserted.
+        global.CURRENT_SUGGESTION_MODEL = model;
       }),
       setSuggestionProvider: vi.fn((provider: string) => {
         process.env.SUGGESTION_PROVIDER = provider;
-        process.env.LLM_PROVIDER = provider; // Actual configService updates this too
+        process.env.LLM_PROVIDER = provider;
+        global.CURRENT_SUGGESTION_PROVIDER = provider;
+        global.CURRENT_LLM_PROVIDER = provider;
       }),
       setEmbeddingProvider: vi.fn((provider: string) => {
         process.env.EMBEDDING_PROVIDER = provider;
