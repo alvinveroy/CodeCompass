@@ -8,8 +8,8 @@ import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
 import * as deepseek from "./deepseek";
-// model-persistence functions now use configService internally or are replaced by configService methods.
-import { loadModelConfig, forceUpdateModelConfig } from "./model-persistence"; 
+// model-persistence functions (loadModelConfig, forceUpdateModelConfig) are no longer directly used here.
+// Their functionalities are covered by configService methods or were part of removed tools.
 
 // Initialize MCP-safe logging immediately
 initMcpSafeLogging();

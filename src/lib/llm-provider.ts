@@ -188,37 +188,6 @@ function instantiateProvider(providerName: string): LLMProvider {
 
 // Note: Global variables are declared in src/types/global.d.ts
 
-// loadModelConfig and saveModelConfig are now part of configService's lifecycle or methods
-// For example, configService.reloadConfigsFromFile() and configService.persistModelConfiguration()
-// Direct import might be removed if model-persistence.ts is fully absorbed or refactored.
-// For now, assume model-persistence functions will internally use configService if they still exist.
-import { loadModelConfig, saveModelConfig } from './model-persistence'; 
-
-/**
- * Switch LLM provider (kept for backward compatibility with tests)
- * @deprecated Use switchSuggestionModel instead
- */
-export async function switchLLMProvider(provider: string): Promise<boolean> {
-  logger.warn("switchLLMProvider is deprecated, use switchSuggestionModel instead");
-  
-  // Validate provider name
-  const normalizedProvider = provider.toLowerCase();
-  if (normalizedProvider !== 'ollama' && normalizedProvider !== 'deepseek') {
-    logger.error(`Invalid LLM provider: ${provider}. Valid options are 'ollama' or 'deepseek'`);
-    return false;
-  }
-  
-  // Map provider to default model
-  const model = normalizedProvider === 'deepseek' ? 'deepseek-coder' : 'llama3.1:8b';
-  
-  // Directly call saveModelConfig for tests
-  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    saveModelConfig();
-  }
-  
-  return await switchSuggestionModel(model);
-}
-
 // Cache for LLM providers to avoid creating new instances unnecessarily
 interface ProviderCache {
   suggestionModel: string;
