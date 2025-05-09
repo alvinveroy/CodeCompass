@@ -198,10 +198,8 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     return false;
   }
   
-  // For backward compatibility with tests, also set LLM_PROVIDER
-  if ((process.env.NODE_ENV === 'test' || process.env.VITEST)) {
-    process.env.LLM_PROVIDER = normalizedProvider;
-  }
+  // For backward compatibility with tests, LLM_PROVIDER is set by configService when SUGGESTION_PROVIDER is set.
+  // No direct process.env manipulation needed here.
   
   // Map provider to default model
   const model = normalizedProvider === 'deepseek' ? 'deepseek-coder' : 'llama3.1:8b';
@@ -333,7 +331,7 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
   // Configure embedding provider
   await configureEmbeddingProvider(provider);
 
-  logger.info(`Successfully switched to ${normalizedModel} (${provider}) for suggestions and ${global.CURRENT_EMBEDDING_PROVIDER} for embeddings.`);
+  logger.info(`Successfully switched to ${configService.SUGGESTION_MODEL} (${configService.SUGGESTION_PROVIDER}) for suggestions and ${configService.EMBEDDING_PROVIDER} for embeddings.`);
   
   // Save the configuration using ConfigService
   configService.persistModelConfiguration();

@@ -734,30 +734,30 @@ export async function startServer(repoPath: string): Promise<void> {
             };
           }
         
-          // Get the actual values from the global variables to ensure we're reporting what was actually set
-          const actualModel = global.CURRENT_SUGGESTION_MODEL;
-          const actualProvider = global.CURRENT_SUGGESTION_PROVIDER;
-          const embeddingProvider = global.CURRENT_EMBEDDING_PROVIDER || process.env.EMBEDDING_PROVIDER || "ollama";
+          // Get the actual values from ConfigService to ensure we're reporting what was actually set
+          const actualModel = configService.SUGGESTION_MODEL;
+          const actualProvider = configService.SUGGESTION_PROVIDER;
+          const embeddingProvider = configService.EMBEDDING_PROVIDER;
         
           // Log the current models and providers to debug
-          logger.info(`Current suggestion model: ${actualModel}, provider: ${actualProvider}, embedding: ${embeddingProvider}`);
+          logger.info(`Current suggestion model from ConfigService: ${actualModel}, provider: ${actualProvider}, embedding: ${embeddingProvider}`);
           
           // Verify that the model was actually changed
           if (actualModel !== requestedModel) {
-            logger.error(`Model switch failed: requested ${requestedModel} but got ${actualModel}`);
+            logger.error(`Model switch failed: requested ${requestedModel} but ConfigService reports ${actualModel}. Attempting to force set via ConfigService.`);
             
-            // Force set the model directly as a last resort
-            global.CURRENT_SUGGESTION_MODEL = requestedModel;
-            global.CURRENT_SUGGESTION_PROVIDER = requestedModel.includes('deepseek') ? 'deepseek' : 'ollama';
+            // Force set the model via ConfigService
+            configService.setSuggestionModel(requestedModel);
+            configService.setSuggestionProvider(requestedModel.includes('deepseek') ? 'deepseek' : 'ollama');
             
-            logger.info(`Forced model to ${requestedModel} and provider to ${global.CURRENT_SUGGESTION_PROVIDER}`);
+            logger.info(`Forced model to ${configService.SUGGESTION_MODEL} and provider to ${configService.SUGGESTION_PROVIDER} via ConfigService.`);
             
-            // Check if the force-set worked
-            if (global.CURRENT_SUGGESTION_MODEL !== requestedModel) {
+            // Check if the force-set worked by reading back from ConfigService
+            if (configService.SUGGESTION_MODEL !== requestedModel) {
               return {
                 content: [{
                   type: "text",
-                  text: `# Error Switching Suggestion Model\n\nFailed to switch to ${requestedModel}. The model is still set to ${global.CURRENT_SUGGESTION_MODEL}.\n\nPlease check the logs for more details.`,
+                  text: `# Error Switching Suggestion Model\n\nFailed to switch to ${requestedModel}. The model is still set to ${configService.SUGGESTION_MODEL}.\n\nPlease check the logs for more details.`,
                 }],
               };
             }
@@ -767,7 +767,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${requestedModel} for suggestions.\n\nUsing ${requestedModel} (${requestedModel.includes('deepseek') ? 'deepseek' : 'ollama'} provider) for suggestions and ${embeddingProvider} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${requestedModel}'`,
+              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${configService.SUGGESTION_MODEL} for suggestions.\n\nUsing ${configService.SUGGESTION_MODEL} (${configService.SUGGESTION_PROVIDER} provider) for suggestions and ${configService.EMBEDDING_PROVIDER} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${configService.SUGGESTION_MODEL}' or update ~/.codecompass/model-config.json.`,
             }],
           };
         } catch (error: unknown) {

@@ -1,6 +1,5 @@
-import { logger } from "../config";
-import * as fs from 'fs';
-import * as path from 'path';
+import { configService, logger } from "../config-service";
+// fs and path are no longer needed here as configService handles persistence.
 
 /**
  * Directly switches the model without going through the regular switchSuggestionModel function
@@ -13,53 +12,26 @@ export async function directModelSwitch(model: string): Promise<Record<string, u
   const isDeepSeekModel = normalizedModel.includes('deepseek');
   const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
   
-  // Get current state before switch
+  configService.reloadConfigsFromFile(true); // Ensure fresh state
+
+  // Get current state from ConfigService before switch
   const beforeState = {
-    model: global.CURRENT_SUGGESTION_MODEL,
-    provider: global.CURRENT_SUGGESTION_PROVIDER,
-    embedding: global.CURRENT_EMBEDDING_PROVIDER
+    model: configService.SUGGESTION_MODEL,
+    provider: configService.SUGGESTION_PROVIDER,
+    embedding: configService.EMBEDDING_PROVIDER
   };
   
   try {
-    // Clear all existing values
-    delete process.env.SUGGESTION_MODEL;
-    delete process.env.SUGGESTION_PROVIDER;
-    delete process.env.EMBEDDING_PROVIDER;
+    // Set the new values using ConfigService
+    // This handles updating globals, process.env, and persisting the configuration.
+    configService.setSuggestionModel(normalizedModel);
+    configService.setSuggestionProvider(provider);
+    configService.setEmbeddingProvider("ollama"); // Policy for embedding provider
     
-    // Force set the new values directly
-    global.CURRENT_SUGGESTION_MODEL = normalizedModel;
-    global.CURRENT_SUGGESTION_PROVIDER = provider;
-    global.CURRENT_EMBEDDING_PROVIDER = "ollama";
-    
-    // Also set environment variables
-    process.env.SUGGESTION_MODEL = normalizedModel;
-    process.env.SUGGESTION_PROVIDER = provider;
-    process.env.EMBEDDING_PROVIDER = "ollama";
-    
-    // Save the settings to a persistent file
-    const configDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
-    const configFile = path.join(configDir, 'model-config.json');
-    
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
-    }
-    
-    // Write the configuration to a file
-    const config = {
-      SUGGESTION_MODEL: normalizedModel,
-      SUGGESTION_PROVIDER: provider,
-      EMBEDDING_PROVIDER: "ollama",
-      timestamp: new Date().toISOString()
-    };
-    
-    fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-    logger.info(`Saved model configuration to ${configFile}`);
-    
-    logger.info(`Directly set model to ${normalizedModel} and provider to ${provider}`);
+    logger.info(`Directly set model to ${normalizedModel} and provider to ${provider} via ConfigService.`);
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger.error(`Error in direct model switch: ${err.message}`);
+    logger.error(`Error in direct model switch using ConfigService: ${err.message}`);
     return {
       success: false,
       error: err.message,

@@ -1,104 +1,86 @@
-import { logger } from "../config";
+import { configService, logger } from "../config-service";
 
 /**
  * Performs a comprehensive diagnostic on model switching
  */
 export async function modelSwitchDiagnostic(): Promise<Record<string, unknown>> {
   logger.info("Running comprehensive model switch diagnostic");
-  
-  // Get current state
-  const currentState = {
-    environment: {
-      SUGGESTION_MODEL: process.env.SUGGESTION_MODEL,
-      SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
-      EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER,
-      DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ? "Set" : "Not set",
-      DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL,
-      OLLAMA_HOST: process.env.OLLAMA_HOST,
-      NODE_ENV: process.env.NODE_ENV,
-      VITEST: process.env.VITEST,
-    },
-    globals: {
-      CURRENT_SUGGESTION_MODEL: global.CURRENT_SUGGESTION_MODEL,
-      CURRENT_SUGGESTION_PROVIDER: global.CURRENT_SUGGESTION_PROVIDER,
-      CURRENT_EMBEDDING_PROVIDER: global.CURRENT_EMBEDDING_PROVIDER,
-    }
+  configService.reloadConfigsFromFile(true); // Ensure fresh state
+
+  // Get current state from ConfigService
+  const originalState = {
+    SUGGESTION_MODEL: configService.SUGGESTION_MODEL,
+    SUGGESTION_PROVIDER: configService.SUGGESTION_PROVIDER,
+    EMBEDDING_PROVIDER: configService.EMBEDDING_PROVIDER,
+    DEEPSEEK_API_KEY: configService.DEEPSEEK_API_KEY ? "Set" : "Not set",
+    DEEPSEEK_API_URL: configService.DEEPSEEK_API_URL,
+    OLLAMA_HOST: configService.OLLAMA_HOST,
+    NODE_ENV: process.env.NODE_ENV, // NODE_ENV is not managed by ConfigService but useful for diagnostics
+    VITEST: process.env.VITEST,     // VITEST is not managed by ConfigService
   };
   
-  // Test direct setting of globals
-  const testDeepseek = "deepseek-coder";
-  const testOllama = "llama3.1:8b";
+  const testDeepseekModel = "deepseek-coder";
+  const testOllamaModel = "llama3.1:8b";
   
-  // Test setting deepseek - use a more robust approach
-  try {
-    // Clear existing values first
-    delete process.env.SUGGESTION_MODEL;
-    delete process.env.SUGGESTION_PROVIDER;
-    global.CURRENT_SUGGESTION_MODEL = undefined;
-    global.CURRENT_SUGGESTION_PROVIDER = "";
-    
-    // Now set the new values
-    global.CURRENT_SUGGESTION_MODEL = testDeepseek;
-    process.env.SUGGESTION_MODEL = testDeepseek;
-    global.CURRENT_SUGGESTION_PROVIDER = "deepseek";
-    process.env.SUGGESTION_PROVIDER = "deepseek";
-  } catch (error) {
-    logger.error(`Error setting DeepSeek model: ${error}`);
-  }
+  // Test setting DeepSeek model via ConfigService
+  configService.setSuggestionModel(testDeepseekModel);
+  configService.setSuggestionProvider("deepseek");
   
   const deepseekTest = {
     expected: {
-      model: testDeepseek,
+      model: testDeepseekModel,
       provider: "deepseek"
     },
     actual: {
-      model: global.CURRENT_SUGGESTION_MODEL,
-      provider: global.CURRENT_SUGGESTION_PROVIDER
+      model: configService.SUGGESTION_MODEL,
+      provider: configService.SUGGESTION_PROVIDER
     },
-    success: global.CURRENT_SUGGESTION_MODEL === testDeepseek && global.CURRENT_SUGGESTION_PROVIDER === "deepseek"
+    success: configService.SUGGESTION_MODEL === testDeepseekModel && configService.SUGGESTION_PROVIDER === "deepseek"
   };
   
-  // Test setting ollama - use a more robust approach
-  try {
-    // Clear existing values first
-    delete process.env.SUGGESTION_MODEL;
-    delete process.env.SUGGESTION_PROVIDER;
-    global.CURRENT_SUGGESTION_MODEL = undefined;
-    global.CURRENT_SUGGESTION_PROVIDER = "";
-    
-    // Now set the new values
-    global.CURRENT_SUGGESTION_MODEL = testOllama;
-    process.env.SUGGESTION_MODEL = testOllama;
-    global.CURRENT_SUGGESTION_PROVIDER = "ollama";
-    process.env.SUGGESTION_PROVIDER = "ollama";
-  } catch (error) {
-    logger.error(`Error setting Ollama model: ${error}`);
-  }
+  // Test setting Ollama model via ConfigService
+  configService.setSuggestionModel(testOllamaModel);
+  configService.setSuggestionProvider("ollama");
   
   const ollamaTest = {
     expected: {
-      model: testOllama,
+      model: testOllamaModel,
       provider: "ollama"
     },
     actual: {
-      model: global.CURRENT_SUGGESTION_MODEL,
-      provider: global.CURRENT_SUGGESTION_PROVIDER
+      model: configService.SUGGESTION_MODEL,
+      provider: configService.SUGGESTION_PROVIDER
     },
-    success: global.CURRENT_SUGGESTION_MODEL === testOllama && global.CURRENT_SUGGESTION_PROVIDER === "ollama"
+    success: configService.SUGGESTION_MODEL === testOllamaModel && configService.SUGGESTION_PROVIDER === "ollama"
   };
   
-  // Restore original state
-  global.CURRENT_SUGGESTION_MODEL = currentState.globals.CURRENT_SUGGESTION_MODEL;
-  process.env.SUGGESTION_MODEL = currentState.environment.SUGGESTION_MODEL;
-  global.CURRENT_SUGGESTION_PROVIDER = currentState.globals.CURRENT_SUGGESTION_PROVIDER;
-  process.env.SUGGESTION_PROVIDER = currentState.environment.SUGGESTION_PROVIDER;
+  // Restore original state using ConfigService
+  configService.setSuggestionModel(originalState.SUGGESTION_MODEL);
+  configService.setSuggestionProvider(originalState.SUGGESTION_PROVIDER);
+  if (originalState.EMBEDDING_PROVIDER) { // EMBEDDING_PROVIDER might not always be in originalState if it was default
+      configService.setEmbeddingProvider(originalState.EMBEDDING_PROVIDER);
+  }
+  // API key, URL, OLLAMA_HOST are not changed by these setters, they are loaded from file/env by configService
   
+  // Re-fetch the restored state to report
+  const restoredState = {
+    SUGGESTION_MODEL: configService.SUGGESTION_MODEL,
+    SUGGESTION_PROVIDER: configService.SUGGESTION_PROVIDER,
+    EMBEDDING_PROVIDER: configService.EMBEDDING_PROVIDER,
+    DEEPSEEK_API_KEY: configService.DEEPSEEK_API_KEY ? "Set" : "Not set",
+    DEEPSEEK_API_URL: configService.DEEPSEEK_API_URL,
+    OLLAMA_HOST: configService.OLLAMA_HOST,
+    NODE_ENV: process.env.NODE_ENV,
+    VITEST: process.env.VITEST,
+  };
+
   return {
-    currentState,
+    originalStateReported: originalState, // State at the beginning of the diagnostic
     tests: {
       deepseek: deepseekTest,
       ollama: ollamaTest
     },
+    finalRestoredState: restoredState, // State after attempting to restore
     timestamp: new Date().toISOString()
   };
 }
