@@ -4,7 +4,8 @@ import { withRetry, preprocessText } from '../lib/utils';
 import { configService as originalConfigServiceInstance } from '../lib/config-service';
 
 // Mock configService for the withRetry tests
-const mockConfigValues = {
+// Define a function that returns the mock values to avoid hoisting issues with vi.mock
+const getMockConfigValues = () => ({
   MAX_RETRIES: originalConfigServiceInstance.MAX_RETRIES,
   RETRY_DELAY: originalConfigServiceInstance.RETRY_DELAY,
   // Mock logger methods used by withRetry
@@ -14,15 +15,16 @@ const mockConfigValues = {
     info: vi.fn(),
     debug: vi.fn(),
   }
-};
+});
 
 vi.mock('../lib/config-service', async () => {
   // Import original to ensure other exports from config-service are maintained if any
   const originalModule = await vi.importActual('../lib/config-service') as any;
+  const mockConfig = getMockConfigValues();
   return {
     ...originalModule, // Spread original exports
-    configService: mockConfigValues, // Override configService with our mock
-    logger: mockConfigValues.logger, // Override logger export with our mock logger
+    configService: mockConfig, // Override configService with our mock
+    logger: mockConfig.logger, // Override logger export with our mock logger
   };
 });
 
@@ -97,7 +99,7 @@ describe('Utils Module', () => {
     });
 
     it('should respect the configured MAX_RETRIES when no retry count is provided', async () => {
-      mockConfigValues.MAX_RETRIES = 4; // Set for this specific test
+      mutableMockConfigValues.MAX_RETRIES = 4; // Modify the mutable object
       
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
       
@@ -110,11 +112,11 @@ describe('Utils Module', () => {
       await expect(withRetry(fn)).rejects.toThrow('fail');
       expect(fn).toHaveBeenCalledTimes(4); 
       
-      // No need to restore, beforeEach will reset mockConfigValues.MAX_RETRIES
+      // No need to restore, beforeEach will reset mutableMockConfigValues.MAX_RETRIES
     });
 
     it('should use the provided retry delay between attempts', async () => {
-      mockConfigValues.RETRY_DELAY = 1000; // Set for this specific test
+      mutableMockConfigValues.RETRY_DELAY = 1000; // Modify the mutable object
       
       // Spy on setTimeout
       const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {

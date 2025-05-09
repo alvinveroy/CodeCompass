@@ -1,18 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { configService } from '../lib/config-service';
 
+import * as fs from 'fs'; // Import fs for mocking
+
 describe('Config Module', () => {
   // Save original environment variables
   const originalEnv = { ...process.env };
   
   beforeEach(() => {
     // Clear any mocked environment variables between tests
-    vi.resetModules();
+    vi.resetModules(); // This is important for re-importing config-service
+    // Restore process.env to original state before each test in this suite
+    process.env = { ...originalEnv };
   });
   
   afterEach(() => {
-    // Restore original environment variables
+    // Restore original environment variables fully after each test
     process.env = { ...originalEnv };
+    vi.restoreAllMocks(); // Restore any mocks like fs
   });
 
   describe('Default Configuration', () => {
@@ -81,47 +86,64 @@ describe('Config Module', () => {
   });
 
   describe('Environment Variable Overrides', () => {
-    it('should respect OLLAMA_HOST environment variable if set', () => {
-      // This test assumes the config module reads from process.env
-      // If it doesn't, this test would need to be adjusted or removed
+    beforeEach(() => {
+      // Mock fs to prevent loading from actual config files
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      // If readFileSync is still called (e.g. for LOG_DIR check), ensure it doesn't throw for config files
+      vi.spyOn(fs, 'readFileSync').mockImplementation((path) => {
+        if (typeof path === 'string' && (path.endsWith('model-config.json') || path.endsWith('deepseek-config.json'))) {
+          throw new Error('File not found mock');
+        }
+        // For other paths (like LOG_DIR check if it uses readFileSync, though it uses mkdirSync),
+        // we might need to return specific values or call original.
+        // For now, this should prevent config file loading.
+        return ''; // Default empty return
+      });
+    });
+
+    it('should respect OLLAMA_HOST environment variable if set', async () => {
       const testUrl = 'http://test-ollama-host:11434';
       process.env.OLLAMA_HOST = testUrl;
       
-      // We need to re-import the module to see the environment variable effect
-      vi.resetModules();
-      // Use dynamic import instead of require for TypeScript modules
-      return import('../lib/config-service').then(mod => {
-        // config-service exports configService instance
-        const freshConfigService = mod.configService;
-        freshConfigService.reloadConfigsFromFile(true); // Force reload to pick up env var
-        expect(freshConfigService.OLLAMA_HOST).toBe(testUrl);
-      });
+      vi.resetModules(); // Ensure configService is re-initialized
+      const mod = await import('../lib/config-service');
+      const freshConfigService = mod.configService;
+      // reloadConfigsFromFile is implicitly called by constructor if resetModules works as expected
+      // or call it explicitly if needed after re-import
+      freshConfigService.reloadConfigsFromFile(true); 
+      expect(freshConfigService.OLLAMA_HOST).toBe(testUrl);
     });
     
-    it('should respect QDRANT_HOST environment variable if set', () => {
+    it('should respect QDRANT_HOST environment variable if set', async () => {
       const testUrl = 'http://test-qdrant-host:6333';
       process.env.QDRANT_HOST = testUrl;
       
       vi.resetModules();
-      return import('../lib/config-service').then(mod => {
-        const freshConfigService = mod.configService;
-        freshConfigService.reloadConfigsFromFile(true);
-        expect(freshConfigService.QDRANT_HOST).toBe(testUrl);
-      });
+      const mod = await import('../lib/config-service');
+      const freshConfigService = mod.configService;
+      freshConfigService.reloadConfigsFromFile(true);
+      expect(freshConfigService.QDRANT_HOST).toBe(testUrl);
     });
     
-    it('should respect custom model configurations if set', () => {
-      const testModel = 'test-model';
-      process.env.EMBEDDING_MODEL = testModel;
-      process.env.SUGGESTION_MODEL = testModel;
+    it('should respect custom model configurations if set via environment variables', async () => {
+      const testModel = 'test-model-from-env';
+      const testProvider = 'ollama'; // 'test-model-from-env' implies ollama unless 'deepseek' is in name
+
+      process.env.EMBEDDING_MODEL = testModel; // This should be picked up
+      process.env.SUGGESTION_MODEL = testModel; // This should be picked up
+      // SUGGESTION_PROVIDER will be derived if not set, or can be set explicitly
+      process.env.SUGGESTION_PROVIDER = testProvider;
       
-      vi.resetModules();
-      return import('../lib/config-service').then(mod => {
-        const freshConfigService = mod.configService;
-        freshConfigService.reloadConfigsFromFile(true);
-        expect(freshConfigService.EMBEDDING_MODEL).toBe(testModel);
-        expect(freshConfigService.SUGGESTION_MODEL).toBe(testModel);
-      });
+      vi.resetModules(); // This is key to re-evaluate the module with new env vars
+      const mod = await import('../lib/config-service');
+      const freshConfigService = mod.configService;
+      // The constructor of ConfigService already calls loadConfigurationsFromFile and initializes globals.
+      // reloadConfigsFromFile(true) ensures it re-reads env vars and then files (which are mocked not to exist).
+      freshConfigService.reloadConfigsFromFile(true); 
+
+      expect(freshConfigService.EMBEDDING_MODEL).toBe(testModel);
+      expect(freshConfigService.SUGGESTION_MODEL).toBe(testModel);
+      expect(freshConfigService.SUGGESTION_PROVIDER).toBe(testProvider);
     });
   });
 });

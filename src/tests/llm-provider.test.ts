@@ -216,8 +216,8 @@ describe('LLM Provider', () => {
       // Verify the DeepSeek spy was called
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
       
-      // Verify model config was loaded
-      expect(modelPersistence.loadModelConfig).toHaveBeenCalled();
+      // modelPersistence.loadModelConfig is not directly called by getLLMProvider.
+      // ConfigService handles its own loading.
     });
     
     it('should return Ollama provider when SUGGESTION_PROVIDER is set to ollama', async () => {
@@ -244,8 +244,8 @@ describe('LLM Provider', () => {
       // Verify the Ollama spy was called
       expect(ollama.checkOllama).toHaveBeenCalled();
       
-      // Verify model config was loaded
-      expect(modelPersistence.loadModelConfig).toHaveBeenCalled();
+      // modelPersistence.loadModelConfig is not directly called by getLLMProvider.
+      // ConfigService handles its own loading.
     });
     
     it('should use provider cache when available', async () => {
