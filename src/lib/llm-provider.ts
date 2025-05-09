@@ -62,7 +62,9 @@ class OllamaProvider implements LLMProvider {
           { model: configService.SUGGESTION_MODEL, prompt: prompt, stream: false },
           { timeout: configService.REQUEST_TIMEOUT }
         );
+        logger.info(`OllamaProvider API request to ${configService.OLLAMA_HOST}/api/generate completed with status: ${res.status}`);
         if (!res.data || typeof res.data.response !== 'string') {
+          logger.error(`OllamaProvider API request failed with status ${res.status}: Invalid response structure. Response data: ${JSON.stringify(res.data)}`);
           throw new Error("Invalid response structure from Ollama API");
         }
         return res.data.response;

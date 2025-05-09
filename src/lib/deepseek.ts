@@ -119,7 +119,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         data: response.data
       })}`);
       
-      logger.info(`DeepSeek API response status: ${response.status}`);
+      logger.info(`DeepSeek API test request to ${apiUrl} completed with status: ${response.status}`);
 
       if (response.status === 200) {
         logger.info("DeepSeek API connection successful");
@@ -234,9 +234,10 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
         );
         
         if (!res.data.choices || res.data.choices.length === 0) {
+          logger.error(`DeepSeek API request to ${apiUrl} failed with status ${res.status}: Invalid response structure. Response data: ${JSON.stringify(res.data)}`);
           throw new Error("Invalid response from DeepSeek API");
         }
-        
+        logger.info(`DeepSeek API request to ${apiUrl} (generateText) completed with status: ${res.status}`);
         return res.data.choices[0].message.content;
       });
       
@@ -364,9 +365,10 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
         );
         
         if (!res.data.data || !res.data.data[0].embedding) {
+          logger.error(`DeepSeek API request to ${embeddingUrl} failed with status ${res.status}: Invalid embedding response structure. Response data: ${JSON.stringify(res.data)}`);
           throw new Error("Invalid embedding response from DeepSeek API");
         }
-        
+        logger.info(`DeepSeek API request to ${embeddingUrl} (generateEmbedding) completed with status: ${res.status}`);
         return res.data.data[0].embedding;
       });
       
