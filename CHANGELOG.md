@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Consolidated retry logic:
     - Removed local `enhancedWithRetry` functions from `src/lib/ollama.ts`, `src/lib/deepseek.ts`, and the `OllamaProvider` class in `src/lib/llm-provider.ts`.
     - All retryable operations in these files now use the centralized `withRetry` function from `src/utils/retry-utils.ts` for consistent retry behavior. (7f57ec6)
+- Improved MCP tool descriptions in `src/lib/server.ts` with more details and examples to provide better context for LLM usage.
 - Enhanced documentation for environment variable configuration
 - Improved client integration examples with all configurable options
 - Improved formatting for all tool outputs using Markdown for better readability

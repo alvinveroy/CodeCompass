@@ -208,7 +208,7 @@ export async function startServer(repoPath: string): Promise<void> {
     // Register the switch suggestion model tool
     server.tool(
       "switch_suggestion_model",
-      "Switch between different suggestion models (e.g., llama3.1:8b, deepseek-coder) while keeping embeddings on ollama.",
+      "Switches the primary model used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder', use `{\"model\": \"deepseek-coder\"}`. To switch to 'llama3.1:8b', use `{\"model\": \"llama3.1:8b\"}`.",
       {
         model: z.string().describe("The suggestion model to switch to (e.g., llama3.1:8b, deepseek-coder)")
       },
@@ -334,7 +334,7 @@ export async function startServer(repoPath: string): Promise<void> {
     // Register deepseek_diagnostic tool
     server.tool(
       "deepseek_diagnostic",
-      "Run a diagnostic check for DeepSeek API configuration and connectivity.",
+      "Performs a comprehensive diagnostic check of the DeepSeek API configuration, API key validity, and connectivity. This tool helps identify issues with DeepSeek integration. \nExample: Call this tool without parameters: `{}`.",
       {}, // No parameters needed
       async () => {
         logger.info("Running deepseek_diagnostic tool");
@@ -368,7 +368,7 @@ export async function startServer(repoPath: string): Promise<void> {
     // Register force_deepseek_connection tool
     server.tool(
       "force_deepseek_connection",
-      "Force a direct test connection to DeepSeek API with specified or default parameters. Bypasses some local config checks for direct testing.",
+      "Attempts a direct connection to the DeepSeek API, optionally overriding local configuration for API key, URL, and model. Useful for testing specific DeepSeek configurations or troubleshooting connectivity by bypassing some local checks. \nExample: To test with a specific API key: `{\"apiKey\": \"your_deepseek_api_key\"}`. To test with default parameters from config: `{}`.",
       { // Define expected parameters, all optional as they can fallback to configService/env
         apiKey: z.string().optional().describe("DeepSeek API Key to test with."),
         apiUrl: z.string().optional().describe("DeepSeek API URL to test against."),
@@ -492,7 +492,7 @@ async function registerTools(
   // Add the agent_query tool
   server.tool(
     "agent_query",
-    "Run an AI agent that can perform multiple steps to answer complex questions about your codebase. The agent can use other tools internally to gather information and provide a comprehensive response.",
+    "Initiates a multi-step AI agent to answer complex questions or perform tasks related to the codebase. The agent can autonomously use other available tools. Returns an initial plan and a session ID. \nExample: `{\"query\": \"How is user authentication handled in this project?\", \"maxSteps\": 5}`. To start an open-ended query: `{\"query\": \"Refactor the main service to improve performance.\"}`.",
     {
       query: z.string().describe("The question or task for the agent to process"),
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests"),
@@ -582,7 +582,7 @@ ${JSON.stringify(initialResponse.agentState, null, 2)}
   // Tool to execute the next step of an agent's plan
   server.tool(
     "execute_agent_step",
-    "Executes the next step of an agent's plan based on the current agent state. Returns the outcome of the step and the updated agent state.",
+    "Executes the next pending step from an agent's plan, using the provided `agentState`. This tool is used to iteratively run an agent after it has been initiated by `agent_query`. \nExample: `{\"sessionId\": \"session_123\", \"agentState\": { ...current_agent_state_object... }}`. The `agentState` object is obtained from the previous `agent_query` or `execute_agent_step` response.",
     {
       sessionId: z.string().describe("The session ID for the ongoing agent query."),
       // The agentState should be passed by the client.
@@ -686,7 +686,7 @@ ${stepResponse.agentState.finalResponse}
   // Search Code Tool with iterative refinement
   server.tool(
     "search_code",
-    "Search for code in your repository based on a query. This function uses semantic search to find relevant code snippets that match your query.",
+    "Performs a semantic search for code snippets within the repository that are relevant to the given query. Results include file paths, code snippets, and relevance scores. \nExample: `{\"query\": \"function to handle user login\"}`. For a broader search: `{\"query\": \"database connection setup\"}`.",
     {
       query: z.string().describe("The search query to find relevant code in the repository"),
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
@@ -791,7 +791,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add get_changelog tool
   server.tool(
     "get_changelog",
-    "Retrieve the changelog for the repository. This function returns the contents of the CHANGELOG.md file if it exists.",
+    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
     {},
     async () => {
       try {
@@ -819,7 +819,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add reset_metrics tool
   server.tool(
     "reset_metrics",
-    "Reset all the tracking metrics for the current session. This is useful for benchmarking or starting fresh measurements.",
+    "Resets all accumulated performance and usage metrics for the CodeCompass server. This is useful for starting a fresh measurement period, for example, before benchmarking. \nExample: Call this tool without parameters: `{}`.",
     {},
     async () => {
       resetMetrics();
@@ -835,7 +835,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add check_provider tool
   server.tool(
     "check_provider",
-    "Check the current LLM provider status, configuration, and test the connection.",
+    "Checks and reports the status of the currently configured LLM provider(s) (e.g., Ollama, DeepSeek). Includes details on configuration, model availability, and basic connectivity tests. \nExample: Call this tool without parameters: `{}`.",
     {}, // No parameters needed, checkProviderDetailed is always verbose.
     async () => {
       logger.info("Running check_provider tool");
@@ -877,7 +877,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add get_session_history tool
   server.tool(
     "get_session_history",
-    "Retrieve the history of queries and suggestions from a specific session. This helps track your interaction with CodeCompass.",
+    "Retrieves the history of interactions (queries, suggestions, feedback) for a given session ID. This allows you to review past activities within a specific CodeCompass session. \nExample: `{\"sessionId\": \"your_session_id_here\"}`.",
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
@@ -937,7 +937,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
     // Generate Suggestion Tool with multi-step reasoning
     server.tool(
       "generate_suggestion",
-      "Generate code suggestions based on a query or prompt. This function uses AI to provide implementation ideas and code examples.",
+      "Generates code suggestions, implementation ideas, or examples based on a natural language query. It leverages repository context and relevant code snippets to provide targeted advice. \nExample: `{\"query\": \"Suggest an optimized way to fetch user data\"}`. For a specific task: `{\"query\": \"Write a Python function to parse a CSV file\"}`.",
       {
         query: z.string().describe("The query or prompt for generating code suggestions"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
@@ -1078,7 +1078,7 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
     // Add a new feedback tool
     server.tool(
       "provide_feedback",
-      "Provide feedback on a suggestion to improve future recommendations.",
+      "Submits feedback on a previously generated suggestion. This feedback (score and comments) can be used by the LLM provider to refine future suggestions. \nExample: `{\"sessionId\": \"session_abc\", \"feedbackId\": \"chain_xyz\", \"score\": 8, \"comments\": \"The suggestion was helpful but missed an edge case.\", \"originalQuery\": \"How to sort an array?\", \"suggestion\": \"Use Array.prototype.sort()\"}`.",
       {
         sessionId: z.string().describe("The session ID that received the suggestion"),
         feedbackId: z.string().optional().describe("The ID of the suggestion to provide feedback for"),
@@ -1148,7 +1148,7 @@ Session ID: ${session.id}`;
     // Get Repository Context Tool with state management
     server.tool(
       "get_repository_context",
-      "Get high-level context about your repository related to a specific query. This provides an overview of relevant project structure, patterns, and conventions.",
+      "Provides a high-level summary of the repository's structure, common patterns, and conventions relevant to a specific query. It uses semantic search to find pertinent information and synthesizes it. \nExample: `{\"query\": \"What are the main components of the API service?\"}`. To understand coding standards: `{\"query\": \"coding conventions for frontend development\"}`.",
       {
         query: z.string().describe("The query to get repository context for"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
@@ -1276,7 +1276,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     // Add a new tool for multi-step reasoning
     server.tool(
       "analyze_code_problem",
-      "Analyze a code problem through multiple steps: problem analysis, root cause identification, and implementation planning.",
+      "Performs a multi-step analysis of a described code problem. This includes understanding the problem, identifying potential root causes using repository context, and generating a high-level implementation plan. \nExample: `{\"query\": \"The login page is throwing a 500 error after the latest deployment.\"}`. For debugging help: `{\"query\": \"My sorting algorithm is too slow for large datasets, how can I improve it?\"}`.",
       {
         query: z.string().describe("Description of the code problem to analyze"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
