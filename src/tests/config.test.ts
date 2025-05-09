@@ -18,6 +18,7 @@ describe('Config Module', () => {
     // Restore original environment variables fully after each test
     process.env = { ...originalEnv };
     vi.restoreAllMocks(); // Restore any mocks like fs
+    vi.resetModules(); // Ensure modules are reset for subsequent test files if any
   });
 
   describe('Default Configuration', () => {
@@ -86,19 +87,28 @@ describe('Config Module', () => {
   });
 
   describe('Environment Variable Overrides', () => {
-    beforeEach(() => {
-      // Mock fs to prevent loading from actual config files
-      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
-      // If readFileSync is still called (e.g. for LOG_DIR check), ensure it doesn't throw for config files
-      vi.spyOn(fs, 'readFileSync').mockImplementation((path) => {
-        if (typeof path === 'string' && (path.endsWith('model-config.json') || path.endsWith('deepseek-config.json'))) {
-          throw new Error('File not found mock');
-        }
-        // For other paths (like LOG_DIR check if it uses readFileSync, though it uses mkdirSync),
-        // we might need to return specific values or call original.
-        // For now, this should prevent config file loading.
-        return ''; // Default empty return
-      });
+    // Mock the entire fs module for this suite to prevent file system interactions
+    // This is a cleaner way to handle fs mocking for a suite.
+    vi.mock('fs', async () => {
+      const actualFs = await vi.importActual('fs') as typeof fs;
+      return {
+        ...actualFs, // Keep original non-mocked functions if needed by other parts
+        existsSync: vi.fn().mockImplementation((path: string) => {
+          // Only mock false for config files, allow others (like LOG_DIR check) to proceed
+          if (path.endsWith('model-config.json') || path.endsWith('deepseek-config.json')) {
+            return false;
+          }
+          return actualFs.existsSync(path); // Call original for other paths
+        }),
+        readFileSync: vi.fn().mockImplementation((path: string) => {
+          if (path.endsWith('model-config.json') || path.endsWith('deepseek-config.json')) {
+            throw new Error('File not found mock for config files');
+          }
+          return actualFs.readFileSync(path); // Call original for other paths
+        }),
+        // mkdirSync is used for LOG_DIR, let it run or mock if it causes issues
+        mkdirSync: actualFs.mkdirSync, 
+      };
     });
 
     it('should respect OLLAMA_HOST environment variable if set', async () => {

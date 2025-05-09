@@ -3,42 +3,54 @@ import { withRetry, preprocessText } from '../lib/utils';
 // Import the original configService to get its actual default values for resetting
 import { configService as originalConfigServiceInstance } from '../lib/config-service';
 
-// This object will be used by the mock factory.
-// We can modify its properties in tests/beforeEach.
-const mutableMockConfigValues = {
-  MAX_RETRIES: originalConfigServiceInstance.MAX_RETRIES,
-  RETRY_DELAY: originalConfigServiceInstance.RETRY_DELAY,
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-  }
-};
-
+// Mock the config-service module
 vi.mock('../lib/config-service', async () => {
   const originalModule = await vi.importActual('../lib/config-service') as any;
+  // Create the mock values inside the factory to avoid hoisting issues
+  const mockValues = {
+    MAX_RETRIES: originalConfigServiceInstance.MAX_RETRIES,
+    RETRY_DELAY: originalConfigServiceInstance.RETRY_DELAY,
+    logger: {
+      warn: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+    },
+    // Include other properties/methods from original configService if they are used by the SUT
+    // and don't need to be mocked, or provide simple mocks for them.
+    // For example, if OLLAMA_HOST was used by withRetry, it should be here.
+    OLLAMA_HOST: originalConfigServiceInstance.OLLAMA_HOST, 
+    // Add any other properties that might be accessed by the SUT (utils.ts)
+  };
   return {
-    ...originalModule,
-    configService: mutableMockConfigValues, // Use the mutable object here
-    logger: mutableMockConfigValues.logger,
+    ...originalModule, // Spread original exports to keep non-mocked parts
+    configService: mockValues, // Override configService with our mock
+    logger: mockValues.logger, // Override logger export with our mock logger
   };
 });
 
 describe('Utils Module', () => {
-  describe('withRetry', () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-      // Reset the properties of the mutable mock object before each test
-      mutableMockConfigValues.MAX_RETRIES = originalConfigServiceInstance.MAX_RETRIES;
-      mutableMockConfigValues.RETRY_DELAY = originalConfigServiceInstance.RETRY_DELAY;
-      mutableMockConfigValues.logger.warn.mockClear();
-      mutableMockConfigValues.logger.error.mockClear();
-      mutableMockConfigValues.logger.info.mockClear();
-      mutableMockConfigValues.logger.debug.mockClear();
-    });
+  // This import will now get the mocked version of configService
+  let mockedConfigService: typeof originalConfigServiceInstance;
+  let mockedLogger: { warn: Mock; error: Mock; info: Mock; debug: Mock };
 
-    afterEach(() => {
+  beforeEach(async () => {
+    // Dynamically import the mocked service here to get the instance used by the mock factory
+    const mockedModule = await import('../lib/config-service');
+    mockedConfigService = mockedModule.configService;
+    mockedLogger = mockedModule.logger as any; // Cast as any to access mockClear on spies
+
+    vi.useFakeTimers();
+    // Reset the properties of the *actual mocked instance* before each test
+    mockedConfigService.MAX_RETRIES = originalConfigServiceInstance.MAX_RETRIES;
+    mockedConfigService.RETRY_DELAY = originalConfigServiceInstance.RETRY_DELAY;
+    mockedLogger.warn.mockClear();
+    mockedLogger.error.mockClear();
+    mockedLogger.info.mockClear();
+    mockedLogger.debug.mockClear();
+  });
+
+  afterEach(() => {
       vi.restoreAllMocks(); // This will also restore vi.spyOn(global, 'setTimeout')
       vi.useRealTimers();
     });
@@ -102,7 +114,8 @@ describe('Utils Module', () => {
     });
 
     it('should respect the configured MAX_RETRIES when no retry count is provided', async () => {
-      mutableMockConfigValues.MAX_RETRIES = 4; // Modify the mutable object
+      // Modify the properties of the *mocked* configService instance
+      mockedConfigService.MAX_RETRIES = 4;
       
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
       
@@ -115,11 +128,12 @@ describe('Utils Module', () => {
       await expect(withRetry(fn)).rejects.toThrow('fail');
       expect(fn).toHaveBeenCalledTimes(4); 
       
-      // No need to restore, beforeEach will reset mutableMockConfigValues.MAX_RETRIES
+      // No need to restore, beforeEach will reset the mockedConfigService properties
     });
 
     it('should use the provided retry delay between attempts', async () => {
-      mutableMockConfigValues.RETRY_DELAY = 1000; // Modify the mutable object
+      // Modify the properties of the *mocked* configService instance
+      mockedConfigService.RETRY_DELAY = 1000;
       
       // Spy on setTimeout
       const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {
