@@ -1,7 +1,7 @@
 import axios from "axios";
 import { logger, OLLAMA_HOST, SUGGESTION_MODEL, MAX_INPUT_LENGTH, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY } from "./config";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types";
-import { preprocessText } from "./utils";
+import { preprocessText } from "../utils/text-utils";
 import { incrementCounter, timeExecution, trackFeedbackScore } from "./metrics";
 
 /**

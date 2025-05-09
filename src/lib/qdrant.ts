@@ -1,6 +1,7 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger, QDRANT_HOST, COLLECTION_NAME } from "./config";
-import { withRetry, preprocessText } from "./utils";
+import { withRetry } from "../utils/retry-utils";
+import { preprocessText } from "../utils/text-utils";
 import { generateEmbedding } from "./ollama";
 import { trackQueryRefinement } from "./metrics";
 
