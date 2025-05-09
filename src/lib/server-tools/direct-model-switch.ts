@@ -36,25 +36,25 @@ export async function directModelSwitch(model: string): Promise<Record<string, u
       success: false,
       error: err.message,
       before: beforeState,
-      after: {
-        model: global.CURRENT_SUGGESTION_MODEL,
-        provider: global.CURRENT_SUGGESTION_PROVIDER,
-        embedding: global.CURRENT_EMBEDDING_PROVIDER
+      after: { // Read from ConfigService to confirm
+        model: configService.SUGGESTION_MODEL,
+        provider: configService.SUGGESTION_PROVIDER,
+        embedding: configService.EMBEDDING_PROVIDER
       }
     };
   }
   
-  // Verify the switch was successful
-  const success = global.CURRENT_SUGGESTION_MODEL === normalizedModel && 
-                  global.CURRENT_SUGGESTION_PROVIDER === provider;
+  // Verify the switch was successful by checking ConfigService
+  const success = configService.SUGGESTION_MODEL === normalizedModel && 
+                  configService.SUGGESTION_PROVIDER === provider;
   
   return {
     success,
     before: beforeState,
-    after: {
-      model: global.CURRENT_SUGGESTION_MODEL,
-      provider: global.CURRENT_SUGGESTION_PROVIDER,
-      embedding: global.CURRENT_EMBEDDING_PROVIDER
+    after: { // Read from ConfigService
+      model: configService.SUGGESTION_MODEL,
+      provider: configService.SUGGESTION_PROVIDER,
+      embedding: configService.EMBEDDING_PROVIDER
     },
     timestamp: new Date().toISOString()
   };
