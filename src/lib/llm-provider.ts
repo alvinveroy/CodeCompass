@@ -10,6 +10,27 @@ export interface LLMProvider {
   processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string>;
 }
 
+// --- Provider Factory ---
+type LLMProviderConstructor = new () => LLMProvider;
+
+const providerRegistry: Record<string, LLMProviderConstructor> = {
+  ollama: OllamaProvider,
+  deepseek: DeepSeekProvider,
+  // Future providers can be registered here
+};
+
+function instantiateProvider(providerName: string): LLMProvider {
+  const normalizedName = providerName.toLowerCase();
+  const Constructor = providerRegistry[normalizedName];
+  if (!Constructor) {
+    logger.warn(`Unknown provider name: "${providerName}". Defaulting to OllamaProvider.`);
+    return new OllamaProvider(); // Default fallback
+  }
+  logger.debug(`Instantiating provider: ${normalizedName}`);
+  return new Constructor();
+}
+// --- End Provider Factory ---
+
 // Ollama Provider Implementation
 class OllamaProvider implements LLMProvider {
   async checkConnection(): Promise<boolean> {
@@ -35,19 +56,8 @@ class HybridProvider implements LLMProvider {
   private embeddingProvider: LLMProvider;
 
   constructor(suggestionProviderName: string, embeddingProviderName: string) {
-    // Initialize the suggestion provider
-    if (suggestionProviderName.toLowerCase() === 'deepseek') {
-      this.suggestionProvider = new DeepSeekProvider();
-    } else {
-      this.suggestionProvider = new OllamaProvider();
-    }
-
-    // Initialize the embedding provider
-    if (embeddingProviderName.toLowerCase() === 'deepseek') {
-      this.embeddingProvider = new DeepSeekProvider();
-    } else {
-      this.embeddingProvider = new OllamaProvider();
-    }
+    this.suggestionProvider = instantiateProvider(suggestionProviderName);
+    this.embeddingProvider = instantiateProvider(embeddingProviderName);
   }
 
   async checkConnection(): Promise<boolean> {
@@ -288,35 +298,28 @@ export async function switchSuggestionModel(model: string): Promise<boolean> {
  * Creates a test provider for test environments
  */
 async function createTestProvider(suggestionProvider: string): Promise<LLMProvider> {
-  const testProvider = suggestionProvider.toLowerCase();
-  
-  if (testProvider === 'deepseek') {
+  const testProviderName = suggestionProvider.toLowerCase();
+  const provider = instantiateProvider(testProviderName);
+
+  if (testProviderName === 'deepseek') {
     logger.info("[TEST] Using DeepSeek as LLM provider");
-    
-    // Log the API key status (without revealing it)
     const hasApiKey = await deepseek.checkDeepSeekApiKey();
     logger.info(`[TEST] DeepSeek API key configured: ${hasApiKey}`);
     
-    const provider = new DeepSeekProvider();
-    // Override checkConnection to call the test function but always return true
+    // Override checkConnection for testing
     provider.checkConnection = async () => {
-      // Make sure the spy is called
-      await deepseek.testDeepSeekConnection();
+      await deepseek.testDeepSeekConnection(); // Call original for spy
       return true;
     };
-    return provider;
-  } else {
-    logger.info("[TEST] Using Ollama as LLM provider");
-    
-    const provider = new OllamaProvider();
-    // Override checkConnection to call the test function but always return true
+  } else { // ollama or other defaults handled by instantiateProvider
+    logger.info(`[TEST] Using ${testProviderName} as LLM provider (defaulting to Ollama if unknown)`);
+    // Override checkConnection for testing
     provider.checkConnection = async () => {
-      // Make sure the spy is called
-      await ollama.checkOllama();
+      await ollama.checkOllama(); // Call original for spy
       return true;
     };
-    return provider;
   }
+  return provider;
 }
 
 /**
@@ -324,49 +327,42 @@ async function createTestProvider(suggestionProvider: string): Promise<LLMProvid
  */
 async function createProvider(providerName: string): Promise<LLMProvider> {
   let provider: LLMProvider;
+  const normalizedProviderName = providerName.toLowerCase();
   
-  // Log the actual provider being used
-  logger.info(`Creating provider instance for: ${providerName}`);
+  logger.info(`Creating provider instance for: ${normalizedProviderName}`);
   
-  switch (providerName) {
-    case 'deepseek': {
-      try {
-        // Check if DeepSeek API key is configured
-        const apiKeyConfigured = await deepseek.checkDeepSeekApiKey();
-        if (!apiKeyConfigured) {
-          logger.warn("DeepSeek API key not configured, falling back to Ollama");
-          provider = new OllamaProvider();
-        } else {
-          logger.info("Using DeepSeek as LLM provider");
-          provider = new DeepSeekProvider();
-          
-          // Verify DeepSeek connection
-          const isConnected = await provider.checkConnection();
-          logger.info(`DeepSeek provider connection test: ${isConnected ? "successful" : "failed"}`);
-          
-          if (!isConnected) {
-            logger.warn("DeepSeek connection failed, falling back to Ollama");
-            provider = new OllamaProvider();
-          }
+  if (normalizedProviderName === 'deepseek') {
+    try {
+      const apiKeyConfigured = await deepseek.checkDeepSeekApiKey();
+      if (!apiKeyConfigured) {
+        logger.warn("DeepSeek API key not configured, falling back to Ollama");
+        provider = instantiateProvider('ollama');
+      } else {
+        logger.info("Using DeepSeek as LLM provider");
+        provider = instantiateProvider('deepseek');
+        
+        const isConnected = await provider.checkConnection();
+        logger.info(`DeepSeek provider connection test: ${isConnected ? "successful" : "failed"}`);
+        
+        if (!isConnected) {
+          logger.warn("DeepSeek connection failed, falling back to Ollama");
+          provider = instantiateProvider('ollama');
         }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        logger.error(`Error configuring DeepSeek provider: ${errorMsg}`);
-        logger.warn("Falling back to Ollama due to DeepSeek configuration error");
-        provider = new OllamaProvider();
       }
-      break;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Error configuring DeepSeek provider: ${errorMsg}`);
+      logger.warn("Falling back to Ollama due to DeepSeek configuration error");
+      provider = instantiateProvider('ollama');
     }
-    case 'ollama':
-    default: {
-      logger.info("Using Ollama as LLM provider");
-      provider = new OllamaProvider();
-      
-      // Verify Ollama connection
-      const isConnected = await provider.checkConnection();
-      logger.info(`Ollama provider connection test: ${isConnected ? "successful" : "failed"}`);
-      break;
-    }
+  } else { // 'ollama' or other defaults handled by instantiateProvider
+    logger.info(`Using ${normalizedProviderName} as LLM provider (defaulting to Ollama if unknown)`);
+    provider = instantiateProvider(normalizedProviderName); 
+    
+    // Verify Ollama connection (or default provider's connection)
+    // This assumes non-DeepSeek providers behave like Ollama for this check.
+    const isConnected = await provider.checkConnection();
+    logger.info(`${normalizedProviderName} provider connection test: ${isConnected ? "successful" : "failed"}`);
   }
   
   return provider;
