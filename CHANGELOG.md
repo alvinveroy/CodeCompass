@@ -40,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Moved the implementation of `processFeedback` for the Ollama provider from `src/lib/ollama.ts` into the `OllamaProvider` class within `llm-provider.ts`. This consolidates the provider-specific logic following the removal of the function from the lower-level client.
     - Added necessary metric tracking imports (`trackFeedbackScore`, `incrementCounter`) to `llm-provider.ts` for use by `OllamaProvider.processFeedback`. (39b8e0f)
 - Removed unused imports from `model-persistence.ts` (`loadModelConfig`, `forceUpdateModelConfig`) in `src/lib/server.ts` as their functionalities are now covered by `configService` or were part of removed tools. (f2a3abd)
-- Refactored `src/lib/model-persistence.ts`: Removed `saveModelConfig`, `loadModelConfig`, and `forceUpdateModelConfig` functions as their logic is now handled directly by `ConfigService`. (162e050)
+- Refactored `src/lib/model-persistence.ts` by removing `saveModelConfig`, `loadModelConfig`, and `forceUpdateModelConfig` functions as their logic is now handled directly by `ConfigService`. (162e050)
+- Removed `src/lib/model-persistence.ts` as its remaining exports were unused and its functionality is covered by `configService`.
 - Consolidated retry logic:
     - Removed local `enhancedWithRetry` functions from `src/lib/ollama.ts`, `src/lib/deepseek.ts`, and the `OllamaProvider` class in `src/lib/llm-provider.ts`.
     - All retryable operations in these files now use the centralized `withRetry` function from `src/utils/retry-utils.ts` for consistent retry behavior. (7f57ec6)
