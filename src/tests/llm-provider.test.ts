@@ -54,37 +54,65 @@ vi.mock('../lib/config-service', async (importOriginal) => {
 });
 
 describe('LLM Provider', () => {
-  const originalEnv = { ...process.env };
-  const originalGlobal = { ...global };
+  // Store original environment variable values that might be changed by tests
+  const originalEnvValues: Record<string, string | undefined> = {};
+  const envKeysToManage = [
+    'LLM_PROVIDER', 
+    'SUGGESTION_MODEL', 
+    'SUGGESTION_PROVIDER', 
+    'EMBEDDING_PROVIDER',
+    'DEEPSEEK_API_KEY', // Include any other env vars potentially modified
+    'NODE_ENV', // Often set during tests
+    'VITEST',   // Vitest sets this
+    'TEST_PROVIDER_UNAVAILABLE' // Used in these tests
+  ];
+
+  const originalGlobalValues = { 
+    CURRENT_LLM_PROVIDER: global.CURRENT_LLM_PROVIDER,
+    CURRENT_SUGGESTION_MODEL: global.CURRENT_SUGGESTION_MODEL,
+    CURRENT_SUGGESTION_PROVIDER: global.CURRENT_SUGGESTION_PROVIDER,
+    CURRENT_EMBEDDING_PROVIDER: global.CURRENT_EMBEDDING_PROVIDER,
+  };
   
   beforeEach(() => {
     // Reset mocks before each test
     vi.resetAllMocks();
     
-    // Reset environment variables
-    process.env = { ...originalEnv };
-    delete process.env.LLM_PROVIDER;
-    delete process.env.SUGGESTION_MODEL;
-    delete process.env.SUGGESTION_PROVIDER;
-    delete process.env.EMBEDDING_PROVIDER;
-    
+    // Save current values and then delete specific environment variables
+    // This ensures we are modifying the actual process.env object
+    envKeysToManage.forEach(key => {
+      originalEnvValues[key] = process.env[key];
+      delete process.env[key];
+    });
+    // Restore NODE_ENV and VITEST as they are needed for test environment detection
+    if (originalEnvValues['NODE_ENV']) process.env.NODE_ENV = originalEnvValues['NODE_ENV'];
+    if (originalEnvValues['VITEST']) process.env.VITEST = originalEnvValues['VITEST'];
+        
     // Reset global variables
     global.CURRENT_SUGGESTION_MODEL = undefined;
-    global.CURRENT_SUGGESTION_PROVIDER = "";
-    global.CURRENT_EMBEDDING_PROVIDER = "";
+    global.CURRENT_SUGGESTION_PROVIDER = ""; // Ensure it's a string as per type
+    global.CURRENT_EMBEDDING_PROVIDER = ""; // Ensure it's a string
+    global.CURRENT_LLM_PROVIDER = ""; // Ensure it's a string
     
     // Clear provider cache
     clearProviderCache();
   });
   
   afterEach(() => {
-    // Restore environment variables
-    process.env = { ...originalEnv };
+    // Restore specific environment variables to their original states
+    envKeysToManage.forEach(key => {
+      if (originalEnvValues[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originalEnvValues[key];
+      }
+    });
     
     // Restore global variables
-    global.CURRENT_SUGGESTION_MODEL = originalGlobal.CURRENT_SUGGESTION_MODEL;
-    global.CURRENT_SUGGESTION_PROVIDER = originalGlobal.CURRENT_SUGGESTION_PROVIDER;
-    global.CURRENT_EMBEDDING_PROVIDER = originalGlobal.CURRENT_EMBEDDING_PROVIDER;
+    global.CURRENT_SUGGESTION_MODEL = originalGlobalValues.CURRENT_SUGGESTION_MODEL;
+    global.CURRENT_SUGGESTION_PROVIDER = originalGlobalValues.CURRENT_SUGGESTION_PROVIDER;
+    global.CURRENT_EMBEDDING_PROVIDER = originalGlobalValues.CURRENT_EMBEDDING_PROVIDER;
+    global.CURRENT_LLM_PROVIDER = originalGlobalValues.CURRENT_LLM_PROVIDER;
   });
   
   // switchLLMProvider tests are removed as the function is removed.
