@@ -1485,7 +1485,7 @@ Session ID: ${session.id}`;
       
       const context = results.map(r => ({
         filepath: (r.payload as QdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, MAX_SNIPPET_LENGTH),
+        snippet: (r.payload as QdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
         last_modified: (r.payload as QdrantSearchResult['payload']).last_modified,
         relevance: r.score,
       }));
