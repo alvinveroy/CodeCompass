@@ -28,6 +28,9 @@ vi.mock('../lib/config-service', async (importOriginal) => {
     configService: {
       ...actualConfigService.configService,
       persistModelConfiguration: vi.fn(),
+      setSuggestionModel: vi.fn(),
+      setSuggestionProvider: vi.fn(),
+      setEmbeddingProvider: vi.fn(),
       // Mock other getters/setters if needed for specific tests
       // Ensure getters return values consistent with test setup
       get SUGGESTION_MODEL() { return process.env.SUGGESTION_MODEL || 'llama3.1:8b'; },

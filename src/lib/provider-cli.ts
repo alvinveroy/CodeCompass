@@ -51,7 +51,7 @@ Examples:
         console.log(`Successfully switched to suggestion model: ${configService.SUGGESTION_MODEL} (Provider: ${configService.SUGGESTION_PROVIDER}).`);
         console.log(`To make this change permanent, set the SUGGESTION_MODEL environment variable to '${configService.SUGGESTION_MODEL}' or update ~/.codecompass/model-config.json.`);
       } else {
-        console.error(`Failed to switch to ${provider} provider. Check the logs for details.`);
+        console.error(`Failed to switch to model ${modelName}. Check the logs for details.`);
         process.exit(1);
       }
       break;

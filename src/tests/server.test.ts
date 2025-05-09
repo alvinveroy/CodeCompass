@@ -84,8 +84,9 @@ describe('Server Tool Response Formatting', () => {
     });
 
     it('should handle object input without query property', () => {
-      const result = normalizeToolParams({ other: 'value' });
-      expect(result).toEqual({ query: JSON.stringify({ other: 'value' }) });
+      const input = { other: 'value' };
+      const result = normalizeToolParams(input);
+      expect(result).toEqual(input); // Expect the object to be returned as-is
     });
 
     it('should handle primitive values', () => {

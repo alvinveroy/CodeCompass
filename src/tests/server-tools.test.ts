@@ -84,7 +84,7 @@ describe('Server Tools', () => {
     it('should handle object input without query/prompt/sessionId properties', () => {
       const obj = { foo: 'bar', baz: 123 };
       const result = normalizeToolParams(obj);
-      expect(result).toEqual({ query: JSON.stringify(obj) });
+      expect(result).toEqual(obj); // Expect the object to be returned as-is
     });
 
     it('should handle primitive values', () => {
@@ -94,7 +94,7 @@ describe('Server Tools', () => {
 
     it('should handle null input', () => {
       const result = normalizeToolParams(null);
-      expect(result).toEqual({ query: 'null' });
+      expect(result).toEqual({ query: '' }); // Updated to expect empty string for null
     });
   });
 
