@@ -3,7 +3,7 @@ import { getLLMProvider } from "./llm-provider";
 import { incrementCounter, timeExecution } from "./metrics";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { QdrantSearchResult, AgentState } from "./types";
+import { QdrantSearchResult, AgentState, AgentStep } from "./types";
 import { searchWithRefinement } from "./qdrant";
 import { validateGitRepository, getRepositoryDiff } from "./repository";
 import git from "isomorphic-git";
@@ -16,14 +16,6 @@ export interface Tool {
   description: string;
   parameters: Record<string, unknown>;
   requiresModel: boolean;
-}
-
-// Define AgentStep interface
-export interface AgentStep {
-  tool: string;
-  input: unknown;
-  output: unknown;
-  reasoning: string;
 }
 
 // Tool registry with descriptions for the agent
