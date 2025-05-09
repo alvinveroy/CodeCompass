@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { logger, COLLECTION_NAME, MAX_SNIPPET_LENGTH } from "./config";
+import { configService, logger } from "./config-service";
 import { generateEmbedding } from "./ollama";
 
 // Validate Git Repository
@@ -55,7 +55,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       const content = await fs.readFile(fullPath, "utf8");
       
       // Skip empty or very large files
-      if (!content.trim() || content.length > MAX_SNIPPET_LENGTH * 10) {
+      if (!content.trim() || content.length > configService.MAX_SNIPPET_LENGTH * 10) {
         logger.info(`Skipping ${filepath}: ${!content.trim() ? 'empty file' : 'file too large'}`);
         continue;
       }
@@ -63,7 +63,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       const embedding = await generateEmbedding(content);
       const pointId = uuidv4();
       logger.info(`Upserting to Qdrant: ${filepath} (ID: ${pointId})`);
-      await qdrantClient.upsert(COLLECTION_NAME, {
+      await qdrantClient.upsert(configService.COLLECTION_NAME, {
         points: [{ id: pointId, vector: embedding, payload: { filepath, content, last_modified: (await fs.stat(fullPath)).mtime.toISOString() } }],
       });
       logger.info(`Indexed: ${filepath}`);

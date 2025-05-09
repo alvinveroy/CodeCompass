@@ -1,4 +1,4 @@
-import { logger } from "./config";
+import { logger } from "./config-service";
 
 // Session state interface
 export interface SessionState {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { switchLLMProvider, getLLMProvider } from './llm-provider';
-import { LLM_PROVIDER } from './config';
+import { configService } from './config-service';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -31,7 +31,7 @@ Examples:
 
   switch (command) {
     case 'status':
-      console.log(`Current LLM provider: ${LLM_PROVIDER}`);
+      console.log(`Current LLM provider: ${configService.LLM_PROVIDER}`);
       break;
     
     case 'switch': {
@@ -60,14 +60,14 @@ Examples:
     }
     
     case 'test': {
-      console.log(`Testing ${LLM_PROVIDER} provider connection...`);
+      console.log(`Testing ${configService.LLM_PROVIDER} provider connection...`);
       const llmProvider = await getLLMProvider();
       const available = await llmProvider.checkConnection();
       
       if (available) {
-        console.log(`${LLM_PROVIDER} provider is available and working correctly.`);
+        console.log(`${configService.LLM_PROVIDER} provider is available and working correctly.`);
       } else {
-        console.error(`${LLM_PROVIDER} provider is not available. Check your configuration.`);
+        console.error(`${configService.LLM_PROVIDER} provider is not available. Check your configuration.`);
         process.exit(1);
       }
       break;

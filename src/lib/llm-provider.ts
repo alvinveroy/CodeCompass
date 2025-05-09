@@ -2,6 +2,9 @@ import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
 
+import axios from "axios"; // For OllamaProvider.generateText
+import { OllamaGenerateResponse } from "./types"; // For OllamaProvider.generateText
+
 // Interface for LLM Provider
 export interface LLMProvider {
   checkConnection(): Promise<boolean>;
@@ -9,30 +12,6 @@ export interface LLMProvider {
   generateEmbedding(text: string): Promise<number[]>;
   processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string>;
 }
-
-// --- Provider Factory ---
-type LLMProviderConstructor = new () => LLMProvider;
-
-const providerRegistry: Record<string, LLMProviderConstructor> = {
-  ollama: OllamaProvider,
-  deepseek: DeepSeekProvider,
-  // Future providers can be registered here
-};
-
-function instantiateProvider(providerName: string): LLMProvider {
-  const normalizedName = providerName.toLowerCase();
-  const Constructor = providerRegistry[normalizedName];
-  if (!Constructor) {
-    logger.warn(`Unknown provider name: "${providerName}". Defaulting to OllamaProvider.`);
-    return new OllamaProvider(); // Default fallback
-  }
-  logger.debug(`Instantiating provider: ${normalizedName}`);
-  return new Constructor();
-}
-// --- End Provider Factory ---
-
-import axios from "axios"; // For OllamaProvider.generateText
-import { OllamaGenerateResponse } from "./types"; // For OllamaProvider.generateText
 
 // Ollama Provider Implementation
 class OllamaProvider implements LLMProvider {
@@ -104,41 +83,6 @@ class OllamaProvider implements LLMProvider {
   }
 }
 
-// Hybrid Provider Implementation that uses different backends for different operations
-class HybridProvider implements LLMProvider {
-  private suggestionProvider: LLMProvider;
-  private embeddingProvider: LLMProvider;
-
-  constructor(suggestionProviderName: string, embeddingProviderName: string) {
-    this.suggestionProvider = instantiateProvider(suggestionProviderName);
-    this.embeddingProvider = instantiateProvider(embeddingProviderName);
-  }
-
-  async checkConnection(): Promise<boolean> {
-    // Check both providers
-    const suggestionCheck = await this.suggestionProvider.checkConnection();
-    const embeddingCheck = await this.embeddingProvider.checkConnection();
-    
-    // Both must be available
-    return suggestionCheck && embeddingCheck;
-  }
-
-  async generateText(prompt: string): Promise<string> {
-    // Use the suggestion provider for text generation
-    return await this.suggestionProvider.generateText(prompt);
-  }
-
-  async generateEmbedding(text: string): Promise<number[]> {
-    // Always use Ollama for embeddings regardless of provider settings
-    return await ollama.generateEmbedding(text);
-  }
-
-  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
-    // Use the suggestion provider for feedback processing
-    return await this.suggestionProvider.processFeedback(originalPrompt, suggestion, feedback, score);
-  }
-}
-
 // DeepSeek Provider Implementation
 class DeepSeekProvider implements LLMProvider {
   async checkConnection(): Promise<boolean> {
@@ -176,7 +120,63 @@ Please provide an improved response addressing the user's feedback.`;
   }
 }
 
-// Note: Global variables are declared in config.ts
+// Hybrid Provider Implementation that uses different backends for different operations
+class HybridProvider implements LLMProvider {
+  private suggestionProvider: LLMProvider;
+  private embeddingProvider: LLMProvider;
+
+  constructor(suggestionProviderName: string, embeddingProviderName: string) {
+    this.suggestionProvider = instantiateProvider(suggestionProviderName);
+    this.embeddingProvider = instantiateProvider(embeddingProviderName);
+  }
+
+  async checkConnection(): Promise<boolean> {
+    // Check both providers
+    const suggestionCheck = await this.suggestionProvider.checkConnection();
+    const embeddingCheck = await this.embeddingProvider.checkConnection();
+    
+    // Both must be available
+    return suggestionCheck && embeddingCheck;
+  }
+
+  async generateText(prompt: string): Promise<string> {
+    // Use the suggestion provider for text generation
+    return await this.suggestionProvider.generateText(prompt);
+  }
+
+  async generateEmbedding(text: string): Promise<number[]> {
+    // Always use Ollama for embeddings regardless of provider settings
+    return await ollama.generateEmbedding(text);
+  }
+
+  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
+    // Use the suggestion provider for feedback processing
+    return await this.suggestionProvider.processFeedback(originalPrompt, suggestion, feedback, score);
+  }
+}
+
+// --- Provider Factory ---
+type LLMProviderConstructor = new () => LLMProvider;
+
+const providerRegistry: Record<string, LLMProviderConstructor> = {
+  ollama: OllamaProvider,
+  deepseek: DeepSeekProvider,
+  // Future providers can be registered here
+};
+
+function instantiateProvider(providerName: string): LLMProvider {
+  const normalizedName = providerName.toLowerCase();
+  const Constructor = providerRegistry[normalizedName];
+  if (!Constructor) {
+    logger.warn(`Unknown provider name: "${providerName}". Defaulting to OllamaProvider.`);
+    return new OllamaProvider(); // Default fallback
+  }
+  logger.debug(`Instantiating provider: ${normalizedName}`);
+  return new Constructor();
+}
+// --- End Provider Factory ---
+
+// Note: Global variables are declared in src/types/global.d.ts
 
 // loadModelConfig and saveModelConfig are now part of configService's lifecycle or methods
 // For example, configService.reloadConfigsFromFile() and configService.persistModelConfiguration()

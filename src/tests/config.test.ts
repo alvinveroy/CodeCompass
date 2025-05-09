@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as config from '../lib/config';
+import { configService } from '../lib/config-service';
 
 describe('Config Module', () => {
   // Save original environment variables
@@ -17,42 +17,42 @@ describe('Config Module', () => {
 
   describe('Default Configuration', () => {
     it('should have default values for all required configuration', () => {
-      expect(config.OLLAMA_HOST).toBeDefined();
-      expect(config.QDRANT_HOST).toBeDefined();
-      expect(config.COLLECTION_NAME).toBeDefined();
-      expect(config.EMBEDDING_MODEL).toBeDefined();
-      expect(config.SUGGESTION_MODEL).toBeDefined();
-      expect(config.MAX_RETRIES).toBeGreaterThan(0);
-      expect(config.RETRY_DELAY).toBeGreaterThan(0);
-      expect(config.MAX_INPUT_LENGTH).toBeGreaterThan(0);
+      expect(configService.OLLAMA_HOST).toBeDefined();
+      expect(configService.QDRANT_HOST).toBeDefined();
+      expect(configService.COLLECTION_NAME).toBeDefined();
+      expect(configService.EMBEDDING_MODEL).toBeDefined();
+      expect(configService.SUGGESTION_MODEL).toBeDefined();
+      expect(configService.MAX_RETRIES).toBeGreaterThan(0);
+      expect(configService.RETRY_DELAY).toBeGreaterThan(0);
+      expect(configService.MAX_INPUT_LENGTH).toBeGreaterThan(0);
     });
   
     it('should have valid URL formats for host configurations', () => {
       const urlPattern = /^https?:\/\/.+/;
-      expect(config.OLLAMA_HOST).toMatch(urlPattern);
-      expect(config.QDRANT_HOST).toMatch(urlPattern);
+      expect(configService.OLLAMA_HOST).toMatch(urlPattern);
+      expect(configService.QDRANT_HOST).toMatch(urlPattern);
     });
   
     it('should have reasonable limits for MAX_INPUT_LENGTH', () => {
-      expect(config.MAX_INPUT_LENGTH).toBeGreaterThan(100);
-      expect(config.MAX_INPUT_LENGTH).toBeLessThan(100000); // Assuming there's some reasonable upper limit
+      expect(configService.MAX_INPUT_LENGTH).toBeGreaterThan(100);
+      expect(configService.MAX_INPUT_LENGTH).toBeLessThan(100000); // Assuming there's some reasonable upper limit
     });
   
     it('should have reasonable values for retry configuration', () => {
-      expect(config.MAX_RETRIES).toBeGreaterThanOrEqual(1);
-      expect(config.MAX_RETRIES).toBeLessThanOrEqual(10); // Assuming there's some reasonable upper limit
-      expect(config.RETRY_DELAY).toBeGreaterThanOrEqual(100); // At least 100ms
-      expect(config.RETRY_DELAY).toBeLessThanOrEqual(30000); // Not more than 30 seconds
+      expect(configService.MAX_RETRIES).toBeGreaterThanOrEqual(1);
+      expect(configService.MAX_RETRIES).toBeLessThanOrEqual(10); // Assuming there's some reasonable upper limit
+      expect(configService.RETRY_DELAY).toBeGreaterThanOrEqual(100); // At least 100ms
+      expect(configService.RETRY_DELAY).toBeLessThanOrEqual(30000); // Not more than 30 seconds
     });
   });
 
   describe('Logger Configuration', () => {
     it('should have a properly configured logger', () => {
-      expect(config.logger).toBeDefined();
-      expect(typeof config.logger.info).toBe('function');
-      expect(typeof config.logger.error).toBe('function');
-      expect(typeof config.logger.warn).toBe('function');
-      expect(typeof config.logger.debug).toBe('function');
+      expect(configService.logger).toBeDefined();
+      expect(typeof configService.logger.info).toBe('function');
+      expect(typeof configService.logger.error).toBe('function');
+      expect(typeof configService.logger.warn).toBe('function');
+      expect(typeof configService.logger.debug).toBe('function');
     });
   
     it('should be able to log messages without throwing errors', () => {
@@ -67,10 +67,10 @@ describe('Config Module', () => {
       console.warn = vi.fn();
       console.debug = vi.fn();
       
-      expect(() => config.logger.info('Test info message')).not.toThrow();
-      expect(() => config.logger.error('Test error message')).not.toThrow();
-      expect(() => config.logger.warn('Test warning message')).not.toThrow();
-      expect(() => config.logger.debug('Test debug message')).not.toThrow();
+      expect(() => configService.logger.info('Test info message')).not.toThrow();
+      expect(() => configService.logger.error('Test error message')).not.toThrow();
+      expect(() => configService.logger.warn('Test warning message')).not.toThrow();
+      expect(() => configService.logger.debug('Test debug message')).not.toThrow();
       
       // Restore console methods
       console.info = originalInfo;
@@ -90,8 +90,11 @@ describe('Config Module', () => {
       // We need to re-import the module to see the environment variable effect
       vi.resetModules();
       // Use dynamic import instead of require for TypeScript modules
-      return import('../lib/config').then(freshConfig => {
-        expect(freshConfig.OLLAMA_HOST).toBe(testUrl);
+      return import('../lib/config-service').then(mod => {
+        // config-service exports configService instance
+        const freshConfigService = mod.configService;
+        freshConfigService.reloadConfigsFromFile(true); // Force reload to pick up env var
+        expect(freshConfigService.OLLAMA_HOST).toBe(testUrl);
       });
     });
     
@@ -100,9 +103,10 @@ describe('Config Module', () => {
       process.env.QDRANT_HOST = testUrl;
       
       vi.resetModules();
-      // Use dynamic import instead of require for TypeScript modules
-      return import('../lib/config').then(freshConfig => {
-        expect(freshConfig.QDRANT_HOST).toBe(testUrl);
+      return import('../lib/config-service').then(mod => {
+        const freshConfigService = mod.configService;
+        freshConfigService.reloadConfigsFromFile(true);
+        expect(freshConfigService.QDRANT_HOST).toBe(testUrl);
       });
     });
     
@@ -112,10 +116,11 @@ describe('Config Module', () => {
       process.env.SUGGESTION_MODEL = testModel;
       
       vi.resetModules();
-      // Use dynamic import instead of require for TypeScript modules
-      return import('../lib/config').then(freshConfig => {
-        expect(freshConfig.EMBEDDING_MODEL).toBe(testModel);
-        expect(freshConfig.SUGGESTION_MODEL).toBe(testModel);
+      return import('../lib/config-service').then(mod => {
+        const freshConfigService = mod.configService;
+        freshConfigService.reloadConfigsFromFile(true);
+        expect(freshConfigService.EMBEDDING_MODEL).toBe(testModel);
+        expect(freshConfigService.SUGGESTION_MODEL).toBe(testModel);
       });
     });
   });

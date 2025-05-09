@@ -1,4 +1,4 @@
-import { logger as configLogger } from "./config";
+import { logger as configLogger } from "./config-service";
 
 // Export logger for easier mocking in tests
 export const logger = configLogger;

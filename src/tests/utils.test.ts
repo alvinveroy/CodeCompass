@@ -1,6 +1,30 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { withRetry, preprocessText } from '../lib/utils';
-import * as config from '../lib/config';
+// Import the original configService to get its actual default values for resetting
+import { configService as originalConfigServiceInstance } from '../lib/config-service';
+
+// Mock configService for the withRetry tests
+const mockConfigValues = {
+  MAX_RETRIES: originalConfigServiceInstance.MAX_RETRIES,
+  RETRY_DELAY: originalConfigServiceInstance.RETRY_DELAY,
+  // Mock logger methods used by withRetry
+  logger: {
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  }
+};
+
+vi.mock('../lib/config-service', async () => {
+  // Import original to ensure other exports from config-service are maintained if any
+  const originalModule = await vi.importActual('../lib/config-service') as any;
+  return {
+    ...originalModule, // Spread original exports
+    configService: mockConfigValues, // Override configService with our mock
+    logger: mockConfigValues.logger, // Override logger export with our mock logger
+  };
+});
 
 describe('Utils Module', () => {
   describe('withRetry', () => {
@@ -10,7 +34,7 @@ describe('Utils Module', () => {
     });
 
     afterEach(() => {
-      vi.restoreAllMocks();
+      vi.restoreAllMocks(); // This will also restore vi.spyOn(global, 'setTimeout')
       vi.useRealTimers();
     });
 
@@ -73,9 +97,7 @@ describe('Utils Module', () => {
     });
 
     it('should respect the configured MAX_RETRIES when no retry count is provided', async () => {
-      // Save original and override for test
-      const originalMaxRetries = config.MAX_RETRIES;
-      Object.defineProperty(config, 'MAX_RETRIES', { value: 4 });
+      mockConfigValues.MAX_RETRIES = 4; // Set for this specific test
       
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
       
@@ -86,15 +108,13 @@ describe('Utils Module', () => {
       });
       
       await expect(withRetry(fn)).rejects.toThrow('fail');
-      expect(fn).toHaveBeenCalledTimes(4);
+      expect(fn).toHaveBeenCalledTimes(4); 
       
-      // Restore original
-      Object.defineProperty(config, 'MAX_RETRIES', { value: originalMaxRetries });
+      // No need to restore, beforeEach will reset mockConfigValues.MAX_RETRIES
     });
 
     it('should use the provided retry delay between attempts', async () => {
-      const originalRetryDelay = config.RETRY_DELAY;
-      Object.defineProperty(config, 'RETRY_DELAY', { value: 1000 });
+      mockConfigValues.RETRY_DELAY = 1000; // Set for this specific test
       
       // Spy on setTimeout
       const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {
@@ -109,10 +129,11 @@ describe('Utils Module', () => {
       await withRetry(fn, 2);
       
       // Now verify setTimeout was called with the correct delay
+      // withRetry uses exponential backoff: delay * Math.pow(2, i)
+      // For the first retry (i=0), delay is 1000 * 2^0 = 1000
       expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
       
-      // Restore original
-      Object.defineProperty(config, 'RETRY_DELAY', { value: originalRetryDelay });
+      // No need to restore, beforeEach will reset mockConfigValues.RETRY_DELAY
     });
   });
 

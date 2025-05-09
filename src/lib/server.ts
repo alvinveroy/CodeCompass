@@ -821,7 +821,7 @@ export async function startServer(repoPath: string): Promise<void> {
     
     // Log startup info to file
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
-    const registeredTools = server.capabilities?.tools || {};
+    const registeredTools = (server as any).capabilities?.tools || {};
     logger.info(`CodeCompass server started with tools: ${Object.keys(registeredTools).join(', ')}`);
     
     // Display version and status to stderr (similar to Context7)
@@ -1097,10 +1097,10 @@ async function registerTools(
       }
       
       return {
-        filepath: (result.payload as QdrantSearchResult['payload']).filepath,
+        filepath: (result.payload as DetailedQdrantSearchResult['payload']).filepath,
         snippet,
         summary,
-        last_modified: (result.payload as QdrantSearchResult['payload']).last_modified,
+        last_modified: (result.payload as DetailedQdrantSearchResult['payload']).last_modified,
         relevance: result.score,
       };
     }));
