@@ -137,19 +137,23 @@ describe('Config Module', () => {
     
     it('should respect custom model configurations if set via environment variables', async () => {
       const testModel = 'test-model-from-env';
-      const testProvider = 'ollama'; // 'test-model-from-env' implies ollama unless 'deepseek' is in name
+      const testProvider = 'ollama';
 
-      process.env.EMBEDDING_MODEL = testModel; // This should be picked up
-      process.env.SUGGESTION_MODEL = testModel; // This should be picked up
-      // SUGGESTION_PROVIDER will be derived if not set, or can be set explicitly
+      // Set environment variables *before* any potential module import or reset
+      process.env.EMBEDDING_MODEL = testModel;
+      process.env.SUGGESTION_MODEL = testModel;
       process.env.SUGGESTION_PROVIDER = testProvider;
       
-      vi.resetModules(); // This is key to re-evaluate the module with new env vars
-      const mod = await import('../lib/config-service');
-      const freshConfigService = mod.configService;
-      // The constructor of ConfigService already calls loadConfigurationsFromFile and initializes globals.
-      // reloadConfigsFromFile(true) ensures it re-reads env vars and then files (which are mocked not to exist).
-      freshConfigService.reloadConfigsFromFile(true); 
+      // Ensure a completely fresh import of config-service after env vars are set
+      vi.resetModules(); 
+      const { configService: freshConfigService } = await import('../lib/config-service');
+      
+      // The ConfigService constructor should have picked up these env vars.
+      // reloadConfigsFromFile(true) is called by the constructor.
+      // If we call it again, it re-initializes from env vars then attempts file load.
+      // This should be redundant if vi.resetModules() + import works as expected.
+      // However, to be absolutely sure it re-evaluates with current process.env:
+      freshConfigService.reloadConfigsFromFile(true);
 
       expect(freshConfigService.EMBEDDING_MODEL).toBe(testModel);
       expect(freshConfigService.SUGGESTION_MODEL).toBe(testModel);
