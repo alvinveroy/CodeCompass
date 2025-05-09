@@ -12,8 +12,33 @@ const LOCAL_DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/embeddings";
 // Exporting these might still be useful for direct use if configService isn't passed everywhere,
 // but ideally, modules get these from configService.
 export { LOCAL_DEEPSEEK_API_URL as DEEPSEEK_API_URL, LOCAL_DEEPSEEK_EMBEDDING_URL as DEEPSEEK_EMBEDDING_URL };
-import { incrementCounter, timeExecution } from "./metrics";
+import { incrementCounter, recordTiming, timeExecution } from "./metrics";
 import { preprocessText } from "./utils";
+
+// Rate limiting state
+const requestTimestamps: number[] = [];
+
+async function waitForRateLimit(): Promise<void> {
+  const now = Date.now();
+  const rpmLimit = configService.DEEPSEEK_RPM_LIMIT;
+
+  // Remove timestamps older than 1 minute
+  while (requestTimestamps.length > 0 && requestTimestamps[0] < now - 60000) {
+    requestTimestamps.shift();
+  }
+
+  if (requestTimestamps.length >= rpmLimit) {
+    const timeToWait = (requestTimestamps[0] + 60000) - now;
+    if (timeToWait > 0) {
+      logger.info(`DeepSeek rate limit nearly reached (${requestTimestamps.length}/${rpmLimit} requests in last minute). Delaying next request for ${timeToWait}ms.`);
+      const delayStartTime = Date.now();
+      await new Promise(resolve => setTimeout(resolve, timeToWait));
+      recordTiming('deepseek_rate_limit_delay_ms', Date.now() - delayStartTime);
+    }
+  }
+  requestTimestamps.push(now);
+}
+
 
 /**
  * Check if DeepSeek API key is configured
@@ -169,6 +194,8 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
     }
     logger.info(`DeepSeek API key is configured with length: ${apiKey.length}`);
 
+    await waitForRateLimit();
+
     return await timeExecution('deepseek_generation', async () => {
       logger.info(`Generating with DeepSeek for prompt (length: ${prompt.length})`);
       
@@ -305,6 +332,8 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
     logger.info(`DeepSeek API key is configured with length: ${apiKey.length}`);
 
     const processedText = preprocessText(text);
+
+    await waitForRateLimit();
     
     return await timeExecution('deepseek_embedding_generation', async () => {
       // Construct embedding URL based on API URL from configService

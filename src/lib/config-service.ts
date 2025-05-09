@@ -26,6 +26,7 @@ class ConfigService {
   private _deepSeekApiKey: string;
   private _deepSeekApiUrl: string;
   private _deepSeekModel: string;
+  private _deepSeekRpmLimit: number; // Requests Per Minute
 
   private _useMixedProviders: boolean;
   private _suggestionProvider: string;
@@ -36,6 +37,8 @@ class ConfigService {
   public readonly REQUEST_TIMEOUT: number;
   public readonly MAX_RETRIES: number;
   public readonly RETRY_DELAY: number;
+
+  public readonly DEEPSEEK_RPM_LIMIT_DEFAULT = 60; // Default RPM for DeepSeek
 
   public readonly CONFIG_DIR: string;
   public readonly MODEL_CONFIG_FILE: string;
@@ -96,6 +99,7 @@ class ConfigService {
     this._deepSeekApiKey = process.env.DEEPSEEK_API_KEY || "";
     this._deepSeekApiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
     this._deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-coder";
+    this._deepSeekRpmLimit = parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this.DEEPSEEK_RPM_LIMIT_DEFAULT;
 
     this._useMixedProviders = process.env.USE_MIXED_PROVIDERS === "true" || false;
     this._suggestionProvider = process.env.SUGGESTION_PROVIDER || this._llmProvider;
@@ -177,7 +181,8 @@ class ConfigService {
     // or external libraries that might still read from process.env directly.
     process.env.DEEPSEEK_API_KEY = this._deepSeekApiKey;
     process.env.DEEPSEEK_API_URL = this._deepSeekApiUrl;
-    process.env.DEEPSEEK_MODEL = this._deepSeekModel; // DEEPSEEK_MODEL is usually from env or default
+    process.env.DEEPSEEK_MODEL = this._deepSeekModel; 
+    process.env.DEEPSEEK_RPM_LIMIT = String(this._deepSeekRpmLimit);
     process.env.SUGGESTION_MODEL = this._suggestionModel;
     process.env.SUGGESTION_PROVIDER = this._suggestionProvider;
     process.env.EMBEDDING_PROVIDER = this._embeddingProvider;
@@ -195,6 +200,7 @@ class ConfigService {
     this._deepSeekApiKey = process.env.DEEPSEEK_API_KEY || "";
     this._deepSeekApiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
     this._deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-coder";
+    this._deepSeekRpmLimit = parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this.DEEPSEEK_RPM_LIMIT_DEFAULT;
     this._suggestionProvider = process.env.SUGGESTION_PROVIDER || this._llmProvider;
     this._embeddingProvider = process.env.EMBEDDING_PROVIDER || "ollama";
       
@@ -218,6 +224,7 @@ class ConfigService {
   get DEEPSEEK_API_KEY(): string { return process.env.DEEPSEEK_API_KEY || this._deepSeekApiKey; }
   get DEEPSEEK_API_URL(): string { return process.env.DEEPSEEK_API_URL || this._deepSeekApiUrl; }
   get DEEPSEEK_MODEL(): string { return process.env.DEEPSEEK_MODEL || this._deepSeekModel; }
+  get DEEPSEEK_RPM_LIMIT(): number { return parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this._deepSeekRpmLimit; }
 
   get USE_MIXED_PROVIDERS(): boolean { return this._useMixedProviders; } // Typically from env or default
   get SUGGESTION_PROVIDER(): string { return global.CURRENT_SUGGESTION_PROVIDER || this._suggestionProvider; }

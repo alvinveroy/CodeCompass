@@ -80,6 +80,7 @@ async function registerGetRepositoryContextTool(
     async (params: unknown) => {
       const chainId = generateChainId();
       trackToolChain(chainId, "get_repository_context");
+      logger.info(`Tool 'get_repository_context' execution started. Chain ID: ${chainId}`);
       
       logger.info("Received params for get_repository_context (simplified)", { params });
       const normalizedParams = normalizeToolParams(params);
@@ -949,6 +950,7 @@ async function registerTools(
       const chainId = generateChainId();
       trackToolChain(chainId, "agent_query");
       trackAgentRun();
+      logger.info(`Tool 'agent_query' execution started. Chain ID: ${chainId}`);
       
       logger.info("Received params for agent_query", { params });
       const normalizedParams = normalizeToolParams(params);
@@ -1040,6 +1042,7 @@ async function registerTools(
     async (params: unknown) => {
       const chainId = generateChainId();
       trackToolChain(chainId, "search_code");
+      logger.info(`Tool 'search_code' execution started. Chain ID: ${chainId}`);
         
       logger.info("Received params for search_code", { params });
       const normalizedParams = normalizeToolParams(params);
@@ -1290,6 +1293,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       async (params: unknown) => {
         const chainId = generateChainId();
         trackToolChain(chainId, "generate_suggestion");
+        logger.info(`Tool 'generate_suggestion' execution started. Chain ID: ${chainId}`);
         
         logger.info("Received params for generate_suggestion", { params });
         const normalizedParams = normalizeToolParams(params);
@@ -1629,6 +1633,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       async (params: unknown) => {
         const chainId = generateChainId();
         trackToolChain(chainId, "analyze_code_problem");
+        logger.info(`Tool 'analyze_code_problem' execution started. Chain ID: ${chainId}`);
         
         logger.info("Received params for analyze_code_problem", { params });
         const normalizedParams = normalizeToolParams(params);

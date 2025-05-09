@@ -458,6 +458,7 @@ export async function runAgentLoop(
   maxSteps = 5
 ): Promise<string> {
   incrementCounter('agent_runs');
+  logger.info(`Agent loop started for query: "${query}" (Session: ${sessionId || 'new'})`);
   
   // Log the current provider and model being used by the agent, sourced from ConfigService
   logger.info(`Agent running with provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
@@ -533,6 +534,7 @@ export async function runAgentLoop(
       
       // Get agent reasoning with timeout handling
       let agentOutput: string;
+      logger.info(`Agent (step ${step + 1}): Generating reasoning and tool selection...`);
       try {
         // Set a timeout promise
         const timeoutPromise = new Promise<string>((_, reject) => {
@@ -544,8 +546,9 @@ export async function runAgentLoop(
           llmProvider.generateText(agentPrompt),
           timeoutPromise
         ]);
+        logger.info(`Agent (step ${step + 1}): Reasoning and tool selection generated.`);
       } catch (error) {
-        logger.warn(`Agent reasoning timed out or failed: ${error instanceof Error ? error.message : String(error)}`);
+        logger.warn(`Agent (step ${step + 1}): Reasoning timed out or failed: ${error instanceof Error ? error.message : String(error)}`);
         // Provide a fallback response that continues the agent loop
         agentOutput = "TOOL_CALL: " + JSON.stringify({
           tool: "search_code",
