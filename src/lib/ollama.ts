@@ -2,8 +2,7 @@ import axios from "axios"; // axios will be used by OllamaProvider.generateText
 import { configService, logger } from "./config-service";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types"; // OllamaGenerateResponse might be used by OllamaProvider
 import { preprocessText } from "../utils/text-utils";
-import { incrementCounter, timeExecution, trackFeedbackScore } from "./metrics"; // trackFeedbackScore might be used by SuggestionPlanner
-import { getLLMProvider } from "./llm-provider"; // For summarizeSnippet
+import { incrementCounter, timeExecution } from "./metrics";
 
 /**
  * Check if Ollama server is running and accessible
@@ -171,57 +170,4 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     });
     throw new Error(`Failed to generate embedding: ${err.message}`);
   }
-}
-
-// Process user feedback on a suggestion
-// This function might be better placed in SuggestionService or called by it,
-// but for now, it's kept here if OllamaProvider's processFeedback calls it.
-// Alternatively, OllamaProvider.processFeedback can implement this logic directly.
-export async function processFeedback(
-  originalPrompt: string,
-  suggestion: string,
-  feedback: string,
-  score: number
-): Promise<string> {
-  try {
-    // Track the user feedback score
-    trackFeedbackScore(score);
-    
-    const feedbackPrompt = `You previously provided this response to a request:
-    
-Request: ${originalPrompt}
-
-Your response:
-${suggestion}
-
-The user provided the following feedback (score ${score}/10):
-${feedback}
-
-Please provide an improved response addressing the user's feedback.`;
-    
-    const improvedResponse = await enhancedWithRetry(async () => {
-      const res = await axios.post<OllamaGenerateResponse>(
-        `${configService.OLLAMA_HOST}/api/generate`,
-        { model: configService.SUGGESTION_MODEL, prompt: feedbackPrompt, stream: false },
-        { timeout: configService.REQUEST_TIMEOUT }
-      );
-      return res.data.response;
-    });
-    
-    incrementCounter('feedback_refinements');
-    return improvedResponse;
-  } catch (error: unknown) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    logger.error("Failed to process feedback", { error: err.message });
-    throw new Error("Failed to improve response based on feedback: " + err.message);
-  }
-}
-
-// Summarize Snippet
-export async function summarizeSnippet(snippet: string): Promise<string> {
-  const prompt = `Summarize this code snippet in 50 words or less:\n\n${snippet}`;
-  // For summarization, a direct generation is likely sufficient.
-  // The full planning process might be overkill.
-  const llmProvider = await getLLMProvider();
-  return await llmProvider.generateText(prompt);
 }
