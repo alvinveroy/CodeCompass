@@ -33,9 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Removed unused `registerGetRepositoryContextTool` function (dead code). (20c7bd0)
     - Fixed misplaced `generateChainId` function definition, moving it to the module's top level.
     - Refactored `normalizeToolParams` to correctly handle structured object parameters and simplify its logic.
-    - Simplified parameter extraction in the `switch_suggestion_model` tool by relying on the Zod schema and the improved `normalizeToolParams`.
+    - Simplified parameter extraction in the `switch_suggestion_model` tool by relying on the Zod schema and the improved `normalizeToolParams`. (d592217)
 - Fixed tool registration order in `src/lib/server.ts`: Moved `deepseek_diagnostic` and `force_deepseek_connection` tool registrations to occur before the server connects to the transport, ensuring they are available immediately upon server startup. (a50162f)
 - Refactored `src/lib/llm-provider.ts`:
+    - Removed deprecated `switchLLMProvider` function and its associated unused import of `saveModelConfig` and `loadModelConfig` from `model-persistence.ts`. (f2a3abd)
+    - Moved the implementation of `processFeedback` for the Ollama provider from `src/lib/ollama.ts` into the `OllamaProvider` class within `llm-provider.ts`. This consolidates the provider-specific logic following the removal of the function from the lower-level client.
+    - Added necessary metric tracking imports (`trackFeedbackScore`, `incrementCounter`) to `llm-provider.ts` for use by `OllamaProvider.processFeedback`. (39b8e0f)
+- Removed unused imports from `model-persistence.ts` (`loadModelConfig`, `forceUpdateModelConfig`) in `src/lib/server.ts` as their functionalities are now covered by `configService` or were part of removed tools. (f2a3abd)
+- Refactored `src/lib/model-persistence.ts`: Removed `saveModelConfig`, `loadModelConfig`, and `forceUpdateModelConfig` functions as their logic is now handled directly by `ConfigService`.
+- Consolidated retry logic:
     - Removed deprecated `switchLLMProvider` function and its associated unused import of `saveModelConfig` and `loadModelConfig` from `model-persistence.ts`.
     - Moved the implementation of `processFeedback` for the Ollama provider from `src/lib/ollama.ts` into the `OllamaProvider` class within `llm-provider.ts`. This consolidates the provider-specific logic following the removal of the function from the lower-level client.
     - Added necessary metric tracking imports (`trackFeedbackScore`, `incrementCounter`) to `llm-provider.ts` for use by `OllamaProvider.processFeedback`. (39b8e0f)
