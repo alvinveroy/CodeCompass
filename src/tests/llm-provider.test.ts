@@ -156,11 +156,9 @@ describe('LLM Provider', () => {
       // Verify the result is true (success)
       expect(result).toBe(true);
       
-      // Verify the environment and global variables were updated
-      expect(process.env.SUGGESTION_MODEL).toBe('deepseek-coder');
-      expect(process.env.SUGGESTION_PROVIDER).toBe('deepseek');
-      expect(global.CURRENT_SUGGESTION_MODEL).toBe('deepseek-coder');
-      expect(global.CURRENT_SUGGESTION_PROVIDER).toBe('deepseek');
+      // Verify that configService methods were called with correct arguments
+      expect(configService.setSuggestionModel).toHaveBeenCalledWith('deepseek-coder');
+      expect(configService.setSuggestionProvider).toHaveBeenCalledWith('deepseek');
       
       // Verify the DeepSeek connection was tested
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
@@ -179,11 +177,9 @@ describe('LLM Provider', () => {
       // Verify the result is true (success)
       expect(result).toBe(true);
       
-      // Verify the environment and global variables were updated
-      expect(process.env.SUGGESTION_MODEL).toBe('llama3.1:8b');
-      expect(process.env.SUGGESTION_PROVIDER).toBe('ollama');
-      expect(global.CURRENT_SUGGESTION_MODEL).toBe('llama3.1:8b');
-      expect(global.CURRENT_SUGGESTION_PROVIDER).toBe('ollama');
+      // Verify that configService methods were called with correct arguments
+      expect(configService.setSuggestionModel).toHaveBeenCalledWith('llama3.1:8b');
+      expect(configService.setSuggestionProvider).toHaveBeenCalledWith('ollama');
       
       // Verify the Ollama connection was tested
       expect(ollama.checkOllama).toHaveBeenCalled();

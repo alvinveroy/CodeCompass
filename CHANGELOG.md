@@ -64,11 +64,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed granular diagnostic tools: `debug_provider`, `reset_provider`, `direct_model_switch`, `model_switch_diagnostic`, and `debug_model_switch` to simplify the toolset. Core diagnostics are covered by `check_provider`.
 
 ### Fixed
-- Resolved multiple test failures and a build error (f543424, 33a73a0, 80fe7e2, 8e36565):
+- Resolved multiple test failures and a build error (f543424, 33a73a0, 80fe7e2, 8e36565, bf4d444):
     - Updated `configService` mock in `tests/llm-provider.test.ts` to include setter methods.
     - Refined `configService` mock setters in `tests/llm-provider.test.ts` to correctly update `process.env` and `global` variables.
     - Adjusted `beforeEach` and `afterEach` in `tests/llm-provider.test.ts` to correctly manage and restore `process.env` properties.
-    - Further refined the `configService` mock in `tests/llm-provider.test.ts` to more explicitly define mocked properties and ensure setters correctly update `process.env` and `global` state, aiming to resolve persistent test failures for `switchSuggestionModel`.
+    - Further refined the `configService` mock in `tests/llm-provider.test.ts` to more explicitly define mocked properties.
+    - Changed assertions in `switchSuggestionModel` tests within `tests/llm-provider.test.ts` to verify calls to mocked `configService` setters (e.g., `setSuggestionModel`) rather than asserting direct side effects on `process.env` or `global` variables, making the tests more robust.
     - Corrected `normalizeToolParams` tests in `tests/server.test.ts` and `tests/server-tools.test.ts` to align with its refactored behavior.
     - Fixed an incorrect variable name in an error message in `lib/provider-cli.ts`.
 - Fixed MCP logging to prevent JSON parsing errors in Claude Desktop
