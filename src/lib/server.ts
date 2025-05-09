@@ -22,9 +22,10 @@ import { validateGitRepository, indexRepository, getRepositoryDiff } from "./rep
 import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun } from "./metrics";
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider"; // Added LLMProvider import
 import { SuggestionPlanner } from "./suggestion-service"; // Added SuggestionPlanner import
+import { AgentInitialQueryResponse } from "./types"; // Added AgentInitialQueryResponse import
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults } from "./state";
-import { runAgentLoop } from "./agent";
+import { runAgentLoop } from "./agent"; // This might become unused
 
 // Normalize tool parameters to handle various input formats
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
@@ -962,72 +963,66 @@ async function registerTools(
         logger.warn("No query provided for agent_query, using default");
       }
       
-      const { query, sessionId, maxSteps = 5 } = normalizedParams;
+      const { query, sessionId } = normalizedParams; // maxSteps is not used in initiateAgentQuery directly
     
     try {
-      // Force clear any cached providers
-      Object.keys(require.cache).forEach(key => {
-        if (key.includes('llm-provider') || key.includes('deepseek') || key.includes('ollama')) {
-          delete require.cache[key];
-        }
-      });
-      
-      // Import the clearProviderCache function and use it
-      const { clearProviderCache } = await import('./llm-provider');
-      clearProviderCache();
-      
       // Ensure ConfigService reflects the latest state from files.
       configService.reloadConfigsFromFile(true);
 
       const llmProvider = await getLLMProvider(); // Uses configService
-      
       logger.info(`Agent using provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
-      // Logging process.env directly can be for sanity check, but configService is the authority.
-      logger.info(`Provider details from env - suggestionProvider: ${process.env.SUGGESTION_PROVIDER}, suggestionModel: ${process.env.SUGGESTION_MODEL}`);
       
-      // Verify the provider is working with a test generation
-      try {
-        const _testResult = await llmProvider.generateText("Test message");
-        logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
-      } catch (_error) {
-        logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`, { error: _error });
+      const planner = new SuggestionPlanner(llmProvider);
+      const initialResponse: AgentInitialQueryResponse = await planner.initiateAgentQuery(
+        query as string,
+        sessionId as string | undefined
+      );
+
+      if (initialResponse.status === "ERROR") {
+        logger.error("Error in agent_query during plan initiation", { 
+          sessionId: initialResponse.sessionId, 
+          message: initialResponse.message 
+        });
+        return {
+          content: [{
+            type: "text",
+            text: `# Agent Query Failed\n\nSession ID: ${initialResponse.sessionId}\nStatus: ${initialResponse.status}\nMessage: ${initialResponse.message}\n\nAgent State:\n\`\`\`json\n${JSON.stringify(initialResponse.agentState, null, 2)}\n\`\`\``,
+          }],
+        };
       }
       
-      // Create a timeout promise
-      const agentTimeoutMs = configService.AGENT_QUERY_TIMEOUT;
-      logger.info(`Agent query will timeout after ${agentTimeoutMs / 1000} seconds.`);
-      const timeoutPromise = new Promise<string>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`Agent query timed out after ${agentTimeoutMs / 1000} seconds`));
-        }, agentTimeoutMs);
-      });
-      
-      // Run the agent loop with timeout
-      const response = await Promise.race([
-        runAgentLoop(
-          query as string,
-          sessionId as string | undefined,
-          qdrantClient,
-          repoPath,
-          suggestionModelAvailable,
-          maxSteps as number
-        ),
-        timeoutPromise
-      ]);
+      const responseText = `# Agent Query Initiated Successfully
+
+**Session ID:** ${initialResponse.sessionId}
+**Status:** ${initialResponse.status}
+**Message:** ${initialResponse.message}
+
+## Generated Plan
+\`\`\`
+${initialResponse.generatedPlanText || "No plan text generated."}
+\`\`\`
+
+**Next Steps:** To execute this plan, use the session ID (\`${initialResponse.sessionId}\`) with a subsequent command designed for step-by-step execution (e.g., a future 'execute_agent_step' tool or an enhanced 'agent_query' tool).
+
+**Current Agent State:**
+\`\`\`json
+${JSON.stringify(initialResponse.agentState, null, 2)}
+\`\`\`
+`;
       
       return {
         content: [{
           type: "text",
-          text: response,
+          text: responseText,
         }],
       };
     } catch (error: unknown) {
-      logger.error("Error in agent_query", { error: error instanceof Error ? error.message : String(error) });
+      logger.error("Error in agent_query tool", { error: error instanceof Error ? error.message : String(error) });
       
       return {
         content: [{
           type: "text",
-          text: `# Error in Agent Processing\n\nThere was an error processing your query: ${(error as Error).message}\n\nPlease try a more specific query or use one of the other tools directly.`,
+          text: `# Error in Agent Query Tool\n\nThere was an unexpected error processing your query: ${(error as Error).message}\n\nPlease check the server logs for more details.`,
         }],
       };
     }
