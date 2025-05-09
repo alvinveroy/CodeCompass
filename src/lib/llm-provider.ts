@@ -1,6 +1,7 @@
 import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
+import { incrementCounter, trackFeedbackScore } from "./metrics"; // Added for processFeedback
 
 import axios from "axios"; // For OllamaProvider.generateText
 import { OllamaGenerateResponse } from "./types"; // For OllamaProvider.generateText
@@ -82,7 +83,45 @@ class OllamaProvider implements LLMProvider {
   }
 
   async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
-    return await ollama.processFeedback(originalPrompt, suggestion, feedback, score);
+    logger.debug(`OllamaProvider: Processing feedback for prompt (original length: ${originalPrompt.length}, score: ${score})`);
+    try {
+      // Track the user feedback score
+      trackFeedbackScore(score);
+      
+      const feedbackPrompt = `You previously provided this response to a request:
+    
+Request: ${originalPrompt}
+
+Your response:
+${suggestion}
+
+The user provided the following feedback (score ${score}/10):
+${feedback}
+
+Please provide an improved response addressing the user's feedback.`;
+      
+      const improvedResponse = await this.enhancedWithRetry(async () => {
+        const res = await axios.post<OllamaGenerateResponse>(
+          `${configService.OLLAMA_HOST}/api/generate`,
+          { model: configService.SUGGESTION_MODEL, prompt: feedbackPrompt, stream: false },
+          { timeout: configService.REQUEST_TIMEOUT }
+        );
+        logger.info(`OllamaProvider API request to ${configService.OLLAMA_HOST}/api/generate (for feedback) completed with status: ${res.status}`);
+        if (!res.data || typeof res.data.response !== 'string') {
+          logger.error(`OllamaProvider API request (for feedback) failed with status ${res.status}: Invalid response structure. Response data: ${JSON.stringify(res.data)}`);
+          throw new Error("Invalid response structure from Ollama API during feedback processing");
+        }
+        return res.data.response;
+      });
+      
+      incrementCounter('feedback_refinements');
+      return improvedResponse;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error("OllamaProvider: Failed to process feedback", { message: err.message });
+      // Re-throw to be caught by SuggestionPlanner or other callers
+      throw new Error(`OllamaProvider: Failed to improve response based on feedback: ${err.message}`);
+    }
   }
 }
 
