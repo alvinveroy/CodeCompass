@@ -20,7 +20,8 @@ import { initializeQdrant } from "./qdrant"; // searchWithRefinement removed fro
 import { searchWithRefinement } from "./query-refinement"; // Added import for searchWithRefinement
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
 import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun } from "./metrics";
-import { getLLMProvider, switchSuggestionModel } from "./llm-provider";
+import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider"; // Added LLMProvider import
+import { SuggestionPlanner } from "./suggestion-service"; // Added SuggestionPlanner import
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { runAgentLoop } from "./agent";
@@ -1306,10 +1307,11 @@ Ensure the suggestion is concise, practical, and leverages the repository's exis
       `;
       
       // Get the current LLM provider
-      const llmProvider = await getLLMProvider();
+      const llmProvider: LLMProvider = await getLLMProvider();
       
-      // Generate suggestion with the current provider
-      const suggestion = await llmProvider.generateText(prompt);
+      // Use SuggestionPlanner for multi-step suggestion generation
+      const planner = new SuggestionPlanner(llmProvider);
+      const suggestion = await planner.planAndGenerate(prompt);
       
       // Add suggestion to session
       addSuggestion(session.id, query as string, suggestion);

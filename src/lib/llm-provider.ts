@@ -31,14 +31,68 @@ function instantiateProvider(providerName: string): LLMProvider {
 }
 // --- End Provider Factory ---
 
+import axios from "axios"; // For OllamaProvider.generateText
+import { OllamaGenerateResponse } from "./types"; // For OllamaProvider.generateText
+
 // Ollama Provider Implementation
 class OllamaProvider implements LLMProvider {
   async checkConnection(): Promise<boolean> {
     return await ollama.checkOllama();
   }
 
+  // Simplified enhancedWithRetry for direct use in OllamaProvider.generateText
+  // This is a copy of the one previously in ollama.ts, adapted for direct use.
+  private async enhancedWithRetry<T>(
+    fn: () => Promise<T>,
+    retries = configService.MAX_RETRIES,
+    initialDelay = configService.RETRY_DELAY
+  ): Promise<T> {
+    let lastError: Error | undefined;
+    let currentDelay = initialDelay;
+
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await fn();
+      } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        lastError = err;
+        const axiosError = error as { code?: string; response?: { status: number } };
+        const isTimeout = axiosError.code === 'ECONNABORTED' ||
+                          err.message.includes('timeout') ||
+                          axiosError.response?.status === 500;
+        if (isTimeout) {
+          logger.warn(`OllamaProvider: Request timed out (attempt ${i + 1}/${retries}). Retrying in ${currentDelay}ms...`);
+        } else {
+          logger.warn(`OllamaProvider: Retry ${i + 1}/${retries} after error: ${err.message}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, currentDelay));
+        currentDelay *= 2;
+      }
+    }
+    throw lastError || new Error("OllamaProvider: All retries failed");
+  }
+
   async generateText(prompt: string): Promise<string> {
-    return await ollama.generateSuggestion(prompt);
+    // Direct call to Ollama API for text generation
+    logger.debug(`OllamaProvider: Generating text for prompt (length: ${prompt.length})`);
+    try {
+      const response = await this.enhancedWithRetry(async () => {
+        const res = await axios.post<OllamaGenerateResponse>(
+          `${configService.OLLAMA_HOST}/api/generate`,
+          { model: configService.SUGGESTION_MODEL, prompt: prompt, stream: false },
+          { timeout: configService.REQUEST_TIMEOUT }
+        );
+        if (!res.data || typeof res.data.response !== 'string') {
+          throw new Error("Invalid response structure from Ollama API");
+        }
+        return res.data.response;
+      });
+      return response;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error("OllamaProvider: Failed to generate text", { message: err.message, promptLength: prompt.length });
+      throw err; // Re-throw to be caught by SuggestionPlanner or other callers
+    }
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
