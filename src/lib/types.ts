@@ -25,14 +25,7 @@ export const GetRepositoryContextSchema = z.object({
   z.string().min(1, "Query is required").transform(query => ({ query }))
 );
 
-export const FeedbackSchema = z.object({
-  sessionId: z.string().optional(),
-  feedbackId: z.string().optional(),
-  score: z.number().min(1).max(10),
-  comments: z.string(),
-  originalQuery: z.string(),
-  suggestion: z.string()
-});
+// FeedbackSchema removed
 
 // Agent schema
 export const AgentQuerySchema = z.object({
@@ -109,19 +102,13 @@ export interface AgentState {
 
 export interface AgentInitialQueryResponse {
   sessionId: string;
-  status: "PLAN_GENERATED" | "ERROR"; // Initial statuses
+  status: "PLAN_GENERATED" | "COMPLETED" | "ERROR"; // Statuses now include COMPLETED for the final response
   message: string;
   generatedPlanText?: string; // The raw plan text from the LLM
-  agentState: AgentState; // The complete, updated agent state including the planText
+  agentState: AgentState; // The complete, updated agent state including the planText and finalResponse
 }
 
-export interface AgentStepExecutionResponse {
-  sessionId: string;
-  status: "STEP_EXECUTED" | "COMPLETED" | "ERROR";
-  message: string;
-  executedStep?: AgentStep; // The step that was just executed
-  agentState: AgentState; // The complete, updated agent state
-}
+// AgentStepExecutionResponse interface removed
 
 export interface DetailedQdrantSearchResult {
   id: string | number;
