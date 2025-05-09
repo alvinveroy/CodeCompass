@@ -326,12 +326,9 @@ export async function startServer(repoPath: string): Promise<void> {
 
     // Register tools
     await registerTools(server, qdrantClient, repoPath, suggestionModelAvailable);
-  
-    // Ensure get_repository_context is always registered
-    if (!suggestionModelAvailable) {
-      logger.info("Registering get_repository_context tool separately");
-      registerGetRepositoryContextTool(server, qdrantClient, repoPath);
-    }
+    // The get_repository_context tool is registered within registerTools.
+    // Its internal logic handles behavior when suggestionModelAvailable is false.
+    // No need for a separate conditional registration here.
     
   
     // Register the switch suggestion model tool
