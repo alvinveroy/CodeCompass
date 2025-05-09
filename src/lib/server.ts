@@ -716,7 +716,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       logger.info("Extracted query for generate_suggestion", { query, sessionId: session.id });
       
       // First, use search_code internally to get relevant context
-      trackToolChain(chainId, "search_code");
+      // trackToolChain(chainId, "search_code"); // Removed as chainId is not defined and metrics are removed
       
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
