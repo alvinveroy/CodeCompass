@@ -19,18 +19,15 @@ import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant } from "./qdrant"; // searchWithRefinement removed from here
 import { searchWithRefinement } from "./query-refinement"; // Added import for searchWithRefinement
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
-import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun } from "./metrics";
+// Removed metrics imports: getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider"; // Added LLMProvider import
 import { SuggestionPlanner } from "./suggestion-service"; // Added SuggestionPlanner import
-import { AgentInitialQueryResponse, AgentState, AgentStepExecutionResponse, AgentStateSchema } from "./types"; // Added imports
+import { AgentInitialQueryResponse, AgentState } from "./types"; // AgentStepExecutionResponse, AgentStateSchema removed
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults } from "./state";
 // import { runAgentLoop } from "./agent"; // This is now unused
 
-// Generate a chain ID for tracking tool chains
-function generateChainId(): string {
-  return `chain_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-}
+// generateChainId function removed
 
 // Normalize tool parameters to handle various input formats
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
@@ -123,8 +120,8 @@ export async function startServer(repoPath: string): Promise<void> {
           "repo://structure": {},
           "repo://files/*": {},
           "repo://health": {},
-          "repo://metrics": {},
-          "repo://provider": {},
+          // "repo://metrics": {}, // Removed
+          // "repo://provider": {}, // Removed
           "repo://version": {},
         },
         tools: {
@@ -132,15 +129,14 @@ export async function startServer(repoPath: string): Promise<void> {
           get_repository_context: {},
           ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
           get_changelog: {},
-          agent_query: {}, // New agent tool that works regardless of suggestion model
-          execute_agent_step: {}, // Tool to execute a single step of an agent's plan
-          switch_suggestion_model: {}, // Add the switch_suggestion_model tool to capabilities
-          check_provider: {}, // Add the check_provider tool to capabilities
-          reset_metrics: {}, // Add reset_metrics tool to capabilities
-          // debug_provider is removed
-          // reset_provider is removed
-          deepseek_diagnostic: {}, // Add deepseek_diagnostic tool
-          force_deepseek_connection: {}, // Add force_deepseek_connection tool
+          agent_query: {}, // Agent tool for direct plan and summary
+          // execute_agent_step: {}, // Removed
+          switch_suggestion_model: {}, 
+          // check_provider: {}, // Removed
+          // reset_metrics: {}, // Removed
+          // deepseek_diagnostic: {}, // Removed
+          // force_deepseek_connection: {}, // Removed
+          // provide_feedback and analyze_code_problem also removed by not being registered in registerTools
         },
       },
     });
@@ -162,18 +158,9 @@ export async function startServer(repoPath: string): Promise<void> {
       return { contents: [{ uri: "repo://health", text: JSON.stringify(status, null, 2) }] };
     });
     
-    // Add metrics resource
-    server.resource("repo://metrics", "repo://metrics", {}, async () => {
-      const metrics = getMetrics();
-      return { contents: [{ uri: "repo://metrics", text: JSON.stringify(metrics, null, 2) }] };
-    });
+    // Add metrics resource - REMOVED
     
-    // Add provider status resource
-    server.resource("repo://provider", "repo://provider", {}, async () => {
-      const { getCurrentProviderInfo } = await import("./test-provider");
-      const providerInfo = await getCurrentProviderInfo();
-      return { contents: [{ uri: "repo://provider", text: JSON.stringify(providerInfo, null, 2) }] };
-    });
+    // Add provider status resource - REMOVED
     
     // Add version resource
     server.resource("repo://version", "repo://version", {}, async () => {
@@ -213,8 +200,7 @@ export async function startServer(repoPath: string): Promise<void> {
         model: z.string().describe("The suggestion model to switch to (e.g., llama3.1:8b, deepseek-coder)")
       },
       async (params: unknown) => {
-        const chainId = generateChainId();
-        trackToolChain(chainId, "switch_suggestion_model");
+        // chainId and trackToolChain removed
       
         logger.info("Received params for switch_suggestion_model", { params });
         const normalizedParams = normalizeToolParams(params);
@@ -331,80 +317,8 @@ export async function startServer(repoPath: string): Promise<void> {
       }
     );
 
-    // Register deepseek_diagnostic tool
-    server.tool(
-      "deepseek_diagnostic",
-      "Performs a comprehensive diagnostic check of the DeepSeek API configuration, API key validity, and connectivity. This tool helps identify issues with DeepSeek integration. \nExample: Call this tool without parameters: `{}`.",
-      {}, // No parameters needed
-      async () => {
-        logger.info("Running deepseek_diagnostic tool");
-        try {
-          const diagnosticResult = await import("./server-tools/deepseek-diagnostic").then(
-            module => module.deepseekDiagnostic()
-          );
-          // Format the result as markdown text
-          const { configuration, apiKeyStatus, connectionStatus, timestamp, troubleshootingSteps } = diagnosticResult as any;
-          const text = `# DeepSeek Diagnostic Report\n\n` +
-                       `**Timestamp:** ${timestamp}\n\n` +
-                       `## Configuration from ConfigService:\n` +
-                       `- DEEPSEEK_API_KEY: ${configuration.DEEPSEEK_API_KEY}\n` +
-                       `- DEEPSEEK_API_URL: ${configuration.DEEPSEEK_API_URL}\n` +
-                       `- DEEPSEEK_MODEL: ${configuration.DEEPSEEK_MODEL}\n` +
-                       `- SUGGESTION_PROVIDER: ${configuration.SUGGESTION_PROVIDER}\n` +
-                       `- SUGGESTION_MODEL: ${configuration.SUGGESTION_MODEL}\n\n` +
-                       `**API Key Status:** ${apiKeyStatus}\n` +
-                       `**Connection Status:** ${connectionStatus}\n\n` +
-                       `## Troubleshooting Steps:\n` +
-                       `${(troubleshootingSteps as string[]).map(step => `- ${step}`).join('\n')}\n`;
-          return { content: [{ type: "text", text }] };
-        } catch (error: unknown) {
-          const err = error as Error;
-          logger.error("Error in deepseek_diagnostic tool", { error: err.message });
-          return { content: [{ type: "text", text: `# Error in DeepSeek Diagnostic\n\n${err.message}` }] };
-        }
-      }
-    );
-
-    // Register force_deepseek_connection tool
-    server.tool(
-      "force_deepseek_connection",
-      "Attempts a direct connection to the DeepSeek API, optionally overriding local configuration for API key, URL, and model. Useful for testing specific DeepSeek configurations or troubleshooting connectivity by bypassing some local checks. \nExample: To test with a specific API key: `{\"apiKey\": \"your_deepseek_api_key\"}`. To test with default parameters from config: `{}`.",
-      { // Define expected parameters, all optional as they can fallback to configService/env
-        apiKey: z.string().optional().describe("DeepSeek API Key to test with."),
-        apiUrl: z.string().optional().describe("DeepSeek API URL to test against."),
-        model: z.string().optional().describe("DeepSeek model to use for the test.")
-      },
-      async (params: unknown) => {
-        logger.info("Running force_deepseek_connection tool");
-        const normalizedParams = normalizeToolParams(params); // Ensure params are an object
-        try {
-          const connectionResult = await import("./server-tools/force-deepseek-connection").then(
-            module => module.forceDeepseekConnection(normalizedParams)
-          );
-          // Format the result as markdown text
-          const { success, error, errorCode, responseStatus, responseData, troubleshooting, ...otherDetails } = connectionResult as any;
-          let text = `# Force DeepSeek Connection Test Report\n\n` +
-                     `**Success:** ${success ? "✅ Yes" : "❌ No"}\n\n`;
-          if (error) {
-            text += `**Error:** ${error}\n`;
-            if (errorCode) text += `**Error Code:** ${errorCode}\n`;
-            if (responseStatus) text += `**Response Status:** ${responseStatus}\n`;
-            if (responseData) text += `**Response Data:** \`\`\`json\n${JSON.stringify(responseData, null, 2)}\n\`\`\`\n`;
-          }
-          text += `**Details:**\n` +
-                  `${Object.entries(otherDetails).map(([key, value]) => `- ${key}: ${JSON.stringify(value)}`).join('\n')}\n\n`;
-          if (troubleshooting && (troubleshooting as string[]).length > 0) {
-            text += `## Troubleshooting Steps:\n` +
-                    `${(troubleshooting as string[]).map(step => `- ${step}`).join('\n')}\n`;
-          }
-          return { content: [{ type: "text", text }] };
-        } catch (error: unknown) {
-          const err = error as Error;
-          logger.error("Error in force_deepseek_connection tool", { error: err.message });
-          return { content: [{ type: "text", text: `# Error in Force DeepSeek Connection\n\n${err.message}` }] };
-        }
-      }
-    );
+    // Register deepseek_diagnostic tool - REMOVED
+    // Register force_deepseek_connection tool - REMOVED
     
     // Register custom RPC methods
     // Note: Using type assertion to handle potential missing method in the type definition
@@ -441,8 +355,7 @@ export async function startServer(repoPath: string): Promise<void> {
       });
     }
     
-    // Start metrics logging
-    const metricsInterval = startMetricsLogging(300000); // Log metrics every 5 minutes
+    // Start metrics logging - REMOVED
     
     // Configure transport to use proper JSON formatting
     const transport = new StdioServerTransport();
@@ -458,10 +371,9 @@ export async function startServer(repoPath: string): Promise<void> {
     // Connect to transport after registering all capabilities
     await server.connect(transport);
     
-    // Ensure metrics interval is cleared on shutdown
+    // Metrics interval clearing removed
     process.on('SIGINT', () => {
-      clearInterval(metricsInterval);
-      logger.info("Server shutting down, metrics logging stopped");
+      logger.info("Server shutting down");
       process.exit(0);
     });
     
@@ -492,17 +404,15 @@ async function registerTools(
   // Add the agent_query tool
   server.tool(
     "agent_query",
-    "Initiates a multi-step AI agent to answer complex questions or perform tasks related to the codebase. The agent can autonomously use other available tools. Returns an initial plan and a session ID. \nExample: `{\"query\": \"How is user authentication handled in this project?\", \"maxSteps\": 5}`. To start an open-ended query: `{\"query\": \"Refactor the main service to improve performance.\"}`.",
+    "Provides a detailed plan and a comprehensive summary for addressing complex questions or tasks related to the codebase. This tool generates these insights in a single pass. \nExample: `{\"query\": \"How is user authentication handled in this project?\"}`.",
     {
       query: z.string().describe("The question or task for the agent to process"),
-      sessionId: z.string().optional().describe("Optional session ID to maintain context between requests"),
-      maxSteps: z.number().default(5).describe("Maximum number of reasoning steps the agent should take (default: 5)")
+      sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
+      // maxSteps removed
     },
     async (params: unknown) => {
-      const chainId = generateChainId();
-      trackToolChain(chainId, "agent_query");
-      trackAgentRun();
-      logger.info(`Tool 'agent_query' execution started. Chain ID: ${chainId}`);
+      // chainId, trackToolChain, trackAgentRun removed
+      logger.info(`Tool 'agent_query' execution started.`);
       
       logger.info("Received params for agent_query", { params });
       const normalizedParams = normalizeToolParams(params);
@@ -514,7 +424,7 @@ async function registerTools(
         logger.warn("No query provided for agent_query, using default");
       }
       
-      const { query, sessionId } = normalizedParams; // maxSteps is not used in initiateAgentQuery directly
+      const { query, sessionId } = normalizedParams as { query: string; sessionId?: string };
     
     try {
       // Ensure ConfigService reflects the latest state from files.
@@ -524,40 +434,39 @@ async function registerTools(
       logger.info(`Agent using provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
       
       const planner = new SuggestionPlanner(llmProvider);
-      const initialResponse: AgentInitialQueryResponse = await planner.initiateAgentQuery(
+      // initiateAgentQuery now returns a plan and summary directly.
+      const agentResponse: AgentInitialQueryResponse = await planner.initiateAgentQuery(
         query as string,
         sessionId as string | undefined
       );
 
-      if (initialResponse.status === "ERROR") {
-        logger.error("Error in agent_query during plan initiation", { 
-          sessionId: initialResponse.sessionId, 
-          message: initialResponse.message 
+      if (agentResponse.status === "ERROR") {
+        logger.error("Error in agent_query", { 
+          sessionId: agentResponse.sessionId, 
+          message: agentResponse.message 
         });
         return {
           content: [{
             type: "text",
-            text: `# Agent Query Failed\n\nSession ID: ${initialResponse.sessionId}\nStatus: ${initialResponse.status}\nMessage: ${initialResponse.message}\n\nAgent State:\n\`\`\`json\n${JSON.stringify(initialResponse.agentState, null, 2)}\n\`\`\``,
+            text: `# Agent Query Failed\n\nSession ID: ${agentResponse.sessionId}\nStatus: ${agentResponse.status}\nMessage: ${agentResponse.message}\n\nPlan:\n\`\`\`\n${agentResponse.generatedPlanText || "No plan generated."}\n\`\`\`\nSummary:\n\`\`\`\n${agentResponse.agentState.finalResponse || "No summary generated."}\n\`\`\``,
           }],
         };
       }
       
-      const responseText = `# Agent Query Initiated Successfully
+      const responseText = `# Agent Query Result
 
-**Session ID:** ${initialResponse.sessionId}
-**Status:** ${initialResponse.status}
-**Message:** ${initialResponse.message}
+**Session ID:** ${agentResponse.sessionId}
+**Status:** ${agentResponse.status}
+**Message:** ${agentResponse.message}
 
 ## Generated Plan
 \`\`\`
-${initialResponse.generatedPlanText || "No plan text generated."}
+${agentResponse.generatedPlanText || "No plan generated."}
 \`\`\`
 
-**Next Steps:** To execute this plan, use the session ID (\`${initialResponse.sessionId}\`) with a subsequent command designed for step-by-step execution (e.g., a future 'execute_agent_step' tool or an enhanced 'agent_query' tool).
-
-**Current Agent State:**
-\`\`\`json
-${JSON.stringify(initialResponse.agentState, null, 2)}
+## Generated Summary
+\`\`\`
+${agentResponse.agentState.finalResponse || "No summary generated."}
 \`\`\`
 `;
       
@@ -579,109 +488,7 @@ ${JSON.stringify(initialResponse.agentState, null, 2)}
     }
   });
 
-  // Tool to execute the next step of an agent's plan
-  server.tool(
-    "execute_agent_step",
-    "Executes the next pending step from an agent's plan, using the provided `agentState`. This tool is used to iteratively run an agent after it has been initiated by `agent_query`. \nExample: `{\"sessionId\": \"session_123\", \"agentState\": { ...current_agent_state_object... }}`. The `agentState` object is obtained from the previous `agent_query` or `execute_agent_step` response.",
-    {
-      sessionId: z.string().describe("The session ID for the ongoing agent query."),
-      // The agentState should be passed by the client.
-      // This makes the tool stateless regarding agent execution history beyond what's in AgentState.
-      agentState: AgentStateSchema.describe("The current state of the agent, including the plan and executed steps.")
-    },
-    async (params: unknown) => {
-      const chainId = generateChainId();
-      trackToolChain(chainId, "execute_agent_step");
-      logger.info(`Tool 'execute_agent_step' execution started. Chain ID: ${chainId}`);
-
-      logger.info("Received params for execute_agent_step", { params });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for execute_agent_step", normalizedParams);
-
-      const { sessionId, agentState } = normalizedParams as { sessionId: string, agentState: AgentState };
-
-      if (!agentState || typeof agentState !== 'object' || agentState.sessionId !== sessionId) {
-        logger.error("Invalid agentState provided for execute_agent_step", { sessionId, agentState });
-        return {
-          content: [{
-            type: "text",
-            text: `# Error in Agent Step Execution\n\nInvalid or missing agentState provided. Ensure the agentState object is correctly passed and matches the sessionId.`,
-          }],
-        };
-      }
-      
-      try {
-        // Ensure ConfigService reflects the latest state from files.
-        configService.reloadConfigsFromFile(true);
-        const llmProvider = await getLLMProvider();
-        const planner = new SuggestionPlanner(llmProvider);
-
-        const stepResponse: AgentStepExecutionResponse = await planner.executeNextAgentStep(
-          agentState as AgentState // Cast as AgentState, validated by Zod schema at tool level
-        );
-
-        if (stepResponse.status === "ERROR") {
-          logger.error("Error in agent_step_execution during step execution", { 
-            sessionId: stepResponse.sessionId, 
-            message: stepResponse.message 
-          });
-        }
-        
-        // Format the response
-        let responseText = `# Agent Step Execution Result
-**Session ID:** ${stepResponse.sessionId}
-**Status:** ${stepResponse.status}
-**Message:** ${stepResponse.message}
-`;
-
-        if (stepResponse.executedStep) {
-          responseText += `
-## Executed Step
-**Reasoning:** ${stepResponse.executedStep.reasoning}
-**Output:** 
-\`\`\`
-${stepResponse.executedStep.output}
-\`\`\`
-`;
-        }
-        
-        responseText += `
-**Updated Agent State:**
-\`\`\`json
-${JSON.stringify(stepResponse.agentState, null, 2)}
-\`\`\`
-`;
-        if (stepResponse.status === "COMPLETED" && stepResponse.agentState.finalResponse) {
-          responseText += `
-## Final Response
-\`\`\`
-${stepResponse.agentState.finalResponse}
-\`\`\`
-`;
-        } else if (stepResponse.status === "STEP_EXECUTED") {
-           responseText += `
-**Next Steps:** To continue, call 'execute_agent_step' again with this updated Agent State.`;
-        }
-
-
-        return {
-          content: [{
-            type: "text",
-            text: responseText,
-          }],
-        };
-
-      } catch (error: unknown) {
-        logger.error("Error in execute_agent_step tool", { error: error instanceof Error ? error.message : String(error), sessionId });
-        return {
-          content: [{
-            type: "text",
-            text: `# Error in Agent Step Execution Tool\n\nThere was an unexpected error processing the agent step: ${(error as Error).message}\n\nPlease check the server logs for more details.`,
-          }],
-        };
-      }
-    }
-  );
+  // Tool to execute the next step of an agent's plan - REMOVED
   
   // Search Code Tool with iterative refinement
   server.tool(
@@ -692,9 +499,8 @@ ${stepResponse.agentState.finalResponse}
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
     },
     async (params: unknown) => {
-      const chainId = generateChainId();
-      trackToolChain(chainId, "search_code");
-      logger.info(`Tool 'search_code' execution started. Chain ID: ${chainId}`);
+      // chainId and trackToolChain removed
+      logger.info(`Tool 'search_code' execution started.`);
         
       logger.info("Received params for search_code", { params });
       const normalizedParams = normalizeToolParams(params);
@@ -816,63 +622,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     }
   );
   
-  // Add reset_metrics tool
-  server.tool(
-    "reset_metrics",
-    "Resets all accumulated performance and usage metrics for the CodeCompass server. This is useful for starting a fresh measurement period, for example, before benchmarking. \nExample: Call this tool without parameters: `{}`.",
-    {},
-    async () => {
-      resetMetrics();
-      return {
-        content: [{
-          type: "text",
-          text: "# Metrics Reset\n\nAll metrics have been reset successfully.",
-        }],
-      };
-    }
-  );
-  
-  // Add check_provider tool
-  server.tool(
-    "check_provider",
-    "Checks and reports the status of the currently configured LLM provider(s) (e.g., Ollama, DeepSeek). Includes details on configuration, model availability, and basic connectivity tests. \nExample: Call this tool without parameters: `{}`.",
-    {}, // No parameters needed, checkProviderDetailed is always verbose.
-    async () => {
-      logger.info("Running check_provider tool");
-      try {
-        const { checkProviderDetailed } = await import("./server-tools/check-provider");
-        const result = await checkProviderDetailed() as any; // Cast to any to access properties
-
-        const text = `# LLM Provider Status Report\n\n` +
-                     `**Timestamp:** ${result.timestamp}\n\n` +
-                     `## Effective Configuration (from ConfigService):\n` +
-                     `- Suggestion Model: ${result.environment.SUGGESTION_MODEL}\n` +
-                     `- Suggestion Provider: ${result.environment.SUGGESTION_PROVIDER}\n` +
-                     `- Embedding Provider: ${result.environment.EMBEDDING_PROVIDER}\n` +
-                     `- DeepSeek API Key: ${result.environment.DEEPSEEK_API_KEY}\n` +
-                     `- DeepSeek API URL: ${result.environment.DEEPSEEK_API_URL}\n` +
-                     `- DeepSeek Model (for tests): ${result.model}\n` +
-                     `- Ollama Host: ${result.environment.OLLAMA_HOST}\n\n` +
-                     `## Global Variables (set by ConfigService):\n` +
-                     `- CURRENT_SUGGESTION_MODEL: ${result.globals.CURRENT_SUGGESTION_MODEL}\n` +
-                     `- CURRENT_SUGGESTION_PROVIDER: ${result.globals.CURRENT_SUGGESTION_PROVIDER}\n` +
-                     `- CURRENT_EMBEDDING_PROVIDER: ${result.globals.CURRENT_EMBEDDING_PROVIDER}\n\n` +
-                     `## Connectivity & Status:\n` +
-                     `- API Key Configured (for DeepSeek): ${result.apiKeyConfigured ? "✅ Yes" : "❌ No"}\n` +
-                     `- API Endpoint Configured (for DeepSeek): ${result.apiEndpointConfigured ? "✅ Yes" : "❌ No"}\n` +
-                     `- Connection Status: ${result.connectionStatus}\n\n` +
-                     `## Notes:\n${result.noteText}\n\n` +
-                     `To switch suggestion models, use the \`switch_suggestion_model\` tool.\n` +
-                     `For more detailed DeepSeek diagnostics, use the \`deepseek_diagnostic\` tool.`;
-        
-        return { content: [{ type: "text", text }] };
-      } catch (error: unknown) {
-        const err = error as Error;
-        logger.error("Error in check_provider tool", { error: err.message });
-        return { content: [{ type: "text", text: `# Error in Provider Check\n\n${err.message}` }] };
-      }
-    }
-  );
+  // Add reset_metrics tool - REMOVED
+  // Add check_provider tool - REMOVED
   
   // Add get_session_history tool
   server.tool(
@@ -943,9 +694,8 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
       async (params: unknown) => {
-        const chainId = generateChainId();
-        trackToolChain(chainId, "generate_suggestion");
-        logger.info(`Tool 'generate_suggestion' execution started. Chain ID: ${chainId}`);
+        // chainId and trackToolChain removed
+        logger.info(`Tool 'generate_suggestion' execution started.`);
         
         logger.info("Received params for generate_suggestion", { params });
         const normalizedParams = normalizeToolParams(params);
@@ -1064,8 +814,8 @@ ${c.snippet}
 ${_diff}
 \`\`\`
 
-Session ID: ${session.id} (Use this ID in future requests to maintain context)
-Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
+Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
+// Feedback ID removed
       
       return {
         content: [{
@@ -1075,75 +825,7 @@ Feedback ID: ${chainId} (Use this ID to provide feedback on this suggestion)`;
       };
     });
     
-    // Add a new feedback tool
-    server.tool(
-      "provide_feedback",
-      "Submits feedback on a previously generated suggestion. This feedback (score and comments) can be used by the LLM provider to refine future suggestions. \nExample: `{\"sessionId\": \"session_abc\", \"feedbackId\": \"chain_xyz\", \"score\": 8, \"comments\": \"The suggestion was helpful but missed an edge case.\", \"originalQuery\": \"How to sort an array?\", \"suggestion\": \"Use Array.prototype.sort()\"}`.",
-      {
-        sessionId: z.string().describe("The session ID that received the suggestion"),
-        feedbackId: z.string().optional().describe("The ID of the suggestion to provide feedback for"),
-        score: z.number().min(1).max(10).describe("Rating score from 1-10"),
-        comments: z.string().describe("Detailed feedback comments"),
-        originalQuery: z.string().describe("The original query that generated the suggestion"),
-        suggestion: z.string().describe("The suggestion that was provided")
-      },
-      async (params: unknown) => {
-        logger.info("Received params for provide_feedback", { params });
-        const normalizedParams = normalizeToolParams(params);
-        logger.debug("Normalized params for provide_feedback", normalizedParams);
-        
-        try {
-          const { sessionId, score, comments, originalQuery, suggestion } = normalizedParams;
-      
-        // Get session
-        const session = getOrCreateSession(sessionId as string);
-        
-        // Add feedback to session
-        addFeedback(session.id, score as number, comments as string);
-        
-        // Get the current LLM provider
-        const llmProvider = await getLLMProvider();
-        
-        // Process feedback to improve the suggestion
-        const improvedSuggestion = await llmProvider.processFeedback(
-          originalQuery as string,
-          suggestion as string,
-          comments as string,
-          score as number
-        );
-      
-        // Format the response
-        const formattedResponse = `# Improved Suggestion Based on Your Feedback
-
-Thank you for your feedback (score: ${score}/10).
-
-## Original Query
-${originalQuery}
-
-## Your Feedback
-${comments}
-
-## Improved Suggestion
-${improvedSuggestion}
-
-Session ID: ${session.id}`;
-        
-        return {
-          content: [{
-            type: "text",
-            text: formattedResponse,
-          }],
-        };
-      } catch (error: unknown) {
-        logger.error("Error processing feedback", { error: (error as Error).message });
-        return {
-          content: [{
-            type: "text",
-            text: `# Error Processing Feedback\n\n${(error as Error).message}\n\nPlease ensure you provide all required parameters: sessionId, feedbackId, score, comments, originalQuery, and suggestion.`,
-          }],
-        };
-      }
-    });
+    // Add a new feedback tool - REMOVED (provide_feedback)
 
     // Get Repository Context Tool with state management
     server.tool(
@@ -1154,8 +836,7 @@ Session ID: ${session.id}`;
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
       async (params: unknown) => {
-        const chainId = generateChainId();
-        trackToolChain(chainId, "get_repository_context");
+        // chainId and trackToolChain removed
         
         logger.info("Received params for get_repository_context", { params });
         const normalizedParams = normalizeToolParams(params);
@@ -1273,139 +954,6 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       };
     });
     
-    // Add a new tool for multi-step reasoning
-    server.tool(
-      "analyze_code_problem",
-      "Performs a multi-step analysis of a described code problem. This includes understanding the problem, identifying potential root causes using repository context, and generating a high-level implementation plan. \nExample: `{\"query\": \"The login page is throwing a 500 error after the latest deployment.\"}`. For debugging help: `{\"query\": \"My sorting algorithm is too slow for large datasets, how can I improve it?\"}`.",
-      {
-        query: z.string().describe("Description of the code problem to analyze"),
-        sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
-      },
-      async (params: unknown) => {
-        const chainId = generateChainId();
-        trackToolChain(chainId, "analyze_code_problem");
-        logger.info(`Tool 'analyze_code_problem' execution started. Chain ID: ${chainId}`);
-        
-        logger.info("Received params for analyze_code_problem", { params });
-        const normalizedParams = normalizeToolParams(params);
-        logger.debug("Normalized params for analyze_code_problem", normalizedParams);
-        
-        // Ensure query exists
-        if (!normalizedParams.query && typeof normalizedParams === 'object') {
-          normalizedParams.query = "code problem";
-          logger.warn("No query provided for analyze_code_problem, using default");
-        }
-        
-        const { query = "code problem", sessionId } = normalizedParams;
-      
-      // Get or create session
-      const session = getOrCreateSession(sessionId as string | undefined, repoPath);
-      
-      // Step 1: Get repository context
-      trackToolChain(chainId, "get_repository_context");
-      logger.info("Step 1: Getting repository context");
-      
-      const isGitRepo = await validateGitRepository(repoPath);
-      const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
-        : [];
-      const _diff = await getRepositoryDiff(repoPath);
-      
-      // Use iterative query refinement to find relevant code
-      const { results: contextResults } = await searchWithRefinement(
-        qdrantClient, 
-        query as string, 
-        files
-      );
-      
-      const context = contextResults.map(r => ({
-        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
-        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
-        relevance: r.score,
-      }));
-      
-      // Step 2: Analyze the problem
-      trackToolChain(chainId, "analyze_problem");
-      logger.info("Step 2: Analyzing the problem");
-      
-      const analysisPrompt = `
-**Code Problem Analysis**
-
-Problem: ${query}
-
-**Relevant Code**:
-${context.map(c => `File: ${c.filepath}\n\`\`\`\n${c.snippet}\n\`\`\``).join("\n\n")}
-
-**Instructions**:
-1. Analyze the problem described above.
-2. Identify potential causes based on the code snippets.
-3. List possible solutions.
-4. Recommend the best approach.
-
-Structure your analysis with these sections:
-- Problem Understanding
-- Root Cause Analysis
-- Potential Solutions
-- Recommended Approach
-      `;
-      
-      // Get the current LLM provider
-      const llmProvider = await getLLMProvider();
-      
-      const analysis = await llmProvider.generateText(analysisPrompt);
-      
-      // Step 3: Generate implementation plan
-      trackToolChain(chainId, "generate_implementation_plan");
-      logger.info("Step 3: Generating implementation plan");
-      
-      const planPrompt = `
-Based on your analysis of the problem:
-
-${analysis}
-
-Generate a step-by-step implementation plan to solve this problem. Include:
-1. Files that need to be modified
-2. Specific changes to make
-3. Any new code that needs to be written
-4. Testing approach to verify the solution works
-      `;
-      
-      const implementationPlan = await llmProvider.generateText(planPrompt);
-      
-      // Add to session
-      addQuery(session.id, query as string, contextResults);
-      addSuggestion(session.id, analysisPrompt, analysis);
-      addSuggestion(session.id, planPrompt, implementationPlan);
-      
-      // Format the response
-      const formattedResponse = `# Code Problem Analysis: "${query}"
-
-## Problem Analysis
-${analysis}
-
-## Implementation Plan
-${implementationPlan}
-
-## Relevant Code
-${context.map(c => `
-### ${c.filepath}
-- Last modified: ${c.last_modified}
-- Relevance: ${c.relevance.toFixed(2)}
-
-\`\`\`
-${c.snippet}
-\`\`\`
-`).join('\n')}
-
-Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
-      
-      return {
-        content: [{
-          type: "text",
-          text: formattedResponse,
-        }],
-      };
-    });
+    // Add a new tool for multi-step reasoning - REMOVED (analyze_code_problem)
   }
 }

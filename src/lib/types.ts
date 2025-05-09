@@ -30,8 +30,8 @@ export const GetRepositoryContextSchema = z.object({
 // Agent schema
 export const AgentQuerySchema = z.object({
   query: z.string().min(1, "Query is required"),
-  sessionId: z.string().optional(),
-  maxSteps: z.number().optional().default(5)
+  sessionId: z.string().optional()
+  // maxSteps removed
 });
 
 // Zod schema for AgentStep
@@ -102,7 +102,7 @@ export interface AgentState {
 
 export interface AgentInitialQueryResponse {
   sessionId: string;
-  status: "PLAN_GENERATED" | "COMPLETED" | "ERROR"; // Statuses now include COMPLETED for the final response
+  status: "COMPLETED" | "ERROR"; // Status simplified: plan and summary are generated in one go or it errors.
   message: string;
   generatedPlanText?: string; // The raw plan text from the LLM
   agentState: AgentState; // The complete, updated agent state including the planText and finalResponse
