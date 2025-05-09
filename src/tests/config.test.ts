@@ -8,17 +8,26 @@ describe('Config Module', () => {
   const originalEnv = { ...process.env };
   
   beforeEach(() => {
-    // Clear any mocked environment variables between tests
-    vi.resetModules(); // This is important for re-importing config-service
-    // Restore process.env to original state before each test in this suite
+    // Restore process.env to original state before each test
     process.env = { ...originalEnv };
+    
+    // Explicitly reset global variables that ConfigService might use/set
+    // These globals are set by ConfigService.initializeGlobalState()
+    // Resetting them ensures a clean slate for each test's ConfigService instantiation.
+    const g = global as any;
+    g.CURRENT_LLM_PROVIDER = undefined;
+    g.CURRENT_SUGGESTION_PROVIDER = undefined;
+    g.CURRENT_EMBEDDING_PROVIDER = undefined;
+    g.CURRENT_SUGGESTION_MODEL = undefined;
+    
+    vi.resetModules(); // This is key for re-importing and re-instantiating ConfigService
   });
   
   afterEach(() => {
     // Restore original environment variables fully after each test
     process.env = { ...originalEnv };
-    vi.restoreAllMocks(); // Restore any mocks like fs
-    vi.resetModules(); // Ensure modules are reset for subsequent test files if any
+    vi.restoreAllMocks(); 
+    vi.resetModules(); 
   });
 
   describe('Default Configuration', () => {
@@ -87,28 +96,39 @@ describe('Config Module', () => {
   });
 
   describe('Environment Variable Overrides', () => {
-    // Mock the entire fs module for this suite to prevent file system interactions
-    // This is a cleaner way to handle fs mocking for a suite.
-    vi.mock('fs', async () => {
-      const actualFs = await vi.importActual('fs') as typeof fs;
-      return {
-        ...actualFs, // Keep original non-mocked functions if needed by other parts
-        existsSync: vi.fn().mockImplementation((path: string) => {
-          // Only mock false for config files, allow others (like LOG_DIR check) to proceed
-          if (path.endsWith('model-config.json') || path.endsWith('deepseek-config.json')) {
-            return false;
-          }
-          return actualFs.existsSync(path); // Call original for other paths
-        }),
-        readFileSync: vi.fn().mockImplementation((path: string) => {
-          if (path.endsWith('model-config.json') || path.endsWith('deepseek-config.json')) {
-            throw new Error('File not found mock for config files');
-          }
-          return actualFs.readFileSync(path); // Call original for other paths
-        }),
-        // mkdirSync is used for LOG_DIR, let it run or mock if it causes issues
-        mkdirSync: actualFs.mkdirSync, 
-      };
+    beforeEach(() => {
+      // Mock 'fs' specifically for this suite.
+      // This ensures that ConfigService does not load from actual config files during these tests.
+      vi.doMock('fs', async () => {
+        const actualFs = await vi.importActual('fs') as typeof fs; // Import actual fs to delegate calls
+        return {
+          ...actualFs, // Delegate all other fs calls to the actual module
+          existsSync: vi.fn((pathToCheck: string) => {
+            // Simulate config files not existing
+            if (typeof pathToCheck === 'string' && (pathToCheck.endsWith('model-config.json') || pathToCheck.endsWith('deepseek-config.json'))) {
+              return false;
+            }
+            // For other paths (like LOG_DIR check), use actual existsSync
+            return actualFs.existsSync(pathToCheck);
+          }),
+          readFileSync: vi.fn((pathToCheck: string, options: any) => {
+            // This should ideally not be called for config files if existsSync is false
+            if (typeof pathToCheck === 'string' && (pathToCheck.endsWith('model-config.json') || pathToCheck.endsWith('deepseek-config.json'))) {
+              const e = new Error(`ENOENT: no such file or directory, open '${pathToCheck}' (mocked)`);
+              (e as any).code = 'ENOENT';
+              throw e;
+            }
+            return actualFs.readFileSync(pathToCheck, options);
+          }),
+          // Let mkdirSync pass through for LOG_DIR creation by ConfigService constructor
+          // If this causes issues in a restricted test environment, mock it as vi.fn()
+          mkdirSync: actualFs.mkdirSync,
+        };
+      });
+    });
+
+    afterEach(() => {
+      vi.doUnmock('fs'); // Clean up the 'fs' mock after this suite
     });
 
     it('should respect OLLAMA_HOST environment variable if set', async () => {

@@ -1,53 +1,69 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest'; // Added Mock
 import { withRetry, preprocessText } from '../lib/utils';
-// Import the original configService to get its actual default values for resetting
-import { configService as originalConfigServiceInstance } from '../lib/config-service';
 
-// Mock the config-service module
+// Define a type for the parts of configService we want to mock and make mutable
+interface MockableConfigService {
+  MAX_RETRIES: number;
+  RETRY_DELAY: number;
+  OLLAMA_HOST: string; // Assuming this is used or needed by the SUT directly or indirectly
+  // Add other properties from the actual ConfigService if they are accessed by withRetry
+  logger: { warn: Mock; error: Mock; info: Mock; debug: Mock };
+}
+
 vi.mock('../lib/config-service', async () => {
-  const originalModule = await vi.importActual('../lib/config-service') as any;
-  // Create the mock values inside the factory to avoid hoisting issues
-  const mockValues = {
-    MAX_RETRIES: originalConfigServiceInstance.MAX_RETRIES,
-    RETRY_DELAY: originalConfigServiceInstance.RETRY_DELAY,
+  // Import the original module to get default values *inside the factory*
+  const originalModule = await vi.importActual('../lib/config-service') as { configService: any, logger: any };
+  const originalInstance = originalModule.configService;
+
+  const mockConfigServiceValues: MockableConfigService = {
+    MAX_RETRIES: originalInstance.MAX_RETRIES,
+    RETRY_DELAY: originalInstance.RETRY_DELAY,
+    OLLAMA_HOST: originalInstance.OLLAMA_HOST,
     logger: {
       warn: vi.fn(),
       error: vi.fn(),
       info: vi.fn(),
       debug: vi.fn(),
     },
-    // Include other properties/methods from original configService if they are used by the SUT
-    // and don't need to be mocked, or provide simple mocks for them.
-    // For example, if OLLAMA_HOST was used by withRetry, it should be here.
-    OLLAMA_HOST: originalConfigServiceInstance.OLLAMA_HOST, 
-    // Add any other properties that might be accessed by the SUT (utils.ts)
   };
+
   return {
-    ...originalModule, // Spread original exports to keep non-mocked parts
-    configService: mockValues, // Override configService with our mock
-    logger: mockValues.logger, // Override logger export with our mock logger
+    // Export the mocked configService and logger
+    configService: mockConfigServiceValues,
+    logger: mockConfigServiceValues.logger,
+    // If there are other exports from config-service that utils.ts might use,
+    // spread originalModule here, but be careful not to overwrite your mocks.
+    // Example: ...originalModule (if other named exports are needed and not configService/logger)
   };
 });
 
 describe('Utils Module', () => {
-  // This import will now get the mocked version of configService
-  let mockedConfigService: typeof originalConfigServiceInstance;
-  let mockedLogger: { warn: Mock; error: Mock; info: Mock; debug: Mock };
+  let mockedConfigService: MockableConfigService;
+  let originalDefaultValues: { MAX_RETRIES: number; RETRY_DELAY: number; };
 
   beforeEach(async () => {
-    // Dynamically import the mocked service here to get the instance used by the mock factory
+    // Import the original config service to get its true default values for resetting
+    // This needs to be done carefully due to potential module caching even with vi.importActual
+    // A safer way is to hardcode defaults or derive them if they are complex.
+    // For simplicity, assuming originalConfigServiceInstance can be obtained for defaults.
+    const { configService: actualOriginalInstance } = await vi.importActual('../lib/config-service') as { configService: any };
+    originalDefaultValues = {
+      MAX_RETRIES: actualOriginalInstance.MAX_RETRIES,
+      RETRY_DELAY: actualOriginalInstance.RETRY_DELAY,
+    };
+    
+    // Dynamically import the mocked service to get the instance created by the mock factory
     const mockedModule = await import('../lib/config-service');
-    mockedConfigService = mockedModule.configService;
-    mockedLogger = mockedModule.logger as any; // Cast as any to access mockClear on spies
+    mockedConfigService = mockedModule.configService as MockableConfigService;
 
     vi.useFakeTimers();
     // Reset the properties of the *actual mocked instance* before each test
-    mockedConfigService.MAX_RETRIES = originalConfigServiceInstance.MAX_RETRIES;
-    mockedConfigService.RETRY_DELAY = originalConfigServiceInstance.RETRY_DELAY;
-    mockedLogger.warn.mockClear();
-    mockedLogger.error.mockClear();
-    mockedLogger.info.mockClear();
-    mockedLogger.debug.mockClear();
+    mockedConfigService.MAX_RETRIES = originalDefaultValues.MAX_RETRIES;
+    mockedConfigService.RETRY_DELAY = originalDefaultValues.RETRY_DELAY;
+    mockedConfigService.logger.warn.mockClear();
+    mockedConfigService.logger.error.mockClear();
+    mockedConfigService.logger.info.mockClear();
+    mockedConfigService.logger.debug.mockClear();
   });
 
   afterEach(() => {
