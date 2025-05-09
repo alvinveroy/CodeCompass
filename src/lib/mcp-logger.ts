@@ -1,4 +1,4 @@
-import { logger } from "./config-service"; // Assuming logger is exported from config-service
+import { configService, logger } from "./config-service";
 import fs from 'fs';
 import path from 'path';
 
@@ -158,17 +158,25 @@ export function _restoreConsole(): void {
  * @returns The logs directory path
  */
 function getLogsDir(): string {
-  // Create a logs directory in the current working directory
-  const logsDir = path.join(process.cwd(), 'logs');
+  // Use the LOG_DIR from ConfigService
+  const logsDir = configService.LOG_DIR;
   
-  // Ensure the directory exists
+  // ConfigService constructor already ensures the directory exists.
+  // We can add a check here for robustness if desired, but it might be redundant.
   try {
     if (!fs.existsSync(logsDir)) {
+      // This case should ideally not be hit if ConfigService initialized correctly.
       fs.mkdirSync(logsDir, { recursive: true });
+      logger.warn(`mcp-logger had to create LOG_DIR: ${logsDir}. This should have been done by ConfigService.`);
     }
   } catch (error) {
-    // If we can't create the directory, use a fallback
-    console.error(`Failed to create logs directory: ${error}`);
+    // Fallback if something went wrong with the ConfigService LOG_DIR
+    const fallbackDir = path.join(process.cwd(), 'logs_fallback_mcp');
+    console.error(`Failed to ensure logs directory ${logsDir}: ${(error as Error).message}. Using fallback: ${fallbackDir}`);
+    if (!fs.existsSync(fallbackDir)) {
+      fs.mkdirSync(fallbackDir, { recursive: true });
+    }
+    return fallbackDir;
   }
   
   return logsDir;

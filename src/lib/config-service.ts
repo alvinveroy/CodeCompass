@@ -40,8 +40,28 @@ class ConfigService {
   public readonly CONFIG_DIR: string;
   public readonly MODEL_CONFIG_FILE: string;
   public readonly DEEPSEEK_CONFIG_FILE: string;
+  public readonly LOG_DIR: string;
 
   private constructor() {
+    this.CONFIG_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
+    this.MODEL_CONFIG_FILE = path.join(this.CONFIG_DIR, 'model-config.json');
+    this.DEEPSEEK_CONFIG_FILE = path.join(this.CONFIG_DIR, 'deepseek-config.json');
+    this.LOG_DIR = path.join(this.CONFIG_DIR, 'logs');
+
+    // Ensure log directory exists
+    try {
+      if (!fs.existsSync(this.LOG_DIR)) {
+        fs.mkdirSync(this.LOG_DIR, { recursive: true });
+      }
+    } catch (error) {
+      // Fallback to local logs directory if user-specific one fails
+      console.error(`Failed to create user-specific log directory: ${(error as Error).message}. Falling back to local logs dir.`);
+      this.LOG_DIR = path.join(process.cwd(), 'logs');
+      if (!fs.existsSync(this.LOG_DIR)) {
+        fs.mkdirSync(this.LOG_DIR, { recursive: true });
+      }
+    }
+    
     this.logger = winston.createLogger({
       level: process.env.NODE_ENV === "test" ? "error" : "info",
       format: winston.format.combine(
@@ -49,7 +69,7 @@ class ConfigService {
         winston.format.json()
       ),
       transports: [
-        new winston.transports.File({ filename: "codecompass.log" }),
+        new winston.transports.File({ filename: path.join(this.LOG_DIR, "codecompass.log") }),
         new winston.transports.Console({
           format: winston.format.simple(),
           silent: process.env.NODE_ENV === "test"
@@ -67,9 +87,7 @@ class ConfigService {
     this.MAX_RETRIES = 3;
     this.RETRY_DELAY = 2000;
 
-    this.CONFIG_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
-    this.MODEL_CONFIG_FILE = path.join(this.CONFIG_DIR, 'model-config.json');
-    this.DEEPSEEK_CONFIG_FILE = path.join(this.CONFIG_DIR, 'deepseek-config.json');
+    // CONFIG_DIR, MODEL_CONFIG_FILE, DEEPSEEK_CONFIG_FILE, LOG_DIR are initialized earlier
 
     // Initialize with environment variables or hardcoded defaults first
     this._llmProvider = process.env.LLM_PROVIDER || "ollama";
