@@ -41,6 +41,25 @@ export const AgentQuerySchema = z.object({
   maxSteps: z.number().optional().default(5)
 });
 
+// Zod schema for AgentStep
+export const AgentStepSchema = z.object({
+  tool: z.string(),
+  input: z.unknown(),
+  output: z.unknown(),
+  reasoning: z.string(),
+});
+
+// Zod schema for AgentState
+export const AgentStateSchema = z.object({
+  sessionId: z.string(),
+  query: z.string(),
+  planText: z.string().optional(),
+  steps: z.array(AgentStepSchema),
+  context: z.array(z.unknown()),
+  finalResponse: z.string().optional(),
+  isComplete: z.boolean(),
+});
+
 // Types
 export interface OllamaEmbeddingResponse { 
   embedding: number[] 

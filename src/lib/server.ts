@@ -22,10 +22,10 @@ import { validateGitRepository, indexRepository, getRepositoryDiff } from "./rep
 import { getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun } from "./metrics";
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider"; // Added LLMProvider import
 import { SuggestionPlanner } from "./suggestion-service"; // Added SuggestionPlanner import
-import { AgentInitialQueryResponse } from "./types"; // Added AgentInitialQueryResponse import
+import { AgentInitialQueryResponse, AgentState, AgentStepExecutionResponse, AgentStateSchema } from "./types"; // Added imports
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults } from "./state";
-import { runAgentLoop } from "./agent"; // This might become unused
+// import { runAgentLoop } from "./agent"; // This is now unused
 
 // Normalize tool parameters to handle various input formats
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
@@ -259,6 +259,7 @@ export async function startServer(repoPath: string): Promise<void> {
           ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
           get_changelog: {},
           agent_query: {}, // New agent tool that works regardless of suggestion model
+          execute_agent_step: {}, // Tool to execute a single step of an agent's plan
           switch_suggestion_model: {}, // Add the switch_suggestion_model tool to capabilities
           check_provider: {}, // Add the check_provider tool to capabilities
           reset_metrics: {}, // Add reset_metrics tool to capabilities
@@ -1027,6 +1028,110 @@ ${JSON.stringify(initialResponse.agentState, null, 2)}
       };
     }
   });
+
+  // Tool to execute the next step of an agent's plan
+  server.tool(
+    "execute_agent_step",
+    "Executes the next step of an agent's plan based on the current agent state. Returns the outcome of the step and the updated agent state.",
+    {
+      sessionId: z.string().describe("The session ID for the ongoing agent query."),
+      // The agentState should be passed by the client.
+      // This makes the tool stateless regarding agent execution history beyond what's in AgentState.
+      agentState: AgentStateSchema.describe("The current state of the agent, including the plan and executed steps.")
+    },
+    async (params: unknown) => {
+      const chainId = generateChainId();
+      trackToolChain(chainId, "execute_agent_step");
+      logger.info(`Tool 'execute_agent_step' execution started. Chain ID: ${chainId}`);
+
+      logger.info("Received params for execute_agent_step", { params });
+      const normalizedParams = normalizeToolParams(params);
+      logger.debug("Normalized params for execute_agent_step", normalizedParams);
+
+      const { sessionId, agentState } = normalizedParams as { sessionId: string, agentState: AgentState };
+
+      if (!agentState || typeof agentState !== 'object' || agentState.sessionId !== sessionId) {
+        logger.error("Invalid agentState provided for execute_agent_step", { sessionId, agentState });
+        return {
+          content: [{
+            type: "text",
+            text: `# Error in Agent Step Execution\n\nInvalid or missing agentState provided. Ensure the agentState object is correctly passed and matches the sessionId.`,
+          }],
+        };
+      }
+      
+      try {
+        // Ensure ConfigService reflects the latest state from files.
+        configService.reloadConfigsFromFile(true);
+        const llmProvider = await getLLMProvider();
+        const planner = new SuggestionPlanner(llmProvider);
+
+        const stepResponse: AgentStepExecutionResponse = await planner.executeNextAgentStep(
+          agentState as AgentState // Cast as AgentState, validated by Zod schema at tool level
+        );
+
+        if (stepResponse.status === "ERROR") {
+          logger.error("Error in agent_step_execution during step execution", { 
+            sessionId: stepResponse.sessionId, 
+            message: stepResponse.message 
+          });
+        }
+        
+        // Format the response
+        let responseText = `# Agent Step Execution Result
+**Session ID:** ${stepResponse.sessionId}
+**Status:** ${stepResponse.status}
+**Message:** ${stepResponse.message}
+`;
+
+        if (stepResponse.executedStep) {
+          responseText += `
+## Executed Step
+**Reasoning:** ${stepResponse.executedStep.reasoning}
+**Output:** 
+\`\`\`
+${stepResponse.executedStep.output}
+\`\`\`
+`;
+        }
+        
+        responseText += `
+**Updated Agent State:**
+\`\`\`json
+${JSON.stringify(stepResponse.agentState, null, 2)}
+\`\`\`
+`;
+        if (stepResponse.status === "COMPLETED" && stepResponse.agentState.finalResponse) {
+          responseText += `
+## Final Response
+\`\`\`
+${stepResponse.agentState.finalResponse}
+\`\`\`
+`;
+        } else if (stepResponse.status === "STEP_EXECUTED") {
+           responseText += `
+**Next Steps:** To continue, call 'execute_agent_step' again with this updated Agent State.`;
+        }
+
+
+        return {
+          content: [{
+            type: "text",
+            text: responseText,
+          }],
+        };
+
+      } catch (error: unknown) {
+        logger.error("Error in execute_agent_step tool", { error: error instanceof Error ? error.message : String(error), sessionId });
+        return {
+          content: [{
+            type: "text",
+            text: `# Error in Agent Step Execution Tool\n\nThere was an unexpected error processing the agent step: ${(error as Error).message}\n\nPlease check the server logs for more details.`,
+          }],
+        };
+      }
+    }
+  );
   
   // Search Code Tool with iterative refinement
   server.tool(
