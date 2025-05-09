@@ -1,4 +1,4 @@
-import { logger } from "../config";
+import { configService, logger } from "../config-service";
 import axios from "axios";
 
 /**
@@ -7,34 +7,38 @@ import axios from "axios";
  */
 export async function forceDeepseekConnection(params: Record<string, unknown>): Promise<Record<string, unknown>> {
   logger.info("Running force DeepSeek API connection test");
-  
-  // Get API key from params or environment
-  const apiKey = (params.apiKey as string) || process.env.DEEPSEEK_API_KEY || "";
+  configService.reloadConfigsFromFile(true); // Ensure configService has latest defaults if params are not overriding
+
+  // Get API key from params or ConfigService (which includes env)
+  const apiKey = (params.apiKey as string) || configService.DEEPSEEK_API_KEY;
   if (!apiKey) {
     return {
       success: false,
-      error: "No API key provided. Use {\"apiKey\": \"your-api-key\"} or set DEEPSEEK_API_KEY environment variable."
+      error: "No API key provided. Use {\"apiKey\": \"your-api-key\"} or ensure DEEPSEEK_API_KEY is set via environment or ~/.codecompass/deepseek-config.json."
     };
   }
   
-  // Get API URL from params or use default endpoint
-  const apiUrl = (params.apiUrl as string) || process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
+  // Get API URL from params or ConfigService
+  const apiUrl = (params.apiUrl as string) || configService.DEEPSEEK_API_URL;
   
-  // Get model from params or use default
-  const model = (params.model as string) || process.env.DEEPSEEK_MODEL || "deepseek-coder";
+  // Get model from params or ConfigService
+  const model = (params.model as string) || configService.DEEPSEEK_MODEL;
   
   // Log test parameters
-  logger.info(`Force testing DeepSeek API with key length: ${apiKey.length}, key prefix: ${apiKey.substring(0, 5)}...`);
+  logger.info(`Force testing DeepSeek API with key (length: ${apiKey.length}, prefix: ${apiKey.substring(0, 5)})...`);
   logger.info(`Using API URL: ${apiUrl}`);
   logger.info(`Using model: ${model}`);
   
-  // Force set environment variables
-  process.env.DEEPSEEK_API_KEY = apiKey as string;
-  process.env.DEEPSEEK_API_URL = apiUrl as string;
-  process.env.DEEPSEEK_MODEL = model as string;
+  // Temporarily update configService for this test if values differ from current config.
+  // This tool is for direct testing, so it might not permanently alter config files unless explicitly designed to.
+  // For now, we assume the provided params are for this specific test run.
+  // If persistence is desired, configService.setDeepSeekApiKey etc. would be used.
+  
+  // For the duration of this test, if params were provided, they override configService values for the request.
+  // The actual configService state (and persisted files) are not changed by this tool by default.
   
   try {
-    // Make a simple request to test the API
+    // Make a simple request to test the API using the resolved apiKey, apiUrl, model
     const response = await axios.post(
       apiUrl,
       {
@@ -70,10 +74,11 @@ export async function forceDeepseekConnection(params: Record<string, unknown>): 
                   response.data.choices[0].message.content : "No content"
         },
         message: "DeepSeek API connection successful",
-        environmentSet: {
-          DEEPSEEK_API_KEY: "Set",
-          DEEPSEEK_API_URL: apiUrl,
-          DEEPSEEK_MODEL: model
+        // Reporting what was used for the test, not necessarily what's persisted.
+        parametersUsed: {
+          apiKeyStatus: "Provided or from config",
+          apiUrl: apiUrl,
+          model: model
         }
       };
     } else {

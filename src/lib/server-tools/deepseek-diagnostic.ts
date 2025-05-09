@@ -1,4 +1,4 @@
-import { logger } from "../config";
+import { configService, logger } from "../config-service";
 import { checkDeepSeekApiKey, testDeepSeekConnection } from "../deepseek";
 
 /**
@@ -6,17 +6,18 @@ import { checkDeepSeekApiKey, testDeepSeekConnection } from "../deepseek";
  */
 export async function deepseekDiagnostic(): Promise<Record<string, unknown>> {
   logger.info("Running DeepSeek API diagnostic");
+  configService.reloadConfigsFromFile(true); // Ensure fresh state
   
-  // Get environment variables
-  const envVars = {
-    DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ? `Set (length: ${process.env.DEEPSEEK_API_KEY.length})` : "Not set",
-    DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions",
-    DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL || "deepseek-coder",
-    SUGGESTION_PROVIDER: process.env.SUGGESTION_PROVIDER,
-    SUGGESTION_MODEL: process.env.SUGGESTION_MODEL,
+  // Get configuration from ConfigService
+  const currentConfig = {
+    DEEPSEEK_API_KEY: configService.DEEPSEEK_API_KEY ? `Set (length: ${configService.DEEPSEEK_API_KEY.length})` : "Not set",
+    DEEPSEEK_API_URL: configService.DEEPSEEK_API_URL,
+    DEEPSEEK_MODEL: configService.DEEPSEEK_MODEL,
+    SUGGESTION_PROVIDER: configService.SUGGESTION_PROVIDER,
+    SUGGESTION_MODEL: configService.SUGGESTION_MODEL,
   };
   
-  // Check API key
+  // Check API key (checkDeepSeekApiKey internally uses configService)
   let apiKeyStatus = "Not configured";
   try {
     const hasApiKey = await checkDeepSeekApiKey();
@@ -42,9 +43,9 @@ export async function deepseekDiagnostic(): Promise<Record<string, unknown>> {
   }
   
   return {
-    environment: envVars,
-    apiKeyStatus: apiKeyStatus,
-    connectionStatus: connectionStatus,
+    configuration: currentConfig,
+    apiKeyStatus: apiKeyStatus, // This reflects the check based on configService's key
+    connectionStatus: connectionStatus, // This reflects the test based on configService's settings
     timestamp: new Date().toISOString(),
     troubleshootingSteps: [
       "1. Ensure DEEPSEEK_API_KEY is set with a valid API key",

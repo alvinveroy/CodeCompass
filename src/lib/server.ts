@@ -262,6 +262,8 @@ export async function startServer(repoPath: string): Promise<void> {
           reset_metrics: {}, // Add reset_metrics tool to capabilities
           debug_provider: {}, // Add debug_provider tool to capabilities
           reset_provider: {}, // Add reset_provider tool to capabilities
+          deepseek_diagnostic: {}, // Add deepseek_diagnostic tool
+          force_deepseek_connection: {}, // Add force_deepseek_connection tool
         },
       },
     });
@@ -819,10 +821,8 @@ export async function startServer(repoPath: string): Promise<void> {
     
     // Log startup info to file
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
-    logger.info(`CodeCompass server started with tools: ${Object.keys(suggestionModelAvailable ? 
-      { search_code: {}, get_repository_context: {}, generate_suggestion: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, provide_feedback: {}, analyze_code_problem: {}, agent_query: {}, switch_suggestion_model: {}, check_provider: {} } : 
-      { search_code: {}, get_repository_context: {}, get_changelog: {}, reset_metrics: {}, get_session_history: {}, agent_query: {}, switch_suggestion_model: {}, check_provider: {} }
-    ).join(', ')}`);
+    const registeredTools = server.capabilities?.tools || {};
+    logger.info(`CodeCompass server started with tools: ${Object.keys(registeredTools).join(', ')}`);
     
     // Display version and status to stderr (similar to Context7)
     console.error(`CodeCompass v${VERSION} MCP Server running on stdio`);
@@ -843,6 +843,82 @@ export async function startServer(repoPath: string): Promise<void> {
         resolve();
       });
     });
+
+    // Register deepseek_diagnostic tool
+    server.tool(
+      "deepseek_diagnostic",
+      "Run a diagnostic check for DeepSeek API configuration and connectivity.",
+      {}, // No parameters needed
+      async () => {
+        logger.info("Running deepseek_diagnostic tool");
+        try {
+          const diagnosticResult = await import("./server-tools/deepseek-diagnostic").then(
+            module => module.deepseekDiagnostic()
+          );
+          // Format the result as markdown text
+          const { configuration, apiKeyStatus, connectionStatus, timestamp, troubleshootingSteps } = diagnosticResult as any;
+          const text = `# DeepSeek Diagnostic Report\n\n` +
+                       `**Timestamp:** ${timestamp}\n\n` +
+                       `## Configuration from ConfigService:\n` +
+                       `- DEEPSEEK_API_KEY: ${configuration.DEEPSEEK_API_KEY}\n` +
+                       `- DEEPSEEK_API_URL: ${configuration.DEEPSEEK_API_URL}\n` +
+                       `- DEEPSEEK_MODEL: ${configuration.DEEPSEEK_MODEL}\n` +
+                       `- SUGGESTION_PROVIDER: ${configuration.SUGGESTION_PROVIDER}\n` +
+                       `- SUGGESTION_MODEL: ${configuration.SUGGESTION_MODEL}\n\n` +
+                       `**API Key Status:** ${apiKeyStatus}\n` +
+                       `**Connection Status:** ${connectionStatus}\n\n` +
+                       `## Troubleshooting Steps:\n` +
+                       `${(troubleshootingSteps as string[]).map(step => `- ${step}`).join('\n')}\n`;
+          return { content: [{ type: "text", text }] };
+        } catch (error: unknown) {
+          const err = error as Error;
+          logger.error("Error in deepseek_diagnostic tool", { error: err.message });
+          return { content: [{ type: "text", text: `# Error in DeepSeek Diagnostic\n\n${err.message}` }] };
+        }
+      }
+    );
+
+    // Register force_deepseek_connection tool
+    server.tool(
+      "force_deepseek_connection",
+      "Force a direct test connection to DeepSeek API with specified or default parameters. Bypasses some local config checks for direct testing.",
+      { // Define expected parameters, all optional as they can fallback to configService/env
+        apiKey: z.string().optional().describe("DeepSeek API Key to test with."),
+        apiUrl: z.string().optional().describe("DeepSeek API URL to test against."),
+        model: z.string().optional().describe("DeepSeek model to use for the test.")
+      },
+      async (params: unknown) => {
+        logger.info("Running force_deepseek_connection tool");
+        const normalizedParams = normalizeToolParams(params); // Ensure params are an object
+        try {
+          const connectionResult = await import("./server-tools/force-deepseek-connection").then(
+            module => module.forceDeepseekConnection(normalizedParams)
+          );
+          // Format the result as markdown text
+          const { success, error, errorCode, responseStatus, responseData, troubleshooting, ...otherDetails } = connectionResult as any;
+          let text = `# Force DeepSeek Connection Test Report\n\n` +
+                     `**Success:** ${success ? "✅ Yes" : "❌ No"}\n\n`;
+          if (error) {
+            text += `**Error:** ${error}\n`;
+            if (errorCode) text += `**Error Code:** ${errorCode}\n`;
+            if (responseStatus) text += `**Response Status:** ${responseStatus}\n`;
+            if (responseData) text += `**Response Data:** \`\`\`json\n${JSON.stringify(responseData, null, 2)}\n\`\`\`\n`;
+          }
+          text += `**Details:**\n` +
+                  `${Object.entries(otherDetails).map(([key, value]) => `- ${key}: ${JSON.stringify(value)}`).join('\n')}\n\n`;
+          if (troubleshooting && (troubleshooting as string[]).length > 0) {
+            text += `## Troubleshooting Steps:\n` +
+                    `${(troubleshooting as string[]).map(step => `- ${step}`).join('\n')}\n`;
+          }
+          return { content: [{ type: "text", text }] };
+        } catch (error: unknown) {
+          const err = error as Error;
+          logger.error("Error in force_deepseek_connection tool", { error: err.message });
+          return { content: [{ type: "text", text: `# Error in Force DeepSeek Connection\n\n${err.message}` }] };
+        }
+      }
+    );
+
   } catch (error: unknown) {
     const err = error as Error;
     logger.error("Failed to start CodeCompass", { message: err.message });
