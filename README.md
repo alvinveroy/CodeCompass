@@ -154,22 +154,6 @@ Interact with CodeCompass via MCP using tools optimized for Vibe Coding:
   ```javascript
   server.tool("context7", "get-library-docs", { context7CompatibleLibraryID: "vercel/nextjs" })
   ```
-- **Access Changelog**:
-  ```javascript
-  server.tool("get_changelog", {})
-  ```
-- **Manage Tasks with TaskMaster**:
-  ```javascript
-  server.tool("taskmaster-ai", "get_tasks", { projectRoot: "/path/to/project" })
-  ```
-- **Build Knowledge Graph**:
-  ```javascript
-  server.tool("@modelcontextprotocol/memory", "create_entities", { entities: [...] })
-  ```
-- **Get Library Documentation**:
-  ```javascript
-  server.tool("context7", "get-library-docs", { context7CompatibleLibraryID: "vercel/nextjs" })
-  ```
 
 ### Vibe Coding Example
 **Scenario**: You want to implement user authentication.
@@ -318,33 +302,12 @@ CodeCompass integrates seamlessly with popular IDEs and tools, enhancing your Vi
 
 CodeCompass provides tools to help monitor and troubleshoot:
 
-- **Check Provider Status**: Test your LLM provider connection and configuration (see `check_provider` in the Usage section).
-- **Reset Metrics**: Clear all performance and usage counters.
-  ```javascript
-  server.tool("reset_metrics", {})
-  ```
-- **Get Changelog**: View the project's version history.
-  ```javascript
-  server.tool("get_changelog", {})
-  ```
-- **Get Session History**: Retrieve detailed information about a specific user session.
-  ```javascript
-  server.tool("get_session_history", { sessionId: "your-session-id" })
-  ```
-
-## Why CodeCompass for the Vibe Coder Arsenal?
-CodeCompass is a must-have in the Vibe coder arsenal, a collection of tools for AI-driven development. By implementing [MCP](https://www.anthropic.com/news/model-context-protocol), it connects your repository to AI assistants, enabling Vibe Coding with:
-- **Privacy-First**: Local Ollama models keep data secure.
-- **Flexible AI**: Supports cloud models like OpenAI and DeepSeek for versatility.
-- **Seamless Integration**: Enhances IDEs for efficient workflows.
-- **Democratized Coding**: Makes coding accessible via natural language.
-- **Metrics & Diagnostics**: Built-in tools for performance monitoring and troubleshooting.
-- **Project Management**: Integrated TaskMaster AI for comprehensive project tracking.
-- **Knowledge Representation**: Build and query knowledge graphs about your codebase.
-- **Documentation Access**: Retrieve up-to-date library documentation with Context7.
-- **Project Management**: Integrated TaskMaster AI for comprehensive project tracking.
-- **Knowledge Representation**: Build and query knowledge graphs about your codebase.
-- **Documentation Access**: Retrieve up-to-date library documentation with Context7.
+- **Check Provider Status**: Use `server.tool("check_provider", {})` to test your LLM provider connection and current configuration. This provides a consolidated view of your provider setup.
+- **DeepSeek Specific Diagnostics**: Use `server.tool("deepseek_diagnostic", {})` for a detailed check of DeepSeek API configuration and connectivity.
+- **Force DeepSeek Connection Test**: Use `server.tool("force_deepseek_connection", { apiKey: "YOUR_API_KEY_OPTIONAL", apiUrl: "YOUR_API_URL_OPTIONAL", model: "YOUR_MODEL_OPTIONAL" })` to perform a direct test connection to the DeepSeek API, bypassing some local configurations for direct testing. Parameters are optional and will fall back to `configService` values if not provided.
+- **Reset Metrics**: Clear all performance and usage counters with `server.tool("reset_metrics", {})`.
+- **Get Changelog**: View the project's version history using `server.tool("get_changelog", {})`.
+- **Get Session History**: Retrieve detailed information about a specific user session with `server.tool("get_session_history", { sessionId: "your-session-id" })`.
 
 ## Contributing
 Join our community! See [CONTRIBUTING.md](https://github.com/alvinveroy/CodeCompass/blob/main/CONTRIBUTING.md) for guidelines.
