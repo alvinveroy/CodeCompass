@@ -96,6 +96,14 @@ export interface AgentInitialQueryResponse {
   agentState: AgentState; // The complete, updated agent state including the planText
 }
 
+export interface AgentStepExecutionResponse {
+  sessionId: string;
+  status: "STEP_EXECUTED" | "COMPLETED" | "ERROR";
+  message: string;
+  executedStep?: AgentStep; // The step that was just executed
+  agentState: AgentState; // The complete, updated agent state
+}
+
 export interface DetailedQdrantSearchResult {
   id: string | number;
   score: number;
