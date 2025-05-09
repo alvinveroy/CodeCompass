@@ -198,9 +198,6 @@ export async function switchLLMProvider(provider: string): Promise<boolean> {
     return false;
   }
   
-  // For backward compatibility with tests, LLM_PROVIDER is set by configService when SUGGESTION_PROVIDER is set.
-  // No direct process.env manipulation needed here.
-  
   // Map provider to default model
   const model = normalizedProvider === 'deepseek' ? 'deepseek-coder' : 'llama3.1:8b';
   

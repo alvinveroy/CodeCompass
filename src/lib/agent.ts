@@ -482,16 +482,16 @@ export async function runAgentLoop(
   const isConnected = await currentProvider.checkConnection();
   logger.info(`Agent confirmed provider: ${isConnected ? "connected" : "disconnected"}`);
   
-  // Log the actual provider and model being used
-  logger.info(`Agent using model: ${global.CURRENT_SUGGESTION_MODEL}, provider: ${global.CURRENT_SUGGESTION_PROVIDER}`);
-  
+  // Log the actual provider and model being used, from ConfigService
+  logger.info(`Agent using model: ${configService.SUGGESTION_MODEL}, provider: ${configService.SUGGESTION_PROVIDER}`);
+      
   // Verify the provider is working with a test generation
   try {
     const _testResult = await currentProvider.generateText("Test message");
-    logger.info(`Agent verified provider ${global.CURRENT_SUGGESTION_PROVIDER} is working`);
+    logger.info(`Agent verified provider ${configService.SUGGESTION_PROVIDER} is working`);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (_error: unknown) {
-    logger.error(`Agent failed to verify provider ${global.CURRENT_SUGGESTION_PROVIDER}`);
+    logger.error(`Agent failed to verify provider ${configService.SUGGESTION_PROVIDER}`);
   }
   
   return await timeExecution('agent_loop', async () => {
