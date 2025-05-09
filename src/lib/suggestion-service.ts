@@ -1,9 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
-import { v4 as uuidv4 } from 'uuid';
 import { LLMProvider } from "./llm-provider";
 import { logger } from "./config-service"; // configService might not be directly used here anymore
 import { incrementCounter, timeExecution, trackFeedbackScore } from "./metrics";
-import { AgentInitialQueryResponse, AgentState } from './types';
+import { AgentInitialQueryResponse, AgentState, AgentStepExecutionResponse, AgentStep } from './types';
 
 // Re-define a local enhancedWithRetry or import a shared one if available.
 // For now, let's assume the LLMProvider's generateText handles its own retries.
