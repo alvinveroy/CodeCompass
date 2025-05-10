@@ -1,6 +1,6 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
-import { withRetry } from "../utils/retry-utils"; // Assuming this is the correct path
+ // Assuming this is the correct path
 import { preprocessText } from "../utils/text-utils";
 import { generateEmbedding } from "./ollama"; // Assuming ollama.ts exports generateEmbedding
 // import { trackQueryRefinement } from "./metrics"; // Metrics removed
@@ -14,7 +14,6 @@ export async function searchWithRefinement(
   maxRefinements = 2,
   relevanceThreshold = 0.7
 ): Promise<{ results: DetailedQdrantSearchResult[], refinedQuery: string, relevanceScore: number }> {
-  const queryId = `query_${Date.now()}`;
   let currentQuery = query;
   let bestResults: DetailedQdrantSearchResult[] = [];
   let bestRelevanceScore = 0;

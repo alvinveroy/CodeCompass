@@ -222,7 +222,7 @@ class ConfigService {
     process.env.CLAUDE_API_KEY = this._claudeApiKey;
   }
   
-  public reloadConfigsFromFile(forceSet = true): void {
+  public reloadConfigsFromFile(_forceSet = true): void {
       // Re-initialize from env/defaults
     this._llmProvider = process.env.LLM_PROVIDER || "ollama";
     this._suggestionModel = process.env.SUGGESTION_MODEL || "llama3.1:8b";

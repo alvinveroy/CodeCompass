@@ -555,17 +555,6 @@ async function handleTestEnvironment(normalizedModel: string, provider: string):
 }
 
 /**
- * Resets model settings to ensure a clean switch
- */
-function resetModelSettings(): void {
-  logger.debug(`Resetting existing model settings before switch`);
-  // Reset model settings via ConfigService to ensure consistency
-  configService.setSuggestionModel("llama3.1:8b"); // Default model
-  configService.setSuggestionProvider("ollama");   // Default provider
-  // configService also updates process.env and global variables.
-}
-
-/**
  * Checks if the provider is available
  */
 async function checkProviderAvailability(provider: string, normalizedModel: string): Promise<boolean> {

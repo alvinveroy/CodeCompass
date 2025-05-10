@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { LLMProvider } from "./llm-provider";
 import { logger } from "./config-service";
-import { AgentInitialQueryResponse, AgentState, AgentStep } from './types'; // Removed AgentStepExecutionResponse
+import { AgentInitialQueryResponse, AgentState } from './types'; // Removed AgentStepExecutionResponse
 
 // evaluateSuggestionInternal removed
 

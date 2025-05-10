@@ -1,6 +1,5 @@
 import axios from "axios";
-import * as fs from 'fs';
-import * as path from 'path'; // Keep path for join if needed locally, though configService has CONFIG_DIR
+// Keep path for join if needed locally, though configService has CONFIG_DIR
 import { configService, logger } from "./config-service";
 
 // Constants like DEEPSEEK_API_URL are now primarily sourced from configService.

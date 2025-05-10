@@ -2,12 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 // import { initMcpSafeLogging } from "./mcp-logger"; // mcp-logger removed
 import fs from "fs/promises";
-import * as fsSync from "fs"; // Keep for sync operations if any remain
+ // Keep for sync operations if any remain
 import path from "path"; // Keep for local path operations
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
-import * as deepseek from "./deepseek";
 // model-persistence functions (loadModelConfig, forceUpdateModelConfig) are no longer directly used here.
 // Their functionalities are covered by configService methods or were part of removed tools.
 
@@ -22,9 +21,9 @@ import { validateGitRepository, indexRepository, getRepositoryDiff } from "./rep
 // Removed metrics imports: getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider"; // Added LLMProvider import
 import { SuggestionPlanner } from "./suggestion-service"; // Added SuggestionPlanner import
-import { AgentInitialQueryResponse, AgentState } from "./types"; // AgentStepExecutionResponse, AgentStateSchema removed
+import { AgentInitialQueryResponse } from "./types"; // AgentStepExecutionResponse, AgentStateSchema removed
 import { VERSION } from "./version";
-import { getOrCreateSession, addQuery, addSuggestion, addFeedback, updateContext, getRecentQueries, getRelevantResults } from "./state";
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 // import { runAgentLoop } from "./agent"; // This is now unused
 
 // generateChainId function removed
