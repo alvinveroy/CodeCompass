@@ -308,11 +308,10 @@ export async function startServer(repoPath: string): Promise<void> {
         logger.info("Handling prompts/list tool request");
         return {
           // The MCP SDK expects tool output to be in a `content` array.
-          // The original return value needs to be wrapped.
+          // To send JSON, stringify it and use type: "text".
           content: [{
-            type: "json", // Or "text" if the client expects a stringified JSON
-            // text: JSON.stringify({ // If type: "text"
-            json: { // If type: "json" (assuming client/SDK handles serialization)
+            type: "text",
+            text: JSON.stringify({
               prompts: [
                 {
                   id: "repository-context",
@@ -333,7 +332,7 @@ export async function startServer(repoPath: string): Promise<void> {
                   template: "Analyze this code problem: {{query}}"
                 }
               ]
-            }
+            })
           }]
         };
       }
