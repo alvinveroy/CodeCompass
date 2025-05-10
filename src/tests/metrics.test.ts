@@ -1,0 +1,88 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { withMetrics } from '../lib/utils';
+import { logger as mockLogger } from '../lib/config-service';
+
+// Mock the logger methods from config-service
+vi.mock('../lib/config-service', async (importActual) => {
+  const actual = await importActual() as any;
+  return {
+    ...actual,
+    logger: {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    },
+  };
+});
+
+// Mock performance.now()
+const mockPerformanceNow = vi.fn();
+vi.stubGlobal('performance', { now: mockPerformanceNow });
+
+describe('withMetrics', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPerformanceNow.mockReset();
+  });
+
+  it('should execute the function and log execution time on success', async () => {
+    const mockFn = vi.fn(async (a: number, b: number) => {
+      await new Promise(resolve => setTimeout(resolve, 5)); // Simulate async work
+      return a + b;
+    });
+    mockFn.mockName('mockSumFunction'); // Set name for better logging in tests
+
+    mockPerformanceNow.mockReturnValueOnce(100).mockReturnValueOnce(150); // Simulate 50ms duration
+
+    const wrappedFn = withMetrics(mockFn);
+    const result = await wrappedFn(2, 3);
+
+    expect(result).toBe(5);
+    expect(mockFn).toHaveBeenCalledWith(2, 3);
+    expect(mockLogger.debug).toHaveBeenCalledWith('Starting execution of mockSumFunction');
+    expect(mockLogger.info).toHaveBeenCalledWith('Function mockSumFunction executed in 50.00ms');
+  });
+
+  it('should execute the function, log execution time, and re-throw error on failure', async () => {
+    const testError = new Error('Test error');
+    const mockFn = vi.fn(async () => {
+      await new Promise(resolve => setTimeout(resolve, 5)); // Simulate async work
+      throw testError;
+    });
+    mockFn.mockName('mockErrorFunction');
+
+    mockPerformanceNow.mockReturnValueOnce(200).mockReturnValueOnce(275); // Simulate 75ms duration
+
+    const wrappedFn = withMetrics(mockFn);
+
+    await expect(wrappedFn()).rejects.toThrow(testError);
+    expect(mockFn).toHaveBeenCalled();
+    expect(mockLogger.debug).toHaveBeenCalledWith('Starting execution of mockErrorFunction');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Function mockErrorFunction failed after 75.00ms',
+      { error: testError }
+    );
+  });
+
+  it('should use "anonymousFunction" for unnamed functions in logs', async () => {
+    const mockFn = vi.fn(async () => { // An anonymous function
+      await new Promise(resolve => setTimeout(resolve, 1));
+      return 'done';
+    });
+    // fn.name would be 'mockFn' here because it's assigned.
+    // To test true anonymous, it'd be withMetrics(async () => {...})
+    // However, withMetrics itself defaults to 'anonymousFunction' if fn.name is empty.
+    // Let's test the fallback directly by overriding the name for the test.
+    Object.defineProperty(mockFn, 'name', { value: '' });
+
+
+    mockPerformanceNow.mockReturnValueOnce(300).mockReturnValueOnce(310); // Simulate 10ms duration
+
+    const wrappedFn = withMetrics(mockFn);
+    await wrappedFn();
+
+    expect(mockLogger.debug).toHaveBeenCalledWith('Starting execution of anonymousFunction');
+    expect(mockLogger.info).toHaveBeenCalledWith('Function anonymousFunction executed in 10.00ms');
+  });
+});

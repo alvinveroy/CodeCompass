@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Improved performance by adding caching for LLM responses, batch operations for Qdrant, and a metrics utility. (2950503)
 - New MCP tool: `get_changelog` to access version history programmatically
 - Support for `.env` file configuration
 - Command-line flag `--changelog` to display version history
