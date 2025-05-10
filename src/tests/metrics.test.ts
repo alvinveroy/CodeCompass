@@ -1,6 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { withMetrics } from '../lib/utils';
 import { logger as mockLogger } from '../lib/config-service';
+
+// Define the spy for performance.now() at the top level
+const mockPerformanceNow = vi.fn();
+
+// Mock the 'perf_hooks' module to control performance.now()
+vi.mock('perf_hooks', async (importOriginal) => {
+  const originalModule = await importOriginal<typeof import('perf_hooks')>();
+  return {
+    ...originalModule,
+    performance: {
+      ...originalModule.performance,
+      now: mockPerformanceNow,
+    },
+  };
+});
 
 // Mock the logger methods from config-service
 vi.mock('../lib/config-service', async (importActual) => {
@@ -16,15 +31,13 @@ vi.mock('../lib/config-service', async (importActual) => {
   };
 });
 
-// Mock performance.now()
-const mockPerformanceNow = vi.fn();
-vi.stubGlobal('performance', { now: mockPerformanceNow });
-
 describe('withMetrics', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockPerformanceNow.mockReset();
+    vi.clearAllMocks(); // Clears all mocks, including mockLogger
+    mockPerformanceNow.mockReset(); // Specifically reset the performance.now spy
   });
+
+  // afterEach is not strictly necessary here unless fake timers were used.
 
   it('should execute the function and log execution time on success', async () => {
     const mockFn = vi.fn(async (a: number, b: number) => {
