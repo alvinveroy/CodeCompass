@@ -7,8 +7,8 @@ interface ModelConfigFile {
   SUGGESTION_MODEL?: string;
   SUGGESTION_PROVIDER?: string;
   EMBEDDING_PROVIDER?: string;
-  DEEPSEEK_API_KEY?: string; // Retained for specific DeepSeek config file handling
-  DEEPSEEK_API_URL?: string; // Retained for specific DeepSeek config file handling
+  DEEPSEEK_API_KEY?: string;
+  DEEPSEEK_API_URL?: string;
   OPENAI_API_KEY?: string;
   GEMINI_API_KEY?: string;
   CLAUDE_API_KEY?: string;
