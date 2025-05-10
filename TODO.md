@@ -7,7 +7,7 @@ This file tracks pending tasks for the CodeCompass project.
 The following source files still need to be documented in the `docs/source-files/` directory. The list reflects files that have been added to the chat for this purpose.
 
 ### Pending Documentation:
--   [ ] `docs/source-files/src_lib_agent.md` (for `src/lib/agent.ts`)
+-   [x] `docs/source-files/src_lib_agent.md` (for `src/lib/agent.ts`)
 -   [ ] `docs/source-files/src_lib_provider-cli.md` (for `src/lib/provider-cli.ts`)
 -   [x] `docs/source-files/src_lib_query-refinement.md` (for `src/lib/query-refinement.ts`)
 -   [x] `docs/source-files/src_lib_repository.md` (for `src/lib/repository.ts`)
