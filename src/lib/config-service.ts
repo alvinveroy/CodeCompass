@@ -85,6 +85,7 @@ class ConfigService {
         new winston.transports.Stream({
           stream: process.stderr,
           format: winston.format.simple(), // Keep simple for stderr readability
+          level: 'error', // Only log errors and above to stderr
           silent: process.env.NODE_ENV === "test"
         }),
       ],
