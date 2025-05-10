@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured logger to send all console output to `stderr` for MCP compatibility by using `winston.transports.Stream` with `process.stderr`. This resolves issues where info/warn logs on `stdout` were breaking JSON-RPC communication with clients like Claude Desktop. (7ccdfc7, 7e7fb90)
 
 ### Added
+- Added documentation for script files and global type definitions:
+  - `docs/source-files/src_scripts_set-deepseek-key.md`
+  - `docs/source-files/src_scripts_test-deepseek.md`
+  - `docs/source-files/src_scripts_version-bump.md`
+  - `docs/source-files/src_types_global.d.md`
+- Added documentation for `src/lib/utils.ts`:
+  - `docs/source-files/src_lib_utils.md`
 - Implemented command-line interface flags: (17d2570)
   - `--help` / `-h`: Displays usage information and available commands.
   - `--version` / `-v`: Shows the current application version.
