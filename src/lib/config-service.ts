@@ -82,9 +82,9 @@ class ConfigService {
       ),
       transports: [
         new winston.transports.File({ filename: path.join(this.LOG_DIR, "codecompass.log") }),
-        new winston.transports.Console({
+        new winston.transports.Stream({
+          stream: process.stderr,
           format: winston.format.simple(), // Keep simple for stderr readability
-          stderrLevels: ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'], // All levels to stderr
           silent: process.env.NODE_ENV === "test"
         }),
       ],
