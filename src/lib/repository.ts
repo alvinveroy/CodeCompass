@@ -83,14 +83,28 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
           logger.warn(`Found point in Qdrant (ID: ${pointId}) without a 'filepath' in its payload. Skipping stale check for this point.`);
         }
       }
-      nextOffset = scrollResult.next_page_offset;
+      // Handle different types for next_page_offset to ensure type safety.
+      // Qdrant's next_page_offset can be string, number, null, or undefined (or an object for complex cursors).
+      // We only want to assign string or number to nextOffset, otherwise, pagination stops.
+      const rawNextOffset = scrollResult.next_page_offset;
+      if (typeof rawNextOffset === 'string' || typeof rawNextOffset === 'number') {
+        nextOffset = rawNextOffset;
+      } else {
+        // If rawNextOffset is null, undefined, or an object (complex cursor), 
+        // set nextOffset to undefined to stop pagination.
+        nextOffset = undefined;
+      }
     } while (nextOffset);
 
     if (pointsToDelete.length > 0) {
       logger.info(`Found ${pointsToDelete.length} stale entries to remove from Qdrant.`);
       // Qdrant's deletePoints expects an array of point IDs.
-      // Ensure the point IDs match the type expected by the client (string for UUIDs).
-      await qdrantClient.deletePoints(configService.COLLECTION_NAME, { points: pointsToDelete.map(id => String(id)) });
+      // The pointsSelector object structures the arguments for the deletePoints method.
+      // If the TS2339 error for deletePoints persists after this change,
+      // it strongly indicates an environment or TS configuration/cache issue,
+      // as 'deletePoints' is the correct method name for @qdrant/js-client-rest@1.14.0.
+      const pointsSelector = { points: pointsToDelete.map(id => String(id)) };
+      await qdrantClient.deletePoints(configService.COLLECTION_NAME, pointsSelector);
       logger.info(`Successfully removed ${pointsToDelete.length} stale entries from Qdrant.`);
     } else {
       logger.info("No stale entries found in Qdrant index.");
