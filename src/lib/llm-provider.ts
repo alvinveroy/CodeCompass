@@ -1,3 +1,4 @@
+import NodeCache from 'node-cache';
 import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
@@ -7,10 +8,13 @@ import { withRetry } from "../utils/retry-utils"; // Added for centralized retry
 import axios from "axios"; // For OllamaProvider.generateText
 import { OllamaGenerateResponse } from "./types"; // For OllamaProvider.generateText
 
+// Cache for LLM responses
+const llmCache = new NodeCache({ stdTTL: 3600 }); // 1 hour TTL
+
 // Interface for LLM Provider
 export interface LLMProvider {
   checkConnection(): Promise<boolean>;
-  generateText(prompt: string): Promise<string>;
+  generateText(prompt: string, forceFresh?: boolean): Promise<string>;
   generateEmbedding(text: string): Promise<number[]>;
   processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string>;
 }
@@ -21,9 +25,14 @@ class OllamaProvider implements LLMProvider {
     return await ollama.checkOllama();
   }
 
-  async generateText(prompt: string): Promise<string> {
-    // Direct call to Ollama API for text generation
-    logger.debug(`OllamaProvider: Generating text for prompt (length: ${prompt.length})`);
+  async generateText(prompt: string, forceFresh = false): Promise<string> {
+    const cacheKey = `ollama:${configService.SUGGESTION_MODEL}:${prompt}`;
+    if (!forceFresh && llmCache.has(cacheKey)) {
+      logger.debug(`OllamaProvider: Cache hit for prompt (length: ${prompt.length})`);
+      return llmCache.get(cacheKey) as string;
+    }
+
+    logger.debug(`OllamaProvider: Cache miss. Generating text for prompt (length: ${prompt.length})`);
     try {
       const response = await withRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(
@@ -38,6 +47,7 @@ class OllamaProvider implements LLMProvider {
         }
         return res.data.response;
       });
+      llmCache.set(cacheKey, response);
       return response;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -101,10 +111,19 @@ class DeepSeekProvider implements LLMProvider {
     return await deepseek.testDeepSeekConnection();
   }
 
-  async generateText(prompt: string): Promise<string> {
+  async generateText(prompt: string, forceFresh = false): Promise<string> {
+    const cacheKey = `deepseek:${configService.SUGGESTION_MODEL}:${prompt}`;
+    if (!forceFresh && llmCache.has(cacheKey)) {
+      logger.debug(`DeepSeekProvider: Cache hit for prompt (length: ${prompt.length})`);
+      return llmCache.get(cacheKey) as string;
+    }
+
+    logger.debug(`DeepSeekProvider: Cache miss. Generating text for prompt (length: ${prompt.length})`);
     // First ensure the API key is properly set
     await deepseek.checkDeepSeekApiKey();
-    return await deepseek.generateWithDeepSeek(prompt);
+    const response = await deepseek.generateWithDeepSeek(prompt);
+    llmCache.set(cacheKey, response);
+    return response;
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
@@ -149,9 +168,9 @@ class HybridProvider implements LLMProvider {
     return suggestionCheck && embeddingCheck;
   }
 
-  async generateText(prompt: string): Promise<string> {
+  async generateText(prompt: string, forceFresh = false): Promise<string> {
     // Use the suggestion provider for text generation
-    return await this.suggestionProvider.generateText(prompt);
+    return await this.suggestionProvider.generateText(prompt, forceFresh);
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
@@ -179,8 +198,8 @@ class OpenAIProvider implements LLMProvider {
     logger.info(`OpenAI API Key found (length: ${apiKey.length}). Assuming connection is possible.`);
     return apiKey.startsWith("sk-");
   }
-  async generateText(prompt: string): Promise<string> {
-    logger.warn("OpenAIProvider: generateText not implemented.", { prompt });
+  async generateText(prompt: string, forceFresh?: boolean): Promise<string> {
+    logger.warn("OpenAIProvider: generateText not implemented.", { prompt, forceFresh });
     // Example of how it might look (requires 'openai' package):
     // const openai = new OpenAI({ apiKey: configService.OPENAI_API_KEY });
     // const completion = await openai.chat.completions.create({
@@ -213,8 +232,8 @@ class GeminiProvider implements LLMProvider {
     logger.info(`Gemini API Key found (length: ${apiKey.length}). Assuming connection is possible.`);
     return !!apiKey; // Basic check; a lightweight API call would be better.
   }
-  async generateText(prompt: string): Promise<string> {
-    logger.warn("GeminiProvider: generateText not implemented.", { prompt });
+  async generateText(prompt: string, forceFresh?: boolean): Promise<string> {
+    logger.warn("GeminiProvider: generateText not implemented.", { prompt, forceFresh });
     throw new Error("GeminiProvider.generateText not implemented.");
   }
   async generateEmbedding(text: string): Promise<number[]> {
@@ -238,8 +257,8 @@ class ClaudeProvider implements LLMProvider {
     logger.info(`Claude API Key found (length: ${apiKey.length}). Assuming connection is possible.`);
     return !!apiKey; // Basic check; a lightweight API call would be better.
   }
-  async generateText(prompt: string): Promise<string> {
-    logger.warn("ClaudeProvider: generateText not implemented.", { prompt });
+  async generateText(prompt: string, forceFresh?: boolean): Promise<string> {
+    logger.warn("ClaudeProvider: generateText not implemented.", { prompt, forceFresh });
     throw new Error("ClaudeProvider.generateText not implemented.");
   }
   async generateEmbedding(text: string): Promise<number[]> {
