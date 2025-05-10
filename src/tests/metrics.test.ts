@@ -31,7 +31,8 @@ describe('withMetrics', () => {
       await new Promise(resolve => setTimeout(resolve, 5)); // Simulate async work
       return a + b;
     });
-    mockFn.mockName('mockSumFunction'); // Set name for better logging in tests
+    Object.defineProperty(mockFn, 'name', { value: 'mockSumFunction', configurable: true });
+    // mockFn.mockName('mockSumFunction'); // Retain for Vitest's own reporting if desired, but not for fn.name
 
     mockPerformanceNow.mockReturnValueOnce(100).mockReturnValueOnce(150); // Simulate 50ms duration
 
@@ -50,7 +51,8 @@ describe('withMetrics', () => {
       await new Promise(resolve => setTimeout(resolve, 5)); // Simulate async work
       throw testError;
     });
-    mockFn.mockName('mockErrorFunction');
+    Object.defineProperty(mockFn, 'name', { value: 'mockErrorFunction', configurable: true });
+    // mockFn.mockName('mockErrorFunction'); // Retain for Vitest's own reporting if desired
 
     mockPerformanceNow.mockReturnValueOnce(200).mockReturnValueOnce(275); // Simulate 75ms duration
 
