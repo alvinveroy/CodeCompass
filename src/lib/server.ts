@@ -195,9 +195,10 @@ export async function startServer(repoPath: string): Promise<void> {
     // Register the switch suggestion model tool
     server.tool(
       "switch_suggestion_model",
-      "Switches the primary model used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder', use `{\"model\": \"deepseek-coder\"}`. To switch to 'llama3.1:8b', use `{\"model\": \"llama3.1:8b\"}`.",
+      "Switches the primary model and provider used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder' (DeepSeek provider), use `{\"model\": \"deepseek-coder\", \"provider\": \"deepseek\"}`. To switch to 'llama3.1:8b' (Ollama provider), use `{\"model\": \"llama3.1:8b\", \"provider\": \"ollama\"}`. If provider is omitted, it may be inferred for known model patterns. For other providers like 'openai', 'gemini', 'claude', specify both model and provider: `{\"model\": \"gpt-4\", \"provider\": \"openai\"}`.",
       {
-        model: z.string().describe("The suggestion model to switch to (e.g., llama3.1:8b, deepseek-coder)")
+        model: z.string().describe("The suggestion model to switch to (e.g., 'llama3.1:8b', 'deepseek-coder', 'gpt-4')."),
+        provider: z.string().optional().describe("The LLM provider for the model (e.g., 'ollama', 'deepseek', 'openai', 'gemini', 'claude'). If omitted, an attempt will be made to infer it.")
       },
       async (params: unknown) => {
         // chainId and trackToolChain removed
@@ -209,14 +210,11 @@ export async function startServer(repoPath: string): Promise<void> {
         // Parameters should conform to the Zod schema: { model: string }
         // normalizeToolParams ensures we have an object.
         let modelToSwitchTo: string;
+        let providerToSwitchTo: string | undefined;
 
         if (normalizedParams && typeof normalizedParams.model === 'string') {
           modelToSwitchTo = normalizedParams.model;
         } else {
-          // Fallback or error if 'model' parameter is missing or not a string
-          // This case should ideally be caught by Zod validation if params come directly from client
-          // If normalizeToolParams converted a non-object/non-JSON-string to { query: ... },
-          // then .model would be undefined.
           logger.error("Invalid or missing 'model' parameter for switch_suggestion_model.", { normalizedParams });
           return {
             content: [{
@@ -225,83 +223,63 @@ export async function startServer(repoPath: string): Promise<void> {
             }],
           };
         }
+
+        if (normalizedParams && typeof normalizedParams.provider === 'string') {
+          providerToSwitchTo = normalizedParams.provider.toLowerCase();
+        } else if (normalizedParams && normalizedParams.provider !== undefined) { // handles null or other non-string types for provider
+          logger.error("Invalid 'provider' parameter for switch_suggestion_model. It must be a string if provided.", { normalizedParams });
+          return {
+            content: [{
+              type: "text",
+              text: "# Error Switching Suggestion Model\n\nInvalid 'provider' parameter. It must be a string if provided, or omitted.",
+            }],
+          };
+        }
       
-        logger.info(`Requested model: ${modelToSwitchTo}`);
-        
-        // Ensure we're using the exact model name provided
-        const normalizedModel = modelToSwitchTo.toLowerCase();
-        
-        // Store the requested model for verification later
-        const requestedModel = normalizedModel;
+        logger.info(`Requested model switch: Model='${modelToSwitchTo}', Provider='${providerToSwitchTo || "infer"}'`);
         
         try {
-          // Determine if this is a DeepSeek model
-          const isDeepSeekModel = normalizedModel.includes('deepseek');
-          
-          // For DeepSeek models, ensure we have the API key and endpoint configured
-          if (isDeepSeekModel) {
-            // Check API key
-            if (!await deepseek.checkDeepSeekApiKey()) {
-              return {
-                content: [{
-                  type: "text",
-                  text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${modelToSwitchTo}. DeepSeek API key is not configured.\n\nPlease set the DEEPSEEK_API_KEY environment variable and try again.`,
-                }],
-              };
-            }
-            
-            // Check API endpoint via ConfigService
-            if (!configService.DEEPSEEK_API_URL) { // Or check against a known default if that's the logic
-              logger.warn("DeepSeek API URL not set (checked via ConfigService), using default endpoint from ConfigService.");
-            }
-          }
-        
-          // Switch the suggestion model
-          const success = await switchSuggestionModel(normalizedModel);
+          // The switchSuggestionModel function in llm-provider.ts now handles provider inference 
+          // if providerToSwitchTo is undefined, and also any provider-specific checks (like API keys).
+          const success = await switchSuggestionModel(modelToSwitchTo, providerToSwitchTo);
         
           if (!success) {
+            // switchSuggestionModel in llm-provider.ts should log specific reasons for failure.
             return {
               content: [{
                 type: "text",
-                text: `# Failed to Switch Suggestion Model\n\nUnable to switch to ${modelToSwitchTo}. Please check your configuration and logs for details.`,
+                text: `# Failed to Switch Suggestion Model\n\nUnable to switch to model '${modelToSwitchTo}'${providerToSwitchTo ? ` with provider '${providerToSwitchTo}'` : ''}. Please check your configuration and server logs for details. Ensure the provider is supported and any necessary API keys or host configurations are correctly set.`,
               }],
             };
           }
         
-          // Get the actual values from ConfigService to ensure we're reporting what was actually set
+          // Get the actual values from ConfigService to report what was set
           const actualModel = configService.SUGGESTION_MODEL;
           const actualProvider = configService.SUGGESTION_PROVIDER;
           const embeddingProvider = configService.EMBEDDING_PROVIDER;
         
-          // Log the current models and providers to debug
-          logger.info(`Current suggestion model from ConfigService: ${actualModel}, provider: ${actualProvider}, embedding: ${embeddingProvider}`);
-          
-          // Verify that the model was actually changed
-          if (actualModel !== requestedModel) {
-            logger.error(`Model switch failed: requested ${requestedModel} but ConfigService reports ${actualModel}. Attempting to force set via ConfigService.`);
-            
-            // Force set the model via ConfigService
-            configService.setSuggestionModel(requestedModel);
-            configService.setSuggestionProvider(requestedModel.includes('deepseek') ? 'deepseek' : 'ollama');
-            
-            logger.info(`Forced model to ${configService.SUGGESTION_MODEL} and provider to ${configService.SUGGESTION_PROVIDER} via ConfigService.`);
-            
-            // Check if the force-set worked by reading back from ConfigService
-            if (configService.SUGGESTION_MODEL !== requestedModel) {
-              return {
-                content: [{
-                  type: "text",
-                  text: `# Error Switching Suggestion Model\n\nFailed to switch to ${requestedModel}. The model is still set to ${configService.SUGGESTION_MODEL}.\n\nPlease check the logs for more details.`,
-                }],
-              };
-            }
-          }
+          logger.info(`Successfully switched. ConfigService reports: Model='${actualModel}', Provider='${actualProvider}', Embedding Provider='${embeddingProvider}'`);
         
-          // Use the requested model in the response to ensure consistency
+          // Construct a message confirming the switch
+          let message = `# Suggestion Model Switched\n\nSuccessfully switched to model '${actualModel}' using provider '${actualProvider}' for suggestions.\nEmbeddings continue to use '${embeddingProvider}'.\n\n`;
+          message += `To make this change permanent, update your environment variables (e.g., SUGGESTION_MODEL='${actualModel}', SUGGESTION_PROVIDER='${actualProvider}') or the relevant configuration files (e.g., ~/.codecompass/model-config.json).`;
+          
+          // Add provider-specific instructions or warnings if needed.
+          // This can be enhanced based on feedback from llm-provider or specific checks here.
+          if (actualProvider === 'deepseek' && !configService.DEEPSEEK_API_KEY) {
+            message += `\n\nWarning: DeepSeek provider is selected, but DEEPSEEK_API_KEY is not found in current configuration. Ensure it is set for DeepSeek to function.`;
+          } else if (actualProvider === 'openai' && !configService.OPENAI_API_KEY) {
+            message += `\n\nWarning: OpenAI provider is selected, but OPENAI_API_KEY is not found. Ensure it is set.`;
+          } else if (actualProvider === 'gemini' && !configService.GEMINI_API_KEY) {
+            message += `\n\nWarning: Gemini provider is selected, but GEMINI_API_KEY is not found. Ensure it is set.`;
+          } else if (actualProvider === 'claude' && !configService.CLAUDE_API_KEY) {
+            message += `\n\nWarning: Claude provider is selected, but CLAUDE_API_KEY is not found. Ensure it is set.`;
+          }
+
           return {
             content: [{
               type: "text",
-              text: `# Suggestion Model Switched\n\nSuccessfully switched to ${configService.SUGGESTION_MODEL} for suggestions.\n\nUsing ${configService.SUGGESTION_MODEL} (${configService.SUGGESTION_PROVIDER} provider) for suggestions and ${configService.EMBEDDING_PROVIDER} for embeddings.\n\nTo make this change permanent, set the SUGGESTION_MODEL environment variable to '${configService.SUGGESTION_MODEL}' or update ~/.codecompass/model-config.json.`,
+              text: message,
             }],
           };
         } catch (error: unknown) {
