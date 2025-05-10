@@ -111,7 +111,9 @@ export async function startServer(repoPath: string): Promise<void> {
     const qdrantClient = await initializeQdrant();
     await indexRepository(qdrantClient, repoPath);
 
-    const codeCompassPrompts = [
+    // Define prompts in both array and map formats
+    // Array format for the prompts/list method's return value
+    const codeCompassPromptsArray = [
       {
         id: "repository-context",
         name: "Repository Context",
@@ -131,6 +133,12 @@ export async function startServer(repoPath: string): Promise<void> {
         template: "Analyze this code problem: {{query}}"
       }
     ];
+
+    // Object map format for server capabilities declaration
+    const codeCompassPromptsMap = codeCompassPromptsArray.reduce((acc, prompt) => {
+      acc[prompt.id] = prompt;
+      return acc;
+    }, {} as Record<string, typeof codeCompassPromptsArray[0]>);
 
     const server = new McpServer({
       name: "CodeCompass",
@@ -160,7 +168,7 @@ export async function startServer(repoPath: string): Promise<void> {
           // force_deepseek_connection: {}, // Removed
           // provide_feedback and analyze_code_problem also removed by not being registered in registerTools
         },
-        prompts: codeCompassPrompts, // Provide the defined prompts to the server capabilities
+        prompts: codeCompassPromptsMap, // Use the object map for capabilities
       },
     });
 
@@ -339,7 +347,7 @@ export async function startServer(repoPath: string): Promise<void> {
       {
         handler: async (_params: Record<string, never>) => {
           logger.info("Handling direct prompts/list RPC request via addMethodAdvanced");
-          return { prompts: codeCompassPrompts }; // codeCompassPrompts is defined earlier
+          return { prompts: codeCompassPromptsArray }; // Return the array of prompts
         },
         paramsSchema: z.object({}), // No parameters expected
         resultSchema: promptsResultSchema
