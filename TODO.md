@@ -12,7 +12,7 @@ The following source files still need to be documented in the `docs/source-files
 -   [x] `docs/source-files/src_lib_query-refinement.md` (for `src/lib/query-refinement.ts`)
 -   [x] `docs/source-files/src_lib_repository.md` (for `src/lib/repository.ts`)
 -   [x] `docs/source-files/src_lib_server.md` (for `src/lib/server.ts`)
--   [ ] `docs/source-files/src_lib_state.md` (for `src/lib/state.ts`)
+-   [x] `docs/source-files/src_lib_state.md` (for `src/lib/state.ts`)
 -   [ ] `docs/source-files/src_lib_suggestion-service.md` (for `src/lib/suggestion-service.ts`)
 -   [ ] `docs/source-files/src_lib_types.md` (for `src/lib/types.ts`)
 -   [ ] `docs/source-files/src_lib_utils.md` (for `src/lib/utils.ts`)
