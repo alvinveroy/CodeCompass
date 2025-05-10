@@ -15,9 +15,9 @@ The following source files still need to be documented in the `docs/source-files
 -   [x] `docs/source-files/src_lib_state.md` (for `src/lib/state.ts`)
 -   [x] `docs/source-files/src_lib_suggestion-service.md` (for `src/lib/suggestion-service.ts`)
 -   [x] `docs/source-files/src_lib_types.md` (for `src/lib/types.ts`)
--   [x] `docs/source-files/src_lib_utils.md` (for `src/lib/utils.ts`)
 -   [x] `docs/source-files/src_lib_version.md` (for `src/lib/version.ts`)
 -   [x] `docs/source-files/src_utils_retry-utils.md` (for `src/utils/retry-utils.ts`)
+-   [x] `docs/source-files/src_utils_metrics-utils.md` (for `src/utils/metrics-utils.ts`)
 
 ### Completed Documentation (as of commit 8422802):
 -   [x] `docs/source-files/README.md` (Overview of the documentation section)
@@ -38,8 +38,8 @@ The following source files still need to be documented in the `docs/source-files
     -   [X] Initial investigation: Reviewed `indexRepository`. Hypothesis: error refers to stale data of `model-persistence.ts` in Qdrant index due to lack of deletion logic.
     -   [X] Implement deletion of stale entries from Qdrant in `indexRepository`. (Commit `fd79952`)
 -   [ ] Further analysis of test coverage report to identify and remove dead/unreachable code (this step was skipped by user request).
--   [ ] Review directory structure for potential improvements (Analysis complete, see sub-task).
-    -   [x] Consolidate utility functions: ensure `src/utils/` is the single source of truth for generic utilities (e.g., `withRetry`, `preprocessText`, `withMetrics`), by refactoring `src/lib/utils.ts` (now removed) and updating all imports accordingly.
+-   [x] Review directory structure for potential improvements (Analysis complete, see sub-task).
+    -   [x] Consolidate utility functions: ensured `src/utils/` is the single source of truth for generic utilities (`withRetry` in `retry-utils.ts`, `preprocessText` in `text-utils.ts`, `withMetrics` in `metrics-utils.ts`). Removed `src/lib/utils.ts`. Imports across the codebase should be verified to point to these new locations.
 
 ## Future Considerations (Beyond Current Scope)
 

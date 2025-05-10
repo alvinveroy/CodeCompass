@@ -15,8 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/source-files/src_scripts_test-deepseek.md`
   - `docs/source-files/src_scripts_version-bump.md`
   - `docs/source-files/src_types_global.d.md`
-- Added documentation for `src/lib/utils.ts`:
-  - `docs/source-files/src_lib_utils.md`
 - Added documentation for core library files:
   - `docs/source-files/src_lib_agent.md` (for `src/lib/agent.ts`)
   - `docs/source-files/src_lib_provider-cli.md` (for `src/lib/provider-cli.ts`)
@@ -28,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/source-files/src_lib_types.md` (for `src/lib/types.ts`)
   - `docs/source-files/src_lib_version.md` (for `src/lib/version.ts`)
   - `docs/source-files/src_utils_retry-utils.md` (for `src/utils/retry-utils.ts`)
+  - `docs/source-files/src_utils_metrics-utils.md` (for `src/utils/metrics-utils.ts`)
 - Implemented command-line interface flags: (17d2570)
   - `--help` / `-h`: Displays usage information and available commands.
   - `--version` / `-v`: Shows the current application version.
@@ -53,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Context7 integration for library documentation lookup
 
 ### Changed
+- Refactored utility functions: Consolidated `withRetry`, `preprocessText`, and `withMetrics` into the `src/utils/` directory (`retry-utils.ts`, `text-utils.ts`, `metrics-utils.ts` respectively). Removed the redundant `src/lib/utils.ts` file.
 - Refactored `src/lib/ollama.ts`: Removed `processFeedback` and `summarizeSnippet` functions to streamline the client and improve separation of concerns. (ffa844b)
 - Refactored `src/lib/deepseek.ts`:
     - Removed local URL constants (`LOCAL_DEEPSEEK_API_URL`, `LOCAL_DEEPSEEK_EMBEDDING_URL`) and their re-export, ensuring `configService` is the single source of truth for API endpoints. (Part of 928dd38)
