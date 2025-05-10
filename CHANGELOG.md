@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/source-files/src_types_global.d.md`
 - Added documentation for `src/lib/utils.ts`:
   - `docs/source-files/src_lib_utils.md`
+- Added documentation for core library files:
+  - `docs/source-files/src_lib_agent.md` (for `src/lib/agent.ts`)
+  - `docs/source-files/src_lib_provider-cli.md` (for `src/lib/provider-cli.ts`)
+  - `docs/source-files/src_lib_query-refinement.md` (for `src/lib/query-refinement.ts`)
+  - `docs/source-files/src_lib_repository.md` (for `src/lib/repository.ts`)
+  - `docs/source-files/src_lib_server.md` (for `src/lib/server.ts`)
+  - `docs/source-files/src_lib_state.md` (for `src/lib/state.ts`)
+  - `docs/source-files/src_lib_suggestion-service.md` (for `src/lib/suggestion-service.ts`)
+  - `docs/source-files/src_lib_types.md` (for `src/lib/types.ts`)
+  - `docs/source-files/src_lib_version.md` (for `src/lib/version.ts`)
+  - `docs/source-files/src_utils_retry-utils.md` (for `src/utils/retry-utils.ts`)
 - Implemented command-line interface flags: (17d2570)
   - `--help` / `-h`: Displays usage information and available commands.
   - `--version` / `-v`: Shows the current application version.
