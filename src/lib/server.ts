@@ -131,7 +131,8 @@ export async function startServer(repoPath: string): Promise<void> {
           get_changelog: {},
           agent_query: {}, // Agent tool for direct plan and summary
           // execute_agent_step: {}, // Removed
-          switch_suggestion_model: {}, 
+          switch_suggestion_model: {},
+          "prompts/list": {}, // Declare prompts/list as a tool
           // check_provider: {}, // Removed
           // reset_metrics: {}, // Removed
           // deepseek_diagnostic: {}, // Removed
@@ -298,40 +299,45 @@ export async function startServer(repoPath: string): Promise<void> {
     // Register deepseek_diagnostic tool - REMOVED
     // Register force_deepseek_connection tool - REMOVED
     
-    // Register custom RPC methods
-    // Note: Using type assertion to handle potential missing method in the type definition
-    const serverWithMethods = server as unknown as { registerMethod?: (name: string, handler: () => Promise<unknown>) => void };
-    
-    if (typeof serverWithMethods.registerMethod !== "function") {
-      logger.warn("MCP server does not support 'registerMethod', some functionality may be limited");
-    } else {
-      // Register prompts/list method
-      serverWithMethods.registerMethod("prompts/list", async () => {
-        logger.info("Handling prompts/list request");
+    // Register prompts/list as a tool
+    server.tool(
+      "prompts/list",
+      "Lists available prompt templates that can be used with other tools.",
+      z.object({}), // No parameters expected
+      async () => {
+        logger.info("Handling prompts/list tool request");
         return {
-          prompts: [
-            {
-              id: "repository-context",
-              name: "Repository Context",
-              description: "Get context about your repository",
-              template: "Provide context about {{query}} in this repository"
-            },
-            {
-              id: "code-suggestion",
-              name: "Code Suggestion",
-              description: "Generate code suggestions",
-              template: "Suggest code for {{query}}"
-            },
-            {
-              id: "code-analysis",
-              name: "Code Analysis",
-              description: "Analyze code problems",
-              template: "Analyze this code problem: {{query}}"
+          // The MCP SDK expects tool output to be in a `content` array.
+          // The original return value needs to be wrapped.
+          content: [{
+            type: "json", // Or "text" if the client expects a stringified JSON
+            // text: JSON.stringify({ // If type: "text"
+            json: { // If type: "json" (assuming client/SDK handles serialization)
+              prompts: [
+                {
+                  id: "repository-context",
+                  name: "Repository Context",
+                  description: "Get context about your repository",
+                  template: "Provide context about {{query}} in this repository"
+                },
+                {
+                  id: "code-suggestion",
+                  name: "Code Suggestion",
+                  description: "Generate code suggestions",
+                  template: "Suggest code for {{query}}"
+                },
+                {
+                  id: "code-analysis",
+                  name: "Code Analysis",
+                  description: "Analyze code problems",
+                  template: "Analyze this code problem: {{query}}"
+                }
+              ]
             }
-          ]
+          }]
         };
-      });
-    }
+      }
+    );
     
     // Start metrics logging - REMOVED
     
