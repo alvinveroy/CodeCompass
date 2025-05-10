@@ -34,6 +34,7 @@ The following source files still need to be documented in the `docs/source-files
 -   [x] Identified and removed unused dependencies (via `depcheck` - no issues found).
 -   [x] Identified and removed/fixed unused variables and imports (via `eslint` and manual review - commit `d9da657`).
 -   [x] Removed `src/lib/model-persistence.ts` (staged for commit).
+-   [ ] Investigate and resolve indexing error for removed file `src/lib/model-persistence.ts`.
 -   [ ] Further analysis of test coverage report to identify and remove dead/unreachable code (this step was skipped by user request).
 -   [ ] Review directory structure for potential improvements (not yet started).
 
