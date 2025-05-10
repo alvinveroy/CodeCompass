@@ -334,7 +334,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
     // Explicitly register the "prompts/list" method
     // This ensures the method is available, while capabilities.prompts ensures advertisement.
-    server.rpc.addMethodAdvanced(
+    server.addMethodAdvanced( // Changed from server.rpc.addMethodAdvanced
       "prompts/list",
       {
         handler: async (_params: Record<string, never>) => {
