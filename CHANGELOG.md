@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Documented the use of CodeCompass `agent_query` for planning changelog updates. (9e201bf)
+- Added tests for the `withMetrics` utility. (946bab6)
 - Improved performance by adding caching for LLM responses, batch operations for Qdrant, and a metrics utility. (2950503)
 - New MCP tool: `get_changelog` to access version history programmatically
 - Support for `.env` file configuration
@@ -82,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed provider cache implementation for better performance
 - Resolved test failures in LLM provider and model switching tests
 - Enhanced error handling for agent tool execution
+- Fixed mock function names in `withMetrics` tests to ensure accurate log message assertions. (be14faa)
 
 ## [1.1.0] - 2025-05-06
 
