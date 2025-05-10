@@ -14,7 +14,7 @@ import * as deepseek from "./deepseek";
 // Initialize MCP-safe logging immediately
 // initMcpSafeLogging(); // mcp-logger removed
 import { DetailedQdrantSearchResult } from "./types"; // Changed QdrantSearchResult to DetailedQdrantSearchResult
-import { z, ZodObject, ZodRawShape, ZodTypeAny } from "zod"; // Added ZodObject, ZodRawShape, ZodTypeAny for schema
+import { z } from "zod"; // Simplified Zod import
 import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant } from "./qdrant"; // searchWithRefinement removed from here
 import { searchWithRefinement } from "./query-refinement"; // Added import for searchWithRefinement
@@ -111,6 +111,27 @@ export async function startServer(repoPath: string): Promise<void> {
     const qdrantClient = await initializeQdrant();
     await indexRepository(qdrantClient, repoPath);
 
+    const codeCompassPrompts = [
+      {
+        id: "repository-context",
+        name: "Repository Context",
+        description: "Get context about your repository",
+        template: "Provide context about {{query}} in this repository"
+      },
+      {
+        id: "code-suggestion",
+        name: "Code Suggestion",
+        description: "Generate code suggestions",
+        template: "Suggest code for {{query}}"
+      },
+      {
+        id: "code-analysis",
+        name: "Code Analysis",
+        description: "Analyze code problems",
+        template: "Analyze this code problem: {{query}}"
+      }
+    ];
+
     const server = new McpServer({
       name: "CodeCompass",
       version: VERSION,
@@ -139,6 +160,7 @@ export async function startServer(repoPath: string): Promise<void> {
           // force_deepseek_connection: {}, // Removed
           // provide_feedback and analyze_code_problem also removed by not being registered in registerTools
         },
+        prompts: codeCompassPrompts, // Provide the defined prompts to the server capabilities
       },
     });
 
@@ -299,48 +321,8 @@ export async function startServer(repoPath: string): Promise<void> {
     // Register deepseek_diagnostic tool - REMOVED
     // Register force_deepseek_connection tool - REMOVED
     
-    // Define schema for prompts/list RPC method
-    const promptSchema = z.object({
-      id: z.string(),
-      name: z.string(),
-      description: z.string(),
-      template: z.string()
-    });
-    const promptsResultSchema = z.object({
-      prompts: z.array(promptSchema)
-    });
-
-    // Register prompts/list as a direct JSON-RPC method
-    server.addMethod(
-      "prompts/list",
-      z.object({}) as ZodObject<{}, "strip", ZodTypeAny, {}, {}>, // Empty params schema
-      promptsResultSchema, // Return schema
-      async () => {
-        logger.info("Handling direct prompts/list RPC request");
-        return {
-          prompts: [
-            {
-              id: "repository-context",
-              name: "Repository Context",
-              description: "Get context about your repository",
-              template: "Provide context about {{query}} in this repository"
-            },
-            {
-              id: "code-suggestion",
-              name: "Code Suggestion",
-              description: "Generate code suggestions",
-              template: "Suggest code for {{query}}"
-            },
-            {
-              id: "code-analysis",
-              name: "Code Analysis",
-              description: "Analyze code problems",
-              template: "Analyze this code problem: {{query}}"
-            }
-          ]
-        };
-      }
-    );
+    // Manual registration of prompts/list is removed.
+    // The SDK should handle it based on the prompts provided in server capabilities.
     
     // Start metrics logging - REMOVED
     
