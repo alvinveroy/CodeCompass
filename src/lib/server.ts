@@ -14,7 +14,7 @@ import * as deepseek from "./deepseek";
 // Initialize MCP-safe logging immediately
 // initMcpSafeLogging(); // mcp-logger removed
 import { DetailedQdrantSearchResult } from "./types"; // Changed QdrantSearchResult to DetailedQdrantSearchResult
-import { z } from "zod";
+import { z, ZodObject, ZodRawShape, ZodTypeAny } from "zod"; // Added ZodObject, ZodRawShape, ZodTypeAny for schema
 import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant } from "./qdrant"; // searchWithRefinement removed from here
 import { searchWithRefinement } from "./query-refinement"; // Added import for searchWithRefinement
@@ -132,7 +132,7 @@ export async function startServer(repoPath: string): Promise<void> {
           agent_query: {}, // Agent tool for direct plan and summary
           // execute_agent_step: {}, // Removed
           switch_suggestion_model: {},
-          "prompts/list": {}, // Declare prompts/list as a tool
+          // "prompts/list": {}, // Removed from tools, will be a direct method
           // check_provider: {}, // Removed
           // reset_metrics: {}, // Removed
           // deepseek_diagnostic: {}, // Removed
@@ -299,41 +299,45 @@ export async function startServer(repoPath: string): Promise<void> {
     // Register deepseek_diagnostic tool - REMOVED
     // Register force_deepseek_connection tool - REMOVED
     
-    // Register prompts/list as a tool
-    server.tool(
+    // Define schema for prompts/list RPC method
+    const promptSchema = z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string(),
+      template: z.string()
+    });
+    const promptsResultSchema = z.object({
+      prompts: z.array(promptSchema)
+    });
+
+    // Register prompts/list as a direct JSON-RPC method
+    server.addMethod(
       "prompts/list",
-      "Lists available prompt templates that can be used with other tools.",
-      {}, // No parameters expected, use an empty object for ZodRawShape
+      z.object({}) as ZodObject<{}, "strip", ZodTypeAny, {}, {}>, // Empty params schema
+      promptsResultSchema, // Return schema
       async () => {
-        logger.info("Handling prompts/list tool request");
+        logger.info("Handling direct prompts/list RPC request");
         return {
-          // The MCP SDK expects tool output to be in a `content` array.
-          // To send JSON, stringify it and use type: "text".
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              prompts: [
-                {
-                  id: "repository-context",
-                  name: "Repository Context",
-                  description: "Get context about your repository",
-                  template: "Provide context about {{query}} in this repository"
-                },
-                {
-                  id: "code-suggestion",
-                  name: "Code Suggestion",
-                  description: "Generate code suggestions",
-                  template: "Suggest code for {{query}}"
-                },
-                {
-                  id: "code-analysis",
-                  name: "Code Analysis",
-                  description: "Analyze code problems",
-                  template: "Analyze this code problem: {{query}}"
-                }
-              ]
-            })
-          }]
+          prompts: [
+            {
+              id: "repository-context",
+              name: "Repository Context",
+              description: "Get context about your repository",
+              template: "Provide context about {{query}} in this repository"
+            },
+            {
+              id: "code-suggestion",
+              name: "Code Suggestion",
+              description: "Generate code suggestions",
+              template: "Suggest code for {{query}}"
+            },
+            {
+              id: "code-analysis",
+              name: "Code Analysis",
+              description: "Analyze code problems",
+              template: "Analyze this code problem: {{query}}"
+            }
+          ]
         };
       }
     );
