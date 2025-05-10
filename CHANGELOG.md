@@ -10,13 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured logger to send all console output to `stderr` for MCP compatibility by using `winston.transports.Stream` with `process.stderr`. This resolves issues where info/warn logs on `stdout` were breaking JSON-RPC communication with clients like Claude Desktop. (7ccdfc7, 7e7fb90)
 
 ### Added
+- Implemented command-line interface flags: (17d2570)
+  - `--help` / `-h`: Displays usage information and available commands.
+  - `--version` / `-v`: Shows the current application version.
+  - `--changelog`: Displays the project changelog.
+    - Added `--verbose` option to `--changelog` for potential future detailed output.
 - Documented the use of CodeCompass `agent_query` for planning changelog updates. (9e201bf)
 - Added tests for the `withMetrics` utility. (946bab6)
 - Improved performance by adding caching for LLM responses, batch operations for Qdrant, and a metrics utility. (2950503)
 - New MCP tool: `get_changelog` to access version history programmatically
 - Support for `.env` file configuration
-- Command-line flag `--changelog` to display version history
-- Command-line flag `--version` to display current version
+- Command-line flag `--changelog` to display version history (now fully implemented in main CLI)
+- Command-line flag `--version` to display current version (now fully implemented in main CLI)
 - New MCP tool: `reset_metrics` to reset all metrics counters
 - New MCP tool: `get_session_history` to view detailed session information
 - New MCP tool: `agent_query` for multi-step reasoning and problem analysis
