@@ -46,6 +46,64 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
   
   logger.info(`Filtered to ${filteredFiles.length} code files for indexing`);
 
+  // Clean up stale entries from Qdrant
+  try {
+    logger.info("Checking for stale entries in Qdrant index...");
+    const currentFilePathsInRepo = new Set(filteredFiles);
+    const pointsToDelete: (string | number)[] = []; // Qdrant point IDs can be string or number
+
+    let nextOffset: string | number | undefined = undefined;
+    const scrollLimit = 250; // Number of points to fetch per scroll request
+
+    logger.debug(`Starting scroll operation to fetch all indexed filepaths from collection: ${configService.COLLECTION_NAME}`);
+    do {
+      const scrollResult = await qdrantClient.scroll(configService.COLLECTION_NAME, {
+        with_payload: ['filepath'], // Only fetch the 'filepath' field from the payload
+        with_vector: false,        // No need for vectors
+        limit: scrollLimit,
+        offset: nextOffset,
+      });
+
+      if (scrollResult.points.length > 0) {
+        logger.debug(`Scrolled ${scrollResult.points.length} points from Qdrant.`);
+      }
+
+      for (const point of scrollResult.points) {
+        const indexedFilepath = point.payload?.filepath as string;
+        // Ensure point.id is correctly typed; uuidv4 generates strings.
+        const pointId = point.id as string | number; 
+
+        if (indexedFilepath) {
+          if (!currentFilePathsInRepo.has(indexedFilepath)) {
+            pointsToDelete.push(pointId);
+            logger.debug(`Marking stale entry for deletion: ${indexedFilepath} (ID: ${pointId})`);
+          }
+        } else {
+          // This case could indicate an issue with how data is being indexed or a point without a filepath.
+          logger.warn(`Found point in Qdrant (ID: ${pointId}) without a 'filepath' in its payload. Skipping stale check for this point.`);
+        }
+      }
+      nextOffset = scrollResult.next_page_offset;
+    } while (nextOffset);
+
+    if (pointsToDelete.length > 0) {
+      logger.info(`Found ${pointsToDelete.length} stale entries to remove from Qdrant.`);
+      // Qdrant's deletePoints expects an array of point IDs.
+      // Ensure the point IDs match the type expected by the client (string for UUIDs).
+      await qdrantClient.deletePoints(configService.COLLECTION_NAME, { points: pointsToDelete.map(id => String(id)) });
+      logger.info(`Successfully removed ${pointsToDelete.length} stale entries from Qdrant.`);
+    } else {
+      logger.info("No stale entries found in Qdrant index.");
+    }
+  } catch (error) {
+    logger.error("Error during stale entry cleanup in Qdrant. Indexing of current files will proceed.", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    // Depending on policy, you might choose to re-throw or handle more gracefully.
+    // For now, logging and continuing.
+  }
+
   let successCount = 0;
   let errorCount = 0;
 
