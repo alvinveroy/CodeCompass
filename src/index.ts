@@ -2,7 +2,14 @@
 
 import fs from 'fs';
 import path from 'path';
+import NodeCache from 'node-cache';
 import { startServer } from './lib/server';
+
+// Initialize cache: stdTTL is 0 (infinite) as we manage staleness via file mtime
+// checkOnPreviousTTL: false, as we don't use individual item TTLs here.
+const changelogCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
+const CACHE_KEY_CONTENT = 'changelogContent';
+const CACHE_KEY_MTIME = 'changelogMtime';
 
 // Helper function to read package.json version
 function getPackageVersion(): string {
@@ -48,18 +55,35 @@ For more information, visit: https://github.com/alvinveroy/codecompass
 }
 
 function displayChangelog(verbose: boolean) {
+  const changelogPath = path.resolve(__dirname, '../CHANGELOG.md');
   try {
-    // Assuming the script runs from dist/index.js, CHANGELOG.md is ../CHANGELOG.md
-    const changelogPath = path.resolve(__dirname, '../CHANGELOG.md');
+    const stats = fs.statSync(changelogPath);
+    const currentMtime = stats.mtimeMs;
+
+    const cachedMtime = changelogCache.get<number>(CACHE_KEY_MTIME);
+    const cachedContent = changelogCache.get<string>(CACHE_KEY_CONTENT);
+
+    if (cachedContent && cachedMtime && cachedMtime === currentMtime) {
+      console.log(cachedContent);
+      if (verbose) {
+        // console.log("\n[Verbose changelog mode active - served from cache]");
+      }
+      return;
+    }
+
+    // Cache is stale or doesn't exist, read file
     const changelogContent = fs.readFileSync(changelogPath, 'utf8');
+    changelogCache.set(CACHE_KEY_CONTENT, changelogContent);
+    changelogCache.set(CACHE_KEY_MTIME, currentMtime);
+    
     console.log(changelogContent);
     if (verbose) {
       // Placeholder for future verbose-specific logic.
       // For now, verbose output is the same as non-verbose for the full changelog.
-      // console.log("\n[Verbose changelog mode active]");
+      // console.log("\n[Verbose changelog mode active - freshly read]");
     }
   } catch (error) {
-    console.error('Error reading CHANGELOG.md:', error);
+    console.error('Error reading or caching CHANGELOG.md:', error);
   }
 }
 
