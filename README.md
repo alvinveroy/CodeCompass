@@ -174,15 +174,11 @@ MCP_PORT=3000
 ```
 
 **Setting DeepSeek API Key via CLI**:
-If you prefer not to use environment variables for the DeepSeek API key, you can set it using the `codecompass-provider` CLI tool (available if you cloned and built the project):
+If you prefer not to use environment variables for the DeepSeek API key, you can set it using the dedicated script:
 ```bash
 # From the root of your cloned CodeCompass directory
-npm run codecompass-provider set-apikey deepseek YOUR_API_KEY
-# This will store the key in a local configuration file.
-```
-Alternatively, the `set-deepseek-key` script is also available:
-```bash
 npm run set-deepseek-key YOUR_API_KEY
+# This will store the key in a local configuration file managed by ConfigService.
 ```
 
 ## Usage 🚀
@@ -220,7 +216,32 @@ CodeCompass offers a CLI for quick actions like viewing help, version, or the ch
   ```
   The server will start, index your repository (if it's the first time or changes are detected), and listen for MCP requests on the configured port (default `3000`).
 
-### 2. Model Context Protocol (MCP) Tools
+### 2. Provider Management CLI (`codecompass-provider`)
+CodeCompass includes a separate command-line tool, `codecompass-provider`, for managing and inspecting your LLM provider configuration directly. This tool is available if you have cloned and built the project.
+
+- **Show Current Provider Status**:
+  ```bash
+  npm run codecompass-provider status
+  # Displays: Current Suggestion Model, Current Suggestion Provider, Current Embedding Provider
+  ```
+- **Switch Suggestion Model**:
+  ```bash
+  npm run codecompass-provider switch <model_name>
+  # Example: npm run codecompass-provider switch deepseek-coder
+  # Note: This change is for the current session. For permanent changes,
+  # set environment variables or update your model configuration file.
+  ```
+- **Test Current LLM Provider Connection**:
+  ```bash
+  npm run codecompass-provider test
+  # Verifies connectivity with the currently configured LLM provider.
+  ```
+- **Help for Provider CLI**:
+  ```bash
+  npm run codecompass-provider --help
+  ```
+
+### 3. Model Context Protocol (MCP) Tools
 Interact with CodeCompass programmatically via an MCP client (e.g., within your IDE integration or a custom script). Here are some key tools:
 
 - **View Repository Structure**: Get an overview of your project's directory layout.
