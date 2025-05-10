@@ -402,7 +402,7 @@ async function registerTools(
         logger.warn("No query provided for agent_query, using default");
       }
       
-      const { query, sessionId } = normalizedParams as { query: string; sessionId?: string };
+      const { query, sessionId: initialSessionId } = normalizedParams as { query: string; sessionId?: string }; // Renamed sessionId to avoid conflict
     
     try {
       // Ensure ConfigService reflects the latest state from files.
@@ -410,12 +410,48 @@ async function registerTools(
 
       const llmProvider = await getLLMProvider(); // Uses configService
       logger.info(`Agent using provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
+
+      // Perform a search for the agent's query to gather context
+      const session = getOrCreateSession(initialSessionId, repoPath);
+      const isGitRepo = await validateGitRepository(repoPath);
+      const files = isGitRepo
+        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
+        : [];
+      updateContext(session.id, repoPath, files); // Update context for the session
+
+      const { results: searchResults, refinedQuery } = await searchWithRefinement(
+        qdrantClient, 
+        query as string,
+        files
+      );
+      // Add this search to session history
+      const topScore = searchResults.length > 0 ? searchResults[0].score : 0;
+      addQuery(session.id, query as string, searchResults, topScore);
+
+      const searchContextSnippets = searchResults.map(r => ({
+        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
+        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
+        relevance: r.score,
+      }));
+
+      const augmentedPrompt = `User Query: "${query}"
+${refinedQuery !== query ? `Refined Query (used for vector search): "${refinedQuery}"` : ''}
+
+Relevant code snippets based on the query:
+${searchContextSnippets.length > 0 
+  ? searchContextSnippets.map(c => `File: ${c.filepath} (Relevance: ${c.relevance.toFixed(2)})\n\`\`\`\n${c.snippet}\n\`\`\``).join("\n\n")
+  : "No specific code snippets found directly matching the query."
+}
+
+Based on the user query and the provided relevant code snippets (if any), please generate a detailed plan and a comprehensive summary for addressing the user's query.
+Ensure the plan outlines steps to answer the query or solve the task, and the summary provides a direct answer or solution.
+`;
       
       const planner = new SuggestionPlanner(llmProvider);
       // initiateAgentQuery now returns a plan and summary directly.
       const agentResponse: AgentInitialQueryResponse = await planner.initiateAgentQuery(
-        query as string,
-        sessionId as string | undefined
+        augmentedPrompt,
+        session.id // Use the obtained session.id
       );
 
       if (agentResponse.status === "ERROR") {
