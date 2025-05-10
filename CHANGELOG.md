@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--version` / `-v`: Shows the current application version.
   - `--changelog`: Displays the project changelog.
     - Added `--verbose` option to `--changelog` for potential future detailed output.
+- Implemented in-memory caching for the `--changelog` command output to improve performance on repeated calls. Cache invalidates if `CHANGELOG.md` is modified. (221d993)
 - Documented the use of CodeCompass `agent_query` for planning changelog updates. (9e201bf)
 - Added tests for the `withMetrics` utility. (946bab6)
 - Improved performance by adding caching for LLM responses, batch operations for Qdrant, and a metrics utility. (2950503)
