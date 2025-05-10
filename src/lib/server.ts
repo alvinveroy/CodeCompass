@@ -303,7 +303,7 @@ export async function startServer(repoPath: string): Promise<void> {
     server.tool(
       "prompts/list",
       "Lists available prompt templates that can be used with other tools.",
-      z.object({}), // No parameters expected
+      {}, // No parameters expected, use an empty object for ZodRawShape
       async () => {
         logger.info("Handling prompts/list tool request");
         return {
