@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Configured logger to send all console output to `stderr` for MCP compatibility by using `winston.transports.Stream` with `process.stderr`. This resolves issues where info/warn logs on `stdout` were breaking JSON-RPC communication with clients like Claude Desktop. (7ccdfc7, 7e7fb90)
+
 ### Added
 - Documented the use of CodeCompass `agent_query` for planning changelog updates. (9e201bf)
 - Added tests for the `withMetrics` utility. (946bab6)
@@ -76,7 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Changed assertions in `switchSuggestionModel` tests within `tests/llm-provider.test.ts` to verify calls to mocked `configService` setters (e.g., `setSuggestionModel`) rather than asserting direct side effects on `process.env` or `global` variables, making the tests more robust.
     - Corrected `normalizeToolParams` tests in `tests/server.test.ts` and `tests/server-tools.test.ts` to align with its refactored behavior.
     - Fixed an incorrect variable name in an error message in `lib/provider-cli.ts`.
-- Fixed MCP logging to prevent JSON parsing errors in Claude Desktop
 - Replaced logger.configure with custom file logging implementation
 - Fixed connection issues with DeepSeek API
 - Resolved race conditions in model switching
