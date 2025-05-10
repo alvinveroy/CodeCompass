@@ -7,8 +7,12 @@ interface ModelConfigFile {
   SUGGESTION_MODEL?: string;
   SUGGESTION_PROVIDER?: string;
   EMBEDDING_PROVIDER?: string;
-  DEEPSEEK_API_KEY?: string;
-  DEEPSEEK_API_URL?: string;
+  DEEPSEEK_API_KEY?: string; // Retained for specific DeepSeek config file handling
+  DEEPSEEK_API_URL?: string; // Retained for specific DeepSeek config file handling
+  OPENAI_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  CLAUDE_API_KEY?: string;
+  // Add other provider-specific keys here as needed
 }
 
 class ConfigService {
@@ -28,6 +32,9 @@ class ConfigService {
   private _deepSeekModel: string;
   private _deepSeekRpmLimit: number; // Requests Per Minute
   private _agentQueryTimeout: number;
+  private _openAIApiKey: string;
+  private _geminiApiKey: string;
+  private _claudeApiKey: string;
 
   private _useMixedProviders: boolean;
   private _suggestionProvider: string;
@@ -103,6 +110,9 @@ class ConfigService {
     this._deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-coder";
     this._deepSeekRpmLimit = parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this.DEEPSEEK_RPM_LIMIT_DEFAULT;
     this._agentQueryTimeout = parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this.AGENT_QUERY_TIMEOUT_DEFAULT;
+    this._openAIApiKey = process.env.OPENAI_API_KEY || "";
+    this._geminiApiKey = process.env.GEMINI_API_KEY || "";
+    this._claudeApiKey = process.env.CLAUDE_API_KEY || "";
 
     this._useMixedProviders = process.env.USE_MIXED_PROVIDERS === "true" || false;
     this._suggestionProvider = process.env.SUGGESTION_PROVIDER || this._llmProvider;
@@ -179,11 +189,22 @@ class ConfigService {
     if (modelConfig.EMBEDDING_PROVIDER) {
       this._embeddingProvider = modelConfig.EMBEDDING_PROVIDER;
     }
+
+    // API keys from model-config.json (these override env vars if present in file)
+    if (modelConfig.OPENAI_API_KEY) {
+      this._openAIApiKey = modelConfig.OPENAI_API_KEY;
+    }
+    if (modelConfig.GEMINI_API_KEY) {
+      this._geminiApiKey = modelConfig.GEMINI_API_KEY;
+    }
+    if (modelConfig.CLAUDE_API_KEY) {
+      this._claudeApiKey = modelConfig.CLAUDE_API_KEY;
+    }
     
     // Ensure process.env reflects the final state. This is crucial for any part of the code
     // or external libraries that might still read from process.env directly.
-    process.env.DEEPSEEK_API_KEY = this._deepSeekApiKey;
-    process.env.DEEPSEEK_API_URL = this._deepSeekApiUrl;
+    process.env.DEEPSEEK_API_KEY = this._deepSeekApiKey; // Still handle from its specific file or env
+    process.env.DEEPSEEK_API_URL = this._deepSeekApiUrl; // Still handle from its specific file or env
     process.env.DEEPSEEK_MODEL = this._deepSeekModel;
     process.env.DEEPSEEK_RPM_LIMIT = String(this._deepSeekRpmLimit);
     process.env.AGENT_QUERY_TIMEOUT = String(this._agentQueryTimeout);
@@ -194,6 +215,9 @@ class ConfigService {
     process.env.LLM_PROVIDER = this._llmProvider;
     process.env.OLLAMA_HOST = this.OLLAMA_HOST; // Ensure OLLAMA_HOST from env/default is in process.env
     process.env.QDRANT_HOST = this.QDRANT_HOST; // Ensure QDRANT_HOST from env/default is in process.env
+    process.env.OPENAI_API_KEY = this._openAIApiKey;
+    process.env.GEMINI_API_KEY = this._geminiApiKey;
+    process.env.CLAUDE_API_KEY = this._claudeApiKey;
   }
   
   public reloadConfigsFromFile(forceSet = true): void {
@@ -206,6 +230,9 @@ class ConfigService {
     this._deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-coder";
     this._deepSeekRpmLimit = parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this.DEEPSEEK_RPM_LIMIT_DEFAULT;
     this._agentQueryTimeout = parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this.AGENT_QUERY_TIMEOUT_DEFAULT;
+    this._openAIApiKey = process.env.OPENAI_API_KEY || "";
+    this._geminiApiKey = process.env.GEMINI_API_KEY || "";
+    this._claudeApiKey = process.env.CLAUDE_API_KEY || "";
     this._suggestionProvider = process.env.SUGGESTION_PROVIDER || this._llmProvider;
     this._embeddingProvider = process.env.EMBEDDING_PROVIDER || "ollama";
       
@@ -231,10 +258,26 @@ class ConfigService {
   get DEEPSEEK_MODEL(): string { return process.env.DEEPSEEK_MODEL || this._deepSeekModel; }
   get DEEPSEEK_RPM_LIMIT(): number { return parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this._deepSeekRpmLimit; }
   get AGENT_QUERY_TIMEOUT(): number { return parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this._agentQueryTimeout; }
+  get OPENAI_API_KEY(): string { return process.env.OPENAI_API_KEY || this._openAIApiKey; }
+  get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || this._geminiApiKey; }
+  get CLAUDE_API_KEY(): string { return process.env.CLAUDE_API_KEY || this._claudeApiKey; }
 
   get USE_MIXED_PROVIDERS(): boolean { return this._useMixedProviders; } // Typically from env or default
   get SUGGESTION_PROVIDER(): string { return global.CURRENT_SUGGESTION_PROVIDER || this._suggestionProvider; }
   get EMBEDDING_PROVIDER(): string { return global.CURRENT_EMBEDDING_PROVIDER || this._embeddingProvider; }
+
+  // Method to get all relevant config for a provider (example for OpenAI)
+  public getConfig(): { [key: string]: any } {
+    return {
+      DEEPSEEK_API_KEY: this.DEEPSEEK_API_KEY,
+      DEEPSEEK_API_URL: this.DEEPSEEK_API_URL,
+      DEEPSEEK_MODEL: this.DEEPSEEK_MODEL,
+      OPENAI_API_KEY: this.OPENAI_API_KEY,
+      GEMINI_API_KEY: this.GEMINI_API_KEY,
+      CLAUDE_API_KEY: this.CLAUDE_API_KEY,
+      // Add other keys as needed
+    };
+  }
 
   public setSuggestionModel(model: string): void {
     this._suggestionModel = model;
@@ -279,6 +322,24 @@ class ConfigService {
       // Not persisted in model-config.json or deepseek-config.json by default
   }
 
+  public setOpenAIApiKey(key: string): void {
+    this._openAIApiKey = key;
+    process.env.OPENAI_API_KEY = key;
+    this.persistModelConfiguration(); // Persist to model-config.json
+  }
+
+  public setGeminiApiKey(key: string): void {
+    this._geminiApiKey = key;
+    process.env.GEMINI_API_KEY = key;
+    this.persistModelConfiguration();
+  }
+
+  public setClaudeApiKey(key: string): void {
+    this._claudeApiKey = key;
+    process.env.CLAUDE_API_KEY = key;
+    this.persistModelConfiguration();
+  }
+
   public persistModelConfiguration(): void {
     try {
       if (!fs.existsSync(this.CONFIG_DIR)) {
@@ -288,7 +349,13 @@ class ConfigService {
         SUGGESTION_MODEL: this.SUGGESTION_MODEL, // Use getter to ensure current value
         SUGGESTION_PROVIDER: this.SUGGESTION_PROVIDER, // Use getter
         EMBEDDING_PROVIDER: this.EMBEDDING_PROVIDER, // Use getter
+        // Include other API keys that should be persisted in model-config.json
+        OPENAI_API_KEY: this.OPENAI_API_KEY,
+        GEMINI_API_KEY: this.GEMINI_API_KEY,
+        CLAUDE_API_KEY: this.CLAUDE_API_KEY,
       };
+      // Remove undefined keys before saving
+      Object.keys(configToSave).forEach(key => (configToSave as any)[key] === undefined && delete (configToSave as any)[key]);
       fs.writeFileSync(this.MODEL_CONFIG_FILE, JSON.stringify(configToSave, null, 2));
       this.logger.info(`Saved model configuration to ${this.MODEL_CONFIG_FILE}`);
     } catch (error) {

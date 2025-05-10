@@ -165,12 +165,91 @@ class HybridProvider implements LLMProvider {
   }
 }
 
+// --- Placeholder Providers for future implementation ---
+class OpenAIProvider implements LLMProvider {
+  async checkConnection(): Promise<boolean> {
+    logger.info("OpenAIProvider: Checking connection (API key).");
+    const apiKey = configService.OPENAI_API_KEY;
+    if (!apiKey) {
+      logger.warn("OpenAI API key is not configured.");
+      return false;
+    }
+    // Basic check, actual API call would be better
+    return apiKey.startsWith("sk-"); 
+  }
+  async generateText(prompt: string): Promise<string> {
+    logger.warn("OpenAIProvider: generateText not implemented.", { prompt });
+    throw new Error("OpenAIProvider.generateText not implemented.");
+  }
+  async generateEmbedding(text: string): Promise<number[]> {
+    logger.warn("OpenAIProvider: generateEmbedding not implemented.", { text });
+    // Fallback to Ollama for embeddings as per current policy
+    return await ollama.generateEmbedding(text);
+  }
+  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
+    logger.warn("OpenAIProvider: processFeedback not implemented.", { originalPrompt, suggestion, feedback, score });
+    throw new Error("OpenAIProvider.processFeedback not implemented.");
+  }
+}
+
+class GeminiProvider implements LLMProvider {
+  async checkConnection(): Promise<boolean> { 
+    logger.info("GeminiProvider: Checking connection (API key).");
+    const apiKey = configService.GEMINI_API_KEY;
+     if (!apiKey) {
+      logger.warn("Gemini API key is not configured.");
+      return false;
+    }
+    return !!apiKey; // Basic check
+  }
+  async generateText(prompt: string): Promise<string> { 
+    logger.warn("GeminiProvider: generateText not implemented.", { prompt });
+    throw new Error("GeminiProvider.generateText not implemented.");
+  }
+  async generateEmbedding(text: string): Promise<number[]> { 
+    logger.warn("GeminiProvider: generateEmbedding not implemented.", { text });
+    return await ollama.generateEmbedding(text);
+  }
+  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
+    logger.warn("GeminiProvider: processFeedback not implemented.", { originalPrompt, suggestion, feedback, score });
+    throw new Error("GeminiProvider.processFeedback not implemented.");
+  }
+}
+
+class ClaudeProvider implements LLMProvider {
+  async checkConnection(): Promise<boolean> { 
+    logger.info("ClaudeProvider: Checking connection (API key).");
+    const apiKey = configService.CLAUDE_API_KEY;
+    if (!apiKey) {
+      logger.warn("Claude API key is not configured.");
+      return false;
+    }
+    return !!apiKey; // Basic check
+  }
+  async generateText(prompt: string): Promise<string> { 
+    logger.warn("ClaudeProvider: generateText not implemented.", { prompt });
+    throw new Error("ClaudeProvider.generateText not implemented.");
+  }
+  async generateEmbedding(text: string): Promise<number[]> { 
+    logger.warn("ClaudeProvider: generateEmbedding not implemented.", { text });
+    return await ollama.generateEmbedding(text);
+  }
+  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
+    logger.warn("ClaudeProvider: processFeedback not implemented.", { originalPrompt, suggestion, feedback, score });
+    throw new Error("ClaudeProvider.processFeedback not implemented.");
+  }
+}
+// --- End Placeholder Providers ---
+
 // --- Provider Factory ---
 type LLMProviderConstructor = new () => LLMProvider;
 
 const providerRegistry: Record<string, LLMProviderConstructor> = {
   ollama: OllamaProvider,
   deepseek: DeepSeekProvider,
+  openai: OpenAIProvider,
+  gemini: GeminiProvider,
+  claude: ClaudeProvider,
   // Future providers can be registered here
 };
 
@@ -272,40 +351,55 @@ export async function getLLMProvider(): Promise<LLMProvider> {
 }
 
 // Function to switch the suggestion model
-export async function switchSuggestionModel(model: string): Promise<boolean> {
+export async function switchSuggestionModel(model: string, providerName?: string): Promise<boolean> {
   const normalizedModel = model.toLowerCase();
+  let targetProvider: string;
+
+  if (providerName) {
+    targetProvider = providerName.toLowerCase();
+  } else {
+    // Infer provider if not specified
+    if (normalizedModel.includes('deepseek')) {
+      targetProvider = 'deepseek';
+    } else if (normalizedModel.startsWith('gpt-')) { // Example inference for OpenAI
+      targetProvider = 'openai';
+    } else if (normalizedModel.includes('gemini')) { // Example inference for Gemini
+      targetProvider = 'gemini';
+    } else if (normalizedModel.includes('claude')) { // Example inference for Claude
+      targetProvider = 'claude';
+    } else {
+      targetProvider = 'ollama'; // Default fallback
+    }
+    logger.info(`Provider not specified, inferred '${targetProvider}' for model '${normalizedModel}'.`);
+  }
   
-  // Determine provider based on model name
-  const isDeepSeekModel = normalizedModel.includes('deepseek');
-  const provider = isDeepSeekModel ? 'deepseek' : 'ollama';
-  
-  // Log the requested model
-  logger.debug(`Requested model: ${normalizedModel}, provider: ${provider}`);
+  logger.debug(`Requested model: ${normalizedModel}, target provider: ${targetProvider}`);
   
   // Handle test environment
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    const result = await handleTestEnvironment(normalizedModel, provider);
+    const result = await handleTestEnvironment(normalizedModel, targetProvider);
     // Persist configuration via ConfigService in tests
     configService.persistModelConfiguration();
     return result;
   }
   
-  // Reset existing model settings to ensure a clean switch
-  resetModelSettings();
+  // Reset existing model settings to ensure a clean switch (optional, consider if this is desired)
+  // resetModelSettings(); // Commented out as direct switch might be preferred.
   
-  logger.info(`Switching suggestion model to: ${normalizedModel} (provider: ${provider})`);
+  logger.info(`Attempting to switch suggestion model to: ${normalizedModel} (provider: ${targetProvider})`);
   
   // Check if the provider is available before switching
-  const available = await checkProviderAvailability(provider, normalizedModel);
+  const available = await checkProviderAvailability(targetProvider, normalizedModel);
   if (!available) {
+    logger.error(`Provider '${targetProvider}' is not available or not configured correctly for model '${normalizedModel}'.`);
     return false;
   }
   
   // Set model configuration
-  setModelConfiguration(normalizedModel, provider);
+  setModelConfiguration(normalizedModel, targetProvider);
   
-  // Configure embedding provider
-  await configureEmbeddingProvider(provider);
+  // Configure embedding provider (current policy is always Ollama)
+  await configureEmbeddingProvider(targetProvider); // targetProvider here is for suggestion, embedding is fixed
 
   logger.info(`Successfully switched to ${configService.SUGGESTION_MODEL} (${configService.SUGGESTION_PROVIDER}) for suggestions and ${configService.EMBEDDING_PROVIDER} for embeddings.`);
   
@@ -443,47 +537,36 @@ function resetModelSettings(): void {
  */
 async function checkProviderAvailability(provider: string, normalizedModel: string): Promise<boolean> {
   let available = false;
+  const providerInstance = instantiateProvider(provider);
+
   try {
-    if (provider === 'ollama') {
-      available = await ollama.checkOllama();
-      logger.debug(`Ollama availability check result: ${available}`);
-      
-      // For Ollama, also check if the specific model is available
-      if (available) {
-        try {
-          // We're not checking the actual model here since that would require loading it
-          // Just check if Ollama is running
-          logger.debug(`Assuming Ollama model ${normalizedModel} is available`);
-        } catch (modelError) {
-          const errorMsg = modelError instanceof Error ? modelError.message : String(modelError);
-          logger.error(`Error checking Ollama model ${normalizedModel}: ${errorMsg}`);
-          return false;
-        }
-      }
-    } else if (provider === 'deepseek') {
-      // For DeepSeek, we need to check if the API key is configured
-      const apiKeyConfigured = await deepseek.checkDeepSeekApiKey();
-      logger.debug(`DeepSeek API key configured: ${apiKeyConfigured}`);
-      
-      if (!apiKeyConfigured) { // apiKeyConfigured is from deepseek.checkDeepSeekApiKey
-        logger.error(`DeepSeek API key is not configured (via ConfigService). Set DEEPSEEK_API_KEY environment variable or use ~/.codecompass/deepseek-config.json.`);
-        return false;
-      }
-      
-      const apiEndpoint = configService.DEEPSEEK_API_URL; // From ConfigService
-      logger.debug(`Using DeepSeek API endpoint: ${apiEndpoint}`);
-      
-      available = await deepseek.testDeepSeekConnection(); // Uses ConfigService internally
-      logger.debug(`DeepSeek connection test result: ${available}`);
-      
-      if (process.env.FORCE_DEEPSEEK_AVAILABLE === 'true' && apiKeyConfigured) { // Test flag from env is fine
-        logger.warn(`Forcing DeepSeek availability to true for testing purposes`);
-        available = true;
-      }
+    // Use the provider's own checkConnection method, which should handle API keys etc.
+    available = await providerInstance.checkConnection();
+    logger.info(`Availability check for provider '${provider}' (model '${normalizedModel}'): ${available ? 'Available' : 'Not Available'}`);
+
+    // Specific additional checks if needed, though checkConnection should be comprehensive
+    if (provider === 'ollama' && available) {
+        // For Ollama, checkOllama is the main check. Model specific check can be added if needed.
+        // For now, if Ollama is running, we assume models can be pulled/used.
+        logger.debug(`Ollama provider is available. Model '${normalizedModel}' assumed to be usable if Ollama is running.`);
+    } else if (provider === 'deepseek' && available) {
+        // deepseek.testDeepSeekConnection is called by DeepSeekProvider.checkConnection
+        // No further specific check needed here if checkConnection is robust.
+        logger.debug(`DeepSeek provider is available for model '${normalizedModel}'.`);
+    } else if (['openai', 'gemini', 'claude'].includes(provider) && available) {
+        logger.debug(`${provider} provider is available for model '${normalizedModel}'.`);
     }
+
+
+    // Test flag to force availability (useful for CI or specific test scenarios)
+    if (process.env.FORCE_PROVIDER_AVAILABLE === 'true' && providerInstance) {
+        logger.warn(`Forcing provider '${provider}' availability to true for testing purposes.`);
+        available = true;
+    }
+
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Error checking ${provider} availability for model ${normalizedModel}: ${errorMsg}`);
+    logger.error(`Error checking '${provider}' availability for model '${normalizedModel}': ${errorMsg}`);
     return false;
   }
   
