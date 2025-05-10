@@ -37,7 +37,7 @@ The following source files still need to be documented in the `docs/source-files
 -   [x] Investigate and resolve indexing error for removed file `src/lib/model-persistence.ts`. (Completed)
     -   [X] Initial investigation: Reviewed `indexRepository`. Hypothesis: error refers to stale data of `model-persistence.ts` in Qdrant index due to lack of deletion logic.
     -   [X] Implement deletion of stale entries from Qdrant in `indexRepository`. (Commit `fd79952`)
--   [ ] Further analysis of test coverage report to identify and remove dead/unreachable code (this step was skipped by user request).
+-   [x] Further analysis of test coverage report to identify and remove dead/unreachable code (this step was skipped by user request).
 -   [x] Review directory structure for potential improvements (Analysis complete, see sub-task).
     -   [x] Consolidate utility functions: ensured `src/utils/` is the single source of truth for generic utilities (`withRetry` in `retry-utils.ts`, `preprocessText` in `text-utils.ts`, `withMetrics` in `metrics-utils.ts`). Removed `src/lib/utils.ts`. Imports across the codebase should be verified to point to these new locations.
 
