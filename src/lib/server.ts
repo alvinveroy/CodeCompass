@@ -329,30 +329,9 @@ export async function startServer(repoPath: string): Promise<void> {
     // Register deepseek_diagnostic tool - REMOVED
     // Register force_deepseek_connection tool - REMOVED
     
-    // Define Zod schemas for the prompts/list method result
-    const promptSchema = z.object({
-      id: z.string(),
-      name: z.string(),
-      description: z.string(),
-      template: z.string()
-    });
-    const promptsResultSchema = z.object({
-      prompts: z.array(promptSchema)
-    });
-
-    // Explicitly register the "prompts/list" method
-    // This ensures the method is available, while capabilities.prompts ensures advertisement.
-    server.addMethodAdvanced( // Changed from server.rpc.addMethodAdvanced
-      "prompts/list",
-      {
-        handler: async (_params: Record<string, never>) => {
-          logger.info("Handling direct prompts/list RPC request via addMethodAdvanced");
-          return { prompts: codeCompassPromptsArray }; // Return the array of prompts
-        },
-        paramsSchema: z.object({}), // No parameters expected
-        resultSchema: promptsResultSchema
-      }
-    );
+    // The 'prompts/list' method is automatically handled by the MCP SDK
+    // based on the 'prompts' provided in the server capabilities.
+    // No manual registration is needed.
     
     // Start metrics logging - REMOVED
     
