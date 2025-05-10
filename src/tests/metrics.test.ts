@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { withMetrics } from '../lib/utils';
 import { logger as mockLogger } from '../lib/config-service';
 
-// Define the spy for performance.now() at the top level
-const mockPerformanceNow = vi.fn();
+// Use vi.hoisted to define mockPerformanceNow so it's available to the hoisted vi.mock factory
+const mockPerformanceNow = vi.hoisted(() => vi.fn());
 
 // Mock the 'perf_hooks' module to control performance.now()
 vi.mock('perf_hooks', async (importOriginal) => {
