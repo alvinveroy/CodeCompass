@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseToolCalls, createAgentState } from '../lib/agent';
 
 // Mock dependencies
-vi.mock('../lib/metrics', () => ({
-  incrementCounter: vi.fn(),
-  recordTiming: vi.fn(),
-  timeExecution: vi.fn((name, fn) => fn()),
-  trackAgentRun: vi.fn(),
-  trackAgentCompletion: vi.fn(),
-  trackAgentToolUsage: vi.fn()
-}));
+// vi.mock('../lib/metrics', () => ({ // Metrics removed
+//   incrementCounter: vi.fn(),
+//   recordTiming: vi.fn(),
+//   timeExecution: vi.fn((name, fn) => fn()),
+//   trackAgentRun: vi.fn(),
+//   trackAgentCompletion: vi.fn(),
+//   trackAgentToolUsage: vi.fn()
+// }));
 
 describe('Agent', () => {
   beforeEach(() => {

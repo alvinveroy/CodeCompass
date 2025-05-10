@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
 import { getLLMProvider, switchSuggestionModel, clearProviderCache } from '../lib/llm-provider';
-import * as ollama from '../lib/ollama';
+import * as ollama from '../lib/ollama'; // Mocked
 import * as deepseek from '../lib/deepseek';
 // modelPersistence is removed, configService will be used/mocked for persistence checks
 import { configService } from '../lib/config-service';

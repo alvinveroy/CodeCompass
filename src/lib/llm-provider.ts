@@ -1,7 +1,7 @@
 import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
-import { incrementCounter, trackFeedbackScore } from "./metrics"; // Added for processFeedback
+// import { incrementCounter, trackFeedbackScore } from "./metrics"; // Metrics removed
 import { withRetry } from "../utils/retry-utils"; // Added for centralized retry logic
 
 import axios from "axios"; // For OllamaProvider.generateText
@@ -54,7 +54,7 @@ class OllamaProvider implements LLMProvider {
     logger.debug(`OllamaProvider: Processing feedback for prompt (original length: ${originalPrompt.length}, score: ${score})`);
     try {
       // Track the user feedback score
-      trackFeedbackScore(score);
+      // trackFeedbackScore(score); // Metrics removed
       
       const feedbackPrompt = `You previously provided this response to a request:
     
@@ -82,7 +82,7 @@ Please provide an improved response addressing the user's feedback.`;
         return res.data.response;
       });
       
-      incrementCounter('feedback_refinements');
+      // incrementCounter('feedback_refinements'); // Metrics removed
       return improvedResponse;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));

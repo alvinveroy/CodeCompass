@@ -2,28 +2,28 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { normalizeToolParams } from '../lib/server';
 
 // Mock dependencies
-// Mock metrics module
-const mockMetricsObj = {
-  counters: {},
-  timings: {},
-  uptime: 0,
-  queryRefinements: {},
-  toolChains: {},
-  feedbackStats: { count: 0, average: 0, min: 0, max: 0 },
-  agent: {
-    runs: 0,
-    completions: 0,
-    averageSteps: 0,
-    toolUsage: {}
-  }
-};
+// Mock metrics module - REMOVED
+// const mockMetricsObj = {
+//   counters: {},
+//   timings: {},
+//   uptime: 0,
+//   queryRefinements: {},
+//   toolChains: {},
+//   feedbackStats: { count: 0, average: 0, min: 0, max: 0 },
+//   agent: {
+//     runs: 0,
+//     completions: 0,
+//     averageSteps: 0,
+//     toolUsage: {}
+//   }
+// };
 
-vi.mock('../lib/metrics', () => ({
-  resetMetrics: vi.fn(),
-  getMetrics: vi.fn(() => mockMetricsObj),
-  incrementCounter: vi.fn(),
-  recordTiming: vi.fn()
-}));
+// vi.mock('../lib/metrics', () => ({ // Metrics removed
+//   resetMetrics: vi.fn(),
+//   getMetrics: vi.fn(() => mockMetricsObj),
+//   incrementCounter: vi.fn(),
+//   recordTiming: vi.fn()
+// }));
 
 vi.mock('../lib/state', () => ({
   getOrCreateSession: vi.fn(() => ({
@@ -43,7 +43,7 @@ vi.mock('../lib/state', () => ({
 }));
 
 // Import mocked functions after mocking
-import { resetMetrics, getMetrics } from '../lib/metrics';
+// import { resetMetrics, getMetrics } from '../lib/metrics'; // Metrics removed
 import { getOrCreateSession, addQuery, addSuggestion } from '../lib/state';
 
 describe('Server Tools', () => {
@@ -120,35 +120,35 @@ describe('Server Tools', () => {
     });
   });
 
-  describe('Metrics Management', () => {
-    it('should reset metrics', () => {
-      resetMetrics();
-      expect(resetMetrics).toHaveBeenCalled();
-    });
+  // describe('Metrics Management', () => { // Metrics removed
+  //   it('should reset metrics', () => {
+  //     resetMetrics();
+  //     expect(resetMetrics).toHaveBeenCalled();
+  //   });
 
-    it('should get metrics', () => {
-      // Create a manual mock for this specific test
-      vi.mocked(getMetrics).mockReturnValueOnce({
-        counters: { test: 1 },
-        timings: { test: { count: 1, totalMs: 100, avgMs: 100, minMs: 100, maxMs: 100 } },
-        uptime: 1000,
-        queryRefinements: {},
-        toolChains: {},
-        feedbackStats: { count: 0, average: 0, min: 0, max: 0 },
-        agent: {
-          runs: 0,
-          completions: 0,
-          averageSteps: 0,
-          toolUsage: {}
-        }
-      });
+  //   it('should get metrics', () => {
+  //     // Create a manual mock for this specific test
+  //     vi.mocked(getMetrics).mockReturnValueOnce({
+  //       counters: { test: 1 },
+  //       timings: { test: { count: 1, totalMs: 100, avgMs: 100, minMs: 100, maxMs: 100 } },
+  //       uptime: 1000,
+  //       queryRefinements: {},
+  //       toolChains: {},
+  //       feedbackStats: { count: 0, average: 0, min: 0, max: 0 },
+  //       agent: {
+  //         runs: 0,
+  //         completions: 0,
+  //         averageSteps: 0,
+  //         toolUsage: {}
+  //       }
+  //     });
       
-      const metrics = getMetrics();
-      expect(getMetrics).toHaveBeenCalled();
-      expect(metrics).toEqual(expect.objectContaining({
-        counters: expect.any(Object),
-        timings: expect.any(Object)
-      }));
-    });
-  });
+  //     const metrics = getMetrics();
+  //     expect(getMetrics).toHaveBeenCalled();
+  //     expect(metrics).toEqual(expect.objectContaining({
+  //       counters: expect.any(Object),
+  //       timings: expect.any(Object)
+  //     }));
+  //   });
+  // });
 });

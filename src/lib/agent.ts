@@ -1,6 +1,6 @@
 import { logger, configService } from "./config-service";
 import { getLLMProvider } from "./llm-provider";
-import { incrementCounter, timeExecution } from "./metrics";
+// import { incrementCounter, timeExecution } from "./metrics"; // Metrics removed
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { DetailedQdrantSearchResult, AgentState, AgentStep } from "./types"; // Changed QdrantSearchResult to DetailedQdrantSearchResult
@@ -457,7 +457,7 @@ export async function runAgentLoop(
   suggestionModelAvailable: boolean,
   maxSteps = 5
 ): Promise<string> {
-  incrementCounter('agent_runs');
+  // incrementCounter('agent_runs'); // Metrics removed
   logger.info(`Agent loop started for query: "${query}" (Session: ${sessionId || 'new'})`);
   
   // Log the current provider and model being used by the agent, sourced from ConfigService
@@ -495,7 +495,7 @@ export async function runAgentLoop(
     logger.error(`Agent failed to verify provider ${configService.SUGGESTION_PROVIDER}`);
   }
   
-  return await timeExecution('agent_loop', async () => {
+  // return await timeExecution('agent_loop', async () => { // Metrics removed
     // Get or create session
     const session = getOrCreateSession(sessionId, repoPath);
     
@@ -649,7 +649,7 @@ ${agentState.finalResponse}
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     
-    incrementCounter('agent_completions');
+    // incrementCounter('agent_completions'); // Metrics removed
     return formattedResponse;
-  });
+  // }); // Metrics removed
 }

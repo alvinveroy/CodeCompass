@@ -5,7 +5,7 @@ import { configService, logger } from "./config-service";
 
 // Constants like DEEPSEEK_API_URL are now primarily sourced from configService.
 // Local fallbacks are no longer defined here to ensure configService is the single source of truth.
-import { incrementCounter, recordTiming, timeExecution } from "./metrics";
+// import { incrementCounter, recordTiming, timeExecution } from "./metrics"; // Metrics removed
 import { preprocessText } from "../utils/text-utils";
 import { withRetry } from "../utils/retry-utils";
 
@@ -25,9 +25,9 @@ async function waitForRateLimit(): Promise<void> {
     const timeToWait = (requestTimestamps[0] + 60000) - now;
     if (timeToWait > 0) {
       logger.info(`DeepSeek rate limit nearly reached (${requestTimestamps.length}/${rpmLimit} requests in last minute). Delaying next request for ${timeToWait}ms.`);
-      const delayStartTime = Date.now();
+      // const delayStartTime = Date.now(); // Metrics removed
       await new Promise(resolve => setTimeout(resolve, timeToWait));
-      recordTiming('deepseek_rate_limit_delay_ms', Date.now() - delayStartTime);
+      // recordTiming('deepseek_rate_limit_delay_ms', Date.now() - delayStartTime); // Metrics removed
     }
   }
   requestTimestamps.push(now);
@@ -178,7 +178,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
  * @returns Promise<string> - The generated text
  */
 export async function generateWithDeepSeek(prompt: string): Promise<string> {
-  incrementCounter('deepseek_requests');
+  // incrementCounter('deepseek_requests'); // Metrics removed
   
   try {
     const apiKey = configService.DEEPSEEK_API_KEY;
@@ -190,7 +190,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
 
     await waitForRateLimit();
 
-    return await timeExecution('deepseek_generation', async () => {
+    // return await timeExecution('deepseek_generation', async () => { // Metrics removed
       logger.info(`Generating with DeepSeek for prompt (length: ${prompt.length})`);
       
       const apiUrl = configService.DEEPSEEK_API_URL;
@@ -235,11 +235,11 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
         return res.data.choices[0].message.content;
       });
       
-      incrementCounter('deepseek_success');
+      // incrementCounter('deepseek_success'); // Metrics removed
       return response;
-    });
+    // }); // Metrics removed
   } catch (error: unknown) {
-    incrementCounter('deepseek_errors');
+    // incrementCounter('deepseek_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
     const axiosError = error as { code?: string; response?: { status: number; data: unknown } };
     
@@ -259,7 +259,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
 
 // Generate embeddings with DeepSeek API
 export async function generateEmbeddingWithDeepSeek(text: string): Promise<number[]> {
-  incrementCounter('deepseek_embedding_requests');
+  // incrementCounter('deepseek_embedding_requests'); // Metrics removed
   
   try {
     const apiKey = configService.DEEPSEEK_API_KEY;
@@ -273,7 +273,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
 
     await waitForRateLimit();
     
-    return await timeExecution('deepseek_embedding_generation', async () => {
+    // return await timeExecution('deepseek_embedding_generation', async () => { // Metrics removed
       // Construct embedding URL based on API URL from configService
       const embeddingUrl = configService.DEEPSEEK_API_URL.includes("api.deepseek.com") 
         ? "https://api.deepseek.com/embeddings" 
@@ -308,11 +308,11 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
         return res.data.data[0].embedding;
       });
       
-      incrementCounter('deepseek_embedding_success');
+      // incrementCounter('deepseek_embedding_success'); // Metrics removed
       return response;
-    });
+    // }); // Metrics removed
   } catch (error: unknown) {
-    incrementCounter('deepseek_embedding_errors');
+    // incrementCounter('deepseek_embedding_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
     const axiosError = error as { code?: string; response?: { status: number; data: unknown } };
     

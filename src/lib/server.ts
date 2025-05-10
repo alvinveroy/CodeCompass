@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { initMcpSafeLogging } from "./mcp-logger";
+// import { initMcpSafeLogging } from "./mcp-logger"; // mcp-logger removed
 import fs from "fs/promises";
 import * as fsSync from "fs"; // Keep for sync operations if any remain
 import path from "path"; // Keep for local path operations
@@ -12,7 +12,7 @@ import * as deepseek from "./deepseek";
 // Their functionalities are covered by configService methods or were part of removed tools.
 
 // Initialize MCP-safe logging immediately
-initMcpSafeLogging();
+// initMcpSafeLogging(); // mcp-logger removed
 import { DetailedQdrantSearchResult } from "./types"; // Changed QdrantSearchResult to DetailedQdrantSearchResult
 import { z } from "zod";
 import { checkOllama, checkOllamaModel } from "./ollama";

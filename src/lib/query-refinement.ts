@@ -3,7 +3,7 @@ import { configService, logger } from "./config-service";
 import { withRetry } from "../utils/retry-utils"; // Assuming this is the correct path
 import { preprocessText } from "../utils/text-utils";
 import { generateEmbedding } from "./ollama"; // Assuming ollama.ts exports generateEmbedding
-import { trackQueryRefinement } from "./metrics";
+// import { trackQueryRefinement } from "./metrics"; // Metrics removed
 import { DetailedQdrantSearchResult } from "./types";
 
 // Search with iterative refinement
@@ -54,7 +54,7 @@ export async function searchWithRefinement(
     // Refine the query based on results
     currentQuery = await refineQuery(currentQuery, searchResults as DetailedQdrantSearchResult[], avgRelevance);
     refinementCount++;
-    trackQueryRefinement(queryId);
+    // trackQueryRefinement(queryId); // Metrics removed
   }
 
   logger.info(`Completed search with ${refinementCount} refinements. Final relevance: ${bestRelevanceScore.toFixed(2)}`);
