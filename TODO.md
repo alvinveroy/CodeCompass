@@ -9,7 +9,7 @@ The following source files still need to be documented in the `docs/source-files
 ### Pending Documentation:
 -   [ ] `docs/source-files/src_lib_agent.md` (for `src/lib/agent.ts`)
 -   [ ] `docs/source-files/src_lib_provider-cli.md` (for `src/lib/provider-cli.ts`)
--   [ ] `docs/source-files/src_lib_query-refinement.md` (for `src/lib/query-refinement.ts`)
+-   [x] `docs/source-files/src_lib_query-refinement.md` (for `src/lib/query-refinement.ts`)
 -   [x] `docs/source-files/src_lib_repository.md` (for `src/lib/repository.ts`)
 -   [x] `docs/source-files/src_lib_server.md` (for `src/lib/server.ts`)
 -   [ ] `docs/source-files/src_lib_state.md` (for `src/lib/state.ts`)
