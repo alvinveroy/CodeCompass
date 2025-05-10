@@ -103,8 +103,9 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       // If the TS2339 error for deletePoints persists after this change,
       // it strongly indicates an environment or TS configuration/cache issue,
       // as 'deletePoints' is the correct method name for @qdrant/js-client-rest@1.14.0.
+      // Using client.delete() as per user-provided example.
       const pointsSelector = { points: pointsToDelete.map(id => String(id)) };
-      await qdrantClient.deletePoints(configService.COLLECTION_NAME, pointsSelector);
+      await qdrantClient.delete(configService.COLLECTION_NAME, pointsSelector);
       logger.info(`Successfully removed ${pointsToDelete.length} stale entries from Qdrant.`);
     } else {
       logger.info("No stale entries found in Qdrant index.");
