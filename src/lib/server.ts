@@ -111,34 +111,7 @@ export async function startServer(repoPath: string): Promise<void> {
     const qdrantClient = await initializeQdrant();
     await indexRepository(qdrantClient, repoPath);
 
-    // Define prompts in both array and map formats
-    // Array format for the prompts/list method's return value
-    const codeCompassPromptsArray = [
-      {
-        id: "repository-context",
-        name: "Repository Context",
-        description: "Get context about your repository",
-        template: "Provide context about {{query}} in this repository"
-      },
-      {
-        id: "code-suggestion",
-        name: "Code Suggestion",
-        description: "Generate code suggestions",
-        template: "Suggest code for {{query}}"
-      },
-      {
-        id: "code-analysis",
-        name: "Code Analysis",
-        description: "Analyze code problems",
-        template: "Analyze this code problem: {{query}}"
-      }
-    ];
-
-    // Object map format for server capabilities declaration
-    const codeCompassPromptsMap = codeCompassPromptsArray.reduce((acc, prompt) => {
-      acc[prompt.id] = prompt;
-      return acc;
-    }, {} as Record<string, typeof codeCompassPromptsArray[0]>);
+    // Prompts will be registered using server.prompt() later
 
     const server = new McpServer({
       name: "CodeCompass",
@@ -168,7 +141,7 @@ export async function startServer(repoPath: string): Promise<void> {
           // force_deepseek_connection: {}, // Removed
           // provide_feedback and analyze_code_problem also removed by not being registered in registerTools
         },
-        prompts: codeCompassPromptsMap, // Use the object map for capabilities
+        // prompts capability is now handled by individual server.prompt() registrations
       },
     });
 
@@ -218,6 +191,9 @@ export async function startServer(repoPath: string): Promise<void> {
 
     // Register tools
     await registerTools(server, qdrantClient, repoPath, suggestionModelAvailable);
+    
+    // Register prompts
+    await registerPrompts(server);
     // The get_repository_context tool is registered within registerTools.
     // Its internal logic handles behavior when suggestionModelAvailable is false.
     // No need for a separate conditional registration here.
@@ -367,6 +343,60 @@ export async function startServer(repoPath: string): Promise<void> {
     logger.error("Failed to start CodeCompass", { message: err.message });
     process.exit(1);
   }
+}
+
+async function registerPrompts(server: McpServer): Promise<void> {
+  if (typeof server.prompt !== "function") {
+    logger.warn("MCP server instance does not support 'prompt' method. Prompts may not be available.");
+    return;
+  }
+
+  server.prompt(
+    "repository-context",
+    {
+      name: "Repository Context",
+      description: "Get context about your repository"
+    },
+    { query: z.string().describe("The specific topic or question for which context is needed.") },
+    ({ query }) => ({
+      messages: [{
+        role: "user",
+        content: { type: "text", text: `Provide context about ${query} in this repository` }
+      }]
+    })
+  );
+
+  server.prompt(
+    "code-suggestion",
+    {
+      name: "Code Suggestion",
+      description: "Generate code suggestions"
+    },
+    { query: z.string().describe("The specific topic or problem for which a code suggestion is needed.") },
+    ({ query }) => ({
+      messages: [{
+        role: "user",
+        content: { type: "text", text: `Suggest code for ${query}` }
+      }]
+    })
+  );
+
+  server.prompt(
+    "code-analysis",
+    {
+      name: "Code Analysis",
+      description: "Analyze code problems"
+    },
+    { query: z.string().describe("The code problem or snippet to be analyzed.") },
+    ({ query }) => ({
+      messages: [{
+        role: "user",
+        content: { type: "text", text: `Analyze this code problem: ${query}` }
+      }]
+    })
+  );
+
+  logger.info("Registered prompts: repository-context, code-suggestion, code-analysis");
 }
 
 async function registerTools(
