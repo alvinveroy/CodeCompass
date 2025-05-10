@@ -353,10 +353,7 @@ async function registerPrompts(server: McpServer): Promise<void> {
 
   server.prompt(
     "repository-context",
-    {
-      name: "Repository Context",
-      description: "Get context about your repository"
-    },
+    "Get context about your repository",
     { query: z.string().describe("The specific topic or question for which context is needed.") },
     ({ query }) => ({
       messages: [{
@@ -368,25 +365,19 @@ async function registerPrompts(server: McpServer): Promise<void> {
 
   server.prompt(
     "code-suggestion",
-    {
-      name: "Code Suggestion",
-      description: "Generate code suggestions"
-    },
+    "Generate code suggestions",
     { query: z.string().describe("The specific topic or problem for which a code suggestion is needed.") },
     ({ query }) => ({
       messages: [{
         role: "user",
-        content: { type: "text", text: `Suggest code for ${query}` }
+        content: { type: "text", text: `Generate a code suggestion for: ${query}` }
       }]
     })
   );
 
   server.prompt(
     "code-analysis",
-    {
-      name: "Code Analysis",
-      description: "Analyze code problems"
-    },
+    "Analyze code problems",
     { query: z.string().describe("The code problem or snippet to be analyzed.") },
     ({ query }) => ({
       messages: [{
