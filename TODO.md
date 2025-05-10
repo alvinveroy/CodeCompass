@@ -36,7 +36,8 @@ The following source files still need to be documented in the `docs/source-files
 -   [x] Removed `src/lib/model-persistence.ts` (staged for commit).
 -   [ ] Investigate and resolve indexing error for removed file `src/lib/model-persistence.ts`.
 -   [ ] Further analysis of test coverage report to identify and remove dead/unreachable code (this step was skipped by user request).
--   [ ] Review directory structure for potential improvements (not yet started).
+-   [ ] Review directory structure for potential improvements (Analysis complete, see sub-task).
+    -   [x] Consolidate utility functions: ensure `src/utils/` is the single source of truth for generic utilities (e.g., `withRetry`, `preprocessText`, `withMetrics`), by refactoring `src/lib/utils.ts` (now removed) and updating all imports accordingly.
 
 ## Future Considerations (Beyond Current Scope)
 
