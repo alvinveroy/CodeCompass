@@ -242,66 +242,96 @@ CodeCompass includes a separate command-line tool, `codecompass-provider`, for m
   ```
 
 ### 3. Model Context Protocol (MCP) Tools
-Interact with CodeCompass programmatically via an MCP client (e.g., within your IDE integration or a custom script). Here are some key tools:
+Interact with CodeCompass programmatically via an MCP client (e.g., within your IDE integration or a custom script). CodeCompass exposes several tools:
 
-- **View Repository Structure**: Get an overview of your project's directory layout.
-  ```javascript
-  // Example MCP client-side code
-  const structure = await server.resource("repo://structure");
-  console.log(structure);
-  ```
-- **Search Code Semantically**: Find code snippets relevant to your query.
-  ```javascript
-  const searchResults = await server.tool("search_code", { query: "function for user authentication" });
-  console.log(searchResults);
-  ```
-- **Get Repository Context for a Query**: Understand how different parts of your codebase relate to a specific task or question.
-  ```javascript
-  const context = await server.tool("get_repository_context", { query: "How is database migration handled?" });
-  console.log(context);
-  ```
-- **Generate Code Suggestions**: Get AI-powered code suggestions based on your query and existing code.
-  ```javascript
-  const suggestion = await server.tool("generate_suggestion", { 
-    query: "Refactor this to use async/await", 
-    code: "function fetchData() { return fetch(...).then(...); }" 
-  });
-  console.log(suggestion);
-  ```
-- **Agent Query (Multi-step Reasoning)**: For complex queries, the AI agent can perform multiple steps (e.g., search code, then get context, then generate a suggestion).
+#### Core CodeCompass Tools & Agent Capabilities
+- **Agent Query (`agent_query`)**: The primary tool for complex queries. This invokes the CodeCompass agent, which can perform multi-step reasoning and utilize other tools to formulate a comprehensive answer.
   ```javascript
   const agentResponse = await server.tool("agent_query", { 
     query: "Outline the steps to add a new payment gateway, considering existing patterns.", 
-    maxSteps: 5 
+    // sessionId: "your-session-id" // Optional
   });
   console.log(agentResponse);
   ```
-- **Check Provider Status**: Verify your LLM provider connection and configuration.
-  ```javascript
-  const providerStatus = await server.tool("check_provider", { verbose: true });
-  console.log(providerStatus);
-  ```
-- **Switch Suggestion Models Dynamically**: Change the LLM used for suggestions on the fly.
+  The agent can decide to use the following tools based on its reasoning:
+    - **`search_code`**: Semantically search for code snippets.
+      ```javascript
+      // Can also be called directly by an MCP client
+      const searchResults = await server.tool("search_code", { query: "function for user authentication" /*, sessionId: "your-session-id" */ });
+      console.log(searchResults);
+      ```
+    - **`get_repository_context`**: Get an overview of files, code snippets, and recent changes relevant to a query.
+      ```javascript
+      // Can also be called directly by an MCP client
+      const context = await server.tool("get_repository_context", { query: "How is database migration handled?" /*, sessionId: "your-session-id" */ });
+      console.log(context);
+      ```
+    - **`generate_suggestion`**: Generate code suggestions based on a query and repository context.
+      ```javascript
+      // Can also be called directly by an MCP client
+      const suggestion = await server.tool("generate_suggestion", { 
+        query: "Refactor this to use async/await" /*, sessionId: "your-session-id" */
+      });
+      console.log(suggestion);
+      ```
+    - **`get_changelog`**: Retrieve the project's changelog.
+      ```javascript
+      // Can also be called directly by an MCP client
+      const changelog = await server.tool("get_changelog", {});
+      console.log(changelog);
+      ```
+    - **`analyze_code_problem`**: Analyze a code problem, providing root cause analysis and implementation plans.
+      ```javascript
+      // Can also be called directly by an MCP client
+      const analysis = await server.tool("analyze_code_problem", { query: "My API endpoint is returning 500 errors unexpectedly" /*, sessionId: "your-session-id" */ });
+      console.log(analysis);
+      ```
+
+#### Server Management & Diagnostic Tools
+These tools are typically called directly by an MCP client for managing the CodeCompass server or diagnosing issues:
+- **Switch Suggestion Models (`switch_suggestion_model`)**: Change the LLM used for suggestions on the fly.
   ```javascript
   const switchResult = await server.tool("switch_suggestion_model", { model: "deepseek-coder", provider: "deepseek" });
   console.log(switchResult);
   ```
-- **Access Changelog Programmatically**: Retrieve the project's changelog.
+- **Check Provider Status (`check_provider`)**: Verify your LLM provider connection and configuration.
   ```javascript
-  const changelog = await server.tool("get_changelog", {});
-  console.log(changelog);
+  const providerStatus = await server.tool("check_provider", { verbose: true });
+  console.log(providerStatus);
   ```
+- **DeepSeek Diagnostics (`deepseek_diagnostic`)**: Perform detailed checks for DeepSeek configuration.
+  ```javascript
+  const deepseekStatus = await server.tool("deepseek_diagnostic", {});
+  console.log(deepseekStatus);
+  ```
+- **Force DeepSeek Connection Test (`force_deepseek_connection`)**: Directly test DeepSeek API connectivity.
+  ```javascript
+  const deepseekTest = await server.tool("force_deepseek_connection", { /* Optional apiKey, apiUrl, model */ });
+  console.log(deepseekTest);
+  ```
+- **Get Session History (`get_session_history`)**: Retrieve interaction history for a specific session.
+  ```javascript
+  const history = await server.tool("get_session_history", { sessionId: "your-session-id" });
+  console.log(history);
+  ```
+- **Reset Metrics (`reset_metrics`)**: Clear accumulated performance and usage counters.
+  ```javascript
+  await server.tool("reset_metrics", {});
+  ```
+
+#### Integrated External MCP Tools
+CodeCompass also integrates with other MCP-compatible tools:
 - **Manage Tasks with TaskMaster AI**: Interface with TaskMaster AI for project management.
   ```javascript
   const tasks = await server.tool("taskmaster-ai", "get_tasks", { projectRoot: "/path/to/taskmaster/project" });
   console.log(tasks);
   ```
-- **Build and Query Knowledge Graphs**: Use MCP Memory to create and explore knowledge graphs about your codebase.
+- **Build and Query Knowledge Graphs (MCP Memory)**: Use MCP Memory to create and explore knowledge graphs about your codebase.
   ```javascript
   const newEntities = await server.tool("@modelcontextprotocol/memory", "create_entities", { entities: [/* ... your entities ... */] });
   console.log(newEntities);
   ```
-- **Get Library Documentation with Context7**: Fetch documentation for software libraries.
+- **Get Library Documentation (Context7)**: Fetch documentation for software libraries.
   ```javascript
   // First, resolve the library ID
   const libIdResponse = await server.tool("context7", "resolve-library-id", { libraryName: "react" });
