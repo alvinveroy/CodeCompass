@@ -23,6 +23,8 @@ The following source files still need to be documented in the `docs/source-files
 -   [x] `docs/source-files/src_scripts_version-bump.md` (for `src/scripts/version-bump.ts`)
 -   [x] `docs/source-files/src_types_global.d.md` (for `src/types/global.d.ts`)
 -   [ ] `docs/source-files/src_tests_llm-provider.test.md` (for `src/tests/llm-provider.test.ts`)
+-   [ ] `docs/source-files/src_tests_utils.test.md` (for `src/tests/utils.test.ts`)
+-   [ ] `docs/source-files/src_tests_test-helpers.md` (for `src/tests/test-helpers.ts`)
 
 ### Completed Documentation (as of commit 8422802):
 -   [x] `docs/source-files/README.md` (Overview of the documentation section)
