@@ -13,7 +13,7 @@ interface MockableConfigService {
 
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
-  const originalModule = await vi.importActual('../lib/config-service') as { configService: any, logger: any };
+  const originalModule = await vi.importActual('../lib/config-service') as { configService: { MAX_RETRIES: number; RETRY_DELAY: number; OLLAMA_HOST: string; [key: string]: unknown }; logger: unknown };
   const originalInstance = originalModule.configService;
 
   const mockConfigServiceValues: MockableConfigService = {
