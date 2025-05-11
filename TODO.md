@@ -18,6 +18,10 @@ The following source files still need to be documented in the `docs/source-files
 -   [x] `docs/source-files/src_lib_version.md` (for `src/lib/version.ts`)
 -   [x] `docs/source-files/src_utils_retry-utils.md` (for `src/utils/retry-utils.ts`)
 -   [x] `docs/source-files/src_utils_metrics-utils.md` (for `src/utils/metrics-utils.ts`)
+-   [x] `docs/source-files/src_scripts_set-deepseek-key.md` (for `src/scripts/set-deepseek-key.ts`)
+-   [x] `docs/source-files/src_scripts_test-deepseek.md` (for `src/scripts/test-deepseek.ts`)
+-   [x] `docs/source-files/src_scripts_version-bump.md` (for `src/scripts/version-bump.ts`)
+-   [x] `docs/source-files/src_types_global.d.md` (for `src/types/global.d.ts`)
 
 ### Completed Documentation (as of commit 8422802):
 -   [x] `docs/source-files/README.md` (Overview of the documentation section)
