@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { withMetrics } from '../lib/utils';
+import { withMetrics } from '../utils/metrics-utils';
 import { logger as mockLogger } from '../lib/config-service';
 
 // Use vi.hoisted to define mockPerformanceNow so it's available to the hoisted vi.mock factory
