@@ -2,7 +2,12 @@
 
 This section provides a high-level overview of the key source files within the CodeCompass project. The aim is to help contributors quickly understand the purpose and main responsibilities of each module.
 
-Each Markdown file in this directory corresponds to a TypeScript file in the `src/` directory.
+Each Markdown file in this directory corresponds to a TypeScript file in the `src/` directory, covering key components of the CodeCompass project. This includes:
+
+-   Core libraries (primarily from `src/lib/`)
+-   Utility modules (from `src/utils/`)
+-   Scripts (from `src/scripts/`)
+-   Main application entry points and type definitions.
 
 ## Structure
 
