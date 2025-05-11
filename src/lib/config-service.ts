@@ -269,7 +269,7 @@ class ConfigService {
   get EMBEDDING_PROVIDER(): string { return global.CURRENT_EMBEDDING_PROVIDER || this._embeddingProvider; }
 
   // Method to get all relevant config for a provider (example for OpenAI)
-  public getConfig(): { [key: string]: any } {
+  public getConfig(): { [key: string]: string | number | boolean | undefined } {
     return {
       DEEPSEEK_API_KEY: this.DEEPSEEK_API_KEY,
       DEEPSEEK_API_URL: this.DEEPSEEK_API_URL,
