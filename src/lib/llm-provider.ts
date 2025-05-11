@@ -27,9 +27,12 @@ class OllamaProvider implements LLMProvider {
 
   async generateText(prompt: string, forceFresh = false): Promise<string> {
     const cacheKey = `ollama:${configService.SUGGESTION_MODEL}:${prompt}`;
-    if (!forceFresh && llmCache.has(cacheKey)) {
-      logger.debug(`OllamaProvider: Cache hit for prompt (length: ${prompt.length})`);
-      return llmCache.get(cacheKey) as string;
+    if (!forceFresh) {
+      const cachedValue = llmCache.get<string>(cacheKey);
+      if (cachedValue !== undefined) {
+        logger.debug(`OllamaProvider: Cache hit for prompt (length: ${prompt.length})`);
+        return cachedValue;
+      }
     }
 
     logger.debug(`OllamaProvider: Cache miss. Generating text for prompt (length: ${prompt.length})`);
@@ -113,9 +116,12 @@ class DeepSeekProvider implements LLMProvider {
 
   async generateText(prompt: string, forceFresh = false): Promise<string> {
     const cacheKey = `deepseek:${configService.SUGGESTION_MODEL}:${prompt}`;
-    if (!forceFresh && llmCache.has(cacheKey)) {
-      logger.debug(`DeepSeekProvider: Cache hit for prompt (length: ${prompt.length})`);
-      return llmCache.get(cacheKey) as string;
+    if (!forceFresh) {
+      const cachedValue = llmCache.get<string>(cacheKey);
+      if (cachedValue !== undefined) {
+        logger.debug(`DeepSeekProvider: Cache hit for prompt (length: ${prompt.length})`);
+        return cachedValue;
+      }
     }
 
     logger.debug(`DeepSeekProvider: Cache miss. Generating text for prompt (length: ${prompt.length})`);
