@@ -199,8 +199,17 @@ export async function executeToolCall(
   // Execute the appropriate tool
   switch (tool) {
     case "search_code": {
-      const query = typedParams.query as string;
-      const sessionId = typedParams.sessionId as string | undefined;
+      const queryParam = typedParams.query;
+      if (typeof queryParam !== 'string') {
+        throw new Error(`Parameter 'query' for tool '${tool}' must be a string. Received: ${typeof queryParam}`);
+      }
+      const query: string = queryParam;
+
+      const sessionIdParam = typedParams.sessionId;
+      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
+        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
+      }
+      const sessionId: string | undefined = sessionIdParam;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -240,8 +249,17 @@ export async function executeToolCall(
     }
     
     case "get_repository_context": {
-      const query = typedParams.query as string;
-      const sessionId = typedParams.sessionId as string | undefined;
+      const queryParam = typedParams.query;
+      if (typeof queryParam !== 'string') {
+        throw new Error(`Parameter 'query' for tool '${tool}' must be a string. Received: ${typeof queryParam}`);
+      }
+      const query: string = queryParam;
+
+      const sessionIdParam = typedParams.sessionId;
+      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
+        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
+      }
+      const sessionId: string | undefined = sessionIdParam;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -285,8 +303,17 @@ export async function executeToolCall(
     }
     
     case "generate_suggestion": {
-      const query = typedParams.query as string;
-      const sessionId = typedParams.sessionId as string | undefined;
+      const queryParam = typedParams.query;
+      if (typeof queryParam !== 'string') {
+        throw new Error(`Parameter 'query' for tool '${tool}' must be a string. Received: ${typeof queryParam}`);
+      }
+      const query: string = queryParam;
+
+      const sessionIdParam = typedParams.sessionId;
+      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
+        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
+      }
+      const sessionId: string | undefined = sessionIdParam;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
@@ -377,8 +404,17 @@ Based on the provided context and snippets, generate a detailed code suggestion 
     }
     
     case "analyze_code_problem": {
-      const query = typedParams.query as string;
-      const sessionId = typedParams.sessionId as string | undefined;
+      const queryParam = typedParams.query;
+      if (typeof queryParam !== 'string') {
+        throw new Error(`Parameter 'query' for tool '${tool}' must be a string. Received: ${typeof queryParam}`);
+      }
+      const query: string = queryParam;
+
+      const sessionIdParam = typedParams.sessionId;
+      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
+        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
+      }
+      const sessionId: string | undefined = sessionIdParam;
       
       // Get or create session
       const session = getOrCreateSession(sessionId, repoPath);
