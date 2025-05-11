@@ -357,7 +357,12 @@ class ConfigService {
         CLAUDE_API_KEY: this.CLAUDE_API_KEY,
       };
       // Remove undefined keys before saving
-      Object.keys(configToSave).forEach(key => (configToSave as any)[key] === undefined && delete (configToSave as any)[key]);
+      Object.keys(configToSave).forEach(keyStr => {
+        const key = keyStr as keyof ModelConfigFile;
+        if (configToSave[key] === undefined) {
+          delete configToSave[key];
+        }
+      });
       fs.writeFileSync(this.MODEL_CONFIG_FILE, JSON.stringify(configToSave, null, 2));
       this.logger.info(`Saved model configuration to ${this.MODEL_CONFIG_FILE}`);
     } catch (error) {

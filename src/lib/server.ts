@@ -315,7 +315,7 @@ export async function startServer(repoPath: string): Promise<void> {
     
     // Log startup info to file
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
-    const registeredTools = (server as any).capabilities?.tools || {};
+    const registeredTools = (server as { capabilities?: { tools?: Record<string, unknown> } }).capabilities?.tools || {};
     logger.info(`CodeCompass server started with tools: ${Object.keys(registeredTools).join(', ')}`);
     
     // Display version and status to stderr (similar to Context7)

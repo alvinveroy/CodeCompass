@@ -19,7 +19,7 @@ function getPackageVersion(): string {
     const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
     const packageJson = JSON.parse(packageJsonContent);
     return packageJson.version || 'unknown';
-  } catch (_error) {
+  } catch { // _error removed
     // Silently return 'unknown' on error, e.g. if package.json is not found during certain build phases
     return 'unknown';
   }
