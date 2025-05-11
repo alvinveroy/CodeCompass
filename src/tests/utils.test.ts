@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest'; // Added Mock
-import { withRetry, preprocessText } from '../lib/utils';
+import { withRetry } from '../utils/retry-utils';
+import { preprocessText } from '../utils/text-utils';
 
 // Define a type for the parts of configService we want to mock and make mutable
 interface MockableConfigService {
