@@ -12,7 +12,7 @@ import { logger } from "../lib/config-service";
  *          `fn` and log its performance metrics. The returned function has the same
  *          signature (parameters and return type) as `fn`.
  */
-export function withMetrics<T extends (...args: unknown[]) => Promise<unknown>>(fn: T): 
+export function withMetrics<T extends (...args: any[]) => Promise<any>>(fn: T): 
   (...args: Parameters<T>) => Promise<ReturnType<T>> {
   return async (...args: Parameters<T>): Promise<ReturnType<T>> => {
     const functionName = fn.name || 'anonymousFunction';
