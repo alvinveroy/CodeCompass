@@ -140,23 +140,6 @@ npx @alvinveroy/codecompass --help
 npx @alvinveroy/codecompass /path/to/your/repo
 ```
 
-#### Option 3: Using Docker (Isolated Environment)
-
-This is useful for running CodeCompass in a containerized environment.
-
-```bash
-docker pull alvinveroy/codecompass:latest
-# Example: Run CodeCompass server for a repository located at /Users/me/myproject
-docker run -p 3000:3000 \
-  -v /Users/me/myproject:/app/repo \
-  -e LLM_PROVIDER="ollama" \
-  -e OLLAMA_HOST="http://host.docker.internal:11434" \
-  # Add other environment variables as needed
-  alvinveroy/codecompass:latest
-```
-
-**Note for Docker users**: If Ollama is running on your host machine, you might need to use `http://host.docker.internal:11434` (on Docker Desktop for Mac/Windows) or your host's IP address for `OLLAMA_HOST` so the CodeCompass container can reach it.
-
 ## Configuration ⚙️
 
 CodeCompass can be configured using environment variables. You can set them in your shell, within your MCP client's settings, or by creating a `.env` file in the project root when running from a cloned repository.
