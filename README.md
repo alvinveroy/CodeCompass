@@ -1,5 +1,7 @@
 # CodeCompass: Your AI-Powered Vibe Coding Companion with MCP 🚀
 
+![Logo](docs/images/logo.png)
+
 [![GitHub stars](https://img.shields.io/github/stars/alvinveroy/CodeCompass?style=social)](https://github.com/alvinveroy/CodeCompass/stargazers)
 [![GitHub license](https://img.shields.io/github/license/alvinveroy/CodeCompass)](https://github.com/alvinveroy/CodeCompass/blob/main/LICENSE.md)
 [![npm version](https://img.shields.io/npm/v/@alvinveroy/codecompass.svg)](https://www.npmjs.com/package/@alvinveroy/codecompass)
