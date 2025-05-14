@@ -10,6 +10,12 @@ describe('Config Module', () => {
   beforeEach(() => {
     // Restore process.env to original state before each test
     process.env = { ...originalEnv };
+
+    // Ensure OLLAMA_HOST and QDRANT_HOST are unset so ConfigService uses its internal defaults
+    // for tests relying on those defaults (e.g., "Default Configuration" tests).
+    // Tests that specifically override these variables will set them after this block.
+    delete process.env.OLLAMA_HOST;
+    delete process.env.QDRANT_HOST;
     
     // Explicitly reset global variables that ConfigService might use/set
     // These globals are set by ConfigService.initializeGlobalState()
