@@ -5,6 +5,12 @@ All notable changes to CodeCompass will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2025-05-14
+### Fixed
+- Resolved a persistent unit test failure in `src/tests/config.test.ts` (`Config Module > Default Configuration > should have valid URL formats for host configurations`) that occurred after a Vitest library update. The fixes ensure `ConfigService` correctly initializes with its default host URLs when expected, by:
+    - Clearing `OLLAMA_HOST` and `QDRANT_HOST` environment variables in the main `beforeEach` hook. (3e55984)
+    - Dynamically importing `ConfigService` within the "Default Configuration" and "Logger Configuration" test suites after `vi.resetModules()` and environment variable cleanup, guaranteeing a fresh service instance for these tests. (cd97d8c)
+
 ## [Unreleased]
 ### Fixed
 - Configured logger to send all console output to `stderr` for MCP compatibility by using `winston.transports.Stream` with `process.stderr`. This resolves issues where info/warn logs on `stdout` were breaking JSON-RPC communication with clients like Claude Desktop. (7ccdfc7, 7e7fb90)
