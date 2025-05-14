@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/alvinveroy-codecompass-badge.png)](https://mseep.ai/app/alvinveroy-codecompass)
+
 ![CodeCompass Logo](https://raw.githubusercontent.com/alvinveroy/CodeCompass/main/docs/images/logo.png)
 
 # CodeCompass
