@@ -1,5 +1,3 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/alvinveroy-codecompass-badge.png)](https://mseep.ai/app/alvinveroy-codecompass)
-
 ![CodeCompass Logo](https://raw.githubusercontent.com/alvinveroy/CodeCompass/main/docs/images/logo.png)
 
 # CodeCompass
@@ -93,3 +91,9 @@ Fork, branch, and submit a pull request. See [CONTRIBUTING.md](https://github.co
 ## License
 
 [MIT License](https://github.com/alvinveroy/CodeCompass/blob/main/LICENSE).
+
+## Audits
+
+[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/ef61b10d-edf7-4ca9-9b5a-4c2ab20d48b3)
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/alvinveroy-codecompass-badge.png)](https://mseep.ai/app/alvinveroy-codecompass)
