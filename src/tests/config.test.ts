@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { configService } from '../lib/config-service';
+// configService will be dynamically imported within test suites as needed
 
 import * as fs from 'fs'; // Import fs for mocking
 
@@ -37,43 +37,63 @@ describe('Config Module', () => {
   });
 
   describe('Default Configuration', () => {
+    // Use 'any' for type to avoid complex typeof import for the singleton instance
+    // or define a proper type if preferred: typeof import('../lib/config-service').configService
+    let currentConfigService: any; 
+
+    beforeEach(async () => {
+      // Dynamically import configService to ensure a fresh instance for each test
+      // after vi.resetModules() in the outer beforeEach has run,
+      // and after OLLAMA_HOST/QDRANT_HOST env vars have been deleted.
+      const mod = await import('../lib/config-service');
+      currentConfigService = mod.configService;
+    });
+
     it('should have default values for all required configuration', () => {
-      expect(configService.OLLAMA_HOST).toBeDefined();
-      expect(configService.QDRANT_HOST).toBeDefined();
-      expect(configService.COLLECTION_NAME).toBeDefined();
-      expect(configService.EMBEDDING_MODEL).toBeDefined();
-      expect(configService.SUGGESTION_MODEL).toBeDefined();
-      expect(configService.MAX_RETRIES).toBeGreaterThan(0);
-      expect(configService.RETRY_DELAY).toBeGreaterThan(0);
-      expect(configService.MAX_INPUT_LENGTH).toBeGreaterThan(0);
+      expect(currentConfigService.OLLAMA_HOST).toBeDefined();
+      expect(currentConfigService.QDRANT_HOST).toBeDefined();
+      expect(currentConfigService.COLLECTION_NAME).toBeDefined();
+      expect(currentConfigService.EMBEDDING_MODEL).toBeDefined();
+      expect(currentConfigService.SUGGESTION_MODEL).toBeDefined();
+      expect(currentConfigService.MAX_RETRIES).toBeGreaterThan(0);
+      expect(currentConfigService.RETRY_DELAY).toBeGreaterThan(0);
+      expect(currentConfigService.MAX_INPUT_LENGTH).toBeGreaterThan(0);
     });
   
     it('should have valid URL formats for host configurations', () => {
       const urlPattern = /^https?:\/\/.+/;
-      expect(configService.OLLAMA_HOST).toMatch(urlPattern);
-      expect(configService.QDRANT_HOST).toMatch(urlPattern);
+      expect(currentConfigService.OLLAMA_HOST).toMatch(urlPattern);
+      expect(currentConfigService.QDRANT_HOST).toMatch(urlPattern);
     });
   
     it('should have reasonable limits for MAX_INPUT_LENGTH', () => {
-      expect(configService.MAX_INPUT_LENGTH).toBeGreaterThan(100);
-      expect(configService.MAX_INPUT_LENGTH).toBeLessThan(100000); // Assuming there's some reasonable upper limit
+      expect(currentConfigService.MAX_INPUT_LENGTH).toBeGreaterThan(100);
+      expect(currentConfigService.MAX_INPUT_LENGTH).toBeLessThan(100000); // Assuming there's some reasonable upper limit
     });
   
     it('should have reasonable values for retry configuration', () => {
-      expect(configService.MAX_RETRIES).toBeGreaterThanOrEqual(1);
-      expect(configService.MAX_RETRIES).toBeLessThanOrEqual(10); // Assuming there's some reasonable upper limit
-      expect(configService.RETRY_DELAY).toBeGreaterThanOrEqual(100); // At least 100ms
-      expect(configService.RETRY_DELAY).toBeLessThanOrEqual(30000); // Not more than 30 seconds
+      expect(currentConfigService.MAX_RETRIES).toBeGreaterThanOrEqual(1);
+      expect(currentConfigService.MAX_RETRIES).toBeLessThanOrEqual(10); // Assuming there's some reasonable upper limit
+      expect(currentConfigService.RETRY_DELAY).toBeGreaterThanOrEqual(100); // At least 100ms
+      expect(currentConfigService.RETRY_DELAY).toBeLessThanOrEqual(30000); // Not more than 30 seconds
     });
   });
 
   describe('Logger Configuration', () => {
+    let currentConfigService: any;
+
+    beforeEach(async () => {
+      // Dynamically import for a fresh instance
+      const mod = await import('../lib/config-service');
+      currentConfigService = mod.configService;
+    });
+
     it('should have a properly configured logger', () => {
-      expect(configService.logger).toBeDefined();
-      expect(typeof configService.logger.info).toBe('function');
-      expect(typeof configService.logger.error).toBe('function');
-      expect(typeof configService.logger.warn).toBe('function');
-      expect(typeof configService.logger.debug).toBe('function');
+      expect(currentConfigService.logger).toBeDefined();
+      expect(typeof currentConfigService.logger.info).toBe('function');
+      expect(typeof currentConfigService.logger.error).toBe('function');
+      expect(typeof currentConfigService.logger.warn).toBe('function');
+      expect(typeof currentConfigService.logger.debug).toBe('function');
     });
   
     it('should be able to log messages without throwing errors', () => {
@@ -88,10 +108,10 @@ describe('Config Module', () => {
       console.warn = vi.fn();
       console.debug = vi.fn();
       
-      expect(() => configService.logger.info('Test info message')).not.toThrow();
-      expect(() => configService.logger.error('Test error message')).not.toThrow();
-      expect(() => configService.logger.warn('Test warning message')).not.toThrow();
-      expect(() => configService.logger.debug('Test debug message')).not.toThrow();
+      expect(() => currentConfigService.logger.info('Test info message')).not.toThrow();
+      expect(() => currentConfigService.logger.error('Test error message')).not.toThrow();
+      expect(() => currentConfigService.logger.warn('Test warning message')).not.toThrow();
+      expect(() => currentConfigService.logger.debug('Test debug message')).not.toThrow();
       
       // Restore console methods
       console.info = originalInfo;
