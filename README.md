@@ -178,10 +178,10 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
      }
    }
    ```
-2. Replace `your_deepseek_api_key` with your DeepSeek API key (or omit for Ollama).
+2. Replace `your_deepseek_api_key` with your DeepSeek API key (or omit for Ollama). You can set any of the environment variables listed in the "Configuration" section (e.g., `LLM_PROVIDER`, `SUGGESTION_MODEL`) within this `env` block, and CodeCompass will use them.
 3. Restart Cursor.
 
-**Note**: For Cline in VSCode, configure similarly in `cline_mcp_settings.json` (see [Cline Docs](https://github.com/saoudrizwan/claude-dev)).
+**Note**: For Cline in VSCode, configure similarly in `cline_mcp_settings.json` (see [Cline Docs](https://github.com/saoudrizwan/claude-dev)). Environment variables set in this manner will also be recognized by CodeCompass.
 
 ## Usage
 
