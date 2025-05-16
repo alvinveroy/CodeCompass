@@ -71,11 +71,78 @@ We welcome community contributions and suggestions for future development! Pleas
 
 ## Configuration
 
-CodeCompass uses environment variables for configuration. You can set these in your shell, or create a `.env` file in the root directory where you run CodeCompass (e.g., `/path/to/your/repo/.env` if you are running CodeCompass against that repo, or your user's home directory if running globally).
+CodeCompass relies on environment variables for its configuration. These variables can be set in several ways:
 
-### Environment Variables (`.env.example`)
+1.  **Directly in your shell**: For the current session or persistently by adding them to your shell's profile script.
+2.  **System-wide**: Setting them at the operating system level.
+3.  **Through MCP client settings**: If you're using CodeCompass via an MCP client like Cursor or Cline, you can often define environment variables within their respective configuration files (e.g., `mcp.json` for Cursor). This is detailed in the "Setting Up with Cursor" section.
+4.  **Using a `.env` file**: For convenience, especially during local development, you can place a `.env` file in the root directory of the repository you are analyzing with CodeCompass. CodeCompass will load variables from this file.
 
-Here's a list of important environment variables with examples. Copy this into a `.env` file and adjust as needed:
+Below are instructions for setting environment variables directly in your shell or system-wide, followed by a list of common variables.
+
+### Setting Environment Variables
+
+**For Linux and macOS:**
+
+You can set an environment variable for the current terminal session using the `export` command:
+```bash
+export VAR_NAME="value"
+```
+For example:
+```bash
+export LLM_PROVIDER="deepseek"
+export DEEPSEEK_API_KEY="your_deepseek_api_key_here"
+```
+These settings will only last for the current session. To make them permanent, add these `export` lines to your shell's configuration file:
+- For Bash (common default): `~/.bashrc` or `~/.bash_profile`
+- For Zsh (common on macOS): `~/.zshrc`
+After editing the file, reload it (e.g., `source ~/.bashrc` or `source ~/.zshrc`) or open a new terminal.
+
+**For Windows:**
+
+Using Command Prompt (cmd.exe):
+```cmd
+set VAR_NAME="value"
+```
+For example:
+```cmd
+set LLM_PROVIDER="deepseek"
+set DEEPSEEK_API_KEY="your_deepseek_api_key_here"
+```
+This sets the variable for the current Command Prompt session only.
+
+Using PowerShell:
+```powershell
+$Env:VAR_NAME = "value"
+```
+For example:
+```powershell
+$Env:LLM_PROVIDER = "deepseek"
+$Env:DEEPSEEK_API_KEY = "your_deepseek_api_key_here"
+```
+This sets the variable for the current PowerShell session only.
+
+To set environment variables permanently on Windows:
+1.  Search for "environment variables" in the Start Menu.
+2.  Click on "Edit the system environment variables".
+3.  In the System Properties window, click the "Environment Variables..." button.
+4.  You can set User variables (for the current user) or System variables (for all users). Click "New..." under the desired section.
+5.  Enter the variable name (e.g., `LLM_PROVIDER`) and value (e.g., `deepseek`).
+6.  Click OK on all windows. You may need to restart your Command Prompt, PowerShell, or even your computer for the changes to take full effect.
+
+Alternatively, to set a user environment variable permanently from Command Prompt (requires a new command prompt to see the effect):
+```cmd
+setx VAR_NAME "value"
+```
+Example:
+```cmd
+setx LLM_PROVIDER "deepseek"
+setx DEEPSEEK_API_KEY "your_deepseek_api_key_here"
+```
+
+### Common Environment Variables (Reference)
+
+Here's a list of important environment variables. If you choose to use a `.env` file, you can copy this structure.
 
 ```env
 # --- General Configuration ---
@@ -135,7 +202,7 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
 # DEEPSEEK_RPM_LIMIT=20
 ```
 
-**Note**: For local setup with Ollama, the defaults usually work well. You only need to set `DEEPSEEK_API_KEY` (and adjust `LLM_PROVIDER` and `SUGGESTION_MODEL`) if you intend to use the DeepSeek cloud provider. Similar API keys are needed for other cloud providers.
+**Note**: When setting environment variables directly or via MCP client configurations, you do not need to create a `.env` file. The list above serves as a reference for the variable names and their purposes. For a local setup with Ollama, the default settings often work without needing to set many environment variables, unless you want to customize models or providers. If using cloud providers like DeepSeek, setting the respective `API_KEY` and adjusting `LLM_PROVIDER` and `SUGGESTION_MODEL` is necessary.
 
 ## Troubleshooting
 
