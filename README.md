@@ -12,12 +12,35 @@ CodeCompass helps developers tackle legacy or existing codebases by giving AI co
 - **Smart AI Context**: Uses Agentic RAG to make AI suggestions fit your code perfectly.
 - **Flexible Setup**: Runs locally with Ollama or connects to cloud AI like DeepSeek.
 
+## Project Status and Roadmap
+
+**Current Status:**
+CodeCompass has successfully implemented its core features, including:
+- Codebase analysis using Qdrant Vector Store.
+- Agentic RAG (Retrieval Augmented Generation) for intelligent AI suggestions.
+- Flexible integration with local LLMs via Ollama (e.g., `llama3.1:8b`, `nomic-embed-text:v1.5`) and cloud-based LLMs like DeepSeek.
+
+The project is actively maintained and considered stable for its current feature set.
+
+**Future Enhancements (Under Consideration):**
+While the core functionality is robust, potential future directions include:
+- Support for a broader range of LLM providers (e.g., OpenAI, Gemini, Claude).
+- More sophisticated agent capabilities and additional tool integrations.
+- Enhanced repository indexing techniques for even more precise context retrieval.
+- Streamlined user configuration and an even smoother setup experience.
+- Deeper integrations with various IDEs and development workflows.
+
+We welcome community contributions and suggestions for future development! Please see our [CONTRIBUTING.md](https://github.com/alvinveroy/CodeCompass/blob/main/CONTRIBUTING.md).
+
 ## Prerequisites
 
 - **Node.js** v20+ ([nodejs.org](https://nodejs.org))
 - **Docker** for Qdrant ([docker.com](https://www.docker.com))
-- **Ollama** with models `nomic-embed-text:v1.5` and `llama3.1:8b` ([ollama.com](https://ollama.com))
-- **DeepSeek API Key** (optional, for cloud; get from [Deepseek](https://platform.deepseek.com))
+- **Ollama** ([ollama.com](https://ollama.com)): For local LLM and embedding capabilities.
+  - Required models (can be configured via environment variables, see Configuration section):
+    - Embedding Model: `nomic-embed-text:v1.5` (default)
+    - Suggestion Model (if using Ollama for suggestions): `llama3.1:8b` (default)
+- **DeepSeek API Key** (optional, for cloud-based suggestions; get from [Deepseek](https://platform.deepseek.com))
 
 ## Installation
 
@@ -27,12 +50,13 @@ CodeCompass helps developers tackle legacy or existing codebases by giving AI co
      curl -fsSL https://ollama.com/install.sh | sh
      ```
    - **macOS/Windows**: Download from [ollama.com](https://ollama.com/download).
-   - Start and pull models:
+   - Ensure the Ollama application is running (or run `ollama serve` in your terminal if you installed the CLI version).
+   - Pull the default models (or the models you intend to configure):
      ```bash
-     ollama serve
-     ollama pull nomic-embed-text:v1.5
-     ollama pull llama3.1:8b
+     ollama pull nomic-embed-text:v1.5  # Default embedding model
+     ollama pull llama3.1:8b            # Default Ollama suggestion model
      ```
+     You can verify installed models with `ollama list`.
 
 2. **Install Qdrant**:
    ```bash
@@ -47,9 +71,96 @@ CodeCompass helps developers tackle legacy or existing codebases by giving AI co
 
 ## Configuration
 
-Set environment variables (optional; defaults work for local setup):
-- `LLM_PROVIDER`: `ollama` (local) or `deepseek` (cloud).
-- `DEEPSEEK_API_KEY`: Your DeepSeek API key for cloud use.
+CodeCompass uses environment variables for configuration. You can set these in your shell, or create a `.env` file in the root directory where you run CodeCompass (e.g., `/path/to/your/repo/.env` if you are running CodeCompass against that repo, or your user's home directory if running globally).
+
+### Environment Variables (`.env.example`)
+
+Here's a list of important environment variables with examples. Copy this into a `.env` file and adjust as needed:
+
+```env
+# --- General Configuration ---
+# LOG_LEVEL: Logging level (e.g., error, warn, info, verbose, debug, silly). Default: info
+# LOG_LEVEL=info
+
+# --- Qdrant Configuration ---
+# QDRANT_HOST: URL for the Qdrant vector store server.
+QDRANT_HOST=http://localhost:6333
+# COLLECTION_NAME: Name of the Qdrant collection for this repository.
+# It's good practice to use a unique name per repository if you manage multiple.
+# COLLECTION_NAME=codecompass_default_collection
+
+# --- Ollama Configuration (for local LLM and embeddings) ---
+# OLLAMA_HOST: URL for the Ollama server.
+OLLAMA_HOST=http://localhost:11434
+
+# --- LLM Provider Configuration ---
+# LLM_PROVIDER: Specifies the primary LLM provider for generating suggestions.
+# Supported values: "ollama", "deepseek", "openai", "gemini", "claude". Default: "ollama"
+LLM_PROVIDER=ollama
+
+# SUGGESTION_MODEL: The specific model to use for suggestions.
+# If LLM_PROVIDER="ollama", example: "llama3.1:8b", "codellama:7b"
+# If LLM_PROVIDER="deepseek", example: "deepseek-coder"
+# If LLM_PROVIDER="openai", example: "gpt-4-turbo-preview", "gpt-3.5-turbo"
+# If LLM_PROVIDER="gemini", example: "gemini-pro"
+# If LLM_PROVIDER="claude", example: "claude-2", "claude-3-opus-20240229"
+# Default for Ollama: "llama3.1:8b"
+SUGGESTION_MODEL=llama3.1:8b
+
+# EMBEDDING_PROVIDER: Specifies the provider for generating embeddings.
+# Currently, "ollama" is the primary supported embedding provider. Default: "ollama"
+EMBEDDING_PROVIDER=ollama
+
+# EMBEDDING_MODEL: The specific model to use for embeddings via Ollama.
+# Default: "nomic-embed-text:v1.5"
+EMBEDDING_MODEL=nomic-embed-text:v1.5
+
+# --- Cloud Provider API Keys (only needed if using respective providers) ---
+# DEEPSEEK_API_KEY: Your API key for DeepSeek.
+# DEEPSEEK_API_KEY=your_deepseek_api_key_here
+
+# OPENAI_API_KEY: Your API key for OpenAI.
+# OPENAI_API_KEY=your_openai_api_key_here
+
+# GEMINI_API_KEY: Your API key for Google Gemini.
+# GEMINI_API_KEY=your_gemini_api_key_here
+
+# CLAUDE_API_KEY: Your API key for Anthropic Claude.
+# CLAUDE_API_KEY=your_claude_api_key_here
+
+# --- DeepSeek Specific (Optional) ---
+# DEEPSEEK_API_URL: Custom API URL for DeepSeek if not using the default.
+# DEEPSEEK_API_URL=https://api.deepseek.com
+# DEEPSEEK_RPM_LIMIT: Requests per minute limit for DeepSeek. Default: 20
+# DEEPSEEK_RPM_LIMIT=20
+```
+
+**Note**: For local setup with Ollama, the defaults usually work well. You only need to set `DEEPSEEK_API_KEY` (and adjust `LLM_PROVIDER` and `SUGGESTION_MODEL`) if you intend to use the DeepSeek cloud provider. Similar API keys are needed for other cloud providers.
+
+## Troubleshooting
+
+- **Model Not Found (Ollama):**
+  - Ensure you have pulled the correct model names using `ollama pull <model_name>`.
+  - Verify installed models with `ollama list`.
+  - Check that your `OLLAMA_HOST` environment variable is correct and the Ollama server is accessible.
+  - Ensure the `SUGGESTION_MODEL` (if using Ollama for suggestions) and `EMBEDDING_MODEL` environment variables match the models you have pulled.
+
+- **Connection Refused (Ollama/Qdrant):**
+  - Verify the Ollama server is running (e.g., `ollama serve` or the Ollama application).
+  - Verify the Qdrant Docker container is running (`docker ps`) and accessible on the configured host/port (default `http://localhost:6333`).
+  - Check your firewall settings if they might be blocking local connections.
+
+- **API Key Issues (DeepSeek, OpenAI, Gemini, Claude):**
+  - Double-check that the respective API key (e.g., `DEEPSEEK_API_KEY`) is correctly set in your environment variables or `.env` file.
+  - Ensure the key is valid and has not expired or reached its quota.
+  - For DeepSeek, you can use the `npm run test-deepseek` script (if available in your setup) to diagnose connection issues.
+
+- **Incorrect Provider/Model Mismatch:**
+  - Ensure `LLM_PROVIDER` and `SUGGESTION_MODEL` environment variables are compatible (e.g., use a DeepSeek model name like `deepseek-coder` when `LLM_PROVIDER=deepseek`).
+
+- **General Issues:**
+  - Check CodeCompass logs for more detailed error messages. You might need to set `LOG_LEVEL=debug` for more verbose output.
+  - Ensure Node.js and Docker are correctly installed and running.
 
 ## Setting Up with Cursor
 
