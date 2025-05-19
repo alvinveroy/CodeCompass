@@ -954,9 +954,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         let parsedParams = normalizedParams;
         if (typeof normalizedParams === 'string') {
           try {
-            const parsed = JSON.parse(normalizedParams);
+            const parsed: unknown = JSON.parse(normalizedParams); // Explicitly type parsed as unknown
             if (parsed && typeof parsed === 'object') {
-              parsedParams = parsed;
+              parsedParams = parsed as Record<string, unknown>; // Assert parsed to Record<string, unknown>
             }
           } catch {
             // If it's not valid JSON, keep using it as a string query
