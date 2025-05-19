@@ -177,11 +177,6 @@ export async function startServer(repoPath: string): Promise<void> {
     
     registerPrompts(server); 
     
-    // Note: The manual server.onRequest("resources/list", ...) handler has been removed 
-    // as 'onRequest' does not exist on McpServer type.
-    // The 'capabilities.resources' object in the McpServer constructor
-    // is now populated to allow the SDK to handle 'resources/list' automatically.
-
     server.tool(
       "switch_suggestion_model",
       "Switches the primary model and provider used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder' (DeepSeek provider), use `{\"model\": \"deepseek-coder\", \"provider\": \"deepseek\"}`. To switch to 'llama3.1:8b' (Ollama provider), use `{\"model\": \"llama3.1:8b\", \"provider\": \"ollama\"}`. If provider is omitted, it may be inferred for known model patterns. For other providers like 'openai', 'gemini', 'claude', specify both model and provider: `{\"model\": \"gpt-4\", \"provider\": \"openai\"}`.",
