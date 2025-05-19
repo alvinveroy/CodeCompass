@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { McpContext } from "@modelcontextprotocol/sdk/types.js"; // Changed import path for McpContext
+// McpContext import removed as it's causing issues; will use 'any' for unused context param
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 // import { initMcpSafeLogging } from "./mcp-logger"; // mcp-logger removed
 import fs from "fs/promises";
@@ -653,7 +653,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     "get_changelog",
     "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.", // Description
     z.object({}).shape, // Parameters schema
-    async (_params: Record<string, never>, _context: McpContext) => { // Handler with explicit types
+    async (_params: Record<string, never>, _context: any) => { // Handler with _context as any
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
         const changelog = await fs.readFile(changelogPath, 'utf8'); 
