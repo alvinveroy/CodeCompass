@@ -931,17 +931,24 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         }
         
         // Ensure query exists
-        if (!parsedParams.query && typeof parsedParams === 'object') {
-          // If query is missing but we have a JSON object, use the entire object as context
-          (parsedParams as any).query = "repository context";
-          logger.warn("No query provided for get_repository_context, using default");
+        if (typeof parsedParams === 'object' && parsedParams !== null && !('query' in parsedParams && typeof parsedParams.query === 'string')) {
+          // If query is missing or not a string, set a default
+          (parsedParams as { query?: unknown }).query = "repository context";
+          logger.warn("No query provided or query was not a string for get_repository_context, using default query.");
+        } else if (typeof parsedParams !== 'object' || parsedParams === null) {
+          // If parsedParams is not an object at all, create it with a default query
+          parsedParams = { query: "repository context" };
+          logger.warn("parsedParams was not an object for get_repository_context, initialized with default query.");
         }
         
         let queryFromParamsCtx: string;
-        if (typeof parsedParams.query === 'string') {
-          queryFromParamsCtx = parsedParams.query;
+        // At this point, parsedParams is an object and parsedParams.query should exist if it was missing.
+        // We still need to handle the case where parsedParams.query might have been set to something other than a string by normalizeToolParams if the input was unusual.
+        const queryValue = (parsedParams as { query?: unknown }).query;
+        if (typeof queryValue === 'string') {
+          queryFromParamsCtx = queryValue;
         } else {
-          logger.warn("Query parameter is not a string or is missing in get_repository_context.", { receivedQuery: parsedParams.query });
+          logger.warn("Query parameter is not a string or is missing in get_repository_context.", { receivedQuery: queryValue });
           queryFromParamsCtx = "default repository context query";
         }
 
