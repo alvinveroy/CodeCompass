@@ -147,7 +147,7 @@ export async function startServer(repoPath: string): Promise<void> {
       throw new Error("MCP server does not support 'resource' method");
     }
     
-    server.resource("repo://health", {}, async () => {
+    server.resource("Server Health Status", "repo://health", async () => {
       const status = {
         ollama: await checkOllama().then(() => "healthy").catch(() => "unhealthy"),
         qdrant: await qdrantClient.getCollections().then(() => "healthy").catch(() => "unhealthy"),
@@ -158,10 +158,10 @@ export async function startServer(repoPath: string): Promise<void> {
       return { contents: [{ uri: "repo://health", text: JSON.stringify(status, null, 2) }] };
     });
     
-    server.resource("repo://version", {}, () => {
+    server.resource("Server Version", "repo://version", () => {
       return { contents: [{ uri: "repo://version", text: VERSION }] };
     });
-    server.resource("repo://structure", {}, async () => {
+    server.resource("Repository File Structure", "repo://structure", async () => {
       const uriStr = "repo://structure";
       const isGitRepo = await validateGitRepository(repoPath);
       if (!isGitRepo) {
@@ -180,6 +180,7 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     server.resource(
+      "Repository File Content",
       "repo://files/{filepath}",
       z.object({ filepath: z.string().describe("The path to the file relative to the repository root.") }),
       async (params: { filepath: string }, uri: URL) => {
