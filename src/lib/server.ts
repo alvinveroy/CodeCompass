@@ -208,7 +208,7 @@ export async function startServer(repoPath: string): Promise<void> {
       async (params: unknown) => {
         // chainId and trackToolChain removed
       
-        // eslint-disable-next-line @typescript-eslint/no-base-to-string -- String(params) is acceptable here due to prior object check
+         
         logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) });
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);

@@ -135,7 +135,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         response: axiosError.response ? {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Safely stringifying unknown data for logging
+           
           data: typeof axiosError.response.data === 'string' 
                 ? axiosError.response.data 
                 : (axiosError.response.data === null || axiosError.response.data === undefined) 
@@ -146,7 +146,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       });
       
       // Check for specific error types
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Trusting the cast to AxiosError for detailed error handling
+       
       const typedError = requestError as import('axios').AxiosError<{ message?: string }>; 
       
       if (typedError.code === 'ECONNREFUSED') {
