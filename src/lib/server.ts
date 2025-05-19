@@ -56,6 +56,21 @@ export function normalizeToolParams(params: unknown): Record<string, unknown> {
 }
 
 export async function startServer(repoPath: string): Promise<void> {
+  // Global error handlers to catch issues that might otherwise lead to silent crashes or malformed responses
+  process.on('uncaughtException', (error: Error) => {
+    logger.error('UNCAUGHT EXCEPTION:', { message: error.message, stack: error.stack });
+    // Mandatory exit after uncaught exception
+    // Ensure logs are flushed before exiting if logger is asynchronous.
+    // For simplicity here, assuming logger.error is synchronous enough or process.exit will allow flushing.
+    process.exit(1); 
+  });
+
+  process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+    logger.error('UNHANDLED PROMISE REJECTION:', { reason, promise });
+    // Optionally, exit or take other measures. For robustness, exiting is often safer.
+    // Ensure logs are flushed.
+    process.exit(1);
+  });
   
   logger.info("Starting CodeCompass MCP server...");
 
