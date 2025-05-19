@@ -147,7 +147,7 @@ export async function startServer(repoPath: string): Promise<void> {
       throw new Error("MCP server does not support 'resource' method");
     }
     
-    server.resource("repo://health", "repo://health", {}, async () => {
+    server.resource("repo://health", {}, async () => {
       const status = {
         ollama: await checkOllama().then(() => "healthy").catch(() => "unhealthy"),
         qdrant: await qdrantClient.getCollections().then(() => "healthy").catch(() => "unhealthy"),
@@ -158,10 +158,10 @@ export async function startServer(repoPath: string): Promise<void> {
       return { contents: [{ uri: "repo://health", text: JSON.stringify(status, null, 2) }] };
     });
     
-    server.resource("repo://version", "repo://version", {}, () => {
+    server.resource("repo://version", {}, () => {
       return { contents: [{ uri: "repo://version", text: VERSION }] };
     });
-    server.resource("repo://structure", "repo://structure", {}, async () => {
+    server.resource("repo://structure", {}, async () => {
       const uriStr = "repo://structure";
       const isGitRepo = await validateGitRepository(repoPath);
       if (!isGitRepo) {
@@ -175,21 +175,20 @@ export async function startServer(repoPath: string): Promise<void> {
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`Error listing repository files for ${repoPath}: ${errorMessage}`);
-        return { contents: [{ uri: uriStr, error: `Failed to list repository files: ${errorMessage}` }] };
+        return { contents: [{ uri: uriStr, text: "", error: `Failed to list repository files: ${errorMessage}` }] };
       }
     });
 
     server.resource(
-      "repo://files/{filepath}", 
-      "Repository File Content", 
-      z.object({ filepath: z.string().describe("The path to the file relative to the repository root.") }), 
+      "repo://files/{filepath}",
+      z.object({ filepath: z.string().describe("The path to the file relative to the repository root.") }),
       async (params: { filepath: string }, uri: URL) => {
       const relativeFilepath = params.filepath.trim();
 
       if (!relativeFilepath) {
         const errMsg = "File path cannot be empty.";
         logger.error(`Error accessing resource for URI ${uri.toString()}: ${errMsg}`);
-        return { contents: [{ uri: uri.toString(), error: errMsg }] };
+        return { contents: [{ uri: uri.toString(), text: "", error: errMsg }] };
       }
 
       try {
@@ -226,7 +225,7 @@ export async function startServer(repoPath: string): Promise<void> {
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`Error accessing resource for URI ${uri.toString()} (relative path: ${relativeFilepath}): ${errorMessage}`);
-        return { contents: [{ uri: uri.toString(), error: errorMessage }] };
+        return { contents: [{ uri: uri.toString(), text: "", error: errorMessage }] };
       }
     });
 
