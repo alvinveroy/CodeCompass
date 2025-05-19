@@ -1,5 +1,6 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Variables, RequestHandlerExtra, ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types";
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
@@ -180,11 +181,11 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     server.resource(
-      "Repository File Content", 
-      "repo://files/{filepath}",
-      z.object({ filepath: z.string().describe("The path to the file relative to the repository root.") }),
-      async (params: { filepath: string }, uri: URL) => { 
-      const relativeFilepath = params.filepath.trim();
+      "Repository File Content",
+      new ResourceTemplate("repo://files/{filepath}", { list: undefined }),
+      {}, // metadata
+      async (uri: URL, variables: Variables, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      const relativeFilepath = variables.filepath?.trim() ?? '';
 
       if (!relativeFilepath) {
         const errMsg = "File path cannot be empty.";
