@@ -207,7 +207,7 @@ export async function startServer(repoPath: string): Promise<void> {
       async (params: unknown) => {
         // chainId and trackToolChain removed
       
-        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : params }); // Ensure params is stringified for log
+        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) });
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
       
@@ -292,7 +292,7 @@ export async function startServer(repoPath: string): Promise<void> {
           return {
             content: [{
               type: "text",
-              text: `# Error Switching Suggestion Model\n\n${(error as Error).message}`,
+              text: `# Error Switching Suggestion Model\n\n${error instanceof Error ? error.message : String(error)}`,
             }],
           };
         }
@@ -741,26 +741,29 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
+        const queryValue = normalizedParams.query;
         let queryFromParams: string;
-        if (typeof normalizedParams.query === 'string') {
-          queryFromParams = normalizedParams.query;
+        if (typeof queryValue === 'string') {
+          queryFromParams = queryValue;
         } else {
-          logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
+          logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: queryValue });
           queryFromParams = "default code suggestion query"; 
         }
 
+        const sessionIdValue = normalizedParams.sessionId;
         let sessionIdFromParams: string | undefined;
-        if (typeof normalizedParams.sessionId === 'string') {
-          sessionIdFromParams = normalizedParams.sessionId;
-        } else if (normalizedParams.sessionId !== undefined) {
-          logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });
+        if (typeof sessionIdValue === 'string') {
+          sessionIdFromParams = sessionIdValue;
+        } else if (sessionIdValue !== undefined) {
+          logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: sessionIdValue });
+          // sessionIdFromParams remains undefined
         }
       
       // Get or create session
       const session = getOrCreateSession(sessionIdFromParams, repoPath);
       
       // Log the extracted query to confirm it's working
-      const queryStr = queryFromParams; // queryFromParams is now definitely a string
+      const queryStr = queryFromParams; 
       logger.info("Extracted query for generate_suggestion", { query: queryStr, sessionId: session.id });
       
       // First, use search_code internally to get relevant context
