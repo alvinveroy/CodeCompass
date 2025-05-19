@@ -790,19 +790,24 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        let queryFromParams = "default code suggestion query";
-        const rawQuery = normalizedParams.query; 
+        interface GenerateSuggestionParams {
+          query?: unknown;
+          sessionId?: unknown;
+        }
+        const toolParams = normalizedParams as GenerateSuggestionParams;
+
+        let queryFromParams: string = "default code suggestion query";
+        const rawQuery = toolParams.query; 
         if (typeof rawQuery === 'string') {
             queryFromParams = rawQuery;
         } else if (rawQuery !== undefined) {
             logger.warn("Query parameter is not a string in generate_suggestion.", { receivedQuery: rawQuery });
         } else {
-            // This case should ideally be covered by the block above that sets a default if !normalizedParams.query
             logger.warn("Query parameter is missing in generate_suggestion and was not defaulted.", { normalizedParams });
         }
 
         let sessionIdFromParams: string | undefined = undefined;
-        const rawSessionId = normalizedParams.sessionId; 
+        const rawSessionId = toolParams.sessionId; 
         if (typeof rawSessionId === 'string') {
             sessionIdFromParams = rawSessionId;
         } else if (rawSessionId !== undefined) {
