@@ -387,12 +387,12 @@ function registerPrompts(server: McpServer): void { // Removed async
   logger.info("Registered prompts: repository-context, code-suggestion, code-analysis");
 }
 
-async function registerTools(
+function registerTools( // Removed async
   server: McpServer, 
   qdrantClient: QdrantClient, 
   repoPath: string, 
   suggestionModelAvailable: boolean
-): void { // Removed async
+): void { 
   if (typeof server.tool !== "function") {
     throw new Error("MCP server does not support 'tool' method");
   }
@@ -643,8 +643,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
           }],
         };
-      } catch (error) {
-        logger.error("Failed to read changelog", { error });
+      } catch (error: unknown) {
+        logger.error("Failed to read changelog", { message: error instanceof Error ? error.message : String(error) });
         return {
           content: [{
             type: "text" as const,
@@ -665,7 +665,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
-    async (params: unknown) => {
+    (params: unknown) => { // Removed async
       logger.info("Received params for get_session_history", { params });
       const normalizedParams = normalizeToolParams(params);
       logger.debug("Normalized params for get_session_history", normalizedParams);
@@ -740,13 +740,14 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        const { query, sessionId } = normalizedParams;
+        const queryFromParams = normalizedParams.query;
+        const sessionIdFromParams = normalizedParams.sessionId;
       
       // Get or create session
-      const session = getOrCreateSession(sessionId as string | undefined, repoPath);
+      const session = getOrCreateSession(sessionIdFromParams as string | undefined, repoPath);
       
       // Log the extracted query to confirm it's working
-      const queryStr = String(query); // Ensure query is a string for logging and use
+      const queryStr = String(queryFromParams); // Ensure query is a string for logging and use
       logger.info("Extracted query for generate_suggestion", { query: queryStr, sessionId: session.id });
       
       // First, use search_code internally to get relevant context
@@ -900,14 +901,14 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           logger.warn("No query provided for get_repository_context, using default");
         }
         
-        const query = parsedParams.query;
-        const sessionId = 'sessionId' in parsedParams ? parsedParams.sessionId : undefined;
+        const queryFromParamsCtx = String(parsedParams.query); // Ensure query is string
+        const sessionIdFromParamsCtx = 'sessionId' in parsedParams ? parsedParams.sessionId as string | undefined : undefined;
       
       // Get or create session
-      const session = getOrCreateSession(sessionId as string | undefined, repoPath);
+      const session = getOrCreateSession(sessionIdFromParamsCtx, repoPath);
       
       // Log the extracted query to confirm it's working
-      const queryStrCtx = String(query); // Ensure query is a string
+      const queryStrCtx = queryFromParamsCtx; 
       logger.info("Extracted query for repository context", { query: queryStrCtx, sessionId: session.id });
       
       const isGitRepo = await validateGitRepository(repoPath);
