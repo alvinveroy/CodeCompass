@@ -741,21 +741,19 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        const queryValue = normalizedParams.query;
         let queryFromParams: string;
-        if (typeof queryValue === 'string') {
-          queryFromParams = queryValue;
+        if (typeof normalizedParams.query === 'string') {
+          queryFromParams = normalizedParams.query;
         } else {
-          logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: queryValue });
+          logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
           queryFromParams = "default code suggestion query"; 
         }
 
-        const sessionIdValue = normalizedParams.sessionId;
         let sessionIdFromParams: string | undefined;
-        if (typeof sessionIdValue === 'string') {
-          sessionIdFromParams = sessionIdValue;
-        } else if (sessionIdValue !== undefined) {
-          logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: sessionIdValue });
+        if (typeof normalizedParams.sessionId === 'string') {
+          sessionIdFromParams = normalizedParams.sessionId;
+        } else if (normalizedParams.sessionId !== undefined) {
+          logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });
           // sessionIdFromParams remains undefined
         }
       
