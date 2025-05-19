@@ -194,7 +194,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
       try {
         const resolvedRepoPath = path.resolve(repoPath); // Normalized
-        let requestedFullPath = path.resolve(repoPath, relativeFilepath); // Normalized
+        const requestedFullPath = path.resolve(repoPath, relativeFilepath); // Normalized
 
         // Initial security check: Ensure the resolved path is within the repoPath
         if (!requestedFullPath.startsWith(resolvedRepoPath + path.sep) && requestedFullPath !== resolvedRepoPath) {
