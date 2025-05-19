@@ -188,7 +188,6 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     // Register tools
-    // Unused eslint-disable directive for @typescript-eslint/no-base-to-string was here (around line 212)
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
     // Register prompts
@@ -825,7 +824,6 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           .filter(r => !context.some(c => c.filepath === (r as DetailedQdrantSearchResult).payload?.filepath)) // Cast here is okay for filtering
           .slice(0, 2)
           .map(rUnk => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Trusting structure of relevantResults from state
             const r = rUnk as DetailedQdrantSearchResult; // Define r with type for clarity
             return {
               filepath: r.payload?.filepath || "unknown",

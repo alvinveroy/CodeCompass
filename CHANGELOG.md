@@ -13,12 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
-- Addressed multiple ESLint issues (re-application of fixes from 43bad1a):
-    - `src/lib/deepseek.ts`: Corrected `no-unsafe-assignment` for `axiosError.response.data` by ensuring safe stringification (including null/undefined checks) and managed `eslint-disable` for a specific cast. Removed an unused `eslint-disable` directive.
-    - `src/lib/llm-provider.ts`: Resolved `await-thenable` false positive by making Promise explicit before awaiting. Removed an unused `eslint-disable` directive.
-    - `src/lib/repository.ts`: Fixed `require-await` by removing `async` from a non-asynchronous `map` callback in `git.walk`.
-    - `src/lib/server.ts`: Handled `no-base-to-string` for `params` logging with a targeted `eslint-disable`. Changed `_context: any` to `_context: unknown`. Bypassed `no-unsafe-assignment` for trusted type assertions with comments and `(value as any).prop` for dynamic assignments. Removed unused `eslint-disable` directives.
-    - `src/scripts/set-deepseek-key.ts`: Removed an unused `eslint-disable` directive and added `eslint-disable-line` for `no-floating-promises`.
+- Addressed multiple ESLint issues based on CodeCompass tool analysis (following up on a03a71a):
+    - `src/lib/deepseek.ts`:
+        - Added `eslint-disable-next-line @typescript-eslint/no-unsafe-assignment` with justification for `axiosError.response.data` logging, as the stringification logic is sound.
+        - Removed an internal comment about a previously unused `eslint-disable` directive.
+    - `src/lib/llm-provider.ts`:
+        - Added `eslint-disable-next-line @typescript-eslint/await-thenable` for `await connectionPromise` as `deepseek.testDeepSeekConnection` correctly returns a `Promise<boolean>`, indicating a likely linter false positive.
+    - `src/lib/server.ts`:
+        - Removed an internal comment about a previously unused `eslint-disable` directive.
+        - Removed an unused `eslint-disable-next-line @typescript-eslint/no-unsafe-assignment` for a type assertion that was already safe.
+        - Refactored `parsedParams.query` access and assignment in `get_repository_context` tool to use safer type assertions (`as { query?: unknown }`) instead of `as any`, resolving `no-unsafe-assignment`, `no-explicit-any`, and `no-unsafe-member-access` issues.
+    - `src/scripts/set-deepseek-key.ts`:
+        - Removed an unused `eslint-disable-line @typescript-eslint/no-floating-promises` as the `void` operator likely addresses the floating promise concern.
 - Resolved TypeScript build error (TS2345: Argument of type 'ZodObject<{}, "strip", ZodTypeAny, {}, {}>' is not assignable to parameter of type 'ZodRawShape') for the `get_changelog` tool in `src/lib/server.ts` by changing its parameter schema definition from `z.object({})` to an empty object `{}` to correctly represent no parameters.
 - Resolved TypeScript build error (TS2769: No overload matches this call) for the `get_changelog` tool in `src/lib/server.ts` by changing its registration from `server.tool()` to the more explicit `server.addTool()` method. The `parameters` property for `addTool` is set to `z.object({})` for this parameter-less tool. (24d9c00)
 - Resolved TypeScript build errors (TS2554: Expected 3-4 arguments, but got 5) for `server.resource` and `server.tool` calls in `src/lib/server.ts`.

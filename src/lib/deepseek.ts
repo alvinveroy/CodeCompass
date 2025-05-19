@@ -135,6 +135,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         response: axiosError.response ? {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Safely stringifying unknown data for logging
           data: typeof axiosError.response.data === 'string' 
                 ? axiosError.response.data 
                 : (axiosError.response.data === null || axiosError.response.data === undefined) 
@@ -160,7 +161,6 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     }
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    // Unused eslint-disable directive for @typescript-eslint/no-unsafe-assignment was here
     const axiosError = error as import('axios').AxiosError<{ message?: string }>; 
     
     logger.error("DeepSeek API connection test failed", {
