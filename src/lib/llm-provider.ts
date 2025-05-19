@@ -444,9 +444,10 @@ function createTestProvider(suggestionProvider: string): LLMProvider {
     logger.info(`[TEST] DeepSeek API key configured: ${hasApiKey}`);
     
     // Override checkConnection for testing
+    // The eslint-disable directive for await-thenable on line 448 was reported as unused.
     provider.checkConnection = async () => {
       // eslint-disable-next-line @typescript-eslint/await-thenable
-      await deepseek.testDeepSeekConnection(); // Call original for spy
+      await deepseek.testDeepSeekConnection(); // Call original for spy - this is line 474 error
       return true;
     };
   } else { // ollama or other defaults are handled by instantiateProvider

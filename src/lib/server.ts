@@ -187,10 +187,11 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     // Register tools
-    registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); // Removed await
+    // The eslint-disable directive on line 210 was reported as unused.
+    registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
     // Register prompts
-    registerPrompts(server); // Removed await
+    registerPrompts(server); 
     // The get_repository_context tool is registered within registerTools.
     // Its internal logic handles behavior when suggestionModelAvailable is false.
     // No need for a separate conditional registration here.
@@ -208,7 +209,7 @@ export async function startServer(repoPath: string): Promise<void> {
         // chainId and trackToolChain removed
       
         // eslint-disable-next-line @typescript-eslint/no-base-to-string
-        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) });
+        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) }); // This is line 55 error
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
       
@@ -288,8 +289,9 @@ export async function startServer(repoPath: string): Promise<void> {
             }],
           };
         } catch (error: unknown) {
-          const err = error as Error; // This cast is potentially unsafe if error is not an Error instance
-          logger.error("Error switching suggestion model", { message: error instanceof Error ? error.message : String(error) });
+          // Removed 'const err = error as Error;' as err was unused.
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+          logger.error("Error switching suggestion model", { message: error instanceof Error ? error.message : String(error) }); // This is line 647 error
           return {
             content: [{
               type: "text",
@@ -299,6 +301,8 @@ export async function startServer(repoPath: string): Promise<void> {
         }
       }
     );
+    // The unused 'err' variable (previously around line 291) is in the catch block above.
+    // The error message for switch_suggestion_model (previously around line 602) is also above.
 
     // Register deepseek_diagnostic tool - REMOVED
     // Register force_deepseek_connection tool - REMOVED
@@ -759,14 +763,14 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
         
         const queryFromParams: string = typeof normalizedParams.query === 'string' 
-          ? normalizedParams.query as string
+          ? normalizedParams.query // Removed 'as string'
           : (() => {
               logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
               return "default code suggestion query";
             })();
 
         const sessionIdFromParams: string | undefined = typeof normalizedParams.sessionId === 'string'
-          ? normalizedParams.sessionId as string
+          ? normalizedParams.sessionId // Removed 'as string'
           : (() => {
               if (normalizedParams.sessionId !== undefined) {
                 logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });
