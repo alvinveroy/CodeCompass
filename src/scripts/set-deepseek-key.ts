@@ -59,6 +59,5 @@ function main(): void { // Removed async, added void return type
 main().catch((error: unknown) => {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   console.error('Unhandled error:', error instanceof Error ? error.message : String(error)); // This is line 59 error
-  // The eslint-disable directive on line 60 was reported as unused.
   process.exit(1);
 });

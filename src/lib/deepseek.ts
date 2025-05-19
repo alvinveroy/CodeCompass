@@ -135,7 +135,8 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         response: axiosError.response ? {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
-          data: typeof axiosError.response.data === 'string' ? axiosError.response.data : JSON.stringify(axiosError.response.data) // Disable comment was here, error persists, assuming it's a false positive for this logging context.
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          data: typeof axiosError.response.data === 'string' ? axiosError.response.data : JSON.stringify(axiosError.response.data)
         } : 'No response data',
         request: axiosError.request ? 'Request present' : 'No request data'
       });
@@ -155,8 +156,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       return false;
     }
   } catch (error: unknown) {
-    // The eslint-disable directive for no-unsafe-assignment on line 138 was reported as unused.
-    // This block seems fine.
+    // Unused eslint-disable directive removed from here.
     const err = error instanceof Error ? error : new Error(String(error));
     const axiosError = error as import('axios').AxiosError<{ message?: string }>;
     
