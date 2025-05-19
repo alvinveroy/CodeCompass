@@ -794,7 +794,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         // normalizedParams is Record<string, unknown>, so normalizedParams.query is unknown.
 
         let queryFromParams = "default code suggestion query";
-        const rawQuery = normalizedParams.query; // rawQuery is unknown
+        const rawQuery: unknown = normalizedParams.query; // Explicitly type rawQuery as unknown
         if (typeof rawQuery === 'string') {
             queryFromParams = rawQuery;
         } else if (rawQuery !== undefined) {
@@ -804,7 +804,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
 
         let sessionIdFromParams: string | undefined = undefined;
-        const rawSessionId = normalizedParams.sessionId; // rawSessionId is unknown
+        const rawSessionId: unknown = normalizedParams.sessionId; // Explicitly type rawSessionId as unknown
         if (typeof rawSessionId === 'string') {
             sessionIdFromParams = rawSessionId;
         } else if (rawSessionId !== undefined) {

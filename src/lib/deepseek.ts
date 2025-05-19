@@ -133,7 +133,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       }
 
       // Safely extract Axios-specific error details for logging
-      const logPayload: DeepSeekErrorLogPayload = { message: err.message };
+      const logPayload: DeepSeekErrorLogPayload = { message: String(err.message) }; // Explicitly treat err.message as string
 
       if (axios.isAxiosError(requestError)) {
         logPayload.code = requestError.code;
