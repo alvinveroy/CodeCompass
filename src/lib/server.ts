@@ -102,10 +102,22 @@ export async function startServer(repoPath: string): Promise<void> {
       vendor: "CodeCompass",
       capabilities: {
         resources: {
-          "repo://structure": {},
-          "repo://files/*": {},
-          "repo://health": {},
-          "repo://version": {},
+          "repo://structure": {
+            name: "repo://structure",
+            description: "Lists all files in the current Git repository."
+          },
+          "repo://files/*": {
+            name: "repo://files/*",
+            description: "Retrieves the content of a specific file from the repository. The wildcard * must be replaced with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'."
+          },
+          "repo://health": {
+            name: "repo://health",
+            description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access)."
+          },
+          "repo://version": {
+            name: "repo://version",
+            description: "Provides the current version of the CodeCompass server."
+          },
         },
         tools: {
           search_code: {},
