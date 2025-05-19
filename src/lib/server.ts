@@ -110,7 +110,8 @@ export async function startServer(repoPath: string): Promise<void> {
           "repo://files/*": {
             name: "Repository File Content",
             description: "Retrieves the content of a specific file from the repository. The wildcard * must be replaced with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
-            mimeType: "text/plain" // Default, actual content type might vary
+            mimeType: "text/plain", // Default, actual content type might vary
+            template: true // Mark this resource as templated
           },
           "repo://health": {
             name: "Server Health Status",
