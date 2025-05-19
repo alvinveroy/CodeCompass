@@ -107,11 +107,17 @@ export async function startServer(repoPath: string): Promise<void> {
             description: "Lists all files in the current Git repository.",
             mimeType: "text/plain"
           },
-          "repo://files/*": {
+          "repo://files/{filepath}": {
             name: "Repository File Content",
-            description: "Retrieves the content of a specific file from the repository. The wildcard * must be replaced with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
+            description: "Retrieves the content of a specific file from the repository. Replace {filepath} with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
             mimeType: "text/plain", // Default, actual content type might vary
-            template: true // Mark this resource as templated
+            template: true,
+            parameters: {
+              filepath: {
+                type: "string",
+                description: "The path to the file relative to the repository root."
+              }
+            }
           },
           "repo://health": {
             name: "Server Health Status",
@@ -173,8 +179,12 @@ export async function startServer(repoPath: string): Promise<void> {
       }
     });
 
-    server.resource("repo://files/*", "repo://files/*", {}, async (uri: URL) => {
-      const relativeFilepath = uri.pathname.replace(/^\/files\//, "").trim();
+    server.resource(
+      "repo://files/{filepath}", 
+      "Repository File Content", 
+      z.object({ filepath: z.string().describe("The path to the file relative to the repository root.") }), 
+      async (params: { filepath: string }, uri: URL) => {
+      const relativeFilepath = params.filepath.trim();
 
       if (!relativeFilepath) {
         const errMsg = "File path cannot be empty.";
