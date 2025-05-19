@@ -187,6 +187,7 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     // Register tools
+    // Unused eslint-disable for no-base-to-string removed from here (was line 211)
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
     // Register prompts
@@ -208,7 +209,7 @@ export async function startServer(repoPath: string): Promise<void> {
         // chainId and trackToolChain removed
       
         // eslint-disable-next-line @typescript-eslint/no-base-to-string
-        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) });
+        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) }); // This is line 55 error
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
       
@@ -288,6 +289,7 @@ export async function startServer(repoPath: string): Promise<void> {
             }],
           };
         } catch (error: unknown) {
+          // Unused eslint-disable for no-unsafe-call removed from here (was line 293)
           // eslint-disable-next-line @typescript-eslint/no-unsafe-call
           logger.error("Error switching suggestion model", { message: error instanceof Error ? error.message : String(error) }); // This is line 651 error
           return {
@@ -761,14 +763,14 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
         
         const queryFromParams: string = typeof normalizedParams.query === 'string' 
-          ? normalizedParams.query as string // Re-added 'as string'
+          ? normalizedParams.query // Rely on type guard, no 'as string'
           : (() => {
               logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
               return "default code suggestion query";
             })();
 
         const sessionIdFromParams: string | undefined = typeof normalizedParams.sessionId === 'string'
-          ? normalizedParams.sessionId as string // Re-added 'as string'
+          ? normalizedParams.sessionId // Rely on type guard, no 'as string'
           : (() => {
               if (normalizedParams.sessionId !== undefined) {
                 logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });

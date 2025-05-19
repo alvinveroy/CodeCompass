@@ -136,13 +136,12 @@ export async function testDeepSeekConnection(): Promise<boolean> {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          data: typeof axiosError.response.data === 'string' ? axiosError.response.data : JSON.stringify(axiosError.response.data)
+          data: typeof axiosError.response.data === 'string' ? axiosError.response.data : JSON.stringify(axiosError.response.data) // This is line 112 error
         } : 'No response data',
         request: axiosError.request ? 'Request present' : 'No request data'
       });
       
       // Check for specific error types
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const typedError = requestError as import('axios').AxiosError<{ message?: string }>; // Keep this cast for typed error handling
       
       if (typedError.code === 'ECONNREFUSED') {
@@ -156,7 +155,6 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       return false;
     }
   } catch (error: unknown) {
-    // Unused eslint-disable directive removed from here.
     const err = error instanceof Error ? error : new Error(String(error));
     const axiosError = error as import('axios').AxiosError<{ message?: string }>;
     

@@ -446,7 +446,7 @@ function createTestProvider(suggestionProvider: string): LLMProvider {
     // Override checkConnection for testing
     provider.checkConnection = async () => {
       // eslint-disable-next-line @typescript-eslint/await-thenable
-      await deepseek.testDeepSeekConnection(); // Call original for spy - this is line 475 error
+      await deepseek.testDeepSeekConnection(); // Call original for spy - This is line 475 error
       return true;
     };
   } else { // ollama or other defaults are handled by instantiateProvider
