@@ -651,7 +651,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   server.tool(
     "get_changelog",
     "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
-    z.object({}), // Parameters schema
+    z.object({}).shape, // Parameters schema: pass the shape for an empty schema
     async () => { // Handler
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
