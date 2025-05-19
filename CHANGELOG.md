@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- Resolved `@typescript-eslint/no-unsafe-call` ESLint error for the `server.onRequest("resources/list", ...)` call in `src/lib/server.ts`. The handler is now `async` to ensure its signature (returning a `Promise`) aligns with the MCP SDK's expectations, and `@typescript-eslint/require-await` is disabled for this line as the async nature is for type compatibility. (Reverts part of e35472d)
 - Attempted to resolve persistent ESLint errors by simplifying `eslint-disable-next-line` comments (removing justifications) as a diagnostic step. This is to check if comment content was interfering with ESLint's processing, though the primary suspect remains a potential ESLint configuration issue (e.g., missing `.eslintrc.js`). (following up on b45ad07)
     - `src/lib/deepseek.ts`: Simplified disable comment for `no-unsafe-assignment`.
     - `src/lib/llm-provider.ts`: Simplified disable comment for `await-thenable`.

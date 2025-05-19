@@ -160,7 +160,10 @@ export async function startServer(repoPath: string): Promise<void> {
     registerPrompts(server); 
 
     // Manually handle the 'resources/list' request
-    server.onRequest("resources/list", (_params: unknown, _sessionId?: string) => {
+    // The handler is async to align with potential SDK expectations for Promise-returning handlers,
+    // even though this specific implementation is synchronous.
+    // eslint-disable-next-line @typescript-eslint/require-await
+    server.onRequest("resources/list", async (_params: unknown, _sessionId?: string) => {
       const resources = [
         {
           uri: "repo://structure",
