@@ -160,7 +160,7 @@ export async function startServer(repoPath: string): Promise<void> {
     registerPrompts(server); 
 
     // Manually handle the 'resources/list' request
-    server.onRequest("resources/list", async (_params: unknown, _sessionId?: string) => {
+    server.onRequest("resources/list", (_params: unknown, _sessionId?: string) => {
       const resources = [
         {
           uri: "repo://structure",
