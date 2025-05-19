@@ -133,7 +133,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       }
 
       // Safely extract Axios-specific error details for logging
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- err is Error, err.message is string. DeepSeekErrorLogPayload.message is string. Assignment is safe.
+       
       const logPayload: DeepSeekErrorLogPayload = { message: String(err.message) };
 
       if (axios.isAxiosError(requestError)) {
