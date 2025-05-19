@@ -162,8 +162,13 @@ export async function startServer(repoPath: string): Promise<void> {
     // Manually handle the 'resources/list' request
     // The handler is async to align with potential SDK expectations for Promise-returning handlers,
     // even though this specific implementation is synchronous.
+    interface McpResourcesListParams {
+      id?: string | number | null; // JSON-RPC request ID
+      // Add other specific params for resources/list if any are defined by MCP spec
+    }
     // eslint-disable-next-line @typescript-eslint/require-await
-    server.onRequest("resources/list", async (_params: unknown, _sessionId?: string) => {
+    server.onRequest("resources/list", async (_params: McpResourcesListParams, _sessionId?: string) => {
+      const requestId = _params.id;
       const resources = [
         {
           uri: "repo://structure",
@@ -190,9 +195,12 @@ export async function startServer(repoPath: string): Promise<void> {
           mimeType: "text/plain" // The handler for repo://version returns plain text
         }
       ];
-      logger.info("Responding to resources/list with manually constructed list of resources.");
-      // The SDK should wrap this array in the standard JSON-RPC response structure.
-      return resources;
+      logger.info("Responding to resources/list with manually constructed full JSON-RPC response.");
+      return {
+        jsonrpc: "2.0",
+        result: resources,
+        id: requestId
+      };
     });
     
     server.tool(
