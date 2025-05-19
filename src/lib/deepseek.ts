@@ -123,41 +123,52 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       return false;
     } catch (requestError: unknown) {
       const err = requestError instanceof Error ? requestError : new Error(String(requestError));
-      const axiosError = requestError as { 
-        code?: string; 
-        response?: { status: number; statusText: string; data: unknown }; 
-        request?: unknown 
-      };
-      
-      logger.error("DeepSeek API connection test failed", {
-        message: err.message,
-        code: axiosError.code,
-        response: axiosError.response ? {
-          status: axiosError.response.status,
-          statusText: axiosError.response.statusText,
-           
-          data: (() => {
-            const responseData = axiosError.response?.data;
-            if (typeof responseData === 'string') return responseData;
-            if (responseData === null || responseData === undefined) return String(responseData);
-            return JSON.stringify(responseData);
-          })()
-        } : 'No response data',
-        request: axiosError.request ? 'Request present' : 'No request data'
-      });
-      
-      // Check for specific error types
-       
-      const typedError = requestError as import('axios').AxiosError<{ message?: string }>; 
-      
-      if (typedError.code === 'ECONNREFUSED') {
-        logger.error("Connection refused. Check if the DeepSeek API endpoint is correct and accessible.");
-      } else if (typedError.response && typedError.response.status === 401) {
-        logger.error("Authentication failed. Check your DeepSeek API key.");
-      } else if (typedError.response && typedError.response.status === 404) {
-        logger.error("API endpoint not found. Check the DeepSeek API URL.");
+
+      // Safely extract Axios-specific error details for logging
+      let logPayload: {
+        message: string;
+        code?: string;
+        response?: { status: number; statusText: string; data: string; } | string;
+        request?: string;
+      } = { message: err.message };
+
+      if (axios.isAxiosError(requestError)) {
+        logPayload.code = requestError.code;
+        logPayload.request = requestError.request ? 'Request present' : 'No request data';
+
+        if (requestError.response) {
+          let responseDataString: string;
+          try {
+            responseDataString = typeof requestError.response.data === 'string'
+              ? requestError.response.data
+              : JSON.stringify(requestError.response.data);
+          } catch (e) {
+            responseDataString = "[Unserializable response data]";
+          }
+          logPayload.response = {
+            status: requestError.response.status,
+            statusText: requestError.response.statusText,
+            data: responseDataString,
+          };
+        } else {
+          logPayload.response = 'No response data';
+        }
+
+        // Check for specific error types using the narrowed requestError
+        if (requestError.code === 'ECONNREFUSED') {
+          logger.error("Connection refused. Check if the DeepSeek API endpoint is correct and accessible.");
+        } else if (requestError.response && requestError.response.status === 401) {
+          logger.error("Authentication failed. Check your DeepSeek API key.");
+        } else if (requestError.response && requestError.response.status === 404) {
+          logger.error("API endpoint not found. Check the DeepSeek API URL.");
+        }
+      } else {
+        // For non-Axios errors
+        logPayload.response = 'No response data (not an Axios error)';
+        logPayload.request = 'No request data (not an Axios error)';
       }
-      
+
+      logger.error("DeepSeek API connection test failed", logPayload);
       return false;
     }
   } catch (error: unknown) {
