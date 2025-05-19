@@ -140,6 +140,7 @@ export async function startServer(repoPath: string): Promise<void> {
           // force_deepseek_connection: {}, // Removed
           // provide_feedback and analyze_code_problem also removed by not being registered in registerTools
         },
+        prompts: {}, // Explicitly declare prompts capability
         // prompts capability is now handled by individual server.prompt() registrations
       },
     });
@@ -632,7 +633,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   server.tool(
     "get_changelog",
     "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
-    {},
+    z.object({}), // Explicitly use z.object({}) for no parameters
     async () => {
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
