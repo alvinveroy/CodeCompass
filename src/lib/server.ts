@@ -208,7 +208,7 @@ export async function startServer(repoPath: string): Promise<void> {
       async (params: unknown) => {
         // chainId and trackToolChain removed
       
-         
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string -- The code uses JSON.stringify for objects, preventing '[object Object]'.
         logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) });
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
@@ -933,12 +933,12 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         // Ensure query exists
         if (typeof parsedParams === 'object' && parsedParams !== null && !('query' in parsedParams && typeof parsedParams.query === 'string')) {
           // If query is missing or not a string, set a default
-           
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Assigning to a property of Record<string, unknown> after type checks.
           (parsedParams as { query?: unknown }).query = "repository context";
           logger.warn("No query provided or query was not a string for get_repository_context, using default query.");
         } else if (typeof parsedParams !== 'object' || parsedParams === null) {
           // If parsedParams is not an object at all, create it with a default query
-           
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Reassigning Record<string, unknown> to a compatible literal.
           parsedParams = { query: "repository context" };
           logger.warn("parsedParams was not an object for get_repository_context, initialized with default query.");
         }
