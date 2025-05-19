@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { UriTemplate } from "@modelcontextprotocol/sdk/types"; // Import UriTemplate
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
@@ -182,10 +181,10 @@ export async function startServer(repoPath: string): Promise<void> {
 
     server.resource(
       "Repository File Content",
-      { uriTemplate: new UriTemplate("repo://files/{filepath}") }, // Instantiate UriTemplate
+      new UriTemplate("repo://files/{filepath}"), // Pass UriTemplate instance directly
       {}, // Empty metadata object
-      async (params: { filepath: string }, uri: URL) => { // SDK should infer params type from capabilities
-      const relativeFilepath = params.filepath.trim();
+      async (uri: URL, variables, extra) => { // Updated parameter types to match expected interface
+      const relativeFilepath = variables['filepath']?.trim() ?? '';
 
       if (!relativeFilepath) {
         const errMsg = "File path cannot be empty.";
