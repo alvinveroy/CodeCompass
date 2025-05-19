@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- Addressed multiple ESLint issues across the codebase:
+    - `src/lib/deepseek.ts`: Corrected `no-unsafe-assignment` for `axiosError.response.data` by ensuring safe stringification and removed an unused `eslint-disable` directive.
+    - `src/lib/llm-provider.ts`: Resolved `await-thenable` false positive by making Promise explicit before awaiting and removed an unused `eslint-disable` directive.
+    - `src/lib/repository.ts`: Fixed `require-await` by removing `async` from a non-asynchronous `map` callback in `git.walk`.
+    - `src/lib/server.ts`: Handled `no-base-to-string` for `params` logging with a targeted `eslint-disable`, changed `_context: any` to `_context: unknown`, bypassed `no-unsafe-assignment` for trusted type assertions with comments, and removed unused `eslint-disable` directives.
+    - `src/scripts/set-deepseek-key.ts`: Removed an unused `eslint-disable` directive and addressed a potential `no-floating-promises` warning.
 - Resolved TypeScript build error (TS2345: Argument of type 'ZodObject<{}, "strip", ZodTypeAny, {}, {}>' is not assignable to parameter of type 'ZodRawShape') for the `get_changelog` tool in `src/lib/server.ts` by changing its parameter schema definition from `z.object({})` to an empty object `{}` to correctly represent no parameters.
 - Resolved TypeScript build error (TS2769: No overload matches this call) for the `get_changelog` tool in `src/lib/server.ts` by changing its registration from `server.tool()` to the more explicit `server.addTool()` method. The `parameters` property for `addTool` is set to `z.object({})` for this parameter-less tool. (24d9c00)
 - Resolved TypeScript build errors (TS2554: Expected 3-4 arguments, but got 5) for `server.resource` and `server.tool` calls in `src/lib/server.ts`.
