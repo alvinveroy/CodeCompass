@@ -275,7 +275,7 @@ export async function startServer(repoPath: string): Promise<void> {
     
     await server.connect(transport);
     
-    });
+    // }); // This was misplaced, removed. The try block continues.
     
     await new Promise<void>((resolve) => {
       process.on('SIGINT', () => {
