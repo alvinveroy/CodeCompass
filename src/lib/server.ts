@@ -151,14 +151,52 @@ export async function startServer(repoPath: string): Promise<void> {
     }
     
     server.resource("Server Health Status", "repo://health", async () => {
-      const status = {
-        ollama: await checkOllama().then(() => "healthy").catch(() => "unhealthy"),
-        qdrant: await qdrantClient.getCollections().then(() => "healthy").catch(() => "unhealthy"),
-        repository: await validateGitRepository(repoPath) ? "healthy" : "unhealthy",
-        version: VERSION,
-        timestamp: new Date().toISOString()
-      };
-      return { contents: [{ uri: "repo://health", text: JSON.stringify(status, null, 2) }] };
+      const healthUri = "repo://health";
+      try {
+        // More robust error capturing for individual checks
+        let ollamaStatus = "unhealthy";
+        try {
+          await checkOllama();
+          ollamaStatus = "healthy";
+        } catch (err) {
+          logger.warn(`Ollama health check failed during repo://health: ${err instanceof Error ? err.message : String(err)}`);
+          // ollamaStatus remains "unhealthy"
+        }
+
+        let qdrantStatus = "unhealthy";
+        try {
+          await qdrantClient.getCollections(); // This just checks if the call succeeds
+          qdrantStatus = "healthy";
+        } catch (err) {
+          logger.warn(`Qdrant health check failed during repo://health: ${err instanceof Error ? err.message : String(err)}`);
+          // qdrantStatus remains "unhealthy"
+        }
+        
+        // validateGitRepository already logs its own warnings and should return true/false
+        const repositoryStatus = await validateGitRepository(repoPath) ? "healthy" : "unhealthy";
+
+        const status = {
+          ollama: ollamaStatus,
+          qdrant: qdrantStatus,
+          repository: repositoryStatus,
+          version: VERSION,
+          timestamp: new Date().toISOString()
+        };
+        return { contents: [{ uri: healthUri, text: JSON.stringify(status, null, 2) }] };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`Critical error in repo://health resource handler: ${errorMessage}`);
+        const errorPayload = {
+          error: "Failed to retrieve complete health status due to a critical error.",
+          details: errorMessage,
+          version: VERSION,
+          timestamp: new Date().toISOString(),
+          ollama: "unknown", 
+          qdrant: "unknown",
+          repository: "unknown"
+        };
+        return { contents: [{ uri: healthUri, text: JSON.stringify(errorPayload, null, 2) }] };
+      }
     });
     
     server.resource("Server Version", "repo://version", () => {
