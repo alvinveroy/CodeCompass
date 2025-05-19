@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- Resolved TypeScript build error (`No overload matches this call`) for the `get_changelog` tool in `src/lib/server.ts` by casting its output content items to `any`. This satisfies the MCP SDK's strict `ToolResponseContentItem` type checking, specifically regarding potential index signatures, while ensuring correct runtime behavior for text content. (aeee3ec)
 - Resolved MCP client serialization error (`Serialization(Error("data did not match any variant of untagged enum Response"))`) for `resources/list` requests by ensuring the `get_changelog` tool (which accepts no parameters) uses `z.object({})` with a type assertion (`as any`) for its input schema in `src/lib/server.ts`. This satisfies both TypeScript build requirements and MCP SDK runtime serialization expectations. (Related to 4480806)
 - Validated `OLLAMA_HOST` and `QDRANT_HOST` environment variables to ensure they are proper URLs, falling back to defaults and logging a warning if an invalid URL is provided. This resolves "Invalid URL" errors when connecting to Ollama/Qdrant. (2accc79)
 - Corrected the input schema for the `get_changelog` tool in `src/lib/server.ts` to use `z.object({})` instead of an empty JavaScript object. This resolves MCP serialization errors (`Serialization(Error("data did not match any variant of untagged enum Response"))`) when clients request the list of available resources.

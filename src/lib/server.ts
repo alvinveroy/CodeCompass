@@ -643,7 +643,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           content: [{
             type: "text",
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
-          }],
+          } as any], // Cast content item to any for TS compatibility
         };
       } catch (error) {
         logger.error("Failed to read changelog", { error });
@@ -651,7 +651,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           content: [{
             type: "text",
             text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
-          }],
+          } as any], // Cast content item to any for TS compatibility
         };
       }
     }
