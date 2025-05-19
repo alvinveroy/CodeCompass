@@ -644,7 +644,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           }],
         };
       } catch (error: unknown) {
-        logger.error("Failed to read changelog", { message: error instanceof Error ? error.message : String(error) });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error("Failed to read changelog", { message: errorMessage });
         return {
           content: [{
             type: "text" as const,
