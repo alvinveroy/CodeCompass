@@ -180,8 +180,7 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     server.resource(
-      "Repository File Content",
-      {}, // Add empty metadata object
+      "Repository File Content", "repo://files/{filepath}",
       async (params: { filepath: string }, uri: URL) => { 
       const relativeFilepath = params.filepath.trim();
 
