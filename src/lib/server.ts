@@ -151,7 +151,7 @@ export async function startServer(repoPath: string): Promise<void> {
     }
     
     // Add health check resource
-    server.resource("repo://health", "repo://health", {}, { title: "Repository Health" }, async () => {
+    server.resource("repo://health", "repo://health", {}, async () => {
       const status = {
         ollama: await checkOllama().then(() => "healthy").catch(() => "unhealthy"),
         qdrant: await qdrantClient.getCollections().then(() => "healthy").catch(() => "unhealthy"),
@@ -167,10 +167,10 @@ export async function startServer(repoPath: string): Promise<void> {
     // Add provider status resource - REMOVED
     
     // Add version resource
-    server.resource("repo://version", "repo://version", {}, { title: "Application Version" }, async () => {
+    server.resource("repo://version", "repo://version", {}, async () => {
       return { contents: [{ uri: "repo://version", text: VERSION }] };
     });
-    server.resource("repo://structure", "repo://structure", {}, { title: "Repository File Structure" }, async () => {
+    server.resource("repo://structure", "repo://structure", {}, async () => {
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
@@ -178,7 +178,7 @@ export async function startServer(repoPath: string): Promise<void> {
       return { contents: [{ uri: "repo://structure", text: files.join("\n") }] };
     });
 
-    server.resource("repo://files/*", "repo://files/*", {}, { title: "Repository File Content" }, async (uri: URL) => {
+    server.resource("repo://files/*", "repo://files/*", {}, async (uri: URL) => {
       const filepath = uri.pathname.replace(/^\/files\//, "");
       try {
         const content = await fs.readFile(path.join(repoPath, filepath), "utf8");
@@ -632,10 +632,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add get_changelog tool
   server.tool(
     "get_changelog",
-    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
-    {}, // Empty ZodRawShape for no parameters
-    { title: "Get Changelog" }, // Annotations object
-    async () => {
+    {}, // paramsSchema: Empty ZodRawShape for no parameters
+    async () => { // handler
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
         const changelog = await fs.readFile(changelogPath, 'utf8');
@@ -655,6 +653,10 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           }],
         };
       }
+    },
+    { // optionsObject
+      description: "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
+      annotations: { title: "Get Changelog" }
     }
   );
   
