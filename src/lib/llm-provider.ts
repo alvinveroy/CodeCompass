@@ -560,7 +560,6 @@ async function checkProviderAvailability(provider: string, normalizedModel: stri
         logger.debug(`${provider} provider is available for model '${normalizedModel}'.`);
     }
 
-
     // Test flag to force availability (useful for CI or specific test scenarios)
     if (process.env.FORCE_PROVIDER_AVAILABLE === 'true' && providerInstance) {
         logger.warn(`Forcing provider '${provider}' availability to true for testing purposes.`);
