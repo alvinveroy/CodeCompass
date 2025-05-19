@@ -151,7 +151,8 @@ export async function startServer(repoPath: string): Promise<void> {
     }
     
     // Add health check resource
-    server.resource("repo://health", "repo://health", {}, async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    server.resource("repo://health", "repo://health", z.object({}) as any, async () => {
       const status = {
         ollama: await checkOllama().then(() => "healthy").catch(() => "unhealthy"),
         qdrant: await qdrantClient.getCollections().then(() => "healthy").catch(() => "unhealthy"),
@@ -167,10 +168,12 @@ export async function startServer(repoPath: string): Promise<void> {
     // Add provider status resource - REMOVED
     
     // Add version resource
-    server.resource("repo://version", "repo://version", {}, async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    server.resource("repo://version", "repo://version", z.object({}) as any, async () => {
       return { contents: [{ uri: "repo://version", text: VERSION }] };
     });
-    server.resource("repo://structure", "repo://structure", {}, async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    server.resource("repo://structure", "repo://structure", z.object({}) as any, async () => {
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
@@ -178,7 +181,8 @@ export async function startServer(repoPath: string): Promise<void> {
       return { contents: [{ uri: "repo://structure", text: files.join("\n") }] };
     });
 
-    server.resource("repo://files/*", "repo://files/*", {}, async (uri: URL) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    server.resource("repo://files/*", "repo://files/*", z.object({}) as any, async (uri: URL) => {
       const filepath = uri.pathname.replace(/^\/files\//, "");
       try {
         const content = await fs.readFile(path.join(repoPath, filepath), "utf8");
