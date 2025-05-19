@@ -52,8 +52,17 @@ export function normalizeToolParams(params: unknown): Record<string, unknown> {
   if (params === null || params === undefined) {
     return { query: "" };
   }
-  // For other primitive types (number, boolean), wrap them
-  return { query: String(params) };
+  // At this point, params can be boolean, number, bigint, or symbol.
+  // For these types, String() or .toString() is the correct and safe way to convert.
+  if (typeof params === 'number' || typeof params === 'boolean' || typeof params === 'bigint') {
+    return { query: String(params) };
+  }
+  if (typeof params === 'symbol') {
+    return { query: params.toString() }; // Symbols require .toString()
+  }
+  // Fallback for any other unexpected type, though TS should prevent this with `unknown`
+  logger.warn(`normalizeToolParams: Encountered unexpected param type at end of function: ${typeof params}. Defaulting query string.`);
+  return { query: `[Unexpected type: ${typeof params}]` };
 }
 
 // Start Server
@@ -215,7 +224,7 @@ export async function startServer(repoPath: string): Promise<void> {
           } else {
             paramsString = String(params);
           }
-        } catch (e) {
+        } catch { // 'e' removed as it's unused
           paramsString = "[Unserializable parameters]";
         }
         logger.info("Received params for switch_suggestion_model", { params: paramsString });
@@ -781,21 +790,24 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        const queryFromParams: string = typeof normalizedParams.query === 'string' 
-          ? normalizedParams.query // Rely on type guard, no 'as string'
-          : (() => {
-              logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
-              return "default code suggestion query";
-            })();
+        let queryFromParams: string = "default code suggestion query";
+        const rawQuery = normalizedParams.query; 
+        if (typeof rawQuery === 'string') {
+            queryFromParams = rawQuery;
+        } else if (rawQuery !== undefined) {
+            logger.warn("Query parameter is not a string in generate_suggestion.", { receivedQuery: rawQuery });
+        } else {
+            // This case should ideally be covered by the block above that sets a default if !normalizedParams.query
+            logger.warn("Query parameter is missing in generate_suggestion and was not defaulted.", { normalizedParams });
+        }
 
-        const sessionIdFromParams: string | undefined = typeof normalizedParams.sessionId === 'string'
-          ? normalizedParams.sessionId // Rely on type guard, no 'as string'
-          : (() => {
-              if (normalizedParams.sessionId !== undefined) {
-                logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });
-              }
-              return undefined;
-            })();
+        let sessionIdFromParams: string | undefined = undefined;
+        const rawSessionId = normalizedParams.sessionId; 
+        if (typeof rawSessionId === 'string') {
+            sessionIdFromParams = rawSessionId;
+        } else if (rawSessionId !== undefined) {
+            logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: rawSessionId });
+        }
       
       // Get or create session
       const session = getOrCreateSession(sessionIdFromParams, repoPath);

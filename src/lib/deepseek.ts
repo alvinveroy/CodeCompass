@@ -142,7 +142,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
             responseDataString = typeof requestError.response.data === 'string'
               ? requestError.response.data
               : JSON.stringify(requestError.response.data);
-          } catch (e) {
+          } catch { // 'e' removed as it's unused
             responseDataString = "[Unserializable response data]";
           }
           logPayload.response = {
@@ -173,15 +173,23 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     }
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    const axiosError = error as import('axios').AxiosError<{ message?: string }>; 
     
-    logger.error("DeepSeek API connection test failed", {
+    let errorCode: string | undefined;
+    let errorResponseData: unknown | undefined;
+    let errorResponseStatus: number | undefined;
+
+    if (axios.isAxiosError(error)) {
+        errorCode = error.code;
+        if (error.response) {
+            errorResponseData = error.response.data;
+            errorResponseStatus = error.response.status;
+        }
+    }
+    
+    logger.error("DeepSeek API connection test failed (outer catch)", {
       message: err.message,
-      response: axiosError.response ? {
-        status: axiosError.response.status,
-        data: axiosError.response.data
-      } : null,
-      code: axiosError.code
+      code: errorCode,
+      response: errorResponseStatus !== undefined ? { status: errorResponseStatus, data: errorResponseData } : null,
     });
     return false;
   }
