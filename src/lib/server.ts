@@ -292,50 +292,35 @@ export async function startServer(repoPath: string): Promise<void> {
         model: z.string().describe("The suggestion model to switch to (e.g., 'llama3.1:8b', 'deepseek-coder', 'gpt-4')."),
         provider: z.string().optional().describe("The LLM provider for the model (e.g., 'ollama', 'deepseek', 'openai', 'gemini', 'claude'). If omitted, an attempt will be made to infer it.")
       },
-      async (params: unknown) => {
-      
-        let paramsString: string;
-        try {
-          if (typeof params === 'object' && params !== null) {
-            paramsString = JSON.stringify(params);
-          } else {
-            paramsString = String(params);
-          }
-        } catch {
-          paramsString = "[Unserializable parameters]";
-        }
-        logger.info("Received params for switch_suggestion_model", { params: paramsString });
-        const normalizedParams = normalizeToolParams(params);
-        logger.debug("Normalized params for switch_suggestion_model", typeof normalizedParams === 'object' && normalizedParams !== null ? JSON.stringify(normalizedParams) : String(normalizedParams));
+      async (args: { model: string; provider?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        logger.info("Received args for switch_suggestion_model", { args });
 
-        let modelToSwitchTo: string;
-        let providerToSwitchTo: string | undefined;
+        const modelToSwitchTo = args.model;
+        const providerToSwitchTo = args.provider?.toLowerCase(); // provider is optional
 
-        if (normalizedParams && typeof normalizedParams.model === 'string') {
-          modelToSwitchTo = normalizedParams.model;
-        } else {
-          logger.error("Invalid or missing 'model' parameter for switch_suggestion_model.", { normalizedParams });
+        if (!modelToSwitchTo || typeof modelToSwitchTo !== 'string' || modelToSwitchTo.trim() === "") {
+          const errorMsg = "Invalid or missing 'model' parameter. Please provide a non-empty model name string.";
+          logger.error(errorMsg, { receivedModel: modelToSwitchTo });
           return {
             content: [{
               type: "text",
-              text: "# Error Switching Suggestion Model\n\nInvalid or missing 'model' parameter. Please provide the model name as a string.",
+              text: `# Error Switching Suggestion Model\n\n${errorMsg}`,
             }],
           };
         }
 
-        if (normalizedParams && typeof normalizedParams.provider === 'string') {
-          providerToSwitchTo = normalizedParams.provider.toLowerCase();
-        } else if (normalizedParams && normalizedParams.provider !== undefined) {
-          logger.error("Invalid 'provider' parameter for switch_suggestion_model. It must be a string if provided.", { normalizedParams });
-          return {
-            content: [{
-              type: "text",
-              text: "# Error Switching Suggestion Model\n\nInvalid 'provider' parameter. It must be a string if provided, or omitted.",
-            }],
-          };
+        if (args.provider !== undefined && (typeof args.provider !== 'string' || args.provider.trim() === "")) {
+            const errorMsg = "Invalid 'provider' parameter. If provided, it must be a non-empty string.";
+            logger.error(errorMsg, { receivedProvider: args.provider });
+            return {
+                content: [{
+                    type: "text",
+                    text: `# Error Switching Suggestion Model\n\n${errorMsg}`,
+                }],
+            };
         }
       
-        logger.info(`Requested model switch: Model='${modelToSwitchTo}', Provider='${providerToSwitchTo || "infer"}'`);
+        logger.info(`Requested model switch: Model='${modelToSwitchTo}', Provider='${providerToSwitchTo || "(infer)"}'`);
         
         try {
           // The switchSuggestionModel function in llm-provider.ts now handles provider inference 
@@ -478,19 +463,18 @@ function registerTools( // Removed async
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       // maxSteps removed
     },
-    async (params: unknown) => {
+    async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
       logger.info(`Tool 'agent_query' execution started.`);
-      
-      logger.info("Received params for agent_query", { params });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for agent_query", normalizedParams);
-      
-      if (!normalizedParams.query && typeof normalizedParams === 'object') {
-        normalizedParams.query = "repository information";
-        logger.warn("No query provided for agent_query, using default");
+      // args are already parsed by Zod via McpServer based on the schema above.
+      // No need for normalizeToolParams here if using args directly.
+      logger.info("Received args for agent_query", { args });
+
+      const query = args.query || "repository information"; // Default if query is empty string after parsing
+      const initialSessionId = args.sessionId;
+
+      if (args.query === undefined || args.query === null || args.query.trim() === "") {
+        logger.warn("No query provided or query is empty for agent_query, using default 'repository information'");
       }
-      
-      const { query, sessionId: initialSessionId } = normalizedParams as { query: string; sessionId?: string };
     
     try {
       configService.reloadConfigsFromFile(true);
@@ -595,40 +579,21 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
       query: z.string().describe("The search query to find relevant code in the repository"),
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
     },
-    async (params: unknown) => {
+    async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
       logger.info(`Tool 'search_code' execution started.`);
-        
-      logger.info("Received params for search_code", { params });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for search_code", normalizedParams);
-        
-      if (!normalizedParams.query && typeof normalizedParams === 'object') {
-        normalizedParams.query = "code search";
-        logger.warn("No query provided for search_code, using default");
-      }
-        
-      const queryValueSc = normalizedParams.query;
-      const sessionIdValueSc = normalizedParams.sessionId;
+      logger.info("Received args for search_code", { args });
 
-      let searchQuery: string;
-      if (typeof queryValueSc === 'string') {
-        searchQuery = queryValueSc;
-      } else {
-        logger.warn("Query parameter is not a string or is missing in search_code.", { receivedQuery: queryValueSc });
-        searchQuery = "default code search"; 
-      }
-
-      let searchSessionId: string | undefined;
-      if (typeof sessionIdValueSc === 'string') {
-        searchSessionId = sessionIdValueSc;
-      } else if (sessionIdValueSc !== undefined) {
-        logger.warn("SessionID parameter is not a string in search_code.", { receivedSessionId: sessionIdValueSc });
+      const searchQuery = args.query || "code search"; // Default if query is empty string
+      const searchSessionId = args.sessionId;
+      
+      if (args.query === undefined || args.query === null || args.query.trim() === "") {
+        logger.warn("No query provided or query is empty for search_code, using default 'code search'");
       }
 
     try {
       const session = getOrCreateSession(searchSessionId, repoPath);
     
-      logger.info("Extracted query for search_code", { query: searchQuery, sessionId: session.id });
+      logger.info("Using query for search_code", { query: searchQuery, sessionId: session.id });
     
     const isGitRepo = await validateGitRepository(repoPath);
     const files = isGitRepo
@@ -716,7 +681,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     {
       annotations: { title: "Get Changelog" }
     },
-    async (_params: Record<string, never>, _context: unknown) => {
+    async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
         const changelog = await fs.readFile(changelogPath, 'utf8'); 
@@ -750,22 +715,21 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
-    (params: unknown) => {
-      let paramsLogString: string;
-      try {
-        paramsLogString = (typeof params === 'object' && params !== null) ? JSON.stringify(params) : String(params);
-      } catch {
-        paramsLogString = "[Unserializable params]";
-      }
-      logger.info("Received params for get_session_history", { params: paramsLogString });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for get_session_history", typeof normalizedParams === 'object' && normalizedParams !== null ? JSON.stringify(normalizedParams) : String(normalizedParams));
+    async (args: { sessionId: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      logger.info("Received args for get_session_history", { args });
 
-      const sessionIdValue = normalizedParams.sessionId;
+      const sessionIdValue = args.sessionId;
 
       if (typeof sessionIdValue !== 'string' || !sessionIdValue) {
-        logger.error("Session ID is required and must be a non-empty string.", { receivedSessionId: String(sessionIdValue) });
-        throw new Error("Session ID is required and must be a non-empty string.");
+        const errorMsg = "Session ID is required and must be a non-empty string.";
+        logger.error(errorMsg, { receivedSessionId: String(sessionIdValue) });
+        // Return an error structure consistent with other tools
+        return {
+          content: [{
+            type: "text",
+            text: `# Error Getting Session History\n\n${errorMsg}`,
+          }],
+        };
       }
 
     try {
@@ -818,43 +782,21 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         query: z.string().describe("The query or prompt for generating code suggestions"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
-      async (params: unknown) => {
+      async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
         logger.info(`Tool 'generate_suggestion' execution started.`);
-        
-        logger.info("Received params for generate_suggestion", { params });
-        const normalizedParams = normalizeToolParams(params);
-        logger.debug("Normalized params for generate_suggestion", normalizedParams);
-        
-        if (!normalizedParams.query && typeof normalizedParams === 'object') {
-          normalizedParams.query = "code suggestion";
-          logger.warn("No query provided for generate_suggestion, using default");
-        }
-        
-        let queryFromParams = "default code suggestion query";
-         
-        const rawQuery: unknown = normalizedParams.query;
-        if (typeof rawQuery === 'string') {
-            queryFromParams = rawQuery;
-        } else if (rawQuery !== undefined) {
-            logger.warn("Query parameter is not a string in generate_suggestion.", { receivedQuery: rawQuery });
-        } else {
-            logger.warn("Query parameter is missing in generate_suggestion and was not defaulted.", { normalizedParams });
-        }
+        logger.info("Received args for generate_suggestion", { args });
 
-        let sessionIdFromParams: string | undefined = undefined;
-         
-        const rawSessionId: unknown = normalizedParams.sessionId;
-        if (typeof rawSessionId === 'string') {
-            sessionIdFromParams = rawSessionId;
-        } else if (rawSessionId !== undefined) {
-            logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: rawSessionId });
-        }
+        const queryStr = args.query || "code suggestion"; // Default if query is empty string
+        const sessionIdFromParams = args.sessionId;
 
+        if (args.query === undefined || args.query === null || args.query.trim() === "") {
+          logger.warn("No query provided or query is empty for generate_suggestion, using default 'code suggestion'");
+        }
+        
       try {
         const session = getOrCreateSession(sessionIdFromParams, repoPath);
       
-        const queryStr = queryFromParams; 
-      logger.info("Extracted query for generate_suggestion", { query: queryStr, sessionId: session.id });
+      logger.info("Using query for generate_suggestion", { query: queryStr, sessionId: session.id });
       
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
@@ -976,52 +918,19 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         query: z.string().describe("The query to get repository context for"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
-      async (params: unknown) => {
-        
-        logger.info("Received params for get_repository_context", { params });
-        const normalizedParams = normalizeToolParams(params);
-        logger.debug("Normalized params for get_repository_context", normalizedParams);
-        
-        let parsedParams = normalizedParams;
-        if (typeof normalizedParams === 'string') {
-          try {
-            const parsed: unknown = JSON.parse(normalizedParams);
-            if (parsed && typeof parsed === 'object') {
-              parsedParams = parsed as Record<string, unknown>;
-            }
-          } catch {
-            parsedParams = { query: normalizedParams };
-          }
-        }
-        
-        if (typeof parsedParams === 'object' && parsedParams !== null && !('query' in parsedParams && typeof parsedParams.query === 'string')) {
-          (parsedParams as { query?: unknown }).query = "repository context";
-          logger.warn("No query provided or query was not a string for get_repository_context, using default query.");
-        } else if (typeof parsedParams !== 'object' || parsedParams === null) {
-          parsedParams = { query: "repository context" };
-          logger.warn("parsedParams was not an object for get_repository_context, initialized with default query.");
-        }
-        
-        let queryFromParamsCtx: string;
-        const queryValue = (parsedParams as { query?: unknown }).query;
-        if (typeof queryValue === 'string') {
-          queryFromParamsCtx = queryValue;
-        } else {
-          logger.warn("Query parameter is not a string or is missing in get_repository_context.", { receivedQuery: queryValue });
-          queryFromParamsCtx = "default repository context query";
-        }
+      async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        logger.info("Received args for get_repository_context", { args });
 
-        let sessionIdFromParamsCtx: string | undefined;
-        if ('sessionId' in parsedParams && typeof parsedParams.sessionId === 'string') {
-          sessionIdFromParamsCtx = parsedParams.sessionId;
-        } else if ('sessionId' in parsedParams && parsedParams.sessionId !== undefined) {
-          logger.warn("SessionID parameter is not a string in get_repository_context.", { receivedSessionId: parsedParams.sessionId });
+        const queryStrCtx = args.query || "repository context"; // Default if query is empty string
+        const sessionIdFromParamsCtx = args.sessionId;
+
+        if (args.query === undefined || args.query === null || args.query.trim() === "") {
+          logger.warn("No query provided or query is empty for get_repository_context, using default 'repository context'");
         }
       
       const session = getOrCreateSession(sessionIdFromParamsCtx, repoPath);
       
-      const queryStrCtx = queryFromParamsCtx;
-      logger.info("Extracted query for repository context", { query: queryStrCtx, sessionId: session.id });
+      logger.info("Using query for repository context", { query: queryStrCtx, sessionId: session.id });
       
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
