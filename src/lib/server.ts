@@ -790,7 +790,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        let queryFromParams: string = "default code suggestion query";
+        let queryFromParams = "default code suggestion query";
         const rawQuery = normalizedParams.query; 
         if (typeof rawQuery === 'string') {
             queryFromParams = rawQuery;
