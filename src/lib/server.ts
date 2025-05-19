@@ -743,7 +743,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         
         let queryFromParams: string;
         if (typeof normalizedParams.query === 'string') {
-          queryFromParams = normalizedParams.query;
+          queryFromParams = normalizedParams.query as string; // Explicitly cast after type check
         } else {
           logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
           queryFromParams = "default code suggestion query"; 
@@ -751,7 +751,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
 
         let sessionIdFromParams: string | undefined;
         if (typeof normalizedParams.sessionId === 'string') {
-          sessionIdFromParams = normalizedParams.sessionId;
+          sessionIdFromParams = normalizedParams.sessionId as string; // Explicitly cast after type check
         } else if (normalizedParams.sessionId !== undefined) {
           logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });
           // sessionIdFromParams remains undefined
