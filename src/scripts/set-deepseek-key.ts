@@ -57,6 +57,6 @@ function main(): void { // Removed async, added void return type
 }
 
 main().catch((error: unknown) => {
-  console.error('Unhandled error:', error instanceof Error ? error.message : error);
+  console.error('Unhandled error:', error instanceof Error ? error.message : String(error)); // Use String(error) for unknown
   process.exit(1);
 });

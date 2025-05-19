@@ -153,7 +153,7 @@ export function parseToolCalls(output: string): { tool: string; parameters: unkn
         const jsonPart = line.substring('TOOL_CALL:'.length).trim();
         logger.debug("Found potential tool call", { jsonPart });
         
-        const parsed: { tool?: string; parameters?: unknown } = JSON.parse(jsonPart);
+        const parsed = JSON.parse(jsonPart) as { tool?: string; parameters?: unknown };
         logger.debug("Successfully parsed JSON", { parsed });
         
         if (parsed && typeof parsed.tool === 'string' && parsed.parameters) {

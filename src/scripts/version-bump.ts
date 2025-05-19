@@ -27,7 +27,7 @@ const projectRoot = path.resolve(__dirname, '..', '..');
 // Read package.json
 const packageJsonPath = path.join(projectRoot, 'package.json');
 const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
-const packageJson: { version: string } = JSON.parse(packageJsonContent);
+const packageJson = JSON.parse(packageJsonContent) as { version: string };
 
 // Parse current version
 const currentVersion: string = packageJson.version;

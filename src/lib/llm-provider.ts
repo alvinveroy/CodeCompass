@@ -434,7 +434,7 @@ export async function switchSuggestionModel(model: string, providerName?: string
 /**
  * Creates a test provider for test environments
  */
-async function createTestProvider(suggestionProvider: string): Promise<LLMProvider> {
+function createTestProvider(suggestionProvider: string): LLMProvider {
   const testProviderName = suggestionProvider.toLowerCase();
   const provider = instantiateProvider(testProviderName);
 

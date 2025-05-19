@@ -6,7 +6,7 @@ function getPackageVersion(): string {
   try {
     const packageJsonPath = path.resolve(__dirname, '../../package.json');
     const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
-    const packageJson: { version?: string } = JSON.parse(packageJsonContent);
+    const packageJson = JSON.parse(packageJsonContent) as { version?: string };
     return packageJson.version || '1.1.3'; // Fallback to previous hardcoded version
   } catch (error) {
     console.error('Error reading package.json version:', error);

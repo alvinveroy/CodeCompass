@@ -207,7 +207,7 @@ export async function startServer(repoPath: string): Promise<void> {
       async (params: unknown) => {
         // chainId and trackToolChain removed
       
-        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : params });
+        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : params }); // Ensure params is stringified for log
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
       
@@ -740,14 +740,26 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        const queryFromParams = normalizedParams.query;
-        const sessionIdFromParams = normalizedParams.sessionId;
+        let queryFromParams: string;
+        if (typeof normalizedParams.query === 'string') {
+          queryFromParams = normalizedParams.query;
+        } else {
+          logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
+          queryFromParams = "default code suggestion query"; 
+        }
+
+        let sessionIdFromParams: string | undefined;
+        if (typeof normalizedParams.sessionId === 'string') {
+          sessionIdFromParams = normalizedParams.sessionId;
+        } else if (normalizedParams.sessionId !== undefined) {
+          logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });
+        }
       
       // Get or create session
-      const session = getOrCreateSession(sessionIdFromParams as string | undefined, repoPath);
+      const session = getOrCreateSession(sessionIdFromParams, repoPath);
       
       // Log the extracted query to confirm it's working
-      const queryStr = String(queryFromParams); // Ensure query is a string for logging and use
+      const queryStr = queryFromParams; // queryFromParams is now definitely a string
       logger.info("Extracted query for generate_suggestion", { query: queryStr, sessionId: session.id });
       
       // First, use search_code internally to get relevant context
@@ -901,14 +913,26 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           logger.warn("No query provided for get_repository_context, using default");
         }
         
-        const queryFromParamsCtx = String(parsedParams.query); // Ensure query is string
-        const sessionIdFromParamsCtx = 'sessionId' in parsedParams ? parsedParams.sessionId as string | undefined : undefined;
+        let queryFromParamsCtx: string;
+        if (typeof parsedParams.query === 'string') {
+          queryFromParamsCtx = parsedParams.query;
+        } else {
+          logger.warn("Query parameter is not a string or is missing in get_repository_context.", { receivedQuery: parsedParams.query });
+          queryFromParamsCtx = "default repository context query";
+        }
+
+        let sessionIdFromParamsCtx: string | undefined;
+        if ('sessionId' in parsedParams && typeof parsedParams.sessionId === 'string') {
+          sessionIdFromParamsCtx = parsedParams.sessionId;
+        } else if ('sessionId' in parsedParams && parsedParams.sessionId !== undefined) {
+          logger.warn("SessionID parameter is not a string in get_repository_context.", { receivedSessionId: parsedParams.sessionId });
+        }
       
       // Get or create session
       const session = getOrCreateSession(sessionIdFromParamsCtx, repoPath);
       
       // Log the extracted query to confirm it's working
-      const queryStrCtx = queryFromParamsCtx; 
+      const queryStrCtx = queryFromParamsCtx; // queryFromParamsCtx is now definitely a string
       logger.info("Extracted query for repository context", { query: queryStrCtx, sessionId: session.id });
       
       const isGitRepo = await validateGitRepository(repoPath);
