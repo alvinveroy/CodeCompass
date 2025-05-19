@@ -642,19 +642,17 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         
         return {
           content: [{
-            type: "text",
+            type: "text" as const,
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any], // Cast content item to any for TS compatibility
+          }],
         };
       } catch (error) {
         logger.error("Failed to read changelog", { error });
         return {
           content: [{
-            type: "text",
+            type: "text" as const,
             text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any], // Cast content item to any for TS compatibility
+          }],
         };
       }
     }
