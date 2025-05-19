@@ -254,7 +254,6 @@ export async function startServer(repoPath: string): Promise<void> {
             }],
           };
         } catch (error: unknown) {
-          // Unused eslint-disable directive for @typescript-eslint/no-unsafe-call was here (around line 294)
           logger.error("Error switching suggestion model", { message: error instanceof Error ? error.message : String(error) });
           return {
             content: [{
