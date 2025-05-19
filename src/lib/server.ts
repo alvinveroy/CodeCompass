@@ -187,10 +187,10 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     // Register tools
-    await registerTools(server, qdrantClient, repoPath, suggestionModelAvailable);
+    registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); // Removed await
     
     // Register prompts
-    await registerPrompts(server);
+    registerPrompts(server); // Removed await
     // The get_repository_context tool is registered within registerTools.
     // Its internal logic handles behavior when suggestionModelAvailable is false.
     // No need for a separate conditional registration here.
@@ -632,10 +632,10 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     description: "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
     parameters: z.object({}), // Explicit Zod schema for no parameters
     annotations: { title: "Get Changelog" },
-    execute: async () => { // This async is fine due to await
+    execute: async () => { 
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
-        const changelog = await fs.readFile(changelogPath, 'utf8'); // await here
+        const changelog = await fs.readFile(changelogPath, 'utf8'); 
         
         return {
           content: [{
@@ -746,7 +746,8 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       const session = getOrCreateSession(sessionId as string | undefined, repoPath);
       
       // Log the extracted query to confirm it's working
-      logger.info("Extracted query for generate_suggestion", { query, sessionId: session.id });
+      const queryStr = String(query); // Ensure query is a string for logging and use
+      logger.info("Extracted query for generate_suggestion", { query: queryStr, sessionId: session.id });
       
       // First, use search_code internally to get relevant context
       // trackToolChain(chainId, "search_code"); // Removed as chainId is not defined and metrics are removed
@@ -767,7 +768,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       // Use iterative query refinement for better search results
       const { results, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
-        query as string, // query is string here
+        queryStr, 
         files
       );
       
@@ -810,7 +811,7 @@ ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 ${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)}${c.note ? `, Note: ${c.note}` : ''})\n${c.snippet}`).join("\n\n")}
 
 **Instruction**:
-Based on the provided context and snippets, generate a detailed code suggestion for "${query}". Include:
+Based on the provided context and snippets, generate a detailed code suggestion for "${queryStr}". Include:
 - A suggested code implementation or improvement.
 - An explanation of how it addresses the query.
 - References to the provided snippets or context where applicable.
@@ -824,10 +825,10 @@ Ensure the suggestion is concise, practical, and leverages the repository's exis
       const suggestion = await llmProvider.generateText(prompt);
       
       // Add suggestion to session
-      addSuggestion(session.id, query as string, suggestion);
+      addSuggestion(session.id, queryStr, suggestion);
       
       // Format the response as clean markdown
-      const formattedResponse = `# Code Suggestion for: "${query}"
+      const formattedResponse = `# Code Suggestion for: "${queryStr}"
 ${refinedQuery !== query ? `\n> Query refined to: "${refinedQuery}"` : ''}
 
 ## Suggestion
@@ -906,7 +907,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       const session = getOrCreateSession(sessionId as string | undefined, repoPath);
       
       // Log the extracted query to confirm it's working
-      logger.info("Extracted query for repository context", { query, sessionId: session.id });
+      const queryStrCtx = String(query); // Ensure query is a string
+      logger.info("Extracted query for repository context", { query: queryStrCtx, sessionId: session.id });
       
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
@@ -920,7 +922,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       // Use iterative query refinement
       const { results, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
-        query as string, // query is string here
+        queryStrCtx, 
         files
       );
       
@@ -945,7 +947,7 @@ ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 ${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})\n${c.snippet}`).join("\n\n")}
 
 **Instruction**:
-Provide a concise summary of the context for "${query}" based on the repository files and recent changes. Highlight key information relevant to the query, referencing specific files or snippets where applicable.
+Provide a concise summary of the context for "${queryStrCtx}" based on the repository files and recent changes. Highlight key information relevant to the query, referencing specific files or snippets where applicable.
       `;
       
       // Get the current LLM provider
@@ -955,10 +957,10 @@ Provide a concise summary of the context for "${query}" based on the repository 
       const summary = await llmProvider.generateText(summaryPrompt);
       
       // Add query to session
-      addQuery(session.id, query as string, results);
+      addQuery(session.id, queryStrCtx, results);
       
       // Format the response as clean markdown
-      const formattedResponse = `# Repository Context Summary for: "${query}"
+      const formattedResponse = `# Repository Context Summary for: "${queryStrCtx}"
 ${refinedQuery !== query ? `\n> Query refined to: "${refinedQuery}"` : ''}
 
 ## Summary

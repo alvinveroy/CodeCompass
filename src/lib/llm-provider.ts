@@ -105,7 +105,7 @@ Please provide an improved response addressing the user's feedback.`;
 class DeepSeekProvider implements LLMProvider {
   async checkConnection(): Promise<boolean> {
     // First ensure the API key is properly set
-    await deepseek.checkDeepSeekApiKey();
+    deepseek.checkDeepSeekApiKey(); // Removed await as checkDeepSeekApiKey is synchronous
     return await deepseek.testDeepSeekConnection();
   }
 
@@ -121,7 +121,7 @@ class DeepSeekProvider implements LLMProvider {
 
     logger.debug(`DeepSeekProvider: Cache miss. Generating text for prompt (length: ${prompt.length})`);
     // First ensure the API key is properly set
-    await deepseek.checkDeepSeekApiKey();
+    deepseek.checkDeepSeekApiKey(); // Removed await as checkDeepSeekApiKey is synchronous
     const response = await deepseek.generateWithDeepSeek(prompt);
     llmCache.set(cacheKey, response);
     return response;
@@ -440,7 +440,7 @@ async function createTestProvider(suggestionProvider: string): Promise<LLMProvid
 
   if (testProviderName === 'deepseek') {
     logger.info("[TEST] Using DeepSeek as LLM provider");
-    const hasApiKey = await deepseek.checkDeepSeekApiKey();
+    const hasApiKey = deepseek.checkDeepSeekApiKey(); // Removed await
     logger.info(`[TEST] DeepSeek API key configured: ${hasApiKey}`);
     
     // Override checkConnection for testing

@@ -51,7 +51,7 @@ export async function searchWithRefinement(
     }
 
     // Refine the query based on results
-    currentQuery = await refineQuery(currentQuery, searchResults as DetailedQdrantSearchResult[], avgRelevance);
+    currentQuery = refineQuery(currentQuery, searchResults as DetailedQdrantSearchResult[], avgRelevance); // Removed await
     refinementCount++;
     // trackQueryRefinement(queryId); // Metrics removed
   }

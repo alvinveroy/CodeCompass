@@ -3,7 +3,7 @@ import { getLLMProvider } from "./llm-provider";
 // import { incrementCounter, timeExecution } from "./metrics"; // Metrics removed
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { DetailedQdrantSearchResult, AgentState, AgentStep } from "./types"; // Changed QdrantSearchResult to DetailedQdrantSearchResult
+import { AgentState, AgentStep } from "./types"; // DetailedQdrantSearchResult removed as it's unused
 import { searchWithRefinement } from "./query-refinement"; // Changed import path
 import { validateGitRepository, getRepositoryDiff } from "./repository";
 import git from "isomorphic-git";
