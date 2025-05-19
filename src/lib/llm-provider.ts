@@ -190,12 +190,6 @@ class OpenAIProvider implements LLMProvider {
   generateText(prompt: string, forceFresh?: boolean): Promise<string> {
     logger.warn("OpenAIProvider: generateText not implemented.", { prompt, forceFresh });
     // Example of how it might look (requires 'openai' package):
-    // const openai = new OpenAI({ apiKey: configService.OPENAI_API_KEY });
-    // const completion = await openai.chat.completions.create({
-    //   model: configService.SUGGESTION_MODEL, // Ensure this model is an OpenAI model
-    //   messages: [{ role: "user", content: prompt }],
-    // });
-    // return completion.choices[0].message.content || "";
     return Promise.reject(new Error("OpenAIProvider.generateText not implemented."));
   }
   async generateEmbedding(text: string): Promise<number[]> { // This can remain async due to ollama.generateEmbedding
@@ -297,13 +291,11 @@ interface ProviderCache {
 
 let providerCache: ProviderCache | null = null;
 
-// Force clear the provider cache
 export function clearProviderCache(): void {
   providerCache = null;
   logger.info("Provider cache cleared");
 }
 
-// Factory function to get the current LLM provider
 export async function getLLMProvider(): Promise<LLMProvider> {
   // Ensure ConfigService has the latest from files/env.
   // configService.reloadConfigsFromFile(); // Call this if there's a chance config changed since service init.
@@ -362,7 +354,6 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   return provider;
 }
 
-// Function to switch the suggestion model
 export async function switchSuggestionModel(model: string, providerName?: string): Promise<boolean> {
   const normalizedModel = model.toLowerCase();
   let targetProvider: string;
@@ -395,7 +386,6 @@ export async function switchSuggestionModel(model: string, providerName?: string
   }
   
   // Reset existing model settings to ensure a clean switch (optional, consider if this is desired)
-  // resetModelSettings(); // Commented out as direct switch might be preferred.
   
   logger.info(`Attempting to switch suggestion model to: '${normalizedModel}' (provider: '${targetProvider}')`);
   

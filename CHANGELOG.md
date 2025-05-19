@@ -69,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Addressed persistent `@typescript-eslint/no-unsafe-assignment` errors by using `eslint-disable-next-line` with justifications for specific, type-safe assignments in `src/lib/deepseek.ts` and `src/lib/server.ts`. (9eaa028)
 
 ### Refactor
-- Removed unnecessary and historical comments from `src/lib/llm-provider.ts`, `src/lib/repository.ts`, `src/lib/deepseek.ts`, and `src/lib/server.ts` to improve code clarity and reduce noise. Kept comments explaining complex logic, policy decisions, or active `eslint-disable` directives.
+- Removed unnecessary comments (historical, redundant, stating the obvious, or commented-out code) from `src/lib/llm-provider.ts`, `src/lib/deepseek.ts`, and `src/lib/server.ts` to improve code clarity. Kept comments explaining complex logic, policy decisions, or active `eslint-disable` directives. (5e92304)
 
 ### Added
 - Added documentation for script files and global type definitions:

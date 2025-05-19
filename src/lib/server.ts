@@ -361,7 +361,6 @@ function registerTools( // Removed async
       const normalizedParams = normalizeToolParams(params);
       logger.debug("Normalized params for agent_query", normalizedParams);
       
-      // Ensure query exists
       if (!normalizedParams.query && typeof normalizedParams === 'object') {
         normalizedParams.query = "repository information";
         logger.warn("No query provided for agent_query, using default");
@@ -479,7 +478,6 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
       const normalizedParams = normalizeToolParams(params);
       logger.debug("Normalized params for search_code", normalizedParams);
         
-      // Ensure query exists
       if (!normalizedParams.query && typeof normalizedParams === 'object') {
         normalizedParams.query = "code search";
         logger.warn("No query provided for search_code, using default");
@@ -693,7 +691,6 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for generate_suggestion", normalizedParams);
         
-        // Ensure query exists
         if (!normalizedParams.query && typeof normalizedParams === 'object') {
           normalizedParams.query = "code suggestion";
           logger.warn("No query provided for generate_suggestion, using default");

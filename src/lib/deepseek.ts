@@ -11,7 +11,6 @@ async function waitForRateLimit(): Promise<void> {
   const now = Date.now();
   const rpmLimit = configService.DEEPSEEK_RPM_LIMIT;
 
-  // Remove timestamps older than 1 minute
   while (requestTimestamps.length > 0 && requestTimestamps[0] < now - 60000) {
     requestTimestamps.shift();
   }
@@ -36,7 +35,7 @@ export function checkDeepSeekApiKey(): boolean {
   // It also updates process.env.DEEPSEEK_API_KEY.
   // This function now primarily serves to check if the key (from any source) is valid/present.
   
-  const apiKey = configService.DEEPSEEK_API_KEY; // Gets the effective API key
+  const apiKey = configService.DEEPSEEK_API_KEY;
   
   if (!apiKey) {
     logger.error("DeepSeek API key is not configured. Set DEEPSEEK_API_KEY environment variable or run 'npm run set-deepseek-key'.");
