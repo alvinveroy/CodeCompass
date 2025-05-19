@@ -124,13 +124,16 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     } catch (requestError: unknown) {
       const err = requestError instanceof Error ? requestError : new Error(String(requestError));
 
-      // Safely extract Axios-specific error details for logging
-      const logPayload: {
+      // Define an interface for the log payload for clarity
+      interface DeepSeekErrorLogPayload {
         message: string;
         code?: string;
         response?: { status: number; statusText: string; data: string; } | string;
         request?: string;
-      } = { message: err.message };
+      }
+
+      // Safely extract Axios-specific error details for logging
+      const logPayload: DeepSeekErrorLogPayload = { message: err.message };
 
       if (axios.isAxiosError(requestError)) {
         logPayload.code = requestError.code;
@@ -175,7 +178,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     const err = error instanceof Error ? error : new Error(String(error));
     
     let errorCode: string | undefined;
-    let errorResponseData: unknown | undefined;
+    let errorResponseData: unknown; // Changed from unknown | undefined
     let errorResponseStatus: number | undefined;
 
     if (axios.isAxiosError(error)) {
