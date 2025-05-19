@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- Resolved final ESLint errors by applying targeted `eslint-disable-next-line` comments with justifications (following up on fdc0caf):
+    - `src/lib/deepseek.ts`: Disabled `no-unsafe-assignment` for `axiosError.response.data` logging, as it's safely stringified.
+    - `src/lib/llm-provider.ts`: Disabled `await-thenable` for `await connectionPromise` as `connectionPromise` is explicitly a Promise, marking it a linter false positive.
+    - `src/lib/server.ts`:
+        - Disabled `no-base-to-string` for `params` logging due to existing safe stringification.
+        - Disabled `no-unsafe-assignment` for controlled assignments to `parsedParams.query` and `parsedParams` within `get_repository_context` tool.
 - Addressed remaining ESLint errors after `lint:fix` (following up on 325c00b and 5d0f174):
     - `src/lib/deepseek.ts`: Added `eslint-disable-next-line @typescript-eslint/no-unsafe-assignment` for `axiosError.response.data` in logging, as the data structure is unknown but handled.
     - `src/lib/llm-provider.ts`: Added `eslint-disable-next-line @typescript-eslint/await-thenable` for `await connectionPromise` as `connectionPromise` is explicitly `Promise<boolean>`, deeming it a linter false positive.
