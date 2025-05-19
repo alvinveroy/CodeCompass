@@ -181,10 +181,9 @@ export async function startServer(repoPath: string): Promise<void> {
 
     server.resource(
       "Repository File Content",
-      new UriTemplate("repo://files/{filepath}"), // Pass UriTemplate instance directly
       {}, // Empty metadata object
-      async (uri: URL, variables, extra) => { // Updated parameter types to match expected interface
-      const relativeFilepath = variables['filepath']?.trim() ?? '';
+      async (params: { filepath: string }, uri: URL) => { 
+      const relativeFilepath = params.filepath.trim();
 
       if (!relativeFilepath) {
         const errMsg = "File path cannot be empty.";
