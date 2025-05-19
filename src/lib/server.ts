@@ -633,6 +633,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   server.tool(
     "get_changelog",
     "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     z.object({}) as any, // Use z.object({}) with type assertion for runtime compatibility
     async () => {
       try {
@@ -643,6 +644,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           content: [{
             type: "text",
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any], // Cast content item to any for TS compatibility
         };
       } catch (error) {
@@ -651,6 +653,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           content: [{
             type: "text",
             text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any], // Cast content item to any for TS compatibility
         };
       }
