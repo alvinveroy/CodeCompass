@@ -135,6 +135,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         response: axiosError.response ? {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: typeof axiosError.response.data === 'string' ? axiosError.response.data : JSON.stringify(axiosError.response.data)
         } : 'No response data',
         request: axiosError.request ? 'Request present' : 'No request data'

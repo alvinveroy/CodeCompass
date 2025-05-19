@@ -57,6 +57,7 @@ function main(): void { // Removed async, added void return type
 }
 
 main().catch((error: unknown) => {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   console.error('Unhandled error:', error instanceof Error ? error.message : String(error)); // Use String(error) for unknown
   process.exit(1);
 });

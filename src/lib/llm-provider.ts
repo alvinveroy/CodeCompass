@@ -445,6 +445,7 @@ function createTestProvider(suggestionProvider: string): LLMProvider {
     
     // Override checkConnection for testing
     provider.checkConnection = async () => {
+      // eslint-disable-next-line @typescript-eslint/await-thenable
       await deepseek.testDeepSeekConnection(); // Call original for spy
       return true;
     };
