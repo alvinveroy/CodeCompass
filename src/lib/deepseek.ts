@@ -105,11 +105,19 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       );
       
       // Log more details about the response for debugging
+      let dataForLogging: string;
+      try {
+        // response.data is 'any' from Axios. Stringify it safely for logging.
+        dataForLogging = JSON.stringify(response.data);
+      } catch (stringifyError) {
+        // If stringification fails (e.g., circular reference)
+        dataForLogging = "[Unserializable data in response]";
+      }
       logger.debug(`DeepSeek API response: ${JSON.stringify({
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
-        data: response.data
+        data: dataForLogging // dataForLogging is now a string
       })}`);
       
       logger.info(`DeepSeek API test request to ${apiUrl} completed with status: ${response.status}`);
