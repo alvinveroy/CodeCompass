@@ -109,7 +109,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       try {
         // response.data is 'any' from Axios. Stringify it safely for logging.
         dataForLogging = JSON.stringify(response.data);
-      } catch (stringifyError) {
+      } catch { // stringifyError variable removed as it's unused
         // If stringification fails (e.g., circular reference)
         dataForLogging = "[Unserializable data in response]";
       }
