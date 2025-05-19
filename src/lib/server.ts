@@ -181,9 +181,9 @@ export async function startServer(repoPath: string): Promise<void> {
 
     server.resource(
       "Repository File Content",
-      { uriTemplate: "repo://files/{filepath}" }, // Wrap uriTemplate in an object
-      z.object({ filepath: z.string().describe("The path to the file relative to the repository root.") }),
-      async (params: { filepath: string }, uri: URL) => {
+      { uriTemplate: "repo://files/{filepath}" }, // Template object
+      {}, // Empty metadata object
+      async (params: { filepath: string }, uri: URL) => { // SDK should infer params type from capabilities
       const relativeFilepath = params.filepath.trim();
 
       if (!relativeFilepath) {
