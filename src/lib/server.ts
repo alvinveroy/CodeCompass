@@ -115,13 +115,55 @@ export async function startServer(repoPath: string): Promise<void> {
 
     // Prompts will be registered using server.prompt() later
 
+    const serverCapabilities = {
+      resources: {
+        "repo://structure": {
+          name: "Repository File Structure",
+          description: "Lists all files in the current Git repository.",
+          mimeType: "text/plain"
+        },
+        "repo://files/{filepath}": {
+          name: "Repository File Content",
+          description: "Retrieves the content of a specific file from the repository. Replace {filepath} with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
+          mimeType: "text/plain", // Default, actual content type might vary
+          template: true,
+          parameters: {
+            filepath: {
+              type: "string",
+              description: "The path to the file relative to the repository root."
+            }
+          }
+        },
+        "repo://health": {
+          name: "Server Health Status",
+          description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access).",
+          mimeType: "application/json"
+        },
+        "repo://version": {
+          name: "Server Version",
+          description: "Provides the current version of the CodeCompass server.",
+          mimeType: "text/plain"
+        }
+      },
+      tools: {
+        search_code: {},
+        get_repository_context: {},
+        ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
+        get_changelog: {},
+        agent_query: {},
+        switch_suggestion_model: {},
+      },
+      prompts: {}, // Explicitly declare prompts capability
+    };
+
     const server = new McpServer({
       name: "CodeCompass",
       version: VERSION,
       vendor: "CodeCompass",
-      capabilities: {
-        resources: {
-          "repo://structure": {
+      capabilities: serverCapabilities,
+    });
+
+    // Register resources
             name: "Repository File Structure",
             description: "Lists all files in the current Git repository.",
             mimeType: "text/plain"
@@ -393,8 +435,8 @@ export async function startServer(repoPath: string): Promise<void> {
     const transport = new StdioServerTransport();
     
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
-    const registeredTools = (server as { capabilities?: { tools?: Record<string, unknown> } }).capabilities?.tools || {};
-    logger.info(`CodeCompass server started with tools: ${Object.keys(registeredTools).join(', ')}`);
+    const toolStubs = serverCapabilities.tools || {};
+    logger.info(`CodeCompass server configured with tool stubs: ${Object.keys(toolStubs).join(', ')}`);
     
     console.error(`CodeCompass v${VERSION} MCP Server running on stdio`);
     
