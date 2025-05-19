@@ -93,7 +93,7 @@ class ConfigService {
 
     // Validate and set OLLAMA_HOST
     const defaultOllamaHost = "http://127.0.0.1:11434";
-    let ollamaHostEnv = process.env.OLLAMA_HOST;
+    const ollamaHostEnv = process.env.OLLAMA_HOST;
     if (ollamaHostEnv && ollamaHostEnv.trim() !== "") {
       try {
         const parsedUrl = new URL(ollamaHostEnv);
@@ -113,7 +113,7 @@ class ConfigService {
 
     // Validate and set QDRANT_HOST
     const defaultQdrantHost = "http://127.0.0.1:6333";
-    let qdrantHostEnv = process.env.QDRANT_HOST;
+    const qdrantHostEnv = process.env.QDRANT_HOST;
     if (qdrantHostEnv && qdrantHostEnv.trim() !== "") {
       try {
         const parsedUrl = new URL(qdrantHostEnv);
