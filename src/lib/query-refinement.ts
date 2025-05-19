@@ -66,7 +66,7 @@ export async function searchWithRefinement(
 }
 
 // Refine query based on search results
-async function refineQuery(originalQuery: string, results: DetailedQdrantSearchResult[], currentRelevance: number): Promise<string> {
+function refineQuery(originalQuery: string, results: DetailedQdrantSearchResult[], currentRelevance: number): string {
   // If no results or very poor results, broaden the query
   if (results.length === 0 || currentRelevance < 0.3) {
     return broadenQuery(originalQuery);

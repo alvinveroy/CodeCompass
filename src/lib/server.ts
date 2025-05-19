@@ -32,29 +32,26 @@ import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQu
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
   if (typeof params === 'object' && params !== null) {
     // If it's already a non-null object, return as is.
-    // The MCP SDK should provide parameters matching the Zod schema.
     return params as Record<string, unknown>;
   }
   if (typeof params === 'string') {
-    // Attempt to parse if it's a JSON string
     try {
-      const parsed = JSON.parse(params);
+      const parsed = JSON.parse(params) as unknown; // Parse as unknown first
       if (typeof parsed === 'object' && parsed !== null) {
-        return parsed; // Successfully parsed JSON string to object
+        return parsed as Record<string, unknown>; // Then assert to Record
       }
+      // If parsed is not an object, treat as a query string
+      return { query: params };
     } catch {
       // Not a valid JSON string, treat as a simple query string
+      return { query: params };
     }
-    // Default for non-JSON strings or if JSON parsing results in non-object
-    return { query: params };
   }
   
-  // For other primitive values (numbers, booleans, undefined, null), convert to a query string
-  // or handle as an error if they are not expected.
-  // For simplicity, let's wrap them in a query object.
   if (params === null || params === undefined) {
-    return { query: "" }; // Or throw error, or handle as per tool expectation
+    return { query: "" };
   }
+  // For other primitive types (number, boolean), wrap them
   return { query: String(params) };
 }
 
@@ -167,13 +164,13 @@ export async function startServer(repoPath: string): Promise<void> {
     // Add provider status resource - REMOVED
     
     // Add version resource
-    server.resource("repo://version", "repo://version", {}, async () => {
+    server.resource("repo://version", "repo://version", {}, () => { // Removed async
       return { contents: [{ uri: "repo://version", text: VERSION }] };
     });
-    server.resource("repo://structure", "repo://structure", {}, async () => {
+    server.resource("repo://structure", "repo://structure", {}, async () => { // This async is fine
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
+        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" }) // await is used
         : [];
       return { contents: [{ uri: "repo://structure", text: files.join("\n") }] };
     });
@@ -210,7 +207,7 @@ export async function startServer(repoPath: string): Promise<void> {
       async (params: unknown) => {
         // chainId and trackToolChain removed
       
-        logger.info("Received params for switch_suggestion_model", { params });
+        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : params });
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
       
@@ -345,7 +342,7 @@ export async function startServer(repoPath: string): Promise<void> {
   }
 }
 
-async function registerPrompts(server: McpServer): Promise<void> {
+function registerPrompts(server: McpServer): void { // Removed async
   if (typeof server.prompt !== "function") {
     logger.warn("MCP server instance does not support 'prompt' method. Prompts may not be available.");
     return;
@@ -395,7 +392,7 @@ async function registerTools(
   qdrantClient: QdrantClient, 
   repoPath: string, 
   suggestionModelAvailable: boolean
-): Promise<void> {
+): void { // Removed async
   if (typeof server.tool !== "function") {
     throw new Error("MCP server does not support 'tool' method");
   }
@@ -423,7 +420,7 @@ async function registerTools(
         logger.warn("No query provided for agent_query, using default");
       }
       
-      const { query, sessionId: initialSessionId } = normalizedParams as { query: string; sessionId?: string }; // Renamed sessionId to avoid conflict
+      const { query, sessionId: initialSessionId } = normalizedParams as { query: string; sessionId?: string }; // This assertion is contextually acceptable
     
     try {
       // Ensure ConfigService reflects the latest state from files.
@@ -442,16 +439,16 @@ async function registerTools(
 
       const { results: searchResults, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
-        query as string,
+        query, // query is already string
         files
       );
       // Add this search to session history
       const topScore = searchResults.length > 0 ? searchResults[0].score : 0;
-      addQuery(session.id, query as string, searchResults, topScore);
+      addQuery(session.id, query, searchResults, topScore);
 
       const searchContextSnippets = searchResults.map(r => ({
-        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
+        filepath: r.payload.filepath,
+        snippet: r.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH),
         relevance: r.score,
       }));
 
@@ -517,7 +514,7 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
       return {
         content: [{
           type: "text",
-          text: `# Error in Agent Query Tool\n\nThere was an unexpected error processing your query: ${(error as Error).message}\n\nPlease check the server logs for more details.`,
+          text: `# Error in Agent Query Tool\n\nThere was an unexpected error processing your query: ${error instanceof Error ? error.message : String(error)}\n\nPlease check the server logs for more details.`,
         }],
       };
     }
@@ -566,19 +563,19 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
     // Use iterative query refinement
     const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
       qdrantClient, 
-      query as string, 
+      query as string, // query is string here
       files
     );
     
     // Add query to session
-    addQuery(session.id, query as string, results, relevanceScore);
+    addQuery(session.id, query as string, results, relevanceScore); // query is string here
     
     // Get the current LLM provider
     const llmProvider = await getLLMProvider();
     
     // Generate summaries for the results
     const summaries = await Promise.all(results.map(async result => {
-      const snippet = (result.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH);
+      const snippet = result.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH);
       let summary = "Summary unavailable";
       
       if (suggestionModelAvailable) {
@@ -593,10 +590,10 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
       }
       
       return {
-        filepath: (result.payload as DetailedQdrantSearchResult['payload']).filepath,
+        filepath: result.payload.filepath,
         snippet,
         summary,
-        last_modified: (result.payload as DetailedQdrantSearchResult['payload']).last_modified,
+        last_modified: result.payload.last_modified,
         relevance: result.score,
       };
     }));
@@ -635,10 +632,10 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     description: "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
     parameters: z.object({}), // Explicit Zod schema for no parameters
     annotations: { title: "Get Changelog" },
-    execute: async () => {
+    execute: async () => { // This async is fine due to await
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
-        const changelog = await fs.readFile(changelogPath, 'utf8');
+        const changelog = await fs.readFile(changelogPath, 'utf8'); // await here
         
         return {
           content: [{
@@ -714,7 +711,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       return {
         content: [{
           type: "text",
-          text: `# Error\n\n${(error as Error).message}`,
+          text: `# Error\n\n${error instanceof Error ? error.message : String(error)}`,
         }],
       };
     }
@@ -770,15 +767,15 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       // Use iterative query refinement for better search results
       const { results, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
-        query as string, 
+        query as string, // query is string here
         files
       );
       
       // Map search results to context
       const context = results.map(r => ({
-        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
-        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
+        filepath: r.payload.filepath,
+        snippet: r.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH),
+        last_modified: r.payload.last_modified,
         relevance: r.score,
         note: ""
       }));
@@ -786,15 +783,18 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       // Include previous relevant results if current results are limited
       if (context.length < 2 && relevantResults.length > 0) {
         const additionalContext = relevantResults
-          .filter(r => !context.some(c => c.filepath === (r as unknown as DetailedQdrantSearchResult).payload?.filepath))
+          .filter(r => !context.some(c => c.filepath === (r as DetailedQdrantSearchResult).payload?.filepath)) // Cast here is okay for filtering
           .slice(0, 2)
-          .map(r => ({
-            filepath: (r as unknown as DetailedQdrantSearchResult).payload?.filepath || "unknown",
-            snippet: (r as unknown as DetailedQdrantSearchResult).payload?.content?.slice(0, configService.MAX_SNIPPET_LENGTH) || "",
-            last_modified: (r as unknown as DetailedQdrantSearchResult).payload?.last_modified || "unknown",
-            relevance: (r as unknown as DetailedQdrantSearchResult).score || 0.5,
-            note: "From previous related query"
-          }));
+          .map(rUnk => {
+            const r = rUnk as DetailedQdrantSearchResult; // Define r with type for clarity
+            return {
+              filepath: r.payload?.filepath || "unknown",
+              snippet: r.payload?.content?.slice(0, configService.MAX_SNIPPET_LENGTH) || "",
+              last_modified: r.payload?.last_modified || "unknown",
+              relevance: r.score || 0.5,
+              note: "From previous related query"
+            };
+          });
         
         context.push(...additionalContext);
       }
@@ -920,7 +920,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       // Use iterative query refinement
       const { results, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
-        query as string, 
+        query as string, // query is string here
         files
       );
       
@@ -928,9 +928,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       const recentQueries = getRecentQueries(session.id);
       
       const context = results.map(r => ({
-        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, configService.MAX_SNIPPET_LENGTH),
-        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
+        filepath: r.payload.filepath,
+        snippet: r.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH),
+        last_modified: r.payload.last_modified,
         relevance: r.score,
       }));
       

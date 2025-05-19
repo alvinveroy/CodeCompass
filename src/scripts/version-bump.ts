@@ -27,10 +27,10 @@ const projectRoot = path.resolve(__dirname, '..', '..');
 // Read package.json
 const packageJsonPath = path.join(projectRoot, 'package.json');
 const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
-const packageJson = JSON.parse(packageJsonContent);
+const packageJson: { version: string } = JSON.parse(packageJsonContent);
 
 // Parse current version
-const currentVersion = packageJson.version;
+const currentVersion: string = packageJson.version;
 const [major, minor, patch] = currentVersion.split('.').map(Number);
 
 // Calculate new version based on bump type

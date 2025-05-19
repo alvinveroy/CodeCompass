@@ -153,10 +153,10 @@ export function parseToolCalls(output: string): { tool: string; parameters: unkn
         const jsonPart = line.substring('TOOL_CALL:'.length).trim();
         logger.debug("Found potential tool call", { jsonPart });
         
-        const parsed = JSON.parse(jsonPart);
+        const parsed: { tool?: string; parameters?: unknown } = JSON.parse(jsonPart);
         logger.debug("Successfully parsed JSON", { parsed });
         
-        if (parsed && parsed.tool && parsed.parameters) {
+        if (parsed && typeof parsed.tool === 'string' && parsed.parameters) {
           results.push({
             tool: parsed.tool,
             parameters: parsed.parameters
@@ -234,9 +234,9 @@ export async function executeToolCall(
       
       // Format results for the agent
       const formattedResults = results.map(r => ({
-        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, 2000), // Limit snippet size
-        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
+        filepath: r.payload.filepath,
+        snippet: r.payload.content.slice(0, 2000), // Limit snippet size
+        last_modified: r.payload.last_modified,
         relevance: r.score,
       }));
       
@@ -284,9 +284,9 @@ export async function executeToolCall(
       const recentQueries = getRecentQueries(session.id);
       
       const context = results.map(r => ({
-        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, 2000), // Limit snippet size
-        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
+        filepath: r.payload.filepath,
+        snippet: r.payload.content.slice(0, 2000), // Limit snippet size
+        last_modified: r.payload.last_modified,
         relevance: r.score,
       }));
       
@@ -341,9 +341,9 @@ export async function executeToolCall(
       
       // Map search results to context
       const context = results.map(r => ({
-        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, 2000),
-        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
+        filepath: r.payload.filepath,
+        snippet: r.payload.content.slice(0, 2000),
+        last_modified: r.payload.last_modified,
         relevance: r.score,
       }));
       
@@ -434,9 +434,9 @@ Based on the provided context and snippets, generate a detailed code suggestion 
       );
       
       const context = contextResults.map(r => ({
-        filepath: (r.payload as DetailedQdrantSearchResult['payload']).filepath,
-        snippet: (r.payload as DetailedQdrantSearchResult['payload']).content.slice(0, 2000),
-        last_modified: (r.payload as DetailedQdrantSearchResult['payload']).last_modified,
+        filepath: r.payload.filepath,
+        snippet: r.payload.content.slice(0, 2000),
+        last_modified: r.payload.last_modified,
         relevance: r.score,
       }));
       
@@ -526,9 +526,8 @@ export async function runAgentLoop(
   try {
     const _testResult = await currentProvider.generateText("Test message");
     logger.info(`Agent verified provider ${configService.SUGGESTION_PROVIDER} is working`);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (_error: unknown) {
-    logger.error(`Agent failed to verify provider ${configService.SUGGESTION_PROVIDER}`);
+  } catch (error: unknown) {
+    logger.error(`Agent failed to verify provider ${configService.SUGGESTION_PROVIDER}: ${error instanceof Error ? error.message : String(error)}`);
   }
   
   // return await timeExecution('agent_loop', async () => { // Metrics removed

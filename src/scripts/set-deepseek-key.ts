@@ -8,7 +8,7 @@ import * as path from 'path';
  * This script sets the DeepSeek API key in a way that ensures it's available to all parts of the application.
  * It writes the key to a configuration file that's loaded at startup.
  */
-async function main() {
+function main(): void { // Removed async, added void return type
   // Get API key from command line argument or environment
   const apiKey = process.argv[2] || process.env.DEEPSEEK_API_KEY;
   
@@ -41,7 +41,7 @@ async function main() {
   
   // Test the connection
   try {
-    import('../lib/deepseek').then(async (deepseek) => {
+    void import('../lib/deepseek').then(async (deepseek) => {
       console.log('Testing DeepSeek connection...');
       const connected = await deepseek.testDeepSeekConnection();
       if (connected) {

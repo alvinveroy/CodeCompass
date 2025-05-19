@@ -182,7 +182,7 @@ class HybridProvider implements LLMProvider {
 
 // --- Placeholder Providers for future implementation ---
 class OpenAIProvider implements LLMProvider {
-  async checkConnection(): Promise<boolean> {
+  checkConnection(): Promise<boolean> {
     logger.info("OpenAIProvider: Checking connection (API key).");
     const apiKey = configService.OPENAI_API_KEY;
     if (!apiKey) {
@@ -192,9 +192,9 @@ class OpenAIProvider implements LLMProvider {
     // A more robust check would involve a lightweight API call, e.g., listing models.
     // For now, just checking if the key exists and has a plausible format.
     logger.info(`OpenAI API Key found (length: ${apiKey.length}). Assuming connection is possible.`);
-    return apiKey.startsWith("sk-");
+    return Promise.resolve(apiKey.startsWith("sk-"));
   }
-  async generateText(prompt: string, forceFresh?: boolean): Promise<string> {
+  generateText(prompt: string, forceFresh?: boolean): Promise<string> {
     logger.warn("OpenAIProvider: generateText not implemented.", { prompt, forceFresh });
     // Example of how it might look (requires 'openai' package):
     // const openai = new OpenAI({ apiKey: configService.OPENAI_API_KEY });
@@ -203,67 +203,67 @@ class OpenAIProvider implements LLMProvider {
     //   messages: [{ role: "user", content: prompt }],
     // });
     // return completion.choices[0].message.content || "";
-    throw new Error("OpenAIProvider.generateText not implemented.");
+    return Promise.reject(new Error("OpenAIProvider.generateText not implemented."));
   }
-  async generateEmbedding(text: string): Promise<number[]> {
+  async generateEmbedding(text: string): Promise<number[]> { // This can remain async due to ollama.generateEmbedding
     logger.warn("OpenAIProvider: generateEmbedding not implemented. Falling back to Ollama.");
     // Fallback to Ollama for embeddings as per current policy
-    return await ollama.generateEmbedding(text);
+    return ollama.generateEmbedding(text);
   }
-  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
+  processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
     logger.warn("OpenAIProvider: processFeedback not implemented.", { originalPrompt, suggestion, feedback, score });
     // Could be implemented similarly to generateText with a modified prompt
-    throw new Error("OpenAIProvider.processFeedback not implemented.");
+    return Promise.reject(new Error("OpenAIProvider.processFeedback not implemented."));
   }
 }
 
 class GeminiProvider implements LLMProvider {
-  async checkConnection(): Promise<boolean> {
+  checkConnection(): Promise<boolean> {
     logger.info("GeminiProvider: Checking connection (API key).");
     const apiKey = configService.GEMINI_API_KEY;
      if (!apiKey) {
       logger.warn("Gemini API key is not configured. Set GEMINI_API_KEY in environment or model-config.json.");
-      return false;
+      return Promise.resolve(false);
     }
     logger.info(`Gemini API Key found (length: ${apiKey.length}). Assuming connection is possible.`);
-    return !!apiKey; // Basic check; a lightweight API call would be better.
+    return Promise.resolve(!!apiKey); // Basic check; a lightweight API call would be better.
   }
-  async generateText(prompt: string, forceFresh?: boolean): Promise<string> {
+  generateText(prompt: string, forceFresh?: boolean): Promise<string> {
     logger.warn("GeminiProvider: generateText not implemented.", { prompt, forceFresh });
-    throw new Error("GeminiProvider.generateText not implemented.");
+    return Promise.reject(new Error("GeminiProvider.generateText not implemented."));
   }
-  async generateEmbedding(text: string): Promise<number[]> {
+  async generateEmbedding(text: string): Promise<number[]> { // This can remain async
     logger.warn("GeminiProvider: generateEmbedding not implemented. Falling back to Ollama.");
-    return await ollama.generateEmbedding(text);
+    return ollama.generateEmbedding(text);
   }
-  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
+  processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
     logger.warn("GeminiProvider: processFeedback not implemented.", { originalPrompt, suggestion, feedback, score });
-    throw new Error("GeminiProvider.processFeedback not implemented.");
+    return Promise.reject(new Error("GeminiProvider.processFeedback not implemented."));
   }
 }
 
 class ClaudeProvider implements LLMProvider {
-  async checkConnection(): Promise<boolean> {
+  checkConnection(): Promise<boolean> {
     logger.info("ClaudeProvider: Checking connection (API key).");
     const apiKey = configService.CLAUDE_API_KEY;
     if (!apiKey) {
       logger.warn("Claude API key is not configured. Set CLAUDE_API_KEY in environment or model-config.json.");
-      return false;
+      return Promise.resolve(false);
     }
     logger.info(`Claude API Key found (length: ${apiKey.length}). Assuming connection is possible.`);
-    return !!apiKey; // Basic check; a lightweight API call would be better.
+    return Promise.resolve(!!apiKey); // Basic check; a lightweight API call would be better.
   }
-  async generateText(prompt: string, forceFresh?: boolean): Promise<string> {
+  generateText(prompt: string, forceFresh?: boolean): Promise<string> {
     logger.warn("ClaudeProvider: generateText not implemented.", { prompt, forceFresh });
-    throw new Error("ClaudeProvider.generateText not implemented.");
+    return Promise.reject(new Error("ClaudeProvider.generateText not implemented."));
   }
-  async generateEmbedding(text: string): Promise<number[]> {
+  async generateEmbedding(text: string): Promise<number[]> { // This can remain async
     logger.warn("ClaudeProvider: generateEmbedding not implemented. Falling back to Ollama.");
-    return await ollama.generateEmbedding(text);
+    return ollama.generateEmbedding(text);
   }
-  async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
+  processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
     logger.warn("ClaudeProvider: processFeedback not implemented.", { originalPrompt, suggestion, feedback, score });
-    throw new Error("ClaudeProvider.processFeedback not implemented.");
+    return Promise.reject(new Error("ClaudeProvider.processFeedback not implemented."));
   }
 }
 // --- End Placeholder Providers ---

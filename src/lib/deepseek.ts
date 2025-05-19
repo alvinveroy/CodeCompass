@@ -35,9 +35,9 @@ async function waitForRateLimit(): Promise<void> {
 
 /**
  * Check if DeepSeek API key is configured
- * @returns Promise<boolean> - True if API key is configured, false otherwise
+ * @returns boolean - True if API key is configured, false otherwise
  */
-export async function checkDeepSeekApiKey(): Promise<boolean> {
+export function checkDeepSeekApiKey(): boolean {
   // ConfigService handles loading the API key from file and environment.
   // It also updates process.env.DEEPSEEK_API_KEY.
   // This function now primarily serves to check if the key (from any source) is valid/present.
@@ -135,16 +135,13 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         response: axiosError.response ? {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
-          data: JSON.stringify(axiosError.response.data)
+          data: typeof axiosError.response.data === 'string' ? axiosError.response.data : JSON.stringify(axiosError.response.data)
         } : 'No response data',
         request: axiosError.request ? 'Request present' : 'No request data'
       });
       
       // Check for specific error types
-      const typedError = requestError as { 
-        code?: string; 
-        response?: { status: number; statusText: string; data: unknown }; 
-      };
+      const typedError = requestError as import('axios').AxiosError<{ message?: string }>;
       
       if (typedError.code === 'ECONNREFUSED') {
         logger.error("Connection refused. Check if the DeepSeek API endpoint is correct and accessible.");
@@ -158,14 +155,15 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     }
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    const axiosError = error as { response?: { status: number; data: unknown } };
+    const axiosError = error as import('axios').AxiosError<{ message?: string }>;
     
     logger.error("DeepSeek API connection test failed", {
       message: err.message,
       response: axiosError.response ? {
         status: axiosError.response.status,
         data: axiosError.response.data
-      } : null
+      } : null,
+      code: axiosError.code
     });
     return false;
   }
@@ -197,6 +195,17 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
       
       logger.debug(`Using DeepSeek API URL: ${apiUrl}`);
       logger.debug(`Using model: ${model}`);
+
+      interface DeepSeekChoice {
+        message: {
+          content: string;
+        };
+      }
+      
+      interface DeepSeekChatResponse {
+        choices: DeepSeekChoice[];
+        // Add other fields if necessary, e.g., usage
+      }
       
       const response = await withRetry(async () => {
         logger.debug(`Sending request to DeepSeek API at ${apiUrl} with model ${model}`);
@@ -209,7 +218,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
           max_tokens: 2048
         })}`);
         
-        const res = await axios.post(
+        const res = await axios.post<DeepSeekChatResponse>(
           apiUrl,
           {
             model: model,
@@ -240,7 +249,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
   } catch (error: unknown) {
     // incrementCounter('deepseek_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
-    const axiosError = error as { code?: string; response?: { status: number; data: unknown } };
+    const axiosError = error as import('axios').AxiosError<{ message?: string }>;
     
     logger.error("DeepSeek API error", {
       message: err.message,
@@ -280,11 +289,21 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
 
       logger.info(`Generating embedding with DeepSeek for text (length: ${processedText.length})`);
       logger.debug(`Using DeepSeek embedding URL: ${embeddingUrl}`);
+
+      interface DeepSeekEmbeddingData {
+        embedding: number[];
+        // Add other fields if necessary
+      }
+      
+      interface DeepSeekEmbeddingResponse {
+        data: DeepSeekEmbeddingData[];
+        // Add other fields if necessary, e.g., usage
+      }
       
       const response = await withRetry(async () => {
         logger.debug(`Sending embedding request to DeepSeek API with model: deepseek-embedding`);
         
-        const res = await axios.post(
+        const res = await axios.post<DeepSeekEmbeddingResponse>(
           embeddingUrl,
           {
             model: "deepseek-embedding",
@@ -313,7 +332,7 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
   } catch (error: unknown) {
     // incrementCounter('deepseek_embedding_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
-    const axiosError = error as { code?: string; response?: { status: number; data: unknown } };
+    const axiosError = error as import('axios').AxiosError<{ message?: string }>;
     
     logger.error("DeepSeek embedding error", {
       message: err.message,

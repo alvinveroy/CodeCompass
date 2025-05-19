@@ -71,7 +71,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       for (const point of scrollResult.points) {
         const indexedFilepath = point.payload?.filepath as string;
         // Ensure point.id is correctly typed; uuidv4 generates strings.
-        const pointId = point.id as string | number; 
+        const pointId = point.id; 
 
         if (indexedFilepath) {
           if (!currentFilePathsInRepo.has(indexedFilepath)) {
@@ -169,10 +169,11 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
       fs,
       dir: repoPath,
       trees: [git.TREE({ ref: previous.oid }), git.TREE({ ref: latest.oid })],
-      map: async (filepath, [a, b]) => {
-        if (!a && !b) return;
+      map: (filepath, [a, b]) => {
+        if (!a && !b) return null;
         const change = !a ? 'added' : !b ? 'removed' : 'modified';
         changes.push(`${change}: ${filepath}`);
+        return null;
       },
     });
     return changes.join('\n') || "No changes since last commit";

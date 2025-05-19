@@ -17,7 +17,7 @@ function getPackageVersion(): string {
     // Assuming the script runs from dist/index.js, package.json is ../package.json
     const packageJsonPath = path.resolve(__dirname, '../package.json');
     const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
-    const packageJson = JSON.parse(packageJsonContent);
+    const packageJson: { version?: string } = JSON.parse(packageJsonContent);
     return packageJson.version || 'unknown';
   } catch { // _error removed
     // Silently return 'unknown' on error, e.g. if package.json is not found during certain build phases
@@ -111,5 +111,5 @@ if (primaryArg === '--help' || primaryArg === '-h') {
   }
   // If primaryArg is undefined (no arguments given), repoPath remains '.'.
 
-  startServer(repoPath);
+  void startServer(repoPath);
 }
