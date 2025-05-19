@@ -620,8 +620,8 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
     }));
     
     // Format the response as clean markdown
-    const formattedResponse = `# Search Results for: "${query}"
-${refinedQuery !== query ? `\n> Query refined to: "${refinedQuery}"` : ''}
+    const formattedResponse = `# Search Results for: "${searchQuery}"
+${refinedQuery !== searchQuery ? `\n> Query refined to: "${refinedQuery}"` : ''}
 
 ${summaries.map(s => `
 ## ${s.filepath}
@@ -648,9 +648,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   });
 
   // Add get_changelog tool
-  server.addTool({
-    name: "get_changelog",
-    description: "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
+  server.tool(
+    "get_changelog",
+    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
     parameters: z.object({}), // Explicit Zod schema for no parameters
     annotations: { title: "Get Changelog" },
     execute: async () => { 
@@ -865,7 +865,7 @@ Ensure the suggestion is concise, practical, and leverages the repository's exis
       
       // Format the response as clean markdown
       const formattedResponse = `# Code Suggestion for: "${queryStr}"
-${refinedQuery !== query ? `\n> Query refined to: "${refinedQuery}"` : ''}
+${refinedQuery !== queryStr ? `\n> Query refined to: "${refinedQuery}"` : ''}
 
 ## Suggestion
 ${suggestion}
@@ -1009,7 +1009,7 @@ Provide a concise summary of the context for "${queryStrCtx}" based on the repos
       
       // Format the response as clean markdown
       const formattedResponse = `# Repository Context Summary for: "${queryStrCtx}"
-${refinedQuery !== query ? `\n> Query refined to: "${refinedQuery}"` : ''}
+${refinedQuery !== queryStrCtx ? `\n> Query refined to: "${refinedQuery}"` : ''}
 
 ## Summary
 ${summary}

@@ -187,7 +187,7 @@ class OpenAIProvider implements LLMProvider {
     const apiKey = configService.OPENAI_API_KEY;
     if (!apiKey) {
       logger.warn("OpenAI API key is not configured. Set OPENAI_API_KEY in environment or model-config.json.");
-      return false;
+      return Promise.resolve(false);
     }
     // A more robust check would involve a lightweight API call, e.g., listing models.
     // For now, just checking if the key exists and has a plausible format.
