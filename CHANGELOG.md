@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- Attempted to resolve persistent ESLint errors by simplifying `eslint-disable-next-line` comments (removing justifications) as a diagnostic step. This is to check if comment content was interfering with ESLint's processing, though the primary suspect remains a potential ESLint configuration issue (e.g., missing `.eslintrc.js`). (following up on b45ad07)
+    - `src/lib/deepseek.ts`: Simplified disable comment for `no-unsafe-assignment`.
+    - `src/lib/llm-provider.ts`: Simplified disable comment for `await-thenable`.
+    - `src/lib/server.ts`: Simplified disable comments for `no-base-to-string` and `no-unsafe-assignment`.
 - Addressed 5 persistent ESLint errors based on CodeCompass insights (following up on b980ab0):
     - `src/lib/deepseek.ts`: Added `eslint-disable-next-line @typescript-eslint/no-unsafe-assignment` before the `data:` property in logging, justifying the safe stringification of potentially varied error response data.
     - `src/lib/llm-provider.ts`: Ensured `eslint-disable-next-line @typescript-eslint/await-thenable` for `await connectionPromise` is correctly placed and justified, as `connectionPromise` is explicitly a Promise.

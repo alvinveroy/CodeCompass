@@ -135,7 +135,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         response: axiosError.response ? {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Safely stringifying potentially varied error response data for logging.
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: (() => {
             const responseData = axiosError.response?.data;
             if (typeof responseData === 'string') return responseData;
