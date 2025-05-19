@@ -102,8 +102,26 @@ export async function startServer(repoPath: string): Promise<void> {
       vendor: "CodeCompass",
       capabilities: {
         resources: {
-          // This section is now empty because resources/list will be handled manually.
-          // The server.resource() calls later will register the actual resource handlers.
+          "repo://structure": {
+            name: "Repository File Structure",
+            description: "Lists all files in the current Git repository.",
+            mimeType: "text/plain"
+          },
+          "repo://files/*": {
+            name: "Repository File Content",
+            description: "Retrieves the content of a specific file from the repository. The wildcard * must be replaced with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
+            mimeType: "text/plain" // Default, actual content type might vary
+          },
+          "repo://health": {
+            name: "Server Health Status",
+            description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access).",
+            mimeType: "application/json"
+          },
+          "repo://version": {
+            name: "Server Version",
+            description: "Provides the current version of the CodeCompass server.",
+            mimeType: "text/plain"
+          }
         },
         tools: {
           search_code: {},
@@ -158,51 +176,12 @@ export async function startServer(repoPath: string): Promise<void> {
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
     registerPrompts(server); 
-
-    // Manually handle the 'resources/list' request
-    // The handler is async to align with potential SDK expectations for Promise-returning handlers,
-    // even though this specific implementation is synchronous.
-    interface McpResourcesListParams {
-      id?: string | number | null; // JSON-RPC request ID
-      // Add other specific params for resources/list if any are defined by MCP spec
-    }
-    // eslint-disable-next-line @typescript-eslint/require-await
-    server.onRequest("resources/list", async (_params: McpResourcesListParams, _sessionId?: string) => {
-      const requestId = _params.id;
-      const resources = [
-        {
-          uri: "repo://structure",
-          name: "Repository File Structure", // Human-readable name
-          description: "Lists all files in the current Git repository.",
-          mimeType: "text/plain"
-        },
-        {
-          uri: "repo://files/*",
-          name: "Repository File Content", // Human-readable name
-          description: "Retrieves the content of a specific file from the repository. The wildcard * must be replaced with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
-          mimeType: "text/plain" // Default, actual content type might vary
-        },
-        {
-          uri: "repo://health",
-          name: "Server Health Status", // Human-readable name
-          description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access).",
-          mimeType: "application/json"
-        },
-        {
-          uri: "repo://version",
-          name: "Server Version", // Human-readable name
-          description: "Provides the current version of the CodeCompass server.",
-          mimeType: "text/plain" // The handler for repo://version returns plain text
-        }
-      ];
-      logger.info("Responding to resources/list with manually constructed full JSON-RPC response.");
-      return {
-        jsonrpc: "2.0",
-        result: resources,
-        id: requestId
-      };
-    });
     
+    // Note: The manual server.onRequest("resources/list", ...) handler has been removed 
+    // as 'onRequest' does not exist on McpServer type.
+    // The 'capabilities.resources' object in the McpServer constructor
+    // is now populated to allow the SDK to handle 'resources/list' automatically.
+
     server.tool(
       "switch_suggestion_model",
       "Switches the primary model and provider used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder' (DeepSeek provider), use `{\"model\": \"deepseek-coder\", \"provider\": \"deepseek\"}`. To switch to 'llama3.1:8b' (Ollama provider), use `{\"model\": \"llama3.1:8b\", \"provider\": \"ollama\"}`. If provider is omitted, it may be inferred for known model patterns. For other providers like 'openai', 'gemini', 'claude', specify both model and provider: `{\"model\": \"gpt-4\", \"provider\": \"openai\"}`.",

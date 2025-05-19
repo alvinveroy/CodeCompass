@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
-- Resolved `@typescript-eslint/no-unsafe-call` ESLint error for `server.onRequest("resources/list", ...)` in `src/lib/server.ts`. The handler now constructs and returns the full JSON-RPC response object (including `jsonrpc`, `result`, and `id`), aligning with common patterns for lower-level request handlers and hints from MCP client error messages. The handler remains `async` for SDK compatibility, with `@typescript-eslint/require-await` disabled. (Follows up on 0dc0f7d)
+- Resolved TypeScript build error `TS2339: Property 'onRequest' does not exist on type 'McpServer'` by removing the manual `server.onRequest("resources/list", ...)` handler in `src/lib/server.ts`.
+- Addressed the underlying MCP client serialization error for `resources/list` requests by populating the `capabilities.resources` object in the `McpServer` constructor with comprehensive metadata (human-readable `name`, `description`, `mimeType`) for each resource. This allows the SDK to correctly generate the `resources/list` response. (Reverts approach from 9cb0f50, 7a0af62 and builds upon 58ffec4)
 - Attempted to resolve persistent ESLint errors by simplifying `eslint-disable-next-line` comments (removing justifications) as a diagnostic step. This is to check if comment content was interfering with ESLint's processing, though the primary suspect remains a potential ESLint configuration issue (e.g., missing `.eslintrc.js`). (following up on b45ad07)
     - `src/lib/deepseek.ts`: Simplified disable comment for `no-unsafe-assignment`.
     - `src/lib/llm-provider.ts`: Simplified disable comment for `await-thenable`.
