@@ -796,7 +796,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
         const toolParams = normalizedParams as GenerateSuggestionParams;
 
-        let queryFromParams: string = "default code suggestion query";
+        let queryFromParams = "default code suggestion query";
         const rawQuery = toolParams.query; 
         if (typeof rawQuery === 'string') {
             queryFromParams = rawQuery;
