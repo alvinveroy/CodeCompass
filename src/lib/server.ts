@@ -181,7 +181,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
     server.resource(
       "Repository File Content",
-      "repo://files/{filepath}",
+      { uriTemplate: "repo://files/{filepath}" }, // Wrap uriTemplate in an object
       z.object({ filepath: z.string().describe("The path to the file relative to the repository root.") }),
       async (params: { filepath: string }, uri: URL) => {
       const relativeFilepath = params.filepath.trim();
