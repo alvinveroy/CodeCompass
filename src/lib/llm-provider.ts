@@ -473,7 +473,7 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
   
   if (normalizedProviderName === 'deepseek') {
     try {
-      const apiKeyConfigured = await deepseek.checkDeepSeekApiKey();
+      const apiKeyConfigured = deepseek.checkDeepSeekApiKey(); // Removed await
       if (!apiKeyConfigured) {
         logger.warn("DeepSeek API key not configured, falling back to Ollama");
         provider = instantiateProvider('ollama');

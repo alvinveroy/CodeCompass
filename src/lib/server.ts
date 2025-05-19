@@ -208,11 +208,21 @@ export async function startServer(repoPath: string): Promise<void> {
       async (params: unknown) => {
         // chainId and trackToolChain removed
       
-         
-        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) });
+        let paramsString: string;
+        try {
+          if (typeof params === 'object' && params !== null) {
+            paramsString = JSON.stringify(params);
+          } else {
+            paramsString = String(params);
+          }
+        } catch (e) {
+          paramsString = "[Unserializable parameters]";
+        }
+        logger.info("Received params for switch_suggestion_model", { params: paramsString });
         const normalizedParams = normalizeToolParams(params);
-        logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
-      
+        // For debugging, ensure normalizedParams is also stringified if it's complex
+        logger.debug("Normalized params for switch_suggestion_model", typeof normalizedParams === 'object' && normalizedParams !== null ? JSON.stringify(normalizedParams) : String(normalizedParams));
+
         // Parameters should conform to the Zod schema: { model: string }
         // normalizeToolParams ensures we have an object.
         let modelToSwitchTo: string;
@@ -689,18 +699,26 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
     (params: unknown) => { // Removed async
-      logger.info("Received params for get_session_history", { params });
-      const normalizedParams = normalizeToolParams(params);
-      logger.debug("Normalized params for get_session_history", normalizedParams);
-        
-      const { sessionId } = normalizedParams;
-        
-      if (!sessionId) {
-        throw new Error("Session ID is required");
+      // Stringify params for logging to avoid [object Object] issues
+      let paramsLogString: string;
+      try {
+        paramsLogString = (typeof params === 'object' && params !== null) ? JSON.stringify(params) : String(params);
+      } catch {
+        paramsLogString = "[Unserializable params]";
       }
-    
+      logger.info("Received params for get_session_history", { params: paramsLogString });
+      const normalizedParams = normalizeToolParams(params);
+      logger.debug("Normalized params for get_session_history", typeof normalizedParams === 'object' && normalizedParams !== null ? JSON.stringify(normalizedParams) : String(normalizedParams));
+
+      const sessionIdValue = normalizedParams.sessionId;
+
+      if (typeof sessionIdValue !== 'string' || !sessionIdValue) {
+        logger.error("Session ID is required and must be a non-empty string.", { receivedSessionId: String(sessionIdValue) });
+        throw new Error("Session ID is required and must be a non-empty string.");
+      }
+
     try {
-      const session = getOrCreateSession(sessionId as string);
+      const session = getOrCreateSession(sessionIdValue);
       
       return {
         content: [{
