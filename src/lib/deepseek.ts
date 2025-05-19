@@ -122,7 +122,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       logger.warn(`DeepSeek API test failed with status: ${response.status}`);
       return false;
     } catch (requestError: unknown) {
-      const err = requestError instanceof Error ? requestError : new Error(String(requestError));
+      const err: Error = requestError instanceof Error ? requestError : new Error(String(requestError));
 
       // Define an interface for the log payload for clarity
       interface DeepSeekErrorLogPayload {

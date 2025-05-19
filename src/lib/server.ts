@@ -790,14 +790,11 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        interface GenerateSuggestionParams {
-          query?: unknown;
-          sessionId?: unknown;
-        }
-        const toolParams = normalizedParams as GenerateSuggestionParams;
+        // Removed GenerateSuggestionParams interface and toolParams variable. Access directly from normalizedParams.
+        // normalizedParams is Record<string, unknown>, so normalizedParams.query is unknown.
 
         let queryFromParams = "default code suggestion query";
-        const rawQuery = toolParams.query; 
+        const rawQuery = normalizedParams.query; // rawQuery is unknown
         if (typeof rawQuery === 'string') {
             queryFromParams = rawQuery;
         } else if (rawQuery !== undefined) {
@@ -807,7 +804,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
 
         let sessionIdFromParams: string | undefined = undefined;
-        const rawSessionId = toolParams.sessionId; 
+        const rawSessionId = normalizedParams.sessionId; // rawSessionId is unknown
         if (typeof rawSessionId === 'string') {
             sessionIdFromParams = rawSessionId;
         } else if (rawSessionId !== undefined) {
