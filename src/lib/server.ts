@@ -181,7 +181,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
     server.resource(
       "Repository File Content",
-      { uriTemplate: "repo://files/{filepath}" }, // Template object
+      { uriTemplate: { text: "repo://files/{filepath}" } }, // Template object, with uriTemplate.text
       {}, // Empty metadata object
       async (params: { filepath: string }, uri: URL) => { // SDK should infer params type from capabilities
       const relativeFilepath = params.filepath.trim();
