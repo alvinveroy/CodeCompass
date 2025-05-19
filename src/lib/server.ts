@@ -181,6 +181,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
     server.resource(
       "Repository File Content",
+      {}, // Add empty metadata object
       async (params: { filepath: string }, uri: URL) => { 
       const relativeFilepath = params.filepath.trim();
 
