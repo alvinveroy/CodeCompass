@@ -1,35 +1,23 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-// McpContext import removed as it's causing issues; will use 'any' for unused context param
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-// import { initMcpSafeLogging } from "./mcp-logger"; // mcp-logger removed
 import fs from "fs/promises";
- // Keep for sync operations if any remain
-import path from "path"; // Keep for local path operations
+import path from "path";
 import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
-// model-persistence functions (loadModelConfig, forceUpdateModelConfig) are no longer directly used here.
-// Their functionalities are covered by configService methods or were part of removed tools.
 
-// Initialize MCP-safe logging immediately
-// initMcpSafeLogging(); // mcp-logger removed
-import { DetailedQdrantSearchResult } from "./types"; // Changed QdrantSearchResult to DetailedQdrantSearchResult
-import { z } from "zod"; // Simplified Zod import
+import { DetailedQdrantSearchResult } from "./types";
+import { z } from "zod";
 import { checkOllama, checkOllamaModel } from "./ollama";
-import { initializeQdrant } from "./qdrant"; // searchWithRefinement removed from here
-import { searchWithRefinement } from "./query-refinement"; // Added import for searchWithRefinement
+import { initializeQdrant } from "./qdrant";
+import { searchWithRefinement } from "./query-refinement";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
-// Removed metrics imports: getMetrics, resetMetrics, startMetricsLogging, trackToolChain, trackAgentRun
-import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider"; // Added LLMProvider import
-import { SuggestionPlanner } from "./suggestion-service"; // Added SuggestionPlanner import
-import { AgentInitialQueryResponse } from "./types"; // AgentStepExecutionResponse, AgentStateSchema removed
+import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
+import { SuggestionPlanner } from "./suggestion-service";
+import { AgentInitialQueryResponse } from "./types";
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
-// import { runAgentLoop } from "./agent"; // This is now unused
 
-// generateChainId function removed
-
-// Normalize tool parameters to handle various input formats
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
   if (typeof params === 'object' && params !== null) {
     // If it's already a non-null object, return as is.
@@ -37,14 +25,12 @@ export function normalizeToolParams(params: unknown): Record<string, unknown> {
   }
   if (typeof params === 'string') {
     try {
-      const parsed = JSON.parse(params) as unknown; // Parse as unknown first
+      const parsed = JSON.parse(params) as unknown;
       if (typeof parsed === 'object' && parsed !== null) {
-        return parsed as Record<string, unknown>; // Then assert to Record
+        return parsed as Record<string, unknown>;
       }
-      // If parsed is not an object, treat as a query string
       return { query: params };
     } catch {
-      // Not a valid JSON string, treat as a simple query string
       return { query: params };
     }
   }
@@ -65,11 +51,8 @@ export function normalizeToolParams(params: unknown): Record<string, unknown> {
   return { query: `[Unexpected type: ${typeof params}]` };
 }
 
-// Start Server
 export async function startServer(repoPath: string): Promise<void> {
-  // MCP-safe logging is already initialized at the top of the file
   
-  // Use file logging instead of stdout
   logger.info("Starting CodeCompass MCP server...");
 
   try {
@@ -77,20 +60,14 @@ export async function startServer(repoPath: string): Promise<void> {
     // For server start, ensure it reflects the latest state.
     configService.reloadConfigsFromFile(true); 
 
-    // If SUGGESTION_MODEL was set in env, switchSuggestionModel might have been intended.
-    // Now, configService handles this initial load. switchSuggestionModel is for dynamic changes.
-    // We can log what's loaded:
     logger.info(`Initial suggestion model from config: ${configService.SUGGESTION_MODEL}`);
     
-    // Validate repoPath
     if (!repoPath || repoPath === "${workspaceFolder}" || repoPath.trim() === "") {
       logger.warn("Invalid repository path provided, defaulting to current directory");
-      repoPath = process.cwd(); // process.cwd() is fine
+      repoPath = process.cwd();
     }
 
-    // loadModelConfig(true); // This is handled by configService.reloadConfigsFromFile(true)
-
-    const llmProvider = await getLLMProvider(); // Uses configService
+    const llmProvider = await getLLMProvider();
     const isLlmAvailable = await llmProvider.checkConnection();
     
     if (!isLlmAvailable) {
@@ -101,14 +78,14 @@ export async function startServer(repoPath: string): Promise<void> {
     try {
       const currentSuggestionProvider = configService.SUGGESTION_PROVIDER.toLowerCase();
       if (currentSuggestionProvider === 'ollama') {
-        await checkOllama(); // Uses configService
-        await checkOllamaModel(configService.EMBEDDING_MODEL, true); // Uses configService
-        await checkOllamaModel(configService.SUGGESTION_MODEL, false); // Uses configService
+        await checkOllama();
+        await checkOllamaModel(configService.EMBEDDING_MODEL, true);
+        await checkOllamaModel(configService.SUGGESTION_MODEL, false);
         suggestionModelAvailable = true;
       } else if (currentSuggestionProvider === 'deepseek') {
-        suggestionModelAvailable = isLlmAvailable; // Assumes connection test implies model for DeepSeek
+        suggestionModelAvailable = isLlmAvailable;
       } else {
-        suggestionModelAvailable = isLlmAvailable; // Fallback for other/unknown
+        suggestionModelAvailable = isLlmAvailable;
       }
     } catch (error: unknown) {
       logger.warn(`Warning: Model not available. Suggestion tools may be limited: ${(error as Error).message}`);
@@ -128,8 +105,6 @@ export async function startServer(repoPath: string): Promise<void> {
           "repo://structure": {},
           "repo://files/*": {},
           "repo://health": {},
-          // "repo://metrics": {}, // Removed
-          // "repo://provider": {}, // Removed
           "repo://version": {},
         },
         tools: {
@@ -137,18 +112,10 @@ export async function startServer(repoPath: string): Promise<void> {
           get_repository_context: {},
           ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
           get_changelog: {},
-          agent_query: {}, // Agent tool for direct plan and summary
-          // execute_agent_step: {}, // Removed
+          agent_query: {},
           switch_suggestion_model: {},
-          // "prompts/list": {}, // Removed from tools, will be a direct method
-          // check_provider: {}, // Removed
-          // reset_metrics: {}, // Removed
-          // deepseek_diagnostic: {}, // Removed
-          // force_deepseek_connection: {}, // Removed
-          // provide_feedback and analyze_code_problem also removed by not being registered in registerTools
         },
         prompts: {}, // Explicitly declare prompts capability
-        // prompts capability is now handled by individual server.prompt() registrations
       },
     });
 
@@ -157,7 +124,6 @@ export async function startServer(repoPath: string): Promise<void> {
       throw new Error("MCP server does not support 'resource' method");
     }
     
-    // Add health check resource
     server.resource("repo://health", "repo://health", {}, async () => {
       const status = {
         ollama: await checkOllama().then(() => "healthy").catch(() => "unhealthy"),
@@ -169,18 +135,13 @@ export async function startServer(repoPath: string): Promise<void> {
       return { contents: [{ uri: "repo://health", text: JSON.stringify(status, null, 2) }] };
     });
     
-    // Add metrics resource - REMOVED
-    
-    // Add provider status resource - REMOVED
-    
-    // Add version resource
-    server.resource("repo://version", "repo://version", {}, () => { // Removed async
+    server.resource("repo://version", "repo://version", {}, () => {
       return { contents: [{ uri: "repo://version", text: VERSION }] };
     });
-    server.resource("repo://structure", "repo://structure", {}, async () => { // This async is fine
+    server.resource("repo://structure", "repo://structure", {}, async () => {
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" }) // await is used
+        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
       return { contents: [{ uri: "repo://structure", text: files.join("\n") }] };
     });
@@ -196,17 +157,10 @@ export async function startServer(repoPath: string): Promise<void> {
       }
     });
 
-    // Register tools
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
-    // Register prompts
     registerPrompts(server); 
-    // The get_repository_context tool is registered within registerTools.
-    // Its internal logic handles behavior when suggestionModelAvailable is false.
-    // No need for a separate conditional registration here.
     
-  
-    // Register the switch suggestion model tool
     server.tool(
       "switch_suggestion_model",
       "Switches the primary model and provider used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder' (DeepSeek provider), use `{\"model\": \"deepseek-coder\", \"provider\": \"deepseek\"}`. To switch to 'llama3.1:8b' (Ollama provider), use `{\"model\": \"llama3.1:8b\", \"provider\": \"ollama\"}`. If provider is omitted, it may be inferred for known model patterns. For other providers like 'openai', 'gemini', 'claude', specify both model and provider: `{\"model\": \"gpt-4\", \"provider\": \"openai\"}`.",
@@ -215,7 +169,6 @@ export async function startServer(repoPath: string): Promise<void> {
         provider: z.string().optional().describe("The LLM provider for the model (e.g., 'ollama', 'deepseek', 'openai', 'gemini', 'claude'). If omitted, an attempt will be made to infer it.")
       },
       async (params: unknown) => {
-        // chainId and trackToolChain removed
       
         let paramsString: string;
         try {
@@ -224,16 +177,13 @@ export async function startServer(repoPath: string): Promise<void> {
           } else {
             paramsString = String(params);
           }
-        } catch { // 'e' removed as it's unused
+        } catch {
           paramsString = "[Unserializable parameters]";
         }
         logger.info("Received params for switch_suggestion_model", { params: paramsString });
         const normalizedParams = normalizeToolParams(params);
-        // For debugging, ensure normalizedParams is also stringified if it's complex
         logger.debug("Normalized params for switch_suggestion_model", typeof normalizedParams === 'object' && normalizedParams !== null ? JSON.stringify(normalizedParams) : String(normalizedParams));
 
-        // Parameters should conform to the Zod schema: { model: string }
-        // normalizeToolParams ensures we have an object.
         let modelToSwitchTo: string;
         let providerToSwitchTo: string | undefined;
 
@@ -251,7 +201,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
         if (normalizedParams && typeof normalizedParams.provider === 'string') {
           providerToSwitchTo = normalizedParams.provider.toLowerCase();
-        } else if (normalizedParams && normalizedParams.provider !== undefined) { // handles null or other non-string types for provider
+        } else if (normalizedParams && normalizedParams.provider !== undefined) {
           logger.error("Invalid 'provider' parameter for switch_suggestion_model. It must be a string if provided.", { normalizedParams });
           return {
             content: [{
@@ -278,19 +228,15 @@ export async function startServer(repoPath: string): Promise<void> {
             };
           }
         
-          // Get the actual values from ConfigService to report what was set
           const actualModel = configService.SUGGESTION_MODEL;
           const actualProvider = configService.SUGGESTION_PROVIDER;
           const embeddingProvider = configService.EMBEDDING_PROVIDER;
         
           logger.info(`Successfully switched. ConfigService reports: Model='${actualModel}', Provider='${actualProvider}', Embedding Provider='${embeddingProvider}'`);
         
-          // Construct a message confirming the switch
           let message = `# Suggestion Model Switched\n\nSuccessfully switched to model '${actualModel}' using provider '${actualProvider}' for suggestions.\nEmbeddings continue to use '${embeddingProvider}'.\n\n`;
           message += `To make this change permanent, update your environment variables (e.g., SUGGESTION_MODEL='${actualModel}', SUGGESTION_PROVIDER='${actualProvider}') or the relevant configuration files (e.g., ~/.codecompass/model-config.json).`;
           
-          // Add provider-specific instructions or warnings if needed.
-          // This can be enhanced based on feedback from llm-provider or specific checks here.
           if (actualProvider === 'deepseek' && !configService.DEEPSEEK_API_KEY) {
             message += `\n\nWarning: DeepSeek provider is selected, but DEEPSEEK_API_KEY is not found in current configuration. Ensure it is set for DeepSeek to function.`;
           } else if (actualProvider === 'openai' && !configService.OPENAI_API_KEY) {
@@ -319,40 +265,20 @@ export async function startServer(repoPath: string): Promise<void> {
         }
       }
     );
-    // The unused 'err' variable (previously around line 291) is in the catch block above.
-    // The error message for switch_suggestion_model (previously around line 602) is also above.
 
-    // Register deepseek_diagnostic tool - REMOVED
-    // Register force_deepseek_connection tool - REMOVED
-    
-    // The 'prompts/list' method is automatically handled by the MCP SDK
-    // based on the 'prompts' provided in the server capabilities.
-    // No manual registration is needed.
-    
-    // Start metrics logging - REMOVED
-    
-    // Configure transport to use proper JSON formatting
     const transport = new StdioServerTransport();
     
-    // Log startup info to file
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
     const registeredTools = (server as { capabilities?: { tools?: Record<string, unknown> } }).capabilities?.tools || {};
     logger.info(`CodeCompass server started with tools: ${Object.keys(registeredTools).join(', ')}`);
     
-    // Display version and status to stderr (similar to Context7)
     console.error(`CodeCompass v${VERSION} MCP Server running on stdio`);
     
-    // Connect to transport after registering all capabilities
     await server.connect(transport);
     
-    // Metrics interval clearing removed
-    process.on('SIGINT', () => {
-      logger.info("Server shutting down");
-      process.exit(0);
     });
     
     await new Promise<void>((resolve) => {
-      // This promise intentionally never resolves to keep the server running
       process.on('SIGINT', () => {
         resolve();
       });
@@ -365,7 +291,7 @@ export async function startServer(repoPath: string): Promise<void> {
   }
 }
 
-function registerPrompts(server: McpServer): void { // Removed async
+function registerPrompts(server: McpServer): void {
   if (typeof server.prompt !== "function") {
     logger.warn("MCP server instance does not support 'prompt' method. Prompts may not be available.");
     return;
@@ -415,7 +341,7 @@ function registerTools( // Removed async
   qdrantClient: QdrantClient, 
   repoPath: string, 
   suggestionModelAvailable: boolean
-): void { 
+): void {
   if (typeof server.tool !== "function") {
     throw new Error("MCP server does not support 'tool' method");
   }
@@ -430,7 +356,6 @@ function registerTools( // Removed async
       // maxSteps removed
     },
     async (params: unknown) => {
-      // chainId, trackToolChain, trackAgentRun removed
       logger.info(`Tool 'agent_query' execution started.`);
       
       logger.info("Received params for agent_query", { params });
@@ -443,16 +368,13 @@ function registerTools( // Removed async
         logger.warn("No query provided for agent_query, using default");
       }
       
-      const { query, sessionId: initialSessionId } = normalizedParams as { query: string; sessionId?: string }; // This assertion is contextually acceptable
+      const { query, sessionId: initialSessionId } = normalizedParams as { query: string; sessionId?: string };
     
     try {
-      // Ensure ConfigService reflects the latest state from files.
       configService.reloadConfigsFromFile(true);
 
-      const llmProvider = await getLLMProvider(); // Uses configService
+      const llmProvider = await getLLMProvider();
       logger.info(`Agent using provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
-
-      // Perform a search for the agent's query to gather context
       const session = getOrCreateSession(initialSessionId, repoPath);
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
@@ -465,7 +387,6 @@ function registerTools( // Removed async
         query, // query is already string
         files
       );
-      // Add this search to session history
       const topScore = searchResults.length > 0 ? searchResults[0].score : 0;
       addQuery(session.id, query, searchResults, topScore);
 
@@ -489,10 +410,9 @@ Ensure the plan outlines steps to answer the query or solve the task, and the su
 `;
       
       const planner = new SuggestionPlanner(llmProvider);
-      // initiateAgentQuery now returns a plan and summary directly.
       const agentResponse: AgentInitialQueryResponse = await planner.initiateAgentQuery(
         augmentedPrompt,
-        session.id // Use the obtained session.id
+        session.id
       );
 
       if (agentResponse.status === "ERROR") {
@@ -554,7 +474,6 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
     },
     async (params: unknown) => {
-      // chainId and trackToolChain removed
       logger.info(`Tool 'search_code' execution started.`);
         
       logger.info("Received params for search_code", { params });
@@ -585,10 +504,8 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
         logger.warn("SessionID parameter is not a string in search_code.", { receivedSessionId: sessionIdValueSc });
       }
     
-    // Get or create session
     const session = getOrCreateSession(searchSessionId, repoPath);
     
-    // Log the extracted query to confirm it's working
     logger.info("Extracted query for search_code", { query: searchQuery, sessionId: session.id });
     
     const isGitRepo = await validateGitRepository(repoPath);
@@ -596,23 +513,18 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
       ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
       : [];
     
-    // Update context in session
     updateContext(session.id, repoPath, files);
     
-    // Use iterative query refinement
     const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
       qdrantClient, 
       searchQuery, 
       files
     );
     
-    // Add query to session
     addQuery(session.id, searchQuery, results, relevanceScore); 
     
-    // Get the current LLM provider
     const llmProvider = await getLLMProvider();
     
-    // Generate summaries for the results
     const summaries = await Promise.all(results.map(async result => {
       const snippet = result.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH);
       let summary = "Summary unavailable";
@@ -668,12 +580,12 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add get_changelog tool
   server.tool(
     "get_changelog",
-    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.", // Description
-    {}, // Parameters schema: pass an empty object as ZodRawShape
-    { // Options - This is now the 4th argument
+    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
+    {},
+    {
       annotations: { title: "Get Changelog" }
     },
-    async (_params: Record<string, never>, _context: unknown) => { // Handler with _context as unknown - This is now the 5th argument
+    async (_params: Record<string, never>, _context: unknown) => {
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
         const changelog = await fs.readFile(changelogPath, 'utf8'); 
@@ -707,8 +619,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
-    (params: unknown) => { // Removed async
-      // Stringify params for logging to avoid [object Object] issues
+    (params: unknown) => {
       let paramsLogString: string;
       try {
         paramsLogString = (typeof params === 'object' && params !== null) ? JSON.stringify(params) : String(params);
@@ -777,7 +688,6 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
       async (params: unknown) => {
-        // chainId and trackToolChain removed
         logger.info(`Tool 'generate_suggestion' execution started.`);
         
         logger.info("Received params for generate_suggestion", { params });
@@ -790,11 +700,8 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        // Removed GenerateSuggestionParams interface and toolParams variable. Access directly from normalizedParams.
-        // normalizedParams is Record<string, unknown>, so normalizedParams.query is unknown.
-
         let queryFromParams = "default code suggestion query";
-         
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- normalizedParams.query is unknown, rawQuery is explicitly unknown. This is type-safe.
         const rawQuery: unknown = normalizedParams.query;
         if (typeof rawQuery === 'string') {
             queryFromParams = rawQuery;
@@ -805,7 +712,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
 
         let sessionIdFromParams: string | undefined = undefined;
-         
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- normalizedParams.sessionId is unknown, rawSessionId is explicitly unknown. This is type-safe.
         const rawSessionId: unknown = normalizedParams.sessionId;
         if (typeof rawSessionId === 'string') {
             sessionIdFromParams = rawSessionId;
@@ -813,15 +720,10 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
             logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: rawSessionId });
         }
       
-      // Get or create session
       const session = getOrCreateSession(sessionIdFromParams, repoPath);
       
-      // Log the extracted query to confirm it's working
       const queryStr = queryFromParams; 
       logger.info("Extracted query for generate_suggestion", { query: queryStr, sessionId: session.id });
-      
-      // First, use search_code internally to get relevant context
-      // trackToolChain(chainId, "search_code"); // Removed as chainId is not defined and metrics are removed
       
       const isGitRepo = await validateGitRepository(repoPath);
       const files = isGitRepo
@@ -829,14 +731,11 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         : [];
       const _diff = await getRepositoryDiff(repoPath);
       
-      // Update context in session
       updateContext(session.id, repoPath, files, _diff);
       
-      // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
       const relevantResults = getRelevantResults(session.id);
       
-      // Use iterative query refinement for better search results
       const { results, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
         queryStr, 
@@ -852,13 +751,12 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         note: ""
       }));
       
-      // Include previous relevant results if current results are limited
       if (context.length < 2 && relevantResults.length > 0) {
         const additionalContext = relevantResults
-          .filter(r => !context.some(c => c.filepath === (r as DetailedQdrantSearchResult).payload?.filepath)) // Cast here is okay for filtering
+          .filter(r => !context.some(c => c.filepath === (r as DetailedQdrantSearchResult).payload?.filepath))
           .slice(0, 2)
           .map(rUnk => {
-            const r = rUnk as DetailedQdrantSearchResult; // Define r with type for clarity
+            const r = rUnk as DetailedQdrantSearchResult;
             return {
               filepath: r.payload?.filepath || "unknown",
               snippet: r.payload?.content?.slice(0, configService.MAX_SNIPPET_LENGTH) || "",
@@ -889,16 +787,12 @@ Based on the provided context and snippets, generate a detailed code suggestion 
 Ensure the suggestion is concise, practical, and leverages the repository's existing code structure. If the query is ambiguous, provide a general solution with assumptions clearly stated.
       `;
       
-      // Get the current LLM provider
       const llmProvider: LLMProvider = await getLLMProvider();
       
-      // Generate suggestion directly using the LLM provider
       const suggestion = await llmProvider.generateText(prompt);
       
-      // Add suggestion to session
       addSuggestion(session.id, queryStr, suggestion);
       
-      // Format the response as clean markdown
       const formattedResponse = `# Code Suggestion for: "${queryStr}"
 ${refinedQuery !== queryStr ? `\n> Query refined to: "${refinedQuery}"` : ''}
 
@@ -923,7 +817,6 @@ ${_diff}
 \`\`\`
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
-// Feedback ID removed
       
       return {
         content: [{
@@ -944,42 +837,32 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
       async (params: unknown) => {
-        // chainId and trackToolChain removed
         
         logger.info("Received params for get_repository_context", { params });
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for get_repository_context", normalizedParams);
         
-        // Handle the case where params might be a JSON string with a query property
         let parsedParams = normalizedParams;
         if (typeof normalizedParams === 'string') {
           try {
-            const parsed: unknown = JSON.parse(normalizedParams); // Explicitly type parsed as unknown
+            const parsed: unknown = JSON.parse(normalizedParams);
             if (parsed && typeof parsed === 'object') {
-              parsedParams = parsed as Record<string, unknown>; // Assert parsed to Record<string, unknown>
+              parsedParams = parsed as Record<string, unknown>;
             }
           } catch {
-            // If it's not valid JSON, keep using it as a string query
             parsedParams = { query: normalizedParams };
           }
         }
         
-        // Ensure query exists
         if (typeof parsedParams === 'object' && parsedParams !== null && !('query' in parsedParams && typeof parsedParams.query === 'string')) {
-          // If query is missing or not a string, set a default
-           
           (parsedParams as { query?: unknown }).query = "repository context";
           logger.warn("No query provided or query was not a string for get_repository_context, using default query.");
         } else if (typeof parsedParams !== 'object' || parsedParams === null) {
-          // If parsedParams is not an object at all, create it with a default query
-           
           parsedParams = { query: "repository context" };
           logger.warn("parsedParams was not an object for get_repository_context, initialized with default query.");
         }
         
         let queryFromParamsCtx: string;
-        // At this point, parsedParams is an object and parsedParams.query should exist if it was missing.
-        // We still need to handle the case where parsedParams.query might have been set to something other than a string by normalizeToolParams if the input was unusual.
         const queryValue = (parsedParams as { query?: unknown }).query;
         if (typeof queryValue === 'string') {
           queryFromParamsCtx = queryValue;
@@ -995,11 +878,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           logger.warn("SessionID parameter is not a string in get_repository_context.", { receivedSessionId: parsedParams.sessionId });
         }
       
-      // Get or create session
       const session = getOrCreateSession(sessionIdFromParamsCtx, repoPath);
       
-      // Log the extracted query to confirm it's working
-      const queryStrCtx = queryFromParamsCtx; // queryFromParamsCtx is now definitely a string
+      const queryStrCtx = queryFromParamsCtx;
       logger.info("Extracted query for repository context", { query: queryStrCtx, sessionId: session.id });
       
       const isGitRepo = await validateGitRepository(repoPath);
@@ -1008,17 +889,14 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         : [];
       const _diff = await getRepositoryDiff(repoPath);
       
-      // Update context in session
       updateContext(session.id, repoPath, files, _diff);
       
-      // Use iterative query refinement
       const { results, refinedQuery } = await searchWithRefinement(
         qdrantClient, 
         queryStrCtx, 
         files
       );
       
-      // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
       
       const context = results.map(r => ({
@@ -1042,16 +920,12 @@ ${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Rele
 Provide a concise summary of the context for "${queryStrCtx}" based on the repository files and recent changes. Highlight key information relevant to the query, referencing specific files or snippets where applicable.
       `;
       
-      // Get the current LLM provider
       const llmProvider = await getLLMProvider();
       
-      // Generate summary with multi-step reasoning
       const summary = await llmProvider.generateText(summaryPrompt);
       
-      // Add query to session
       addQuery(session.id, queryStrCtx, results);
       
-      // Format the response as clean markdown
       const formattedResponse = `# Repository Context Summary for: "${queryStrCtx}"
 ${refinedQuery !== queryStrCtx ? `\n> Query refined to: "${refinedQuery}"` : ''}
 
@@ -1084,6 +958,5 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       };
     });
     
-    // Add a new tool for multi-step reasoning - REMOVED (analyze_code_problem)
   }
 }

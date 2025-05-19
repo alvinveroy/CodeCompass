@@ -6,7 +6,6 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
 import { generateEmbedding } from "./ollama";
 
-// Validate Git Repository
 export async function validateGitRepository(repoPath: string): Promise<boolean> {
   try {
     const gitdir = path.join(repoPath, ".git");
@@ -37,7 +36,6 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     return;
   }
 
-  // Filter files to only include code files
   const codeExtensions = ['.ts', '.js', '.tsx', '.jsx', '.json', '.md', '.html', '.css', '.scss', '.py', '.java', '.c', '.cpp', '.go', '.rs', '.php', '.rb'];
   const filteredFiles = files.filter(file => {
     const ext = path.extname(file).toLowerCase();
@@ -58,8 +56,8 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     logger.debug(`Starting scroll operation to fetch all indexed filepaths from collection: ${configService.COLLECTION_NAME}`);
     do {
       const scrollResult = await qdrantClient.scroll(configService.COLLECTION_NAME, {
-        with_payload: ['filepath'], // Only fetch the 'filepath' field from the payload
-        with_vector: false,        // No need for vectors
+        with_payload: ['filepath'],
+        with_vector: false,
         limit: scrollLimit,
         offset: nextOffset,
       });
@@ -98,12 +96,6 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
 
     if (pointsToDelete.length > 0) {
       logger.info(`Found ${pointsToDelete.length} stale entries to remove from Qdrant.`);
-      // Qdrant's deletePoints expects an array of point IDs.
-      // The pointsSelector object structures the arguments for the deletePoints method.
-      // If the TS2339 error for deletePoints persists after this change,
-      // it strongly indicates an environment or TS configuration/cache issue,
-      // as 'deletePoints' is the correct method name for @qdrant/js-client-rest@1.14.0.
-      // Using client.delete() as per user-provided example.
       const pointsSelector = { points: pointsToDelete.map(id => String(id)) };
       await qdrantClient.delete(configService.COLLECTION_NAME, pointsSelector);
       logger.info(`Successfully removed ${pointsToDelete.length} stale entries from Qdrant.`);
@@ -127,7 +119,6 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       const fullPath = path.join(repoPath, filepath);
       const content = await fs.readFile(fullPath, "utf8");
       
-      // Skip empty or very large files
       if (!content.trim() || content.length > configService.MAX_SNIPPET_LENGTH * 10) {
         logger.info(`Skipping ${filepath}: ${!content.trim() ? 'empty file' : 'file too large'}`);
         continue;
@@ -170,10 +161,10 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
       dir: repoPath,
       trees: [git.TREE({ ref: previous.oid }), git.TREE({ ref: latest.oid })],
       map: (filepath, [a, b]) => { 
-        if (!a && !b) return Promise.resolve(null); // Ensure Promise is returned
+        if (!a && !b) return Promise.resolve(null);
         const change = !a ? 'added' : !b ? 'removed' : 'modified';
         changes.push(`${change}: ${filepath}`);
-        return Promise.resolve(null); // Ensure Promise is returned
+        return Promise.resolve(null);
       },
     });
     return changes.join('\n') || "No changes since last commit";

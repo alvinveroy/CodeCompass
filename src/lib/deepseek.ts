@@ -1,10 +1,6 @@
 import axios from "axios";
-// Keep path for join if needed locally, though configService has CONFIG_DIR
 import { configService, logger } from "./config-service";
 
-// Constants like DEEPSEEK_API_URL are now primarily sourced from configService.
-// Local fallbacks are no longer defined here to ensure configService is the single source of truth.
-// import { incrementCounter, recordTiming, timeExecution } from "./metrics"; // Metrics removed
 import { preprocessText } from "../utils/text-utils";
 import { withRetry } from "../utils/retry-utils";
 
@@ -24,9 +20,7 @@ async function waitForRateLimit(): Promise<void> {
     const timeToWait = (requestTimestamps[0] + 60000) - now;
     if (timeToWait > 0) {
       logger.info(`DeepSeek rate limit nearly reached (${requestTimestamps.length}/${rpmLimit} requests in last minute). Delaying next request for ${timeToWait}ms.`);
-      // const delayStartTime = Date.now(); // Metrics removed
       await new Promise(resolve => setTimeout(resolve, timeToWait));
-      // recordTiming('deepseek_rate_limit_delay_ms', Date.now() - delayStartTime); // Metrics removed
     }
   }
   requestTimestamps.push(now);
@@ -81,7 +75,6 @@ export async function testDeepSeekConnection(): Promise<boolean> {
       logger.info(`Sending test request to DeepSeek API at ${apiUrl}`);
       logger.info(`Using model: ${modelToTest}`);
       
-      // Add more detailed request logging
       logger.debug(`DeepSeek test request payload: ${JSON.stringify({
         model: modelToTest,
         messages: [{ role: "user", content: "Hello" }],
@@ -104,20 +97,18 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         }
       );
       
-      // Log more details about the response for debugging
       let dataForLogging: string;
       try {
         // response.data is 'any' from Axios. Stringify it safely for logging.
         dataForLogging = JSON.stringify(response.data);
-      } catch { // stringifyError variable removed as it's unused
-        // If stringification fails (e.g., circular reference)
+      } catch {
         dataForLogging = "[Unserializable data in response]";
       }
       logger.debug(`DeepSeek API response: ${JSON.stringify({
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
-        data: dataForLogging // dataForLogging is now a string
+        data: dataForLogging
       })}`);
       
       logger.info(`DeepSeek API test request to ${apiUrl} completed with status: ${response.status}`);
@@ -132,7 +123,6 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     } catch (requestError: unknown) {
       const err: Error = requestError instanceof Error ? requestError : new Error(String(requestError));
 
-      // Define an interface for the log payload for clarity
       interface DeepSeekErrorLogPayload {
         message: string;
         code?: string;
@@ -140,9 +130,8 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         request?: string;
       }
 
-      // Safely extract Axios-specific error details for logging
-       
-      const logPayload: DeepSeekErrorLogPayload = { message: err.message }; // Removed String() wrapper
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- err is Error, err.message is string. DeepSeekErrorLogPayload.message is string. Assignment is safe. 
+      const logPayload: DeepSeekErrorLogPayload = { message: err.message };
 
       if (axios.isAxiosError(requestError)) {
         logPayload.code = requestError.code;
@@ -154,7 +143,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
             responseDataString = typeof requestError.response.data === 'string'
               ? requestError.response.data
               : JSON.stringify(requestError.response.data);
-          } catch { // 'e' removed as it's unused
+          } catch {
             responseDataString = "[Unserializable response data]";
           }
           logPayload.response = {
@@ -187,7 +176,7 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     const err = error instanceof Error ? error : new Error(String(error));
     
     let errorCode: string | undefined;
-    let errorResponseData: unknown; // Changed from unknown | undefined
+    let errorResponseData: unknown;
     let errorResponseStatus: number | undefined;
 
     if (axios.isAxiosError(error)) {
@@ -213,7 +202,6 @@ export async function testDeepSeekConnection(): Promise<boolean> {
  * @returns Promise<string> - The generated text
  */
 export async function generateWithDeepSeek(prompt: string): Promise<string> {
-  // incrementCounter('deepseek_requests'); // Metrics removed
   
   try {
     const apiKey = configService.DEEPSEEK_API_KEY;
@@ -225,7 +213,6 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
 
     await waitForRateLimit();
 
-    // return await timeExecution('deepseek_generation', async () => { // Metrics removed
       logger.info(`Generating with DeepSeek for prompt (length: ${prompt.length})`);
       
       const apiUrl = configService.DEEPSEEK_API_URL;
@@ -248,7 +235,6 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
       const response = await withRetry(async () => {
         logger.debug(`Sending request to DeepSeek API at ${apiUrl} with model ${model}`);
         
-        // Log request payload for debugging (without the full prompt)
         logger.debug(`Request payload: ${JSON.stringify({
           model: model,
           messages: [{ role: "user", content: `${prompt.substring(0, 50)}...` }],
@@ -281,11 +267,8 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
         return res.data.choices[0].message.content;
       });
       
-      // incrementCounter('deepseek_success'); // Metrics removed
       return response;
-    // }); // Metrics removed
   } catch (error: unknown) {
-    // incrementCounter('deepseek_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
     const axiosError = error as import('axios').AxiosError<{ message?: string }>;
     
@@ -303,9 +286,7 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
   }
 }
 
-// Generate embeddings with DeepSeek API
 export async function generateEmbeddingWithDeepSeek(text: string): Promise<number[]> {
-  // incrementCounter('deepseek_embedding_requests'); // Metrics removed
   
   try {
     const apiKey = configService.DEEPSEEK_API_KEY;
@@ -319,8 +300,6 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
 
     await waitForRateLimit();
     
-    // return await timeExecution('deepseek_embedding_generation', async () => { // Metrics removed
-      // Construct embedding URL based on API URL from configService
       const embeddingUrl = configService.DEEPSEEK_API_URL.includes("api.deepseek.com") 
         ? "https://api.deepseek.com/embeddings" 
         : configService.DEEPSEEK_API_URL.replace("/chat/completions", "/embeddings");
@@ -364,11 +343,8 @@ export async function generateEmbeddingWithDeepSeek(text: string): Promise<numbe
         return res.data.data[0].embedding;
       });
       
-      // incrementCounter('deepseek_embedding_success'); // Metrics removed
       return response;
-    // }); // Metrics removed
   } catch (error: unknown) {
-    // incrementCounter('deepseek_embedding_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
     const axiosError = error as import('axios').AxiosError<{ message?: string }>;
     

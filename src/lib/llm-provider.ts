@@ -2,15 +2,13 @@ import NodeCache from 'node-cache';
 import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
-import { withRetry } from "../utils/retry-utils"; // Added for centralized retry logic
+import { withRetry } from "../utils/retry-utils";
 
-import axios from "axios"; // For OllamaProvider.generateText
-import { OllamaGenerateResponse } from "./types"; // For OllamaProvider.generateText
+import axios from "axios";
+import { OllamaGenerateResponse } from "./types";
 
-// Cache for LLM responses
-const llmCache = new NodeCache({ stdTTL: 3600 }); // 1 hour TTL
+const llmCache = new NodeCache({ stdTTL: 3600 });
 
-// Interface for LLM Provider
 export interface LLMProvider {
   checkConnection(): Promise<boolean>;
   generateText(prompt: string, forceFresh?: boolean): Promise<string>;
@@ -18,7 +16,6 @@ export interface LLMProvider {
   processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string>;
 }
 
-// Ollama Provider Implementation
 class OllamaProvider implements LLMProvider {
   async checkConnection(): Promise<boolean> {
     return await ollama.checkOllama();
@@ -101,11 +98,9 @@ Please provide an improved response addressing the user's feedback.`;
   }
 }
 
-// DeepSeek Provider Implementation
 class DeepSeekProvider implements LLMProvider {
   async checkConnection(): Promise<boolean> {
-    // First ensure the API key is properly set
-    deepseek.checkDeepSeekApiKey(); // Removed await as checkDeepSeekApiKey is synchronous
+    deepseek.checkDeepSeekApiKey();
     return await deepseek.testDeepSeekConnection();
   }
 
@@ -120,8 +115,7 @@ class DeepSeekProvider implements LLMProvider {
     }
 
     logger.debug(`DeepSeekProvider: Cache miss. Generating text for prompt (length: ${prompt.length})`);
-    // First ensure the API key is properly set
-    deepseek.checkDeepSeekApiKey(); // Removed await as checkDeepSeekApiKey is synchronous
+    deepseek.checkDeepSeekApiKey();
     const response = await deepseek.generateWithDeepSeek(prompt);
     llmCache.set(cacheKey, response);
     return response;
@@ -150,7 +144,6 @@ Please provide an improved response addressing the user's feedback.`;
   }
 }
 
-// Hybrid Provider Implementation that uses different backends for different operations
 class HybridProvider implements LLMProvider {
   private suggestionProvider: LLMProvider;
   private embeddingProvider: LLMProvider;
@@ -294,7 +287,6 @@ function instantiateProvider(providerName: string): LLMProvider {
 
 // Note: Global variables are declared in src/types/global.d.ts
 
-// Cache for LLM providers to avoid creating new instances unnecessarily
 interface ProviderCache {
   suggestionModel: string;
   suggestionProvider: string;
@@ -334,11 +326,10 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     return providerCache.provider;
   }
   
-  providerCache = null; // Clear the cache
+  providerCache = null;
   logger.info("Creating new provider instance");
   
   // In test environment, skip API key check but still call the check functions for test spies
-  // Unused eslint-disable directive for @typescript-eslint/await-thenable was here (around line 448)
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
     return createTestProvider(suggestionProvider);
   }
@@ -441,19 +432,17 @@ function createTestProvider(suggestionProvider: string): LLMProvider {
 
   if (testProviderName === 'deepseek') {
     logger.info("[TEST] Using DeepSeek as LLM provider");
-    const hasApiKey = deepseek.checkDeepSeekApiKey(); // Removed await
+    const hasApiKey = deepseek.checkDeepSeekApiKey();
     logger.info(`[TEST] DeepSeek API key configured: ${hasApiKey}`);
     
-    // Override checkConnection for testing
     provider.checkConnection = async (): Promise<boolean> => {
       const connectionPromise: Promise<boolean> = deepseek.testDeepSeekConnection(); // Call original for spy
        
       await connectionPromise;
       return true;
     };
-  } else { // ollama or other defaults are handled by instantiateProvider
+  } else {
     logger.info(`[TEST] Using ${testProviderName} as LLM provider (defaulting to Ollama if unknown)`);
-    // Override checkConnection for testing
     provider.checkConnection = async () => {
       await ollama.checkOllama(); // Call original for spy
       return true;
@@ -473,7 +462,7 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
   
   if (normalizedProviderName === 'deepseek') {
     try {
-      const apiKeyConfigured = deepseek.checkDeepSeekApiKey(); // Removed await
+      const apiKeyConfigured = deepseek.checkDeepSeekApiKey();
       if (!apiKeyConfigured) {
         logger.warn("DeepSeek API key not configured, falling back to Ollama");
         provider = instantiateProvider('ollama');
@@ -495,12 +484,10 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
       logger.warn("Falling back to Ollama due to DeepSeek configuration error");
       provider = instantiateProvider('ollama');
     }
-  } else { // 'ollama' or other defaults are handled by instantiateProvider
+  } else {
     logger.info(`Using ${normalizedProviderName} as LLM provider (defaulting to Ollama if unknown)`);
     provider = instantiateProvider(normalizedProviderName); 
     
-    // Verify Ollama connection (or default provider's connection).
-    // This assumes non-DeepSeek providers behave like Ollama for this check.
     const isConnected = await provider.checkConnection();
     logger.info(`${normalizedProviderName} provider connection test: ${isConnected ? "successful" : "failed"}`);
   }
