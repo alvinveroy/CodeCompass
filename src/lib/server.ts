@@ -1,6 +1,7 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { Variables, RequestHandlerExtra, ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types";
+import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types";
+import { Variables, RequestHandlerExtra } from "@modelcontextprotocol/sdk"; // Adjusted import path
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
