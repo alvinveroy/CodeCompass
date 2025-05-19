@@ -633,7 +633,7 @@ export async function runAgentLoop(
           // Update user prompt with tool results
           userPrompt += `\n\nTool: ${toolCall.tool}\nResults: ${JSON.stringify(toolOutput, null, 2)}\n\nBased on these results, what's your next step? If you have enough information, provide a final response to the user.`;
           
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+         
         } catch (_error: unknown) {
           const _err = _error instanceof Error ? _error : new Error(String(_error));
           logger.error(`Error executing tool ${toolCall.tool}`, { error: _err.message });
