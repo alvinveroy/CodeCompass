@@ -715,7 +715,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
-    async (args: { sessionId: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+    (args: { sessionId: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
       logger.info("Received args for get_session_history", { args });
 
       const sessionIdValue = args.sessionId;
