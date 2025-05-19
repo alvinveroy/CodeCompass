@@ -187,7 +187,7 @@ export async function startServer(repoPath: string): Promise<void> {
       new ResourceTemplate("repo://files/{filepath}", { list: undefined }),
       {}, // metadata
       async (uri: URL, variables: Variables, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
-      let rawFilepathValue = variables.filepath;
+      const rawFilepathValue = variables.filepath;
       let relativeFilepath = '';
       if (typeof rawFilepathValue === 'string') {
         relativeFilepath = rawFilepathValue.trim();
