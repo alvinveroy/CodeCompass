@@ -91,8 +91,46 @@ class ConfigService {
       ],
     });
 
-    this.OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
-    this.QDRANT_HOST = process.env.QDRANT_HOST || "http://127.0.0.1:6333";
+    // Validate and set OLLAMA_HOST
+    const defaultOllamaHost = "http://127.0.0.1:11434";
+    let ollamaHostEnv = process.env.OLLAMA_HOST;
+    if (ollamaHostEnv && ollamaHostEnv.trim() !== "") {
+      try {
+        const parsedUrl = new URL(ollamaHostEnv);
+        if (parsedUrl.protocol && (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:')) {
+          this.OLLAMA_HOST = ollamaHostEnv;
+        } else {
+          this.logger.warn(`OLLAMA_HOST environment variable "${ollamaHostEnv}" has an invalid or missing protocol. Falling back to default: ${defaultOllamaHost}`);
+          this.OLLAMA_HOST = defaultOllamaHost;
+        }
+      } catch (e) {
+        this.logger.warn(`OLLAMA_HOST environment variable "${ollamaHostEnv}" is not a valid URL. Error: ${(e as Error).message}. Falling back to default: ${defaultOllamaHost}`);
+        this.OLLAMA_HOST = defaultOllamaHost;
+      }
+    } else {
+      this.OLLAMA_HOST = defaultOllamaHost; // Use default if env var is not set or is empty/whitespace
+    }
+
+    // Validate and set QDRANT_HOST
+    const defaultQdrantHost = "http://127.0.0.1:6333";
+    let qdrantHostEnv = process.env.QDRANT_HOST;
+    if (qdrantHostEnv && qdrantHostEnv.trim() !== "") {
+      try {
+        const parsedUrl = new URL(qdrantHostEnv);
+        if (parsedUrl.protocol && (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:')) {
+          this.QDRANT_HOST = qdrantHostEnv;
+        } else {
+          this.logger.warn(`QDRANT_HOST environment variable "${qdrantHostEnv}" has an invalid or missing protocol. Falling back to default: ${defaultQdrantHost}`);
+          this.QDRANT_HOST = defaultQdrantHost;
+        }
+      } catch (e) {
+        this.logger.warn(`QDRANT_HOST environment variable "${qdrantHostEnv}" is not a valid URL. Error: ${(e as Error).message}. Falling back to default: ${defaultQdrantHost}`);
+        this.QDRANT_HOST = defaultQdrantHost;
+      }
+    } else {
+      this.QDRANT_HOST = defaultQdrantHost; // Use default if env var is not set or is empty/whitespace
+    }
+    
     this.COLLECTION_NAME = "codecompass"; // Default, not typically changed by user config
     
     this.MAX_INPUT_LENGTH = 4096;
