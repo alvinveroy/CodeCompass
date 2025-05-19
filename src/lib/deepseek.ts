@@ -135,14 +135,18 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         response: axiosError.response ? {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          data: typeof axiosError.response.data === 'string' ? axiosError.response.data : JSON.stringify(axiosError.response.data) // This is line 112 error
+          data: typeof axiosError.response.data === 'string' 
+                ? axiosError.response.data 
+                : (axiosError.response.data === null || axiosError.response.data === undefined) 
+                  ? String(axiosError.response.data) 
+                  : JSON.stringify(axiosError.response.data)
         } : 'No response data',
         request: axiosError.request ? 'Request present' : 'No request data'
       });
       
       // Check for specific error types
-      const typedError = requestError as import('axios').AxiosError<{ message?: string }>; // Keep this cast for typed error handling
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Trusting the cast to AxiosError for detailed error handling
+      const typedError = requestError as import('axios').AxiosError<{ message?: string }>; 
       
       if (typedError.code === 'ECONNREFUSED') {
         logger.error("Connection refused. Check if the DeepSeek API endpoint is correct and accessible.");
@@ -156,7 +160,8 @@ export async function testDeepSeekConnection(): Promise<boolean> {
     }
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    const axiosError = error as import('axios').AxiosError<{ message?: string }>;
+    // Unused eslint-disable directive for @typescript-eslint/no-unsafe-assignment was here
+    const axiosError = error as import('axios').AxiosError<{ message?: string }>; 
     
     logger.error("DeepSeek API connection test failed", {
       message: err.message,

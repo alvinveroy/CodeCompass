@@ -169,11 +169,11 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
       fs,
       dir: repoPath,
       trees: [git.TREE({ ref: previous.oid }), git.TREE({ ref: latest.oid })],
-      map: async (filepath, [a, b]) => { // Made the map function async
+      map: (filepath, [a, b]) => { // Removed async
         if (!a && !b) return null;
         const change = !a ? 'added' : !b ? 'removed' : 'modified';
         changes.push(`${change}: ${filepath}`);
-        return null; // Implicitly returns Promise.resolve(null)
+        return null;
       },
     });
     return changes.join('\n') || "No changes since last commit";

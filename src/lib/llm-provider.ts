@@ -338,6 +338,7 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   logger.info("Creating new provider instance");
   
   // In test environment, skip API key check but still call the check functions for test spies
+  // Unused eslint-disable directive for @typescript-eslint/await-thenable was here (around line 448)
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
     return createTestProvider(suggestionProvider);
   }
@@ -444,9 +445,9 @@ function createTestProvider(suggestionProvider: string): LLMProvider {
     logger.info(`[TEST] DeepSeek API key configured: ${hasApiKey}`);
     
     // Override checkConnection for testing
-    provider.checkConnection = async () => {
-      // eslint-disable-next-line @typescript-eslint/await-thenable
-      await deepseek.testDeepSeekConnection(); // Call original for spy - This is line 475 error
+    provider.checkConnection = async (): Promise<boolean> => {
+      const connectionPromise: Promise<boolean> = deepseek.testDeepSeekConnection(); // Call original for spy
+      await connectionPromise;
       return true;
     };
   } else { // ollama or other defaults are handled by instantiateProvider

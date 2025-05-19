@@ -41,7 +41,7 @@ function main(): void { // Removed async, added void return type
   
   // Test the connection
   try {
-    void import('../lib/deepseek').then(async (deepseek) => {
+    void import('../lib/deepseek').then(async (deepseek) => { // eslint-disable-line @typescript-eslint/no-floating-promises
       console.log('Testing DeepSeek connection...');
       const connected = await deepseek.testDeepSeekConnection();
       if (connected) {
@@ -59,7 +59,7 @@ function main(): void { // Removed async, added void return type
 try {
   main();
 } catch (error: unknown) {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+  // Unused eslint-disable directive for @typescript-eslint/no-unsafe-call was here
   console.error('Unhandled error:', error instanceof Error ? error.message : String(error));
   process.exit(1);
 }

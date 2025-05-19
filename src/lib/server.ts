@@ -188,7 +188,7 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     // Register tools
-    // Unused eslint-disable for no-base-to-string removed from here (was line 211)
+    // Unused eslint-disable directive for @typescript-eslint/no-base-to-string was here (around line 212)
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
     // Register prompts
@@ -209,8 +209,8 @@ export async function startServer(repoPath: string): Promise<void> {
       async (params: unknown) => {
         // chainId and trackToolChain removed
       
-        // eslint-disable-next-line @typescript-eslint/no-base-to-string
-        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) }); // This is line 55 error
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string -- String(params) is acceptable here due to prior object check
+        logger.info("Received params for switch_suggestion_model", { params: typeof params === 'object' && params !== null ? JSON.stringify(params) : String(params) });
         const normalizedParams = normalizeToolParams(params);
         logger.debug("Normalized params for switch_suggestion_model", normalizedParams);
       
@@ -290,9 +290,8 @@ export async function startServer(repoPath: string): Promise<void> {
             }],
           };
         } catch (error: unknown) {
-          // Unused eslint-disable for no-unsafe-call removed from here (was line 293)
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-          logger.error("Error switching suggestion model", { message: error instanceof Error ? error.message : String(error) }); // This is line 651 error
+          // Unused eslint-disable directive for @typescript-eslint/no-unsafe-call was here (around line 294)
+          logger.error("Error switching suggestion model", { message: error instanceof Error ? error.message : String(error) });
           return {
             content: [{
               type: "text",
@@ -653,7 +652,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     "get_changelog",
     "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.", // Description
     z.object({}), // Parameters schema: pass the ZodObject instance directly
-    async (_params: Record<string, never>, _context: any) => { // Handler with _context as any
+    async (_params: Record<string, never>, _context: unknown) => { // Handler with _context as unknown
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
         const changelog = await fs.readFile(changelogPath, 'utf8'); 
@@ -826,6 +825,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           .filter(r => !context.some(c => c.filepath === (r as DetailedQdrantSearchResult).payload?.filepath)) // Cast here is okay for filtering
           .slice(0, 2)
           .map(rUnk => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Trusting structure of relevantResults from state
             const r = rUnk as DetailedQdrantSearchResult; // Define r with type for clarity
             return {
               filepath: r.payload?.filepath || "unknown",
@@ -935,7 +935,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         // Ensure query exists
         if (!parsedParams.query && typeof parsedParams === 'object') {
           // If query is missing but we have a JSON object, use the entire object as context
-          parsedParams.query = "repository context";
+          (parsedParams as any).query = "repository context";
           logger.warn("No query provided for get_repository_context, using default");
         }
         
