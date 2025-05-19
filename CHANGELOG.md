@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- Validated `OLLAMA_HOST` and `QDRANT_HOST` environment variables to ensure they are proper URLs, falling back to defaults and logging a warning if an invalid URL is provided. This resolves "Invalid URL" errors when connecting to Ollama/Qdrant. (2accc79)
+- Corrected the input schema for the `get_changelog` tool in `src/lib/server.ts` to use `z.object({})` instead of an empty JavaScript object. This resolves MCP serialization errors (`Serialization(Error("data did not match any variant of untagged enum Response"))`) when clients request the list of available resources.
 - Configured logger to send all console output to `stderr` for MCP compatibility by using `winston.transports.Stream` with `process.stderr`. This resolves issues where info/warn logs on `stdout` were breaking JSON-RPC communication with clients like Claude Desktop. (7ccdfc7, 7e7fb90)
 
 ### Added
