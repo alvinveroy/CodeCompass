@@ -2,7 +2,6 @@ import NodeCache from 'node-cache';
 import { configService, logger } from "./config-service";
 import * as ollama from "./ollama";
 import * as deepseek from "./deepseek";
-// import { incrementCounter, trackFeedbackScore } from "./metrics"; // Metrics removed
 import { withRetry } from "../utils/retry-utils"; // Added for centralized retry logic
 
 import axios from "axios"; // For OllamaProvider.generateText
@@ -66,9 +65,6 @@ class OllamaProvider implements LLMProvider {
   async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
     logger.debug(`OllamaProvider: Processing feedback for prompt (original length: ${originalPrompt.length}, score: ${score})`);
     try {
-      // Track the user feedback score
-      // trackFeedbackScore(score); // Metrics removed
-      
       const feedbackPrompt = `You previously provided this response to a request:
     
 Request: ${originalPrompt}
@@ -95,7 +91,6 @@ Please provide an improved response addressing the user's feedback.`;
         return res.data.response;
       });
       
-      // incrementCounter('feedback_refinements'); // Metrics removed
       return improvedResponse;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -166,16 +161,12 @@ class HybridProvider implements LLMProvider {
   }
 
   async checkConnection(): Promise<boolean> {
-    // Check both providers
     const suggestionCheck = await this.suggestionProvider.checkConnection();
     const embeddingCheck = await this.embeddingProvider.checkConnection();
-    
-    // Both must be available
     return suggestionCheck && embeddingCheck;
   }
 
   async generateText(prompt: string, forceFresh = false): Promise<string> {
-    // Use the suggestion provider for text generation
     return await this.suggestionProvider.generateText(prompt, forceFresh);
   }
 
@@ -185,7 +176,6 @@ class HybridProvider implements LLMProvider {
   }
 
   async processFeedback(originalPrompt: string, suggestion: string, feedback: string, score: number): Promise<string> {
-    // Use the suggestion provider for feedback processing
     return await this.suggestionProvider.processFeedback(originalPrompt, suggestion, feedback, score);
   }
 }
@@ -295,7 +285,7 @@ function instantiateProvider(providerName: string): LLMProvider {
   const Constructor = providerRegistry[normalizedName];
   if (!Constructor) {
     logger.warn(`Unknown provider name: "${providerName}". Defaulting to OllamaProvider.`);
-    return new OllamaProvider(); // Default fallback
+    return new OllamaProvider();
   }
   logger.debug(`Instantiating provider: ${normalizedName}`);
   return new Constructor();
@@ -330,10 +320,8 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   const suggestionProvider = configService.SUGGESTION_PROVIDER;
   const embeddingProvider = configService.EMBEDDING_PROVIDER;
   
-  // Log the provider configuration at debug level
   logger.debug(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
   
-  // Check if we have a cached provider and if it's still valid
   const _cacheMaxAge = 2000; // 2 seconds max cache age
   const now = Date.now();
   
@@ -346,8 +334,7 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     return providerCache.provider;
   }
   
-  // Clear the cache
-  providerCache = null;
+  providerCache = null; // Clear the cache
   logger.info("Creating new provider instance");
   
   // In test environment, skip API key check but still call the check functions for test spies
@@ -355,15 +342,12 @@ export async function getLLMProvider(): Promise<LLMProvider> {
     return createTestProvider(suggestionProvider);
   }
   
-  // Create the appropriate provider based on the configuration
   let provider: LLMProvider;
   
-  // Create a hybrid provider that uses different backends for different operations
   if (suggestionProvider.toLowerCase() !== embeddingProvider.toLowerCase()) {
     logger.info(`Using hybrid provider: ${suggestionProvider} for suggestions, ${embeddingProvider} for embeddings`);
     provider = new HybridProvider(suggestionProvider, embeddingProvider);
   } else {
-    // Create a single provider for all operations
     provider = await createProvider(suggestionProvider.toLowerCase());
   }
   
@@ -377,7 +361,6 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   };
   
   if (providerCache === null) {
-    // Create a new cache object if none exists
     providerCache = cacheData;
   } else {
     // Update existing cache with new values but keep the same object reference
@@ -405,14 +388,13 @@ export async function switchSuggestionModel(model: string, providerName?: string
     } else if (normalizedModel.includes('claude')) { // Example inference for Claude
       targetProvider = 'claude';
     } else {
-      targetProvider = 'ollama'; // Default fallback
+      targetProvider = 'ollama';
     }
     logger.info(`Provider not specified, inferred '${targetProvider}' for model '${normalizedModel}'.`);
   }
   
   logger.debug(`Requested model: ${normalizedModel}, target provider: ${targetProvider}`);
   
-  // Handle test environment
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
     const result = await handleTestEnvironment(normalizedModel, targetProvider);
     // Persist configuration via ConfigService in tests
@@ -425,16 +407,13 @@ export async function switchSuggestionModel(model: string, providerName?: string
   
   logger.info(`Attempting to switch suggestion model to: '${normalizedModel}' (provider: '${targetProvider}')`);
   
-  // Check if the provider is available before switching
   const available = await checkProviderAvailability(targetProvider, normalizedModel);
   if (!available) {
     // The checkProviderAvailability function already logs detailed errors.
-    // We can add a summary error here.
     logger.error(`Failed to switch: Provider '${targetProvider}' is not available or not configured correctly for model '${normalizedModel}'.`);
     return false;
   }
   
-  // Set model configuration
   setModelConfiguration(normalizedModel, targetProvider);
   
   // Configure embedding provider (current policy is always Ollama)
@@ -442,11 +421,8 @@ export async function switchSuggestionModel(model: string, providerName?: string
 
   logger.info(`Successfully switched to ${configService.SUGGESTION_MODEL} (${configService.SUGGESTION_PROVIDER}) for suggestions and ${configService.EMBEDDING_PROVIDER} for embeddings.`);
   
-  // Save the configuration using ConfigService
   configService.persistModelConfiguration();
-  
-  // Ensure the cache is cleared after switching models
-  clearProviderCache();
+  clearProviderCache(); // Ensure the cache is cleared after switching models
   
   logger.debug(`Current configuration: model=${configService.SUGGESTION_MODEL}, provider=${configService.SUGGESTION_PROVIDER}, embedding=${configService.EMBEDDING_PROVIDER}`);
   
@@ -472,7 +448,7 @@ async function createTestProvider(suggestionProvider: string): Promise<LLMProvid
       await deepseek.testDeepSeekConnection(); // Call original for spy
       return true;
     };
-  } else { // ollama or other defaults handled by instantiateProvider
+  } else { // ollama or other defaults are handled by instantiateProvider
     logger.info(`[TEST] Using ${testProviderName} as LLM provider (defaulting to Ollama if unknown)`);
     // Override checkConnection for testing
     provider.checkConnection = async () => {
@@ -516,11 +492,11 @@ async function createProvider(providerName: string): Promise<LLMProvider> {
       logger.warn("Falling back to Ollama due to DeepSeek configuration error");
       provider = instantiateProvider('ollama');
     }
-  } else { // 'ollama' or other defaults handled by instantiateProvider
+  } else { // 'ollama' or other defaults are handled by instantiateProvider
     logger.info(`Using ${normalizedProviderName} as LLM provider (defaulting to Ollama if unknown)`);
     provider = instantiateProvider(normalizedProviderName); 
     
-    // Verify Ollama connection (or default provider's connection)
+    // Verify Ollama connection (or default provider's connection).
     // This assumes non-DeepSeek providers behave like Ollama for this check.
     const isConnected = await provider.checkConnection();
     logger.info(`${normalizedProviderName} provider connection test: ${isConnected ? "successful" : "failed"}`);
@@ -551,8 +527,7 @@ async function handleTestEnvironment(normalizedModel: string, provider: string):
     return true;
   }
   
-  // Special case for testing unavailability
-  // Make sure the spy is called for test verification
+  // Special case for testing unavailability - make sure the spy is called for test verification
   if (provider === 'deepseek') {
     await deepseek.testDeepSeekConnection();
   }
@@ -633,7 +608,7 @@ async function configureEmbeddingProvider(provider: string): Promise<void> {
     if (!ollamaAvailable) {
       logger.warn("Ollama is not available for embeddings. This may cause embedding-related features to fail.");
     }
-    // Embedding provider is set to 'ollama' by setModelConfiguration via configService
+    // Embedding provider is set to 'ollama' by setModelConfiguration (via configService).
     configService.setEmbeddingProvider("ollama");
   }
 }
