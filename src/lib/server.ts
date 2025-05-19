@@ -630,10 +630,12 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   });
 
   // Add get_changelog tool
-  server.tool(
-    "get_changelog",
-    {}, // paramsSchema: Empty ZodRawShape for no parameters
-    async () => { // handler
+  server.addTool({
+    name: "get_changelog",
+    description: "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
+    parameters: z.object({}), // Explicit Zod schema for no parameters
+    annotations: { title: "Get Changelog" },
+    execute: async () => {
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
         const changelog = await fs.readFile(changelogPath, 'utf8');
@@ -654,11 +656,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         };
       }
     },
-    { // optionsObject
-      description: "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
-      annotations: { title: "Get Changelog" }
-    }
-  );
+  });
   
   // Add reset_metrics tool - REMOVED
   // Add check_provider tool - REMOVED
