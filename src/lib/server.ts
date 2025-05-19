@@ -155,21 +155,67 @@ export async function startServer(repoPath: string): Promise<void> {
       return { contents: [{ uri: "repo://version", text: VERSION }] };
     });
     server.resource("repo://structure", "repo://structure", {}, async () => {
+      const uriStr = "repo://structure";
       const isGitRepo = await validateGitRepository(repoPath);
-      const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
-        : [];
-      return { contents: [{ uri: "repo://structure", text: files.join("\n") }] };
+      if (!isGitRepo) {
+        // Consistent with original behavior: empty list if not a valid/recognized git repo.
+        // validateGitRepository already logs a warning.
+        return { contents: [{ uri: uriStr, text: "" }] }; 
+      }
+      try {
+        const files = await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
+        return { contents: [{ uri: uriStr, text: files.join("\n") }] };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`Error listing repository files for ${repoPath}: ${errorMessage}`);
+        return { contents: [{ uri: uriStr, error: `Failed to list repository files: ${errorMessage}` }] };
+      }
     });
 
     server.resource("repo://files/*", "repo://files/*", {}, async (uri: URL) => {
-      const filepath = uri.pathname.replace(/^\/files\//, "");
+      const relativeFilepath = uri.pathname.replace(/^\/files\//, "").trim();
+
+      if (!relativeFilepath) {
+        const errMsg = "File path cannot be empty.";
+        logger.error(`Error accessing resource for URI ${uri.toString()}: ${errMsg}`);
+        return { contents: [{ uri: uri.toString(), error: errMsg }] };
+      }
+
       try {
-        const content = await fs.readFile(path.join(repoPath, filepath), "utf8");
+        const resolvedRepoPath = path.resolve(repoPath); // Normalized
+        let requestedFullPath = path.resolve(repoPath, relativeFilepath); // Normalized
+
+        // Initial security check: Ensure the resolved path is within the repoPath
+        if (!requestedFullPath.startsWith(resolvedRepoPath + path.sep) && requestedFullPath !== resolvedRepoPath) {
+          throw new Error(`Access denied: Path '${relativeFilepath}' attempts to traverse outside the repository directory.`);
+        }
+        
+        let finalPathToRead = requestedFullPath;
+        try {
+            const stats = await fs.lstat(requestedFullPath);
+            if (stats.isSymbolicLink()) {
+                const symlinkTargetPath = await fs.realpath(requestedFullPath);
+                // Ensure the resolved symlink target is also within the repository
+                if (!path.resolve(symlinkTargetPath).startsWith(resolvedRepoPath + path.sep) && path.resolve(symlinkTargetPath) !== resolvedRepoPath) {
+                    throw new Error(`Access denied: Symbolic link '${relativeFilepath}' points outside the repository directory.`);
+                }
+                finalPathToRead = symlinkTargetPath; // Update path to read from the symlink's target
+            } else if (!stats.isFile()) {
+                throw new Error(`Access denied: Path '${relativeFilepath}' is not a file.`);
+            }
+        } catch (statError: unknown) {
+            if ((statError as NodeJS.ErrnoException).code === 'ENOENT') {
+                throw new Error(`File not found: ${relativeFilepath}`);
+            }
+            throw statError; // Re-throw other stat/realpath errors
+        }
+
+        const content = await fs.readFile(finalPathToRead, "utf8");
         return { contents: [{ uri: uri.toString(), text: content }] };
       } catch (error: unknown) {
-        logger.error(`Error reading file ${filepath}`, { message: (error as Error).message });
-        return { contents: [{ uri: uri.toString(), text: `Error: ${(error as Error).message}` }] };
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`Error accessing resource for URI ${uri.toString()} (relative path: ${relativeFilepath}): ${errorMessage}`);
+        return { contents: [{ uri: uri.toString(), error: errorMessage }] };
       }
     });
 
