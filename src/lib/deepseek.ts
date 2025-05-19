@@ -135,12 +135,13 @@ export async function testDeepSeekConnection(): Promise<boolean> {
         response: axiosError.response ? {
           status: axiosError.response.status,
           statusText: axiosError.response.statusText,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Safely stringifying unknown error data for logging
-          data: typeof axiosError.response.data === 'string' 
-                ? axiosError.response.data 
-                : (axiosError.response.data === null || axiosError.response.data === undefined) 
-                  ? String(axiosError.response.data) 
-                  : JSON.stringify(axiosError.response.data)
+          data: (() => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Safely stringifying unknown error data for logging
+            const responseData = axiosError.response?.data;
+            if (typeof responseData === 'string') return responseData;
+            if (responseData === null || responseData === undefined) return String(responseData);
+            return JSON.stringify(responseData);
+          })()
         } : 'No response data',
         request: axiosError.request ? 'Request present' : 'No request data'
       });
