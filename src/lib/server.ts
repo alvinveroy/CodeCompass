@@ -102,22 +102,8 @@ export async function startServer(repoPath: string): Promise<void> {
       vendor: "CodeCompass",
       capabilities: {
         resources: {
-          "repo://structure": {
-            name: "repo://structure",
-            description: "Lists all files in the current Git repository."
-          },
-          "repo://files/*": {
-            name: "repo://files/*",
-            description: "Retrieves the content of a specific file from the repository. The wildcard * must be replaced with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'."
-          },
-          "repo://health": {
-            name: "repo://health",
-            description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access)."
-          },
-          "repo://version": {
-            name: "repo://version",
-            description: "Provides the current version of the CodeCompass server."
-          },
+          // This section is now empty because resources/list will be handled manually.
+          // The server.resource() calls later will register the actual resource handlers.
         },
         tools: {
           search_code: {},
@@ -172,6 +158,39 @@ export async function startServer(repoPath: string): Promise<void> {
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
     registerPrompts(server); 
+
+    // Manually handle the 'resources/list' request
+    server.onRequest("resources/list", async (_params: unknown, _sessionId?: string) => {
+      const resources = [
+        {
+          uri: "repo://structure",
+          name: "Repository File Structure", // Human-readable name
+          description: "Lists all files in the current Git repository.",
+          mimeType: "text/plain"
+        },
+        {
+          uri: "repo://files/*",
+          name: "Repository File Content", // Human-readable name
+          description: "Retrieves the content of a specific file from the repository. The wildcard * must be replaced with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
+          mimeType: "text/plain" // Default, actual content type might vary
+        },
+        {
+          uri: "repo://health",
+          name: "Server Health Status", // Human-readable name
+          description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access).",
+          mimeType: "application/json"
+        },
+        {
+          uri: "repo://version",
+          name: "Server Version", // Human-readable name
+          description: "Provides the current version of the CodeCompass server.",
+          mimeType: "text/plain" // The handler for repo://version returns plain text
+        }
+      ];
+      logger.info("Responding to resources/list with manually constructed list of resources.");
+      // The SDK should wrap this array in the standard JSON-RPC response structure.
+      return resources;
+    });
     
     server.tool(
       "switch_suggestion_model",
