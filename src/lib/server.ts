@@ -697,7 +697,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
         
         let queryFromParams = "default code suggestion query";
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- normalizedParams.query is unknown, rawQuery is explicitly unknown. This is type-safe.
+         
         const rawQuery: unknown = normalizedParams.query;
         if (typeof rawQuery === 'string') {
             queryFromParams = rawQuery;
@@ -708,7 +708,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
 
         let sessionIdFromParams: string | undefined = undefined;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- normalizedParams.sessionId is unknown, rawSessionId is explicitly unknown. This is type-safe.
+         
         const rawSessionId: unknown = normalizedParams.sessionId;
         if (typeof rawSessionId === 'string') {
             sessionIdFromParams = rawSessionId;
