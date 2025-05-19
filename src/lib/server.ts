@@ -23,8 +23,9 @@ import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQu
 
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
   if (typeof params === 'object' && params !== null) {
-    // If it's already a non-null object, return as is.
-    return params as Record<string, unknown>;
+    // Ensure it's a standard object, not a null-prototype one.
+    // Spread syntax creates a new object with a standard prototype.
+    return { ...params } as Record<string, unknown>;
   }
   if (typeof params === 'string') {
     try {
