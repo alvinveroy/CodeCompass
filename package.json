@@ -78,6 +78,9 @@
   "bugs": {
     "url": "https://github.com/alvinveroy/codecompass/issues"
   },
+  "overrides": {
+    "undici": "^5.29.0"
+  },
   "engines": {
     "node": ">=18.19.0"
   },
