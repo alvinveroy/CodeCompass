@@ -794,7 +794,8 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         // normalizedParams is Record<string, unknown>, so normalizedParams.query is unknown.
 
         let queryFromParams = "default code suggestion query";
-        const rawQuery: unknown = normalizedParams.query; // Explicitly type rawQuery as unknown
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- normalizedParams.query is unknown, rawQuery is explicitly unknown. This is type-safe.
+        const rawQuery: unknown = normalizedParams.query;
         if (typeof rawQuery === 'string') {
             queryFromParams = rawQuery;
         } else if (rawQuery !== undefined) {
@@ -804,7 +805,8 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         }
 
         let sessionIdFromParams: string | undefined = undefined;
-        const rawSessionId: unknown = normalizedParams.sessionId; // Explicitly type rawSessionId as unknown
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- normalizedParams.sessionId is unknown, rawSessionId is explicitly unknown. This is type-safe.
+        const rawSessionId: unknown = normalizedParams.sessionId;
         if (typeof rawSessionId === 'string') {
             sessionIdFromParams = rawSessionId;
         } else if (rawSessionId !== undefined) {
