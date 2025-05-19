@@ -1,4 +1,5 @@
-import { McpServer, McpContext } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpContext } from "@modelcontextprotocol/sdk/types.js"; // Changed import path for McpContext
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 // import { initMcpSafeLogging } from "./mcp-logger"; // mcp-logger removed
 import fs from "fs/promises";
