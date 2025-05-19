@@ -544,13 +544,29 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
         logger.warn("No query provided for search_code, using default");
       }
         
-      const { query, sessionId } = normalizedParams;
+      const queryValueSc = normalizedParams.query;
+      const sessionIdValueSc = normalizedParams.sessionId;
+
+      let searchQuery: string;
+      if (typeof queryValueSc === 'string') {
+        searchQuery = queryValueSc;
+      } else {
+        logger.warn("Query parameter is not a string or is missing in search_code.", { receivedQuery: queryValueSc });
+        searchQuery = "default code search"; 
+      }
+
+      let searchSessionId: string | undefined;
+      if (typeof sessionIdValueSc === 'string') {
+        searchSessionId = sessionIdValueSc;
+      } else if (sessionIdValueSc !== undefined) {
+        logger.warn("SessionID parameter is not a string in search_code.", { receivedSessionId: sessionIdValueSc });
+      }
     
     // Get or create session
-    const session = getOrCreateSession(sessionId as string | undefined, repoPath);
+    const session = getOrCreateSession(searchSessionId, repoPath);
     
     // Log the extracted query to confirm it's working
-    logger.info("Extracted query for search_code", { query, sessionId: session.id });
+    logger.info("Extracted query for search_code", { query: searchQuery, sessionId: session.id });
     
     const isGitRepo = await validateGitRepository(repoPath);
     const files = isGitRepo
@@ -563,12 +579,12 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
     // Use iterative query refinement
     const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
       qdrantClient, 
-      query as string, // query is string here
+      searchQuery, 
       files
     );
     
     // Add query to session
-    addQuery(session.id, query as string, results, relevanceScore); // query is string here
+    addQuery(session.id, searchQuery, results, relevanceScore); 
     
     // Get the current LLM provider
     const llmProvider = await getLLMProvider();
@@ -741,21 +757,21 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           logger.warn("No query provided for generate_suggestion, using default");
         }
         
-        let queryFromParams: string;
-        if (typeof normalizedParams.query === 'string') {
-          queryFromParams = normalizedParams.query as string; // Explicitly cast after type check
-        } else {
-          logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
-          queryFromParams = "default code suggestion query"; 
-        }
+        const queryFromParams: string = typeof normalizedParams.query === 'string' 
+          ? normalizedParams.query 
+          : (() => {
+              logger.warn("Query parameter is not a string or is missing in generate_suggestion.", { receivedQuery: normalizedParams.query });
+              return "default code suggestion query";
+            })();
 
-        let sessionIdFromParams: string | undefined;
-        if (typeof normalizedParams.sessionId === 'string') {
-          sessionIdFromParams = normalizedParams.sessionId as string; // Explicitly cast after type check
-        } else if (normalizedParams.sessionId !== undefined) {
-          logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });
-          // sessionIdFromParams remains undefined
-        }
+        const sessionIdFromParams: string | undefined = typeof normalizedParams.sessionId === 'string'
+          ? normalizedParams.sessionId
+          : (() => {
+              if (normalizedParams.sessionId !== undefined) {
+                logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: normalizedParams.sessionId });
+              }
+              return undefined;
+            })();
       
       // Get or create session
       const session = getOrCreateSession(sessionIdFromParams, repoPath);
