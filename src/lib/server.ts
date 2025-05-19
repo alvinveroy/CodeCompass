@@ -624,10 +624,11 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
       } else if (sessionIdValueSc !== undefined) {
         logger.warn("SessionID parameter is not a string in search_code.", { receivedSessionId: sessionIdValueSc });
       }
+
+    try {
+      const session = getOrCreateSession(searchSessionId, repoPath);
     
-    const session = getOrCreateSession(searchSessionId, repoPath);
-    
-    logger.info("Extracted query for search_code", { query: searchQuery, sessionId: session.id });
+      logger.info("Extracted query for search_code", { query: searchQuery, sessionId: session.id });
     
     const isGitRepo = await validateGitRepository(repoPath);
     const files = isGitRepo
@@ -690,12 +691,21 @@ ${s.summary}
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     
-    return {
-      content: [{
-        type: "text",
-        text: formattedResponse,
-      }],
-    };
+      return {
+        content: [{
+          type: "text",
+          text: formattedResponse,
+        }],
+      };
+    } catch (error: unknown) {
+      logger.error("Error in search_code tool", { error: error instanceof Error ? error.message : String(error) });
+      return {
+        content: [{
+          type: "text",
+          text: `# Error in Search Code Tool\n\nThere was an unexpected error processing your query: ${error instanceof Error ? error.message : String(error)}\n\nPlease check the server logs for more details.`,
+        }],
+      };
+    }
   });
 
   // Add get_changelog tool
@@ -839,10 +849,11 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         } else if (rawSessionId !== undefined) {
             logger.warn("SessionID parameter is not a string in generate_suggestion.", { receivedSessionId: rawSessionId });
         }
+
+      try {
+        const session = getOrCreateSession(sessionIdFromParams, repoPath);
       
-      const session = getOrCreateSession(sessionIdFromParams, repoPath);
-      
-      const queryStr = queryFromParams; 
+        const queryStr = queryFromParams; 
       logger.info("Extracted query for generate_suggestion", { query: queryStr, sessionId: session.id });
       
       const isGitRepo = await validateGitRepository(repoPath);
@@ -939,11 +950,20 @@ ${_diff}
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       
       return {
-        content: [{
-          type: "text",
-          text: formattedResponse,
-        }],
-      };
+          content: [{
+            type: "text",
+            text: formattedResponse,
+          }],
+        };
+      } catch (error: unknown) {
+        logger.error("Error in generate_suggestion tool", { error: error instanceof Error ? error.message : String(error) });
+        return {
+          content: [{
+            type: "text",
+            text: `# Error in Generate Suggestion Tool\n\nThere was an unexpected error processing your query: ${error instanceof Error ? error.message : String(error)}\n\nPlease check the server logs for more details.`,
+          }],
+        };
+      }
     });
     
     // Add a new feedback tool - REMOVED (provide_feedback)
