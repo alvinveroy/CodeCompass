@@ -187,7 +187,17 @@ export async function startServer(repoPath: string): Promise<void> {
       new ResourceTemplate("repo://files/{filepath}", { list: undefined }),
       {}, // metadata
       async (uri: URL, variables: Variables, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
-      const relativeFilepath = variables.filepath?.trim() ?? '';
+      let rawFilepathValue = variables.filepath;
+      let relativeFilepath = '';
+      if (typeof rawFilepathValue === 'string') {
+        relativeFilepath = rawFilepathValue.trim();
+      } else if (Array.isArray(rawFilepathValue) && rawFilepathValue.length > 0 && typeof rawFilepathValue[0] === 'string') {
+        logger.warn(`Filepath parameter '${variables.filepath}' resolved to an array. Using the first element: '${rawFilepathValue[0]}'`);
+        relativeFilepath = rawFilepathValue[0].trim();
+      } else if (rawFilepathValue !== undefined) {
+        logger.warn(`Filepath parameter '${variables.filepath}' resolved to an unexpected type: ${typeof rawFilepathValue}. Treating as empty.`);
+      }
+      // If rawFilepathValue is undefined, or an empty array, or an array not containing a string at index 0, relativeFilepath remains ''.
 
       if (!relativeFilepath) {
         const errMsg = "File path cannot be empty.";
