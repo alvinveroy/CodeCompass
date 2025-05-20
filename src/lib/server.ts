@@ -122,18 +122,19 @@ export async function startServer(repoPath: string): Promise<void> {
           description: "Lists all files in the current Git repository.",
           mimeType: "text/plain"
         },
-        "repo://files/{filepath}": {
-          name: "Repository File Content",
-          description: "Retrieves the content of a specific file from the repository. Replace {filepath} with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
-          mimeType: "text/plain", // Default, actual content type might vary
-          template: true,
-          parameters: {
-            filepath: {
-              type: "string",
-              description: "The path to the file relative to the repository root."
-            }
-          }
-        },
+        // Temporarily commented out to diagnose "resources/list" serialization error
+        // "repo://files/{filepath}": {
+        //   name: "Repository File Content",
+        //   description: "Retrieves the content of a specific file from the repository. Replace {filepath} with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
+        //   mimeType: "text/plain", // Default, actual content type might vary
+        //   template: true,
+        //   parameters: {
+        //     filepath: {
+        //       type: "string",
+        //       description: "The path to the file relative to the repository root."
+        //     }
+        //   }
+        // },
         "repo://health": {
           name: "Server Health Status",
           description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access).",
