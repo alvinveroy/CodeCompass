@@ -1,7 +1,7 @@
-import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types";
-import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate"; // Attempt specific import for Variables
+// import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate"; // Attempt specific import for Variables
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"; // Attempt specific import for RequestHandlerExtra
 import fs from "fs/promises";
 import path from "path";
