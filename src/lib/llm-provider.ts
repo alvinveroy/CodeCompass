@@ -298,7 +298,6 @@ export function clearProviderCache(): void {
 
 export async function getLLMProvider(): Promise<LLMProvider> {
   // Ensure ConfigService has the latest from files/env.
-  // configService.reloadConfigsFromFile(); // Call this if there's a chance config changed since service init.
 
   const suggestionModel = configService.SUGGESTION_MODEL;
   const suggestionProvider = configService.SUGGESTION_PROVIDER;

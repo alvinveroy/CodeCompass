@@ -28,7 +28,7 @@ export async function searchWithRefinement(
     // Search Qdrant
     const searchResults = await client.search(configService.COLLECTION_NAME, {
       vector: embedding,
-      limit: 5, // This limit could also be a config value
+      limit: configService.QDRANT_SEARCH_LIMIT_DEFAULT, // Use configured limit
       filter: files.length ? { must: [{ key: "filepath", match: { any: files } }] } : undefined,
     });
 

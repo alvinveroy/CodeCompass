@@ -66,7 +66,6 @@ function displayChangelog(verbose: boolean) {
     if (cachedContent && cachedMtime && cachedMtime === currentMtime) {
       console.log(cachedContent);
       if (verbose) {
-        // console.log("\n[Verbose changelog mode active - served from cache]");
       }
       return;
     }
@@ -80,7 +79,6 @@ function displayChangelog(verbose: boolean) {
     if (verbose) {
       // Placeholder for future verbose-specific logic.
       // For now, verbose output is the same as non-verbose for the full changelog.
-      // console.log("\n[Verbose changelog mode active - freshly read]");
     }
   } catch (error) {
     console.error('Error reading or caching CHANGELOG.md:', error);

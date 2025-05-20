@@ -233,12 +233,20 @@ export async function executeToolCall(
       addQuery(session.id, query, results, relevanceScore);
       
       // Format results for the agent
-      const formattedResults = results.map(r => ({
-        filepath: r.payload.filepath,
-        snippet: r.payload.content.slice(0, 2000), // Limit snippet size
-        last_modified: r.payload.last_modified,
-        relevance: r.score,
-      }));
+      const formattedResults = results.map(r => {
+        const payload = r.payload as any; // Cast to any to access potential chunk fields
+        let filepathDisplay = payload.filepath;
+        if (payload.is_chunked) {
+          filepathDisplay = `${payload.filepath} (Chunk ${payload.chunk_index + 1}/${payload.total_chunks})`;
+        }
+        return {
+          filepath: filepathDisplay,
+          snippet: payload.content.slice(0, 2000), // Limit snippet size
+          last_modified: payload.last_modified,
+          relevance: r.score,
+          is_chunked: payload.is_chunked, // Pass along chunking info
+        };
+      });
       
       return {
         sessionId: session.id,
@@ -283,12 +291,24 @@ export async function executeToolCall(
       // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
       
-      const context = results.map(r => ({
-        filepath: r.payload.filepath,
-        snippet: r.payload.content.slice(0, 2000), // Limit snippet size
-        last_modified: r.payload.last_modified,
-        relevance: r.score,
-      }));
+      const context = results.map(r => {
+        const payload = r.payload as any; // Cast to any to access potential chunk fields
+        let filepathDisplay = payload.filepath;
+        if (payload.is_chunked) {
+          filepathDisplay = `${payload.filepath} (Chunk ${payload.chunk_index + 1}/${payload.total_chunks})`;
+        }
+        return {
+          filepath: filepathDisplay,
+          snippet: payload.content.slice(0, 2000), // Limit snippet size
+          last_modified: payload.last_modified,
+          relevance: r.score,
+          is_chunked: payload.is_chunked,
+          // Store original path for potential re-assembly logic later if needed
+          original_filepath: payload.filepath, 
+          chunk_index: payload.chunk_index,
+          total_chunks: payload.total_chunks,
+        };
+      });
       
       // Add query to session
       addQuery(session.id, query, results);
@@ -340,12 +360,23 @@ export async function executeToolCall(
       );
       
       // Map search results to context
-      const context = results.map(r => ({
-        filepath: r.payload.filepath,
-        snippet: r.payload.content.slice(0, 2000),
-        last_modified: r.payload.last_modified,
-        relevance: r.score,
-      }));
+      const context = results.map(r => {
+        const payload = r.payload as any;
+        let filepathDisplay = payload.filepath;
+        if (payload.is_chunked) {
+          filepathDisplay = `${payload.filepath} (Chunk ${payload.chunk_index + 1}/${payload.total_chunks})`;
+        }
+        return {
+          filepath: filepathDisplay, // This will be the display path including chunk info
+          original_filepath: payload.filepath, // Keep original for reference
+          snippet: payload.content.slice(0, 2000),
+          last_modified: payload.last_modified,
+          relevance: r.score,
+          is_chunked: payload.is_chunked,
+          chunk_index: payload.chunk_index,
+          total_chunks: payload.total_chunks,
+        };
+      });
       
       const prompt = `
 **Context**:
@@ -355,7 +386,7 @@ Recent Changes: ${_diff ? _diff.substring(0, 500) : ""}${_diff && _diff.length >
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
-${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}`).join("\n\n")}
+${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})${c.is_chunked ? ` [Chunk ${c.chunk_index + 1}/${c.total_chunks} of ${c.original_filepath}]` : ''}\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}`).join("\n\n")}
 
 **Instruction**:
 Based on the provided context and snippets, generate a detailed code suggestion for "${query}". Include:
@@ -433,12 +464,23 @@ Based on the provided context and snippets, generate a detailed code suggestion 
         files
       );
       
-      const context = contextResults.map(r => ({
-        filepath: r.payload.filepath,
-        snippet: r.payload.content.slice(0, 2000),
-        last_modified: r.payload.last_modified,
-        relevance: r.score,
-      }));
+      const context = contextResults.map(r => {
+        const payload = r.payload as any;
+        let filepathDisplay = payload.filepath;
+        if (payload.is_chunked) {
+          filepathDisplay = `${payload.filepath} (Chunk ${payload.chunk_index + 1}/${payload.total_chunks})`;
+        }
+        return {
+          filepath: filepathDisplay,
+          original_filepath: payload.filepath,
+          snippet: payload.content.slice(0, 2000),
+          last_modified: payload.last_modified,
+          relevance: r.score,
+          is_chunked: payload.is_chunked,
+          chunk_index: payload.chunk_index,
+          total_chunks: payload.total_chunks,
+        };
+      });
       
       // Step 2: Analyze the problem
       const analysisPrompt = `
@@ -447,7 +489,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
 Problem: ${query}
 
 **Relevant Code**:
-${context.map(c => `File: ${c.filepath}\n\`\`\`\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}\n\`\`\``).join("\n\n")}
+${context.map(c => `File: ${c.filepath}${c.is_chunked ? ` [Chunk ${c.chunk_index + 1}/${c.total_chunks} of ${c.original_filepath}]` : ''}\n\`\`\`\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}\n\`\`\``).join("\n\n")}
 
 **Instructions**:
 1. Analyze the problem described above.

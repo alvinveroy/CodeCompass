@@ -1,6 +1,8 @@
 import git from "isomorphic-git";
 import fs from "fs/promises";
 import path from "path";
+import { exec } from "child_process"; // Import exec
+import { promisify } from "util"; // To promisify exec
 import { v4 as uuidv4 } from "uuid";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
@@ -113,25 +115,73 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
 
   let successCount = 0;
   let errorCount = 0;
+  const CHUNK_SIZE = configService.MAX_SNIPPET_LENGTH; // Define CHUNK_SIZE
+  const CHUNK_OVERLAP = 50; // Define CHUNK_OVERLAP
 
   for (const filepath of filteredFiles) {
     try {
       const fullPath = path.join(repoPath, filepath);
       const content = await fs.readFile(fullPath, "utf8");
-      
-      if (!content.trim() || content.length > configService.MAX_SNIPPET_LENGTH * 10) {
-        logger.info(`Skipping ${filepath}: ${!content.trim() ? 'empty file' : 'file too large'}`);
+      const last_modified = (await fs.stat(fullPath)).mtime.toISOString();
+
+      if (!content.trim()) {
+        logger.info(`Skipping ${filepath}: empty file`);
         continue;
       }
-      
-      const embedding = await generateEmbedding(content);
-      const pointId = uuidv4();
-      logger.info(`Upserting to Qdrant: ${filepath} (ID: ${pointId})`);
-      await qdrantClient.upsert(configService.COLLECTION_NAME, {
-        points: [{ id: pointId, vector: embedding, payload: { filepath, content, last_modified: (await fs.stat(fullPath)).mtime.toISOString() } }],
-      });
-      logger.info(`Indexed: ${filepath}`);
-      successCount++;
+
+      // Check if file content is large enough to be chunked
+      if (content.length > CHUNK_SIZE) {
+        logger.info(`File ${filepath} is large, attempting to chunk.`);
+        const chunks: string[] = [];
+        for (let i = 0; i < content.length; i += CHUNK_SIZE - CHUNK_OVERLAP) {
+          chunks.push(content.substring(i, i + CHUNK_SIZE));
+        }
+
+        if (chunks.length > 0) {
+          logger.info(`Indexing ${filepath} in ${chunks.length} chunks.`);
+          for (let i = 0; i < chunks.length; i++) {
+            const chunkContent = chunks[i];
+            if (!chunkContent.trim()) continue; // Skip empty chunks
+
+            const embedding = await generateEmbedding(chunkContent);
+            // Consider a more deterministic ID if needed for updates, e.g., hash(filepath + chunk_index)
+            const pointId = uuidv4(); 
+            const payload = {
+              filepath,
+              content: chunkContent,
+              last_modified,
+              is_chunked: true,
+              chunk_index: i,
+              total_chunks: chunks.length,
+            };
+            logger.info(`Upserting chunk ${i + 1}/${chunks.length} for ${filepath} (ID: ${pointId})`);
+            await qdrantClient.upsert(configService.COLLECTION_NAME, {
+              points: [{ id: pointId, vector: embedding, payload }],
+            });
+          }
+          logger.info(`Successfully indexed ${chunks.length} chunks for ${filepath}`);
+          successCount++;
+        } else {
+          logger.warn(`File ${filepath} was marked for chunking but produced 0 chunks.`);
+          errorCount++; // Or handle as appropriate
+        }
+      } else {
+        // File is not large enough for chunking, index as a whole
+        const embedding = await generateEmbedding(content);
+        const pointId = uuidv4();
+        const payload = {
+          filepath,
+          content,
+          last_modified,
+          is_chunked: false,
+        };
+        logger.info(`Upserting whole file ${filepath} (ID: ${pointId})`);
+        await qdrantClient.upsert(configService.COLLECTION_NAME, {
+          points: [{ id: pointId, vector: embedding, payload }],
+        });
+        logger.info(`Indexed whole file: ${filepath}`);
+        successCount++;
+      }
     } catch (error: unknown) {
       logger.error(`Failed to index ${filepath}`, {
         message: error instanceof Error ? error.message : String(error)
@@ -144,6 +194,9 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
 }
 
 // Get Repository Diff
+const execAsync = promisify(exec); // Promisify exec for async/await usage
+const MAX_DIFF_LENGTH = 10000; // Max characters for diff output
+
 export async function getRepositoryDiff(repoPath: string): Promise<string> {
   const isGitRepo = await validateGitRepository(repoPath);
   if (!isGitRepo) {
@@ -152,25 +205,39 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
   }
 
   try {
-    const commits = await git.log({ fs, dir: repoPath, depth: 2 });
-    if (commits.length < 2) return "No previous commits to compare";
+    const commits = await git.log({ fs, dir: repoPath, depth: 2, gitdir: path.join(repoPath, ".git") });
+    if (commits.length < 2) {
+      logger.info("Not enough commits to generate a diff.");
+      return "No previous commits to compare";
+    }
     const [latest, previous] = commits;
-    const changes: string[] = [];
-    await git.walk({
-      fs,
-      dir: repoPath,
-      trees: [git.TREE({ ref: previous.oid }), git.TREE({ ref: latest.oid })],
-      map: (filepath, [a, b]) => { 
-        if (!a && !b) return Promise.resolve(null);
-        const change = !a ? 'added' : !b ? 'removed' : 'modified';
-        changes.push(`${change}: ${filepath}`);
-        return Promise.resolve(null);
-      },
-    });
-    return changes.join('\n') || "No changes since last commit";
+
+    // Use git diff command to get textual diff
+    const command = `git diff ${previous.oid} ${latest.oid}`;
+    logger.info(`Executing diff command: ${command} in ${repoPath}`);
+
+    const { stdout, stderr } = await execAsync(command, { cwd: repoPath, maxBuffer: 1024 * 1024 * 5 }); // 5MB buffer
+
+    if (stderr) {
+      logger.warn(`Git diff command produced stderr: ${stderr}`);
+      // Continue if stderr is just a warning, but log it.
+      // If it's a fatal error, the command would likely throw.
+    }
+    
+    let diffOutput = stdout.trim();
+    if (!diffOutput) {
+      return "No textual changes found between last two commits.";
+    }
+
+    if (diffOutput.length > MAX_DIFF_LENGTH) {
+      logger.info(`Diff output is too long (${diffOutput.length} chars), truncating to ${MAX_DIFF_LENGTH} chars.`);
+      diffOutput = diffOutput.substring(0, MAX_DIFF_LENGTH) + "\n... (diff truncated)";
+    }
+    return diffOutput;
+
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger.error("Diff error", { message: err.message });
-    return "Failed to retrieve diff";
+    logger.error("Error retrieving git diff", { message: err.message, stack: err.stack });
+    return `Failed to retrieve diff: ${err.message}`;
   }
 }

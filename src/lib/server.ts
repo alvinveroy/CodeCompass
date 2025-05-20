@@ -1,8 +1,8 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"; // Added ResourceTemplate
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types";
-// import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate"; // Attempt specific import for Variables
-import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"; // Attempt specific import for RequestHandlerExtra
+import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"; // Restored import
+import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate"; // Added Variables
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
@@ -122,19 +122,18 @@ export async function startServer(repoPath: string): Promise<void> {
           description: "Lists all files in the current Git repository.",
           mimeType: "text/plain"
         },
-        // Temporarily commented out to diagnose "resources/list" serialization error
-        // "repo://files/{filepath}": {
-        //   name: "Repository File Content",
-        //   description: "Retrieves the content of a specific file from the repository. Replace {filepath} with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
-        //   mimeType: "text/plain", // Default, actual content type might vary
-        //   template: true,
-        //   parameters: {
-        //     filepath: {
-        //       type: "string",
-        //       description: "The path to the file relative to the repository root."
-        //     }
-        //   }
-        // },
+        "repo://files/{filepath}": {
+          name: "Repository File Content",
+          description: "Retrieves the content of a specific file from the repository. Replace {filepath} with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
+          mimeType: "text/plain", // Default, actual content type might vary
+          template: true,
+          parameters: {
+            filepath: {
+              type: "string",
+              description: "The path to the file relative to the repository root."
+            }
+          }
+        },
         "repo://health": {
           name: "Server Health Status",
           description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access).",
@@ -239,67 +238,66 @@ export async function startServer(repoPath: string): Promise<void> {
       }
     });
 
-    // Temporarily commented out to diagnose "resources/list" serialization error
-    // server.resource(
-    //   "Repository File Content",
-    //   new ResourceTemplate("repo://files/{filepath}", { list: undefined }),
-    //   {}, // metadata
-    //   async (uri: URL, variables: Variables, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
-    //   const rawFilepathValue = variables.filepath;
-    //   let relativeFilepath = '';
-    //   if (typeof rawFilepathValue === 'string') {
-    //     relativeFilepath = rawFilepathValue.trim();
-    //   } else if (Array.isArray(rawFilepathValue) && rawFilepathValue.length > 0 && typeof rawFilepathValue[0] === 'string') {
-    //     logger.warn(`Filepath parameter '${JSON.stringify(rawFilepathValue)}' resolved to an array. Using the first element: '${rawFilepathValue[0]}'`);
-    //     relativeFilepath = rawFilepathValue[0].trim();
-    //   } else if (rawFilepathValue !== undefined) {
-    //     logger.warn(`Filepath parameter '${Array.isArray(rawFilepathValue) ? JSON.stringify(rawFilepathValue) : rawFilepathValue}' resolved to an unexpected type: ${typeof rawFilepathValue}. Treating as empty.`);
-    //   }
-    //   // If rawFilepathValue is undefined, or an empty array, or an array not containing a string at index 0, relativeFilepath remains ''.
+    server.resource(
+      "Repository File Content",
+      new ResourceTemplate("repo://files/{filepath}", { list: undefined }), // Used ResourceTemplate directly
+      {}, // metadata
+      async (uri: URL, variables: Variables, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { // Used Variables directly
+      const rawFilepathValue = variables.filepath;
+      let relativeFilepath = '';
+      if (typeof rawFilepathValue === 'string') {
+        relativeFilepath = rawFilepathValue.trim();
+      } else if (Array.isArray(rawFilepathValue) && rawFilepathValue.length > 0 && typeof rawFilepathValue[0] === 'string') {
+        logger.warn(`Filepath parameter '${JSON.stringify(rawFilepathValue)}' resolved to an array. Using the first element: '${rawFilepathValue[0]}'`);
+        relativeFilepath = rawFilepathValue[0].trim();
+      } else if (rawFilepathValue !== undefined) {
+        logger.warn(`Filepath parameter '${Array.isArray(rawFilepathValue) ? JSON.stringify(rawFilepathValue) : rawFilepathValue}' resolved to an unexpected type: ${typeof rawFilepathValue}. Treating as empty.`);
+      }
+      // If rawFilepathValue is undefined, or an empty array, or an array not containing a string at index 0, relativeFilepath remains ''.
 
-    //   if (!relativeFilepath) {
-    //     const errMsg = "File path cannot be empty.";
-    //     logger.error(`Error accessing resource for URI ${uri.toString()}: ${errMsg}`);
-    //     return { contents: [{ uri: uri.toString(), text: "", error: errMsg }] };
-    //   }
+      if (!relativeFilepath) {
+        const errMsg = "File path cannot be empty.";
+        logger.error(`Error accessing resource for URI ${uri.toString()}: ${errMsg}`);
+        return { contents: [{ uri: uri.toString(), text: "", error: errMsg }] };
+      }
 
-    //   try {
-    //     const resolvedRepoPath = path.resolve(repoPath); // Normalized
-    //     const requestedFullPath = path.resolve(repoPath, relativeFilepath); // Normalized
+      try {
+        const resolvedRepoPath = path.resolve(repoPath); // Normalized
+        const requestedFullPath = path.resolve(repoPath, relativeFilepath); // Normalized
 
-    //     // Initial security check: Ensure the resolved path is within the repoPath
-    //     if (!requestedFullPath.startsWith(resolvedRepoPath + path.sep) && requestedFullPath !== resolvedRepoPath) {
-    //       throw new Error(`Access denied: Path '${relativeFilepath}' attempts to traverse outside the repository directory.`);
-    //     }
+        // Initial security check: Ensure the resolved path is within the repoPath
+        if (!requestedFullPath.startsWith(resolvedRepoPath + path.sep) && requestedFullPath !== resolvedRepoPath) {
+          throw new Error(`Access denied: Path '${relativeFilepath}' attempts to traverse outside the repository directory.`);
+        }
         
-    //     let finalPathToRead = requestedFullPath;
-    //     try {
-    //         const stats = await fs.lstat(requestedFullPath);
-    //         if (stats.isSymbolicLink()) {
-    //             const symlinkTargetPath = await fs.realpath(requestedFullPath);
-    //             // Ensure the resolved symlink target is also within the repository
-    //             if (!path.resolve(symlinkTargetPath).startsWith(resolvedRepoPath + path.sep) && path.resolve(symlinkTargetPath) !== resolvedRepoPath) {
-    //                 throw new Error(`Access denied: Symbolic link '${relativeFilepath}' points outside the repository directory.`);
-    //             }
-    //             finalPathToRead = symlinkTargetPath; // Update path to read from the symlink's target
-    //         } else if (!stats.isFile()) {
-    //             throw new Error(`Access denied: Path '${relativeFilepath}' is not a file.`);
-    //         }
-    //     } catch (statError: unknown) {
-    //         if ((statError as NodeJS.ErrnoException).code === 'ENOENT') {
-    //             throw new Error(`File not found: ${relativeFilepath}`);
-    //         }
-    //         throw statError; // Re-throw other stat/realpath errors
-    //     }
+        let finalPathToRead = requestedFullPath;
+        try {
+            const stats = await fs.lstat(requestedFullPath);
+            if (stats.isSymbolicLink()) {
+                const symlinkTargetPath = await fs.realpath(requestedFullPath);
+                // Ensure the resolved symlink target is also within the repository
+                if (!path.resolve(symlinkTargetPath).startsWith(resolvedRepoPath + path.sep) && path.resolve(symlinkTargetPath) !== resolvedRepoPath) {
+                    throw new Error(`Access denied: Symbolic link '${relativeFilepath}' points outside the repository directory.`);
+                }
+                finalPathToRead = symlinkTargetPath; // Update path to read from the symlink's target
+            } else if (!stats.isFile()) {
+                throw new Error(`Access denied: Path '${relativeFilepath}' is not a file.`);
+            }
+        } catch (statError: unknown) {
+            if ((statError as NodeJS.ErrnoException).code === 'ENOENT') {
+                throw new Error(`File not found: ${relativeFilepath}`);
+            }
+            throw statError; // Re-throw other stat/realpath errors
+        }
 
-    //     const content = await fs.readFile(finalPathToRead, "utf8");
-    //     return { contents: [{ uri: uri.toString(), text: content }] };
-    //   } catch (error: unknown) {
-    //     const errorMessage = error instanceof Error ? error.message : String(error);
-    //     logger.error(`Error accessing resource for URI ${uri.toString()} (relative path: ${relativeFilepath}): ${errorMessage}`);
-    //     return { contents: [{ uri: uri.toString(), text: "", error: errorMessage }] };
-    //   }
-    // });
+        const content = await fs.readFile(finalPathToRead, "utf8");
+        return { contents: [{ uri: uri.toString(), text: content }] };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`Error accessing resource for URI ${uri.toString()} (relative path: ${relativeFilepath}): ${errorMessage}`);
+        return { contents: [{ uri: uri.toString(), text: "", error: errorMessage }] };
+      }
+    });
 
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
@@ -403,8 +401,6 @@ export async function startServer(repoPath: string): Promise<void> {
     console.error(`CodeCompass v${VERSION} MCP Server running on stdio`);
     
     await server.connect(transport);
-    
-    // }); // This was misplaced, removed. The try block continues.
     
     await new Promise<void>((resolve) => {
       process.on('SIGINT', () => {
