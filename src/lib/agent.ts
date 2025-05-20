@@ -233,18 +233,21 @@ export async function executeToolCall(
       addQuery(session.id, query, results, relevanceScore);
       
       // Format results for the agent
-      const formattedResults = results.map(r => {
-        const payload = r.payload as any; // Cast to any to access potential chunk fields
-        let filepathDisplay = payload.filepath;
+      const formattedResults = results.map(r => { // r is implicitly DetailedQdrantSearchResult
+        const payload = r.payload; // No 'as any'
+        let filepathDisplay = payload.filepath; // Now type-safe
+
+        // Safely access optional properties
         if (payload.is_chunked) {
-          filepathDisplay = `${payload.filepath} (Chunk ${payload.chunk_index + 1}/${payload.total_chunks})`;
+          filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         return {
           filepath: filepathDisplay,
-          snippet: payload.content.slice(0, 2000), // Limit snippet size
-          last_modified: payload.last_modified,
+          // payload.content is string, so .slice is safe
+          snippet: payload.content.slice(0, 2000),
+          last_modified: payload.last_modified, // Now type-safe
           relevance: r.score,
-          is_chunked: payload.is_chunked, // Pass along chunking info
+          is_chunked: !!payload.is_chunked, // Ensure boolean
         };
       });
       
@@ -291,22 +294,23 @@ export async function executeToolCall(
       // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
       
-      const context = results.map(r => {
-        const payload = r.payload as any; // Cast to any to access potential chunk fields
-        let filepathDisplay = payload.filepath;
+      const context = results.map(r => { // r is implicitly DetailedQdrantSearchResult
+        const payload = r.payload; // No 'as any'
+        let filepathDisplay = payload.filepath; // Now type-safe
+
         if (payload.is_chunked) {
-          filepathDisplay = `${payload.filepath} (Chunk ${payload.chunk_index + 1}/${payload.total_chunks})`;
+          filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         return {
           filepath: filepathDisplay,
-          snippet: payload.content.slice(0, 2000), // Limit snippet size
-          last_modified: payload.last_modified,
+          snippet: payload.content.slice(0, 2000), // Safe
+          last_modified: payload.last_modified, // Safe
           relevance: r.score,
-          is_chunked: payload.is_chunked,
+          is_chunked: !!payload.is_chunked,
           // Store original path for potential re-assembly logic later if needed
-          original_filepath: payload.filepath, 
-          chunk_index: payload.chunk_index,
-          total_chunks: payload.total_chunks,
+          original_filepath: payload.filepath, // Safe
+          chunk_index: payload.chunk_index, // Safe (will be number | undefined)
+          total_chunks: payload.total_chunks, // Safe (will be number | undefined)
         };
       });
       
@@ -360,21 +364,22 @@ export async function executeToolCall(
       );
       
       // Map search results to context
-      const context = results.map(r => {
-        const payload = r.payload as any;
-        let filepathDisplay = payload.filepath;
+      const context = results.map(r => { // r is implicitly DetailedQdrantSearchResult
+        const payload = r.payload; // No 'as any'
+        let filepathDisplay = payload.filepath; // Safe
+
         if (payload.is_chunked) {
-          filepathDisplay = `${payload.filepath} (Chunk ${payload.chunk_index + 1}/${payload.total_chunks})`;
+          filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         return {
           filepath: filepathDisplay, // This will be the display path including chunk info
-          original_filepath: payload.filepath, // Keep original for reference
-          snippet: payload.content.slice(0, 2000),
-          last_modified: payload.last_modified,
+          original_filepath: payload.filepath, // Safe
+          snippet: payload.content.slice(0, 2000), // Safe
+          last_modified: payload.last_modified, // Safe
           relevance: r.score,
-          is_chunked: payload.is_chunked,
-          chunk_index: payload.chunk_index,
-          total_chunks: payload.total_chunks,
+          is_chunked: !!payload.is_chunked,
+          chunk_index: payload.chunk_index, // Safe
+          total_chunks: payload.total_chunks, // Safe
         };
       });
       
@@ -386,7 +391,7 @@ Recent Changes: ${_diff ? _diff.substring(0, 500) : ""}${_diff && _diff.length >
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
-${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})${c.is_chunked ? ` [Chunk ${c.chunk_index + 1}/${c.total_chunks} of ${c.original_filepath}]` : ''}\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}`).join("\n\n")}
+${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})${c.is_chunked ? ` [Chunk ${(c.chunk_index ?? 0) + 1}/${c.total_chunks ?? 'N/A'} of ${c.original_filepath}]` : ''}\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}`).join("\n\n")}
 
 **Instruction**:
 Based on the provided context and snippets, generate a detailed code suggestion for "${query}". Include:
@@ -464,21 +469,22 @@ Based on the provided context and snippets, generate a detailed code suggestion 
         files
       );
       
-      const context = contextResults.map(r => {
-        const payload = r.payload as any;
-        let filepathDisplay = payload.filepath;
+      const context = contextResults.map(r => { // r is implicitly DetailedQdrantSearchResult
+        const payload = r.payload; // No 'as any'
+        let filepathDisplay = payload.filepath; // Safe
+
         if (payload.is_chunked) {
-          filepathDisplay = `${payload.filepath} (Chunk ${payload.chunk_index + 1}/${payload.total_chunks})`;
+          filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         return {
           filepath: filepathDisplay,
-          original_filepath: payload.filepath,
-          snippet: payload.content.slice(0, 2000),
-          last_modified: payload.last_modified,
+          original_filepath: payload.filepath, // Safe
+          snippet: payload.content.slice(0, 2000), // Safe
+          last_modified: payload.last_modified, // Safe
           relevance: r.score,
-          is_chunked: payload.is_chunked,
-          chunk_index: payload.chunk_index,
-          total_chunks: payload.total_chunks,
+          is_chunked: !!payload.is_chunked,
+          chunk_index: payload.chunk_index, // Safe
+          total_chunks: payload.total_chunks, // Safe
         };
       });
       
@@ -489,7 +495,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
 Problem: ${query}
 
 **Relevant Code**:
-${context.map(c => `File: ${c.filepath}${c.is_chunked ? ` [Chunk ${c.chunk_index + 1}/${c.total_chunks} of ${c.original_filepath}]` : ''}\n\`\`\`\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}\n\`\`\``).join("\n\n")}
+${context.map(c => `File: ${c.filepath}${c.is_chunked ? ` [Chunk ${(c.chunk_index ?? 0) + 1}/${c.total_chunks ?? 'N/A'} of ${c.original_filepath}]` : ''}\n\`\`\`\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}\n\`\`\``).join("\n\n")}
 
 **Instructions**:
 1. Analyze the problem described above.

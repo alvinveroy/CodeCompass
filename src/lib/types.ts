@@ -117,6 +117,10 @@ export interface DetailedQdrantSearchResult {
     filepath: string;
     content: string;
     last_modified: string;
+    // Add these optional properties:
+    is_chunked?: boolean;
+    chunk_index?: number;
+    total_chunks?: number;
     [key: string]: unknown; // Allows for other potential payload fields
   };
   version?: number;

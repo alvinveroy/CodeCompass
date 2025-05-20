@@ -66,6 +66,7 @@ function displayChangelog(verbose: boolean) {
     if (cachedContent && cachedMtime && cachedMtime === currentMtime) {
       console.log(cachedContent);
       if (verbose) {
+        // Future verbose-specific logic can be added here.
       }
       return;
     }
