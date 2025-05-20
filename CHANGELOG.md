@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Dynamically importing `ConfigService` within the "Default Configuration" and "Logger Configuration" test suites after `vi.resetModules()` and environment variable cleanup, guaranteeing a fresh service instance for these tests. (cd97d8c)
 
 ## [Unreleased]
+
+## [1.4.5] - 2025-05-20
 ### Fixed
 - Resolved TypeScript build error `TS2339: Property 'onRequest' does not exist on type 'McpServer'` by removing the manual `server.onRequest("resources/list", ...)` handler in `src/lib/server.ts`.
 - Addressed the underlying MCP client serialization error for `resources/list` requests by populating the `capabilities.resources` object in the `McpServer` constructor with comprehensive metadata (human-readable `name`, `description`, `mimeType`) for each resource. This allows the SDK to correctly generate the `resources/list` response. (Reverts approach from 9cb0f50, 7a0af62 and builds upon 58ffec4)
