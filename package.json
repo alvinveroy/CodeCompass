@@ -1,6 +1,6 @@
 {
   "name": "@alvinveroy/codecompass",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "AI-powered MCP server for codebase navigation and LLM prompt optimization",
   "main": "dist/index.js",
   "bin": {
