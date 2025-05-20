@@ -3,7 +3,7 @@ import { getLLMProvider } from "./llm-provider";
 // import { incrementCounter, timeExecution } from "./metrics"; // Metrics removed
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { AgentState, AgentStep } from "./types"; // DetailedQdrantSearchResult removed as it's unused
+import { AgentState, AgentStep } from "./types";
 import { searchWithRefinement } from "./query-refinement"; // Changed import path
 import { validateGitRepository, getRepositoryDiff } from "./repository";
 import git from "isomorphic-git";
@@ -233,9 +233,9 @@ export async function executeToolCall(
       addQuery(session.id, query, results, relevanceScore);
       
       // Format results for the agent
-      const formattedResults = results.map(r => { // r is implicitly DetailedQdrantSearchResult
-        const payload = r.payload; // No 'as any'
-        let filepathDisplay = payload.filepath; // Now type-safe
+      const formattedResults = results.map(r => {
+        const payload = r.payload;
+        let filepathDisplay = payload.filepath;
 
         // Safely access optional properties
         if (payload.is_chunked) {
@@ -243,11 +243,10 @@ export async function executeToolCall(
         }
         return {
           filepath: filepathDisplay,
-          // payload.content is string, so .slice is safe
           snippet: payload.content.slice(0, 2000),
-          last_modified: payload.last_modified, // Now type-safe
+          last_modified: payload.last_modified,
           relevance: r.score,
-          is_chunked: !!payload.is_chunked, // Ensure boolean
+          is_chunked: !!payload.is_chunked,
         };
       });
       
@@ -294,23 +293,23 @@ export async function executeToolCall(
       // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
       
-      const context = results.map(r => { // r is implicitly DetailedQdrantSearchResult
-        const payload = r.payload; // No 'as any'
-        let filepathDisplay = payload.filepath; // Now type-safe
+      const context = results.map(r => {
+        const payload = r.payload;
+        let filepathDisplay = payload.filepath;
 
         if (payload.is_chunked) {
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         return {
           filepath: filepathDisplay,
-          snippet: payload.content.slice(0, 2000), // Safe
-          last_modified: payload.last_modified, // Safe
+          snippet: payload.content.slice(0, 2000),
+          last_modified: payload.last_modified,
           relevance: r.score,
           is_chunked: !!payload.is_chunked,
           // Store original path for potential re-assembly logic later if needed
-          original_filepath: payload.filepath, // Safe
-          chunk_index: payload.chunk_index, // Safe (will be number | undefined)
-          total_chunks: payload.total_chunks, // Safe (will be number | undefined)
+          original_filepath: payload.filepath,
+          chunk_index: payload.chunk_index,
+          total_chunks: payload.total_chunks,
         };
       });
       
@@ -364,22 +363,22 @@ export async function executeToolCall(
       );
       
       // Map search results to context
-      const context = results.map(r => { // r is implicitly DetailedQdrantSearchResult
-        const payload = r.payload; // No 'as any'
-        let filepathDisplay = payload.filepath; // Safe
+      const context = results.map(r => {
+        const payload = r.payload;
+        let filepathDisplay = payload.filepath;
 
         if (payload.is_chunked) {
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         return {
           filepath: filepathDisplay, // This will be the display path including chunk info
-          original_filepath: payload.filepath, // Safe
-          snippet: payload.content.slice(0, 2000), // Safe
-          last_modified: payload.last_modified, // Safe
+          original_filepath: payload.filepath,
+          snippet: payload.content.slice(0, 2000),
+          last_modified: payload.last_modified,
           relevance: r.score,
           is_chunked: !!payload.is_chunked,
-          chunk_index: payload.chunk_index, // Safe
-          total_chunks: payload.total_chunks, // Safe
+          chunk_index: payload.chunk_index,
+          total_chunks: payload.total_chunks,
         };
       });
       
@@ -469,22 +468,22 @@ Based on the provided context and snippets, generate a detailed code suggestion 
         files
       );
       
-      const context = contextResults.map(r => { // r is implicitly DetailedQdrantSearchResult
-        const payload = r.payload; // No 'as any'
-        let filepathDisplay = payload.filepath; // Safe
+      const context = contextResults.map(r => {
+        const payload = r.payload;
+        let filepathDisplay = payload.filepath;
 
         if (payload.is_chunked) {
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         return {
           filepath: filepathDisplay,
-          original_filepath: payload.filepath, // Safe
-          snippet: payload.content.slice(0, 2000), // Safe
-          last_modified: payload.last_modified, // Safe
+          original_filepath: payload.filepath,
+          snippet: payload.content.slice(0, 2000),
+          last_modified: payload.last_modified,
           relevance: r.score,
           is_chunked: !!payload.is_chunked,
-          chunk_index: payload.chunk_index, // Safe
-          total_chunks: payload.total_chunks, // Safe
+          chunk_index: payload.chunk_index,
+          total_chunks: payload.total_chunks,
         };
       });
       
@@ -541,7 +540,6 @@ export async function runAgentLoop(
   suggestionModelAvailable: boolean,
   maxSteps = 5
 ): Promise<string> {
-  // incrementCounter('agent_runs'); // Metrics removed
   logger.info(`Agent loop started for query: "${query}" (Session: ${sessionId || 'new'})`);
   
   // Log the current provider and model being used by the agent, sourced from ConfigService
@@ -554,10 +552,6 @@ export async function runAgentLoop(
       delete require.cache[key];
     }
   });
-  
-  // Configuration is loaded by configService.reloadConfigsFromFile(true) at server start
-  // and before agent tool execution if needed.
-  // The previous import from './model-persistence' is no longer valid.
   
   // Import the clearProviderCache function and use it
   const { clearProviderCache } = await import('./llm-provider');
@@ -578,7 +572,6 @@ export async function runAgentLoop(
     logger.error(`Agent failed to verify provider ${configService.SUGGESTION_PROVIDER}: ${error instanceof Error ? error.message : String(error)}`);
   }
   
-  // return await timeExecution('agent_loop', async () => { // Metrics removed
     // Get or create session
     const session = getOrCreateSession(sessionId, repoPath);
     
@@ -732,7 +725,5 @@ ${agentState.finalResponse}
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     
-    // incrementCounter('agent_completions'); // Metrics removed
     return formattedResponse;
-  // }); // Metrics removed
 }
