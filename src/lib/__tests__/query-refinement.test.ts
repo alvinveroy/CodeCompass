@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { QdrantClient, type Schemas } from '@qdrant/js-client-rest';
 import type { DetailedQdrantSearchResult } from '../types';
 import type { RefineQueryFunc } from '../query-refinement';
@@ -31,9 +31,8 @@ import { logger } from '../config-service'; // configService itself is not used 
 
 const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
 
-// Define a more generic mock type that Vitest's vi.fn() produces
-type VitestMockedFunction<T extends (...args: any[]) => any> = 
-  vi.Mock<Parameters<T>, ReturnType<T>>;
+// Remove the VitestMockedFunction utility type if it was causing issues.
+// We will use the imported `Mock` type directly.
 
 describe('Query Refinement Tests', () => {
   beforeEach(() => {
@@ -45,8 +44,8 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('searchWithRefinement', () => {
-    // Use the utility type
-    let mockRefineQuery_Injected: VitestMockedFunction<RefineQueryFunc>;
+    // Use the imported Mock type directly with Parameters and ReturnType
+    let mockRefineQuery_Injected: Mock<Parameters<RefineQueryFunc>, ReturnType<RefineQueryFunc>>;
 
     beforeEach(() => {
       mockRefineQuery_Injected = vi.fn((query, _results, relevance) => {
@@ -121,10 +120,10 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('refineQuery (original logic with injected helpers)', () => {
-    // Use the utility type for these mocks as well
-    let mockBroaden_Injected: VitestMockedFunction<(query: string) => string>;
-    let mockFocus_Injected: VitestMockedFunction<(query: string, results: DetailedQdrantSearchResult[]) => string>;
-    let mockTweak_Injected: VitestMockedFunction<(query: string, results: DetailedQdrantSearchResult[]) => string>;
+    // Use the imported Mock type directly
+    let mockBroaden_Injected: Mock<[string], string>;
+    let mockFocus_Injected: Mock<[string, DetailedQdrantSearchResult[]], string>;
+    let mockTweak_Injected: Mock<[string, DetailedQdrantSearchResult[]], string>;
 
     beforeEach(() => {
       mockBroaden_Injected = vi.fn().mockReturnValue('mock_broadened_by_INJECTED_helper');
