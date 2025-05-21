@@ -39,8 +39,16 @@ describe('Query Refinement Utilities', () => {
     vi.clearAllMocks();
     // Default mock for generateEmbedding
     vi.mocked(generateEmbedding).mockResolvedValue([0.1, 0.2, 0.3]); // Default embedding
-    // Default mock for preprocessText
-    vi.mocked(preprocessText).mockImplementation(text => text.toLowerCase().trim());
+    // Default mock for preprocessText - to match its actual behavior from text-utils.ts
+    vi.mocked(preprocessText).mockImplementation(text => {
+      // eslint-disable-next-line no-control-regex
+      let processedText = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+      processedText = processedText.replace(/\s+/g, (match) => {
+        if (match.includes("\n")) return "\n";
+        return " ";
+      });
+      return processedText.trim();
+    });
   });
 
   describe('searchWithRefinement', () => {
@@ -177,25 +185,22 @@ describe('Query Refinement Utilities', () => {
         { payload: { content: "class UserProfile extends BaseProfile" } },
       ] as DetailedQdrantSearchResult[];
       
-      // Mock preprocessText to behave closer to actual for keyword extraction
-      // This mock will be used by the actual extractKeywords function.
-      vi.mocked(preprocessText).mockImplementation(text => 
-        text.toLowerCase().replace(/[^\w\s.:-]/gi, '').replace(/\s+/g, ' ').trim() // Allow common code chars
-      );
-      
-      // We are testing the actual focusQueryBasedOnResults, which calls the actual extractKeywords.
-      // No need to spy on extractKeywords here if we want to test their integration.
-      // If extractKeywords itself is complex and tested elsewhere, then spying is an option.
-      // For this test, let's assume we want to see focusQueryBasedOnResults work with the actual (but pre-mocked preprocessText) extractKeywords.
+      // The preprocessText mock in beforeEach will now apply.
+      // focusQueryBasedOnResults calls the SUT extractKeywords, which in turn calls the
+      // (mocked to actual behavior) preprocessText.
+      // The modified extractKeywords (Option 1) should now produce cleaner keywords.
+      // Example: "function processUser(user: UserType)" 
+      //   -> preprocessText (actual behavior) -> "function processUser(user: UserType)"
+      //   -> extractKeywords (with internal toLowerCase, punctuation removal) -> "processuser", "usertype" (potentially)
+      // "class UserProfile extends BaseProfile" 
+      //   -> preprocessText (actual behavior) -> "class UserProfile extends BaseProfile"
+      //   -> extractKeywords -> "userprofile", "extends", "baseprofile" (potentially)
+      // The top 2 keywords chosen by extractKeywords (after its internal cleaning and filtering)
+      // are expected to lead to the desired focused query.
 
-      // The `focusQueryBasedOnResults` function is imported at the top.
       const focused = focusQueryBasedOnResults(originalQuery, results);
       
-      // Expected keywords from "function processUser(user: UserType) class UserProfile extends BaseProfile"
-      // after preprocessText: "function processuseruser type class userprofile extends baseprofile"
-      // extractKeywords would pick: ['function', 'processuseruser', 'type', 'class', 'userprofile', 'extends', 'baseprofile'] (example)
-      // Then it takes top 2. Let's adjust expectation based on how extractKeywords and focusQueryBasedOnResults work.
-      // The expected output "find user processuser userprofile" implies "processuser" and "userprofile" are the chosen keywords.
+      // Expectation remains, assuming the modified extractKeywords achieves this.
       expect(focused).toBe("find user processuser userprofile"); 
     });
   });

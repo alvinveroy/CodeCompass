@@ -146,17 +146,20 @@ function tweakQuery(query: string, results: DetailedQdrantSearchResult[]): strin
 
 // Extract potential keywords from text
 function extractKeywords(text: string): string[] {
-  // Simple keyword extraction - split by spaces and filter
-  const words = preprocessText(text).split(/\s+/);
+  // Use the imported preprocessText
+  const processed = preprocessText(text);
+  // Further clean for keyword extraction: remove punctuation, convert to lower case for matching
+  const cleanedForKeywords = processed.toLowerCase().replace(/[.,;:!?(){}[\]"']/g, " ");
+  
+  const words = cleanedForKeywords.split(/\s+/);
 
-  // Filter out common words, keep technical terms
-  const keywords = words.filter(word =>
-    word.length > 3 &&
-    !['the', 'and', 'that', 'this', 'with', 'from', 'have'].includes(word.toLowerCase())
-  );
+  const commonWords = ['the', 'and', 'that', 'this', 'with', 'from', 'have', 'for', 'is', 'was', 'are', 'were', 'be', 'been', 'being', 'it', 'its', 'a', 'an'];
+  const keywords = words.filter(word => {
+    const cleanedWord = word.replace(/[():<>]$/, ''); // Remove trailing specific chars often attached to code identifiers
+    return cleanedWord.length > 3 && !commonWords.includes(cleanedWord);
+  }).map(word => word.replace(/[():<>]$/, '')); // Clean again after filter
 
-  // Return unique keywords
-  return [...new Set(keywords)];
+  return [...new Set(keywords)].filter(kw => kw.length > 0); // Ensure no empty strings from replacements
 }
 
 // Export internal functions for testing if needed
