@@ -219,7 +219,8 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
   try {
     const commits = await git.log({ fs: nodeFs, dir: repoPath, depth: 2, gitdir: path.join(repoPath, ".git") });
     if (commits.length < 2) {
-      logger.info("Not enough commits to generate a diff.");
+      // logger.info("Not enough commits to generate a diff."); // Original SUT had this commented out
+      logger.info(`Not enough commits in ${repoPath} to generate a diff (found ${commits.length}).`); // More informative
       return "No previous commits to compare";
     }
     const [latest, previous] = commits;
@@ -249,7 +250,15 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
 
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger.error(`Error retrieving git diff for ${repoPath}: ${err.message}`, err); // Log the full error object
+    // Add stderr to the logged error object if it's an ExecException from execAsync
+    const errorDetails: any = { message: err.message, stack: err.stack };
+    if ('stderr' in err) {
+        errorDetails.stderr = (err as import('child_process').ExecException).stderr;
+    }
+    if ('code' in err) {
+        errorDetails.code = (err as import('child_process').ExecException).code;
+    }
+    logger.error(`Error retrieving git diff for ${repoPath}: ${err.message}`, errorDetails);
     const errorMessage = err && typeof err.message === 'string' ? err.message : String(err);
     return `Failed to retrieve diff for ${repoPath}: ${errorMessage}`;
   }

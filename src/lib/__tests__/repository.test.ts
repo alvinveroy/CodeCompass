@@ -94,8 +94,6 @@ describe('Repository Utilities', () => {
     vi.mocked(readdir).mockReset();
     vi.mocked(stat).mockReset();
 
-    // No longer using spyOn for validateGitRepository here.
-    // It will be mocked specifically for the getRepositoryDiff suite.
 
     // Reset all isomorphic-git mocks
     vi.mocked(git.resolveRef).mockReset();
@@ -139,23 +137,14 @@ describe('Repository Utilities', () => {
   });
 
   describe('getRepositoryDiff', () => {
-    let mockedValidateGitRepository: vi.Mock<[string], Promise<boolean>>;
+    let mockInjectedValidator: vi.Mock<[string], Promise<boolean>>;
 
     // Setup mocks specifically for tests that expect validateGitRepository to pass
     // This beforeEach establishes the common "happy path" for validateGitRepository and git.log
     beforeEach(async () => {
-        // Dynamically mock validateGitRepository for this suite
-        mockedValidateGitRepository = vi.fn();
-        vi.doMock('../repository', async (importOriginal) => {
-            const originalModule = await importOriginal<typeof repositoryFunctions>();
-            return {
-                ...originalModule,
-                validateGitRepository: mockedValidateGitRepository,
-            };
-        });
-        // Re-import SUT to get the mocked version within this scope if needed, or ensure it's picked up.
-        // For getRepositoryDiff, it should pick up the mocked validateGitRepository from its own module.
-        mockedValidateGitRepository.mockResolvedValue(true);
+        // This mock will be passed directly to getRepositoryDiff
+        mockInjectedValidator = vi.fn();
+        mockInjectedValidator.mockResolvedValue(true); // Default to valid
         setupGitLogWithTwoCommits();
     });
 
@@ -163,7 +152,8 @@ describe('Repository Utilities', () => {
       execMock.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(null, 'diff_content_stdout_explicit', '');
       });
-      const result = await repositoryFunctions.getRepositoryDiff(repoPath);
+      const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
+      expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       expect(execMock).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 }), // SUT uses 5MB buffer
@@ -179,7 +169,8 @@ describe('Repository Utilities', () => {
         callback(null, longDiff, '');
       });
 
-      const result = await repositoryFunctions.getRepositoryDiff(repoPath);
+      const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
+      expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       expect(result).toBe('a'.repeat(MAX_DIFF_LENGTH_FROM_SUT) + "\n... (diff truncated)");
       expect(result).toContain('... (diff truncated)');
     });
@@ -194,7 +185,8 @@ describe('Repository Utilities', () => {
         callback(mockError, '', stderrText);
       });
 
-      const result = await repositoryFunctions.getRepositoryDiff(repoPath);
+      const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
+      expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
       expect(logger.error).toHaveBeenCalledWith(
         `Error retrieving git diff for ${repoPath}: Git command failed`,
@@ -207,19 +199,19 @@ describe('Repository Utilities', () => {
     });
     
     it('should return "No Git repository found" if validateGitRepository returns false', async () => {
-        mockedValidateGitRepository.mockResolvedValue(false); // Control our specific mock
-        const result = await repositoryFunctions.getRepositoryDiff(repoPath);
-        expect(mockedValidateGitRepository).toHaveBeenCalledWith(repoPath);
+        mockInjectedValidator.mockResolvedValue(false); // Control our specific mock
+        const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
+        expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
         expect(result).toBe("No Git repository found");
         expect(execMock).not.toHaveBeenCalled();
         expect(vi.mocked(git.log)).not.toHaveBeenCalled();
     });
 
     it('should return "No previous commits to compare" if less than 2 commits (single commit)', async () => {
-      // mockedValidateGitRepository is already set to resolve true in the suite's beforeEach
+      // mockInjectedValidator is set to resolve true in beforeEach
       setupGitLogWithSingleCommit();
-      const result = await repositoryFunctions.getRepositoryDiff(repoPath);
-      expect(mockedValidateGitRepository).toHaveBeenCalledWith(repoPath);
+      const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
+      expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       expect(result).toBe("No previous commits to compare");
       expect(execMock).not.toHaveBeenCalled();
     });
