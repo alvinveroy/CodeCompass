@@ -95,9 +95,9 @@ The following prioritization aims to tackle foundational improvements first, bui
 *(Formerly Section III and IV - Tasks renumbered)*
 
 1.  **Task P3.1 (Formerly Task 8.1-8.3): Expose Key Parameters via `configService`:**
-    *   [ ] Identify and list all new and existing parameters that should be user-configurable (e.g., Qdrant search limits, default/max agent steps, max refinement iterations, chunk sizes for large file indexing, LLM models for summarization/refinement).
-    *   [ ] Add these to `src/lib/config.ts` (with defaults) and `src/lib/config-service.ts` to load them from environment variables or a config file.
-    *   [ ] Update `README.md` and any example `.env` files with these new configuration options.
+    *   [x] Identify and list all new and existing parameters that should be user-configurable (e.g., Qdrant search limits, default/max agent steps, max refinement iterations, chunk sizes for large file indexing, LLM models for summarization/refinement).
+    *   [x] Add these to `src/lib/config.ts` (with defaults) and `src/lib/config-service.ts` to load them from environment variables or a config file.
+    *   [x] Update `README.md` and any example `.env` files with these new configuration options.
 
 2.  **Task P3.2 (Formerly Task 9.1): Flexible Agent Loop Steps:**
     *   [ ] Modify `src/lib/agent.ts` (`runAgentLoop` function):
