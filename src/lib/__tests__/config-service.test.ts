@@ -94,14 +94,17 @@ describe('ConfigService', () => {
     delete process.env.EMBEDDING_PROVIDER;
     delete process.env.DEEPSEEK_API_KEY;
     delete process.env.DEEPSEEK_API_URL;
-    delete process.env.SUMMARIZATION_MODEL;
+    // Ensure these are cleared so derived values are tested correctly
+    delete process.env.SUMMARIZATION_MODEL; 
     delete process.env.REFINEMENT_MODEL;
     delete process.env.AGENT_DEFAULT_MAX_STEPS;
     // ... and any other env vars ConfigService uses.
     process.env.HOME = MOCK_HOME_DIR; // Now set the specific one for tests
     
     const fsMock = fs;
+    // Default: only .codecompass dir exists, config files don't unless specified by a test
     vi.mocked(fsMock.existsSync).mockReset().mockImplementation((p) => p === MOCK_CONFIG_DIR);
+    // Default: config files are empty JSON unless specified by a test
     vi.mocked(fsMock.readFileSync).mockReset().mockReturnValue('{}');
     vi.mocked(fsMock.writeFileSync).mockReset();
     vi.mocked(fsMock.mkdirSync).mockReset().mockImplementation(() => undefined);
@@ -217,8 +220,13 @@ describe('ConfigService', () => {
   });
 
   it('should persist model configuration when setSuggestionModel is called', async () => {
-    vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => p === MOCK_CONFIG_DIR); // Only .codecompass dir exists
-    vi.mocked(fs.readFileSync).mockReset().mockReturnValue('{}'); // No pre-existing model-config
+    // Ensure env vars for derived models are clear for this test, so they derive from the new SUGGESTION_MODEL
+    delete process.env.SUMMARIZATION_MODEL;
+    delete process.env.REFINEMENT_MODEL;
+
+    // Setup fs mocks: .codecompass dir exists, but model-config.json does not yet.
+    vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR);
+    vi.mocked(fs.readFileSync).mockReturnValue('{}'); // model-config.json would be empty if read
 
     const service = await createServiceInstance(); // Initializes with defaults
     
@@ -281,10 +289,11 @@ describe('ConfigService', () => {
   });
 
   it('should handle malformed model-config.json gracefully', async () => {
-    delete process.env.SUGGESTION_MODEL; // Ensure no env override for this test
+    // Ensure SUGGESTION_MODEL is not set in env, so it tries to load from the (malformed) file
+    delete process.env.SUGGESTION_MODEL; 
     // Specific fs setup for this test
     vi.mocked(fs.existsSync).mockImplementation((p) => 
-      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE
+      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE // model-config.json exists
     );
     vi.mocked(fs.readFileSync).mockImplementation((p) => {
         if (p === MOCK_MODEL_CONFIG_FILE) return '{"SUGGESTION_MODEL": MALFORMED';
@@ -349,31 +358,37 @@ describe('ConfigService', () => {
 
   // Test log directory creation fallback
   it('should fallback to local logs directory if user-specific one fails', async () => {
-    vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => {
-      if (p === MOCK_CONFIG_DIR) return true; // .codecompass dir exists
-      // MOCK_LOG_DIR and fallback log dir do not exist initially
-      return false;
+    // Simulate .codecompass dir exists, but MOCK_LOG_DIR and fallback log dir do not initially.
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      if (p === MOCK_CONFIG_DIR) return true; 
+      return false; 
     });
+    
     // Specific mock for mkdirSync for this test
     vi.mocked(fs.mkdirSync).mockImplementation((p) => {
-      if (p === MOCK_LOG_DIR) {
-        throw new Error('Permission denied for user log dir');
+      if (p === MOCK_LOG_DIR) { // Attempt to create user-specific log dir
+        throw new Error('Permission denied for user log dir'); // This attempt fails
       }
-      if (p === path.join(process.cwd(), 'logs')) return undefined; // Success for fallback
-      if (p === MOCK_CONFIG_DIR) return undefined; // Allow .codecompass creation if needed
-      // For any other path, default behavior from beforeEach was: .mockReset().mockImplementation(() => undefined);
-      // So, if not matched above, it will return undefined.
-      return undefined;
+      if (p === path.join(process.cwd(), 'logs')) { // Attempt to create fallback local log dir
+        return undefined; // This attempt succeeds
+      }
+      if (p === MOCK_CONFIG_DIR) return undefined; // Allow .codecompass creation if needed by other parts
+      // Default behavior for other paths (should not be called for log dir creation in this test)
+      return undefined; 
     });
 
-    const service = await createServiceInstance();
+    const service = await createServiceInstance(); // This will trigger logger setup and dir creation attempts
     
     const winstonMockedModule = await import('winston');
-    // Get the logger instance that was created by *this specific* service instance
-    const loggerInstance = vi.mocked(winstonMockedModule.createLogger).mock.results.find(r => r.type === 'return')?.value;
+    // Get the logger instance associated with *this* service instance.
+    // createLogger is cleared in beforeEach, then called once by new ConfigService().
+    const loggerInstance = vi.mocked(winstonMockedModule.createLogger).mock.results[0]?.value;
 
-    expect(service.LOG_DIR).toBe(path.join(process.cwd(), 'logs'));
-    expect(loggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to create user-specific log directory: Permission denied for user log dir. Falling back to local logs dir.'));
+    expect(service.LOG_DIR).toBe(path.join(process.cwd(), 'logs')); // Check it fell back
+    expect(loggerInstance.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to create user-specific log directory: Permission denied for user log dir. Falling back to local logs dir.')
+    );
+    // Check that mkdirSync was called for the fallback directory
     expect(vi.mocked(fs.mkdirSync)).toHaveBeenCalledWith(path.join(process.cwd(), 'logs'), { recursive: true });
   });
 

@@ -465,26 +465,35 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       
       const agentModule = await import('../lib/agent');
       const parseSpy = vi.spyOn(agentModule, 'parseToolCalls')
-        .mockImplementationOnce((output: string) => { // Ensure output is typed
-          if (output === 'TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') {
-            return [{ tool: 'search_code', parameters: { query: 'tool query' } }];
-          }
-          // Fallback for slight variations if the exact string isn't matched, though exact is better
-          if (output.includes('TOOL_CALL:') && output.includes('"tool": "search_code"')) {
-             logger.warn(`[Test Debug] parseToolCalls mock received slightly different input: ${output}`);
-             // Attempt to parse it if it's close, or return the expected structure
-             try {
-                const jsonPart = output.substring(output.indexOf('{'));
+        .mockImplementationOnce((output: string) => {
+          // Robust parsing based on user's analysis
+          const lines = output.split('\n');
+          const toolCalls = [];
+          for (const line of lines) {
+            if (line.startsWith('TOOL_CALL:')) {
+              try {
+                const jsonPart = line.substring('TOOL_CALL:'.length).trim();
                 const parsed = JSON.parse(jsonPart);
-                if(parsed.tool === "search_code") return [{ tool: 'search_code', parameters: parsed.parameters }];
-             } catch (e) { /* ignore parsing error, return empty */ }
+                if (parsed && parsed.tool && parsed.parameters) {
+                  toolCalls.push({ tool: parsed.tool, parameters: parsed.parameters });
+                }
+              } catch (e) {
+                // If parsing fails for a line, log it for test debugging but continue
+                console.error(`[Test Debug] parseToolCalls mock failed to parse: ${line}`, e);
+              }
+            }
           }
-          return [];
+          // For this specific test, we expect one specific tool call from the mocked LLM output
+          if (toolCalls.length === 1 && toolCalls[0].tool === 'search_code' && toolCalls[0].parameters.query === 'tool query') {
+            return toolCalls;
+          }
+          return []; // Return empty if the expected tool call isn't found
         })
         .mockReturnValueOnce([]); // For the second reasoning step (final response)
 
       const execSpy = vi.spyOn(agentModule, 'executeToolCall').mockResolvedValue({ status: 'search_code executed', results: [] });
       
+      // Clear all logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
       mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.error.mockClear();
@@ -595,8 +604,9 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         return { status: 'unknown tool executed' };
       });
 
-      mockedLoggerFromAgentPerspective.warn.mockClear();
+      // Clear all logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
+      mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
@@ -683,14 +693,18 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         throw new Error("Simulated Tool execution timed out: search_code"); // Then reject
       });
       
-      mockedLoggerFromAgentPerspective.error.mockClear();
+      // Clear all logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
       mockedLoggerFromAgentPerspective.warn.mockClear();
+      mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
       const result = await runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
 
-      expect(mockedLoggerFromAgentPerspective.error).toHaveBeenCalledWith("Error executing tool search_code", { error: "Simulated Tool execution timed out: search_code" });
+      expect(mockedLoggerFromAgentPerspective.error).toHaveBeenCalledWith(
+        "Error executing tool search_code", // The message part of the log
+        { error: "Simulated Tool execution timed out: search_code" } // The metadata object part
+      );
       
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // verify, reasoning1, reasoning2(after error)
       const llmCalls = mockLLMProviderInstance.generateText.mock.calls;

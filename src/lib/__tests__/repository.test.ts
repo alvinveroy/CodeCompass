@@ -112,34 +112,35 @@ describe('Repository Utilities', () => {
     it('should return "No previous commits to compare" if less than 2 commits', async () => {
       // setupValidRepoAndCommitsMocks(); // Already called by beforeEach of describe('getRepositoryDiff')
       vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }] as any);
-      // Clear logger.info calls that might have occurred during validateGitRepository or other setup
+      
+      // Clear logger mocks specifically for this test, after potential calls in validateGitRepository
       logger.info.mockClear();
+      logger.warn.mockClear(); // Also clear warn if validateGitRepository might warn in other scenarios
+      logger.error.mockClear();
+
       const result = await getRepositoryDiff(repoPath);
       expect(result).toBe("No previous commits to compare");
+      // This is the specific log message from getRepositoryDiff when there are not enough commits.
       expect(logger.info).toHaveBeenCalledWith(`Not enough commits to generate a diff for ${repoPath}. Found 1 commits.`);
     });
 
     it('should call git diff command and return stdout', async () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        // Ensure callback is always called for promisify(exec) to work
         if (command === 'git diff commit1_oid commit2_oid') {
-          if (callback) process.nextTick(() => callback(null, 'diff_content_stdout', ''));
+          if (callback) process.nextTick(() => callback(null, 'diff_content_stdout', '')); // Correct: null for error, then stdout, then stderr
         } else {
           if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
         }
-        // exec returns a ChildProcess, this part is less critical if callback is handled for promisify
-        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any;
+        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any; // Mock ChildProcess
       });
+
       const result = await getRepositoryDiff(repoPath);
-      // Check if exec was called (promisify might not pass the callback if it uses event listeners)
-      // For now, let's assume the promisify will make exec be called without a direct callback in some cases.
-      // The key is that execAsync should resolve.
+      
       expect(vi.mocked(exec)).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath }),
-        expect.any(Function) // This checks if the callback form was used by promisify, might not always be true.
-                               // More robust: check command and options, then result.
+        expect.any(Function) 
       );
       expect(result).toBe('diff_content_stdout');
     });
@@ -149,11 +150,11 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-          if (callback) process.nextTick(() => callback(null, longDiff, ''));
+          if (callback) process.nextTick(() => callback(null, longDiff, '')); // Correct: null for error, then stdout, then stderr
         } else {
           if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
         }
-        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any;
+        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any; // Mock ChildProcess
       });
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -168,20 +169,28 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-          if (callback) process.nextTick(() => callback(mockError, '', 'error_stderr'));
+          // For promisify(exec), the callback signature is (error, stdout, stderr)
+          if (callback) process.nextTick(() => callback(mockError, '', 'error_stderr')); // Pass error first
         } else {
           if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command in error test: ${command}`) as ExecException, '', ''));
         }
-        // Simulate a ChildProcess that emits 'close' with an error code
-        return { on: vi.fn((event, cb) => { if (event === 'close') cb(mockError.code || 1); }) } as any;
+        return { on: vi.fn((event, cb) => { if (event === 'close') cb(mockError.code || 1); }) } as any; // Mock ChildProcess
       });
+
+      // Clear logger before the call, as validateGitRepository might log
+      logger.error.mockClear();
+      logger.warn.mockClear();
+
       const result = await getRepositoryDiff(repoPath);
-      // The error message in getRepositoryDiff is `Failed to retrieve diff for ${repoPath}: ${err.message}`
+      
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
-      // The logger in getRepositoryDiff logs the full error object as the third argument
       expect(logger.error).toHaveBeenCalledWith(
-        `Error retrieving git diff for ${repoPath}: Git command failed`,
-        expect.objectContaining({ message: 'Git command failed', stderr: 'error_stderr' })
+        `Error retrieving git diff for ${repoPath}: Git command failed`, // The message logged by getRepositoryDiff
+        expect.objectContaining({ // The error object logged by getRepositoryDiff
+            message: 'Git command failed', 
+            stderr: 'error_stderr',
+            code: 128 
+        })
       );
     });
   });
