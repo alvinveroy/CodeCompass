@@ -26,7 +26,7 @@ The following prioritization aims to tackle foundational improvements first, bui
 
 *   [x] **Task 1.1:** Modify `src/lib/query-refinement.ts`:
     *   [x] Make the `limit` parameter in `qdrantClient.search()` calls configurable (e.g., read from `configService`).
-    *   [ ] **Consider (Advanced):** Explore logic for the agent or refinement process to dynamically request a higher search limit if initial results are insufficient.
+    *   [~] **Consider (Advanced):** Explore logic for the agent or refinement process to dynamically request a higher search limit if initial results are insufficient. (Partially addressed by `request_additional_context` tool with `MORE_SEARCH_RESULTS`)
 *   [x] **Task 1.2:** Update `src/lib/config-service.ts` (and potentially `src/lib/config.ts` or `.env` examples):
     *   [x] Add a new configuration variable for the default Qdrant search result limit (e.g., `QDRANT_SEARCH_LIMIT_DEFAULT`).
 
@@ -44,7 +44,7 @@ The following prioritization aims to tackle foundational improvements first, bui
         *   `last_modified` timestamp of the original file.
 *   [x] **Task 2.2 (Formerly Task 3.2):** Modify `src/lib/agent.ts` and `src/lib/query-refinement.ts`:
     *   [x] When processing search results, if results are from chunked files, ensure the agent is aware (e.g., "This snippet is part of a larger file: [filename], chunk X of Y").
-    *   [ ] Consider if query refinement or result presentation needs adjustment for chunked results (e.g., retrieving adjacent chunks if one is highly relevant).
+    *   [>] Consider if query refinement or result presentation needs adjustment for chunked results (e.g., retrieving adjacent chunks if one is highly relevant).
 
 ### P3 - Task Group 3: Improve "Recent Changes" (Diff) Context
 *Goal: Provide meaningful, content-based diff information.*
@@ -65,7 +65,7 @@ The following prioritization aims to tackle foundational improvements first, bui
     *   [x] Modify `src/lib/agent.ts` (prompt generation logic for tools like `generate_suggestion` and the main agent loop):
         *   [x] For file lists: If the list of relevant files is long, use an LLM to summarize the list or select the N most relevant based on the query, instead of simple truncation (`files.slice(0, 10)`).
         *   [x] For code snippets: If a retrieved snippet is very long (even after Qdrant retrieval, before being passed to the agent's reasoning LLM), consider an LLM call to summarize its essence in relation to the query.
-        *   [ ] **Consider:** Allow the agent to explicitly request "more detail" or "full content" for a summarized item if it deems it necessary.
+        *   [~] **Consider:** Allow the agent to explicitly request "more detail" or "full content" for a summarized item if it deems it necessary. (Addressed by `request_additional_context` tool with `FULL_FILE_CONTENT`)
 
 2.  **Task P2.2 (Formerly Task 5.1): Context-Aware Agent System Prompt:**
     *   [x] Modify `src/lib/agent.ts` (`generateAgentSystemPrompt` function):
@@ -79,14 +79,15 @@ The following prioritization aims to tackle foundational improvements first, bui
         *   [x] Add necessary configuration for this LLM call (e.g., specific model, prompt template via `configService`).
 
 4.  **Task P2.4 (Advanced - Formerly Task 7.1-7.3): Explicit "Request More Context" Agent Tool:**
-    *   [x] Define a new tool in `src/lib/agent.ts` (in `toolRegistry` and `executeToolCall`):
+    *   [x] **Task P2.4 (Advanced - Formerly Task 7.1-7.3): Explicit "Request More Context" Agent Tool:**
+        *   [x] Define a new tool in `src/lib/agent.ts` (in `toolRegistry` and `executeToolCall`):
         *   Name: `request_additional_context`.
         *   Parameters: `context_type: enum("MORE_SEARCH_RESULTS", "FULL_FILE_CONTENT", "DIRECTORY_LISTING")`, `query_or_path: string`, `reasoning: string`.
-    *   [>] Implement the logic for `executeToolCall` for this new tool. This might involve:
-        *   [ ] Re-running `searchWithRefinement` with an adjusted original query or increased search limit for "MORE_SEARCH_RESULTS".
-        *   [ ] Using file system operations to list files in a directory for "DIRECTORY_LISTING".
-        *   [ ] Reading full file content for "FULL_FILE_CONTENT", potentially with summarization for very large files.
-    *   [>] Update `generateAgentSystemPrompt` to inform the agent about this new tool and when to use it.
+    *   [x] Implement the logic for `executeToolCall` for this new tool. This might involve:
+        *   [x] Re-running `searchWithRefinement` with an adjusted original query or increased search limit for "MORE_SEARCH_RESULTS".
+        *   [x] Using file system operations to list files in a directory for "DIRECTORY_LISTING".
+        *   [x] Reading full file content for "FULL_FILE_CONTENT", potentially with summarization for very large files.
+    *   [x] Update `generateAgentSystemPrompt` to inform the agent about this new tool and when to use it.
 
 ---
 
