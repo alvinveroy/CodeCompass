@@ -320,8 +320,11 @@ describe('Repository Utilities', () => {
         { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
       ]);
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        if (cb) cb(null, longDiff, '');
+      vi.mocked(exec).mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') { // Handle case where options is omitted
+          callback = options;
+        }
+        if (callback) callback(null, longDiff, '');
         return {} as any;
       });
       const result = await getRepositoryDiff(repoPath);
@@ -334,8 +337,11 @@ describe('Repository Utilities', () => {
       vi.mocked(git.log).mockResolvedValue([
         { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
       ]);
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        if (cb) cb(new Error('Git command failed'), '', 'error_stderr');
+      vi.mocked(exec).mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') { // Handle case where options is omitted
+          callback = options;
+        }
+        if (callback) callback(new Error('Git command failed'), '', 'error_stderr');
         return {} as any;
       });
       const result = await getRepositoryDiff(repoPath);
