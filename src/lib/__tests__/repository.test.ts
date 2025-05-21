@@ -61,7 +61,8 @@ vi.mock('../ollama');
 // Import SUT and other necessary modules AFTER all vi.mock calls
 import { getRepositoryDiff, validateGitRepository, getCommitHistoryWithChanges, indexRepository } from '../repository';
 import { logger, configService } from '../config-service';
-import { promises as fsPromises } from 'fs'; // For vi.mocked(fsPromises.access)
+// Import specific fs/promises methods directly
+import { access, readFile, readdir, stat } from 'fs/promises';
 import git from 'isomorphic-git'; // For vi.mocked(git.log)
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -73,7 +74,7 @@ describe('Repository Utilities', () => {
   const execMock = exec as vi.Mock;
 
   const setupValidRepoAndCommitsMocks = () => {
-      vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
+      vi.mocked(access).mockResolvedValue(undefined as unknown as void); // Use imported 'access'
       vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
       vi.mocked(git.log).mockResolvedValue([
         { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
@@ -84,11 +85,11 @@ describe('Repository Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     execMock.mockReset();
-    // Correctly reset mocks for fsPromises methods
-    (fsPromises.access as vi.Mock).mockReset();
-    (fsPromises.readFile as vi.Mock).mockReset();
-    (fsPromises.readdir as vi.Mock).mockReset();
-    (fsPromises.stat as vi.Mock).mockReset();
+    // Correctly reset mocks for imported fs/promises methods
+    vi.mocked(access).mockReset();
+    vi.mocked(readFile).mockReset();
+    vi.mocked(readdir).mockReset();
+    vi.mocked(stat).mockReset();
 
     vi.mocked(git.resolveRef).mockReset();
     vi.mocked(git.listFiles).mockReset();
@@ -159,10 +160,10 @@ describe('Repository Utilities', () => {
     });
     
     const setupInvalidRepoAccessDeniedMocks = () => {
-        vi.mocked(fsPromises.access).mockRejectedValue(new Error('Permission denied'));
+        vi.mocked(access).mockRejectedValue(new Error('Permission denied')); // Use imported 'access'
     };
     const setupInvalidRepoNoHeadMocks = () => {
-        vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
+        vi.mocked(access).mockResolvedValue(undefined as unknown as void); // Use imported 'access'
         vi.mocked(git.resolveRef).mockRejectedValue(new Error('No HEAD'));
     };
 
@@ -187,7 +188,7 @@ describe('Repository Utilities', () => {
 
   describe('getCommitHistoryWithChanges', () => {
     it('should retrieve commit history with changed files', async () => {
-        vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
+        vi.mocked(access).mockResolvedValue(undefined as unknown as void); // Use imported 'access'
         vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
 
         const mockCommits = [

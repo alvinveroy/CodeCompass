@@ -49,24 +49,19 @@ vi.mock('fs/promises', () => {
 });
 
 // 3. THEN mock the SUT module ('../lib/agent') itself.
+// We will spy on individual functions from the original module later.
 vi.mock('../lib/agent', async (importOriginal) => {
-  const originalModule = await importOriginal<typeof import('../lib/agent')>();
-  return {
-    ...originalModule, // Keep runAgentLoop, createAgentState, etc., original
-    parseToolCalls: vi.fn(),    // Factory-created mock
-    executeToolCall: vi.fn(),   // Factory-created mock
-  };
+  return await importOriginal<typeof import('../lib/agent')>();
 });
 
 // 4. Import functions AFTER all vi.mock calls.
-// runAgentLoop, createAgentState, etc., are original.
-// parseToolCalls and executeToolCall ARE THE MOCKS from the factory.
+// These will be the original functions. We will use vi.spyOn to mock them for specific tests.
 import {
-  runAgentLoop,
-  parseToolCalls,
-  executeToolCall,
-  createAgentState,
-  generateAgentSystemPrompt,
+  runAgentLoop, // Original, SUT for some tests
+  parseToolCalls, // Original, will be spied on for runAgentLoop tests
+  executeToolCall, // Original, will be spied on for runAgentLoop tests
+  createAgentState, // Original
+  generateAgentSystemPrompt, // Original
   toolRegistry
 } from '../lib/agent';
 // For testing the *original* implementations of parseToolCalls, executeToolCall:
@@ -91,13 +86,16 @@ const mockQdrantClientInstance = {
 
 
 describe('Agent', () => {
+  let parseToolCallsSpy: vi.SpyInstance;
+  let executeToolCallSpy: vi.SpyInstance;
+
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // parseToolCalls and executeToolCall are the mocks from the factory.
-    // Cast to vi.Mock to access mock methods.
-    (parseToolCalls as vi.Mock).mockReset().mockReturnValue([]);
-    (executeToolCall as vi.Mock).mockReset().mockResolvedValue({ status: 'default mock success' });
+    // Spy on the original functions from the actual module for tests that need to control them (e.g., runAgentLoop)
+    // For tests directly testing parseToolCalls or executeToolCall originals, they will use actualAgentFunctionsOriginal
+    parseToolCallsSpy = vi.spyOn(actualAgentFunctionsOriginal, 'parseToolCalls').mockReturnValue([]);
+    executeToolCallSpy = vi.spyOn(actualAgentFunctionsOriginal, 'executeToolCall').mockResolvedValue({ status: 'default mock success' });
 
     (getLLMProvider as vi.Mock).mockResolvedValue(mockLLMProviderInstance);
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
@@ -155,22 +153,22 @@ describe('Agent', () => {
 
     it('should execute a tool call and then provide final response', async () => {
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}');
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // LLM output for tool selection
 
-      // Set behavior on the imported mocks (which are from the factory)
-      (parseToolCalls as vi.Mock)
+      // Configure spies for runAgentLoop's internal calls
+      parseToolCallsSpy
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
-        .mockReturnValueOnce([]);
+        .mockReturnValueOnce([]); // For the second iteration where no tool call is expected
 
-      (executeToolCall as vi.Mock).mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      executeToolCallSpy.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 
-      mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.');
+      mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.'); // LLM output for final response
 
       await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      // Assert on the imported mocks
-      expect(executeToolCall).toHaveBeenCalledTimes(1);
-      expect(executeToolCall).toHaveBeenCalledWith(
+      // Assert on the spies
+      expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
+      expect(executeToolCallSpy).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
