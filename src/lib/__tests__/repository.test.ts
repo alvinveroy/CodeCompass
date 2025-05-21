@@ -112,10 +112,11 @@ describe('Repository Utilities', () => {
     it('should return "No previous commits to compare" if less than 2 commits', async () => {
       // setupValidRepoAndCommitsMocks(); // Already called by beforeEach of describe('getRepositoryDiff')
       vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }] as any);
-      
+
       // Clear logger mocks specifically for this test, after potential calls in validateGitRepository
+      // which might be called by getRepositoryDiff or its setup.
       logger.info.mockClear();
-      logger.warn.mockClear(); // Also clear warn if validateGitRepository might warn in other scenarios
+      logger.warn.mockClear();
       logger.error.mockClear();
 
       const result = await getRepositoryDiff(repoPath);
@@ -128,7 +129,8 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-          if (callback) process.nextTick(() => callback(null, 'diff_content_stdout', '')); // Correct: null for error, then stdout, then stderr
+          // For promisify(exec), the callback signature is (error, stdout, stderr)
+          if (callback) process.nextTick(() => callback(null, 'diff_content_stdout', ''));
         } else {
           if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
         }
@@ -150,7 +152,8 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-          if (callback) process.nextTick(() => callback(null, longDiff, '')); // Correct: null for error, then stdout, then stderr
+          // For promisify(exec), the callback signature is (error, stdout, stderr)
+          if (callback) process.nextTick(() => callback(null, longDiff, ''));
         } else {
           if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
         }
@@ -170,7 +173,8 @@ describe('Repository Utilities', () => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
           // For promisify(exec), the callback signature is (error, stdout, stderr)
-          if (callback) process.nextTick(() => callback(mockError, '', 'error_stderr')); // Pass error first
+          // stdout can be an empty string if the command failed before producing output.
+          if (callback) process.nextTick(() => callback(mockError, '', 'error_stderr'));
         } else {
           if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command in error test: ${command}`) as ExecException, '', ''));
         }
