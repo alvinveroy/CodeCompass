@@ -185,7 +185,7 @@ describe('Agent', () => {
     });
 
     it('should execute a tool call and then provide final response', async () => {
-      const { runAgentLoop: runAgentLoopSUT } = await import('../lib/agent'); // Import SUT after doMock
+      const { runAgentLoop: runAgentLoopSUT } = await import('../lib/agent.js'); // Import SUT after doMock
 
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); 
