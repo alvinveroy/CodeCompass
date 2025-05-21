@@ -16,8 +16,8 @@ module.exports = [
       "*.config.js", // Ignores other .config.js files (e.g., vitest.config.js)
       "*.config.ts", // Ignores .config.ts files
       "scripts/",
-      "src/**/*.test.ts",
-      "src/**/*.spec.ts",
+      "src/lib/__tests__/**/*.ts", // More specific for these paths
+      "src/tests/**/*.ts"         // More specific for these paths
     ],
   },
 

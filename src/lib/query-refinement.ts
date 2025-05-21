@@ -59,7 +59,7 @@ export async function searchWithRefinement(
     }
 
     // Refine the query based on results
-    currentQuery = exports.refineQuery(currentQuery, searchResults as DetailedQdrantSearchResult[], avgRelevance); // Removed await
+    currentQuery = refineQuery(currentQuery, searchResults as DetailedQdrantSearchResult[], avgRelevance); // Removed await
     refinementCount++;
     // trackQueryRefinement(queryId); // Metrics removed
   }
@@ -77,16 +77,16 @@ export async function searchWithRefinement(
 function refineQuery(originalQuery: string, results: DetailedQdrantSearchResult[], currentRelevance: number): string {
   // If no results or very poor results, broaden the query
   if (results.length === 0 || currentRelevance < 0.3) {
-    return exports.broadenQuery(originalQuery);
+    return broadenQuery(originalQuery);
   }
 
   // If mediocre results, focus the query based on the results
   if (currentRelevance < 0.7) {
-    return exports.focusQueryBasedOnResults(originalQuery, results);
+    return focusQueryBasedOnResults(originalQuery, results);
   }
 
   // If decent results but not great, make minor adjustments
-  return exports.tweakQuery(originalQuery, results);
+  return tweakQuery(originalQuery, results);
 }
 
 // Broaden a query that's too specific

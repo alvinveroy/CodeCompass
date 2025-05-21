@@ -30,7 +30,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
     // logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
   } catch (error: unknown) {
-    // TEMPORARY DEBUGGING LINE:
+    logger.warn(`Git repository validation failed for ${repoPath}: ${error instanceof Error ? error.message : String(error)}`);
     return false;
   }
 }
@@ -260,12 +260,15 @@ export async function getRepositoryDiff(
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     // Add stderr to the logged error object if it's an ExecException from execAsync
-    const errorDetails: any = { message: err.message, stack: err.stack };
-    if ('stderr' in err) {
-        errorDetails.stderr = (err as import('child_process').ExecException).stderr;
+    const errorDetails: { message: string; stack?: string; stderr?: string; code?: number } = { 
+      message: err.message, 
+      stack: err.stack 
+    };
+    if ('stderr' in err && typeof (err as any).stderr === 'string') {
+        errorDetails.stderr = (err as any).stderr;
     }
-    if ('code' in err) {
-        errorDetails.code = (err as import('child_process').ExecException).code;
+    if ('code' in err && typeof (err as any).code === 'number') {
+        errorDetails.code = (err as any).code;
     }
     logger.error(`Error retrieving git diff for ${repoPath}: ${err.message}`, errorDetails);
     const errorMessage = err && typeof err.message === 'string' ? err.message : String(err);
@@ -316,7 +319,7 @@ export async function getCommitHistoryWithChanges(
         oid: commitEntry.oid,
       });
 
-      let changedFiles: CommitChange[] = [];
+      const changedFiles: CommitChange[] = [];
 
       if (commitData.commit.parent && commitData.commit.parent.length > 0) {
         // Not an initial commit, compare with the first parent

@@ -91,7 +91,7 @@ export async function getProcessedDiff(
   repoPath: string,
   suggestionModelAvailable: boolean
 ): Promise<string> {
-  let diffContent = await getRepositoryDiff(repoPath);
+  const diffContent = await getRepositoryDiff(repoPath);
 
   // Check if diffContent is one of the "no useful diff" messages
   const noUsefulDiffMessages = [
@@ -261,13 +261,13 @@ Based on both searches, I can provide a comprehensive explanation of error handl
 }
 
 // Parse tool calls from LLM output
-export function parseToolCalls(output: string): { tool: string; parameters: unknown }[] {
+export function parseToolCalls(output: string): { tool: string; parameters: Record<string, unknown> }[] {
   // Log the output for debugging
   logger.debug("Parsing tool calls from output", { outputLength: output.length });
   
   // Split the output by lines and look for lines starting with TOOL_CALL:
   const lines = output.split('\n');
-  const results: { tool: string; parameters: unknown }[] = [];
+  const results: { tool: string; parameters: Record<string, unknown> }[] = [];
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -281,12 +281,12 @@ export function parseToolCalls(output: string): { tool: string; parameters: unkn
         logger.debug("Successfully parsed JSON", { parsed });
         
         // More robust check for the structure
-        if (parsed && typeof parsed === 'object' && parsed !== null &&
-            typeof (parsed as any).tool === 'string' && 
-            typeof (parsed as any).parameters === 'object' && (parsed as any).parameters !== null) {
+        if (parsed && typeof parsed === 'object' && parsed !== null && 'tool' in parsed && 'parameters' in parsed &&
+            typeof parsed.tool === 'string' && 
+            typeof parsed.parameters === 'object' && parsed.parameters !== null) {
           results.push({
-            tool: (parsed as any).tool,
-            parameters: parsed.parameters
+            tool: parsed.tool,
+            parameters: parsed.parameters as Record<string, unknown> // Assert parameters as Record
           });
         }
       } catch (error: unknown) {
@@ -373,7 +373,7 @@ export async function executeToolCall(
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
 
-        const processedSnippet = await exports.processSnippet(
+        const processedSnippet = await processSnippet(
           payload.content, 
           query, // Pass the current tool's query
           filepathDisplay, 
@@ -570,7 +570,7 @@ export async function executeToolCall(
 **Context**:
 Repository: ${repoPath}
 Files: ${filesContextString}
-Recent Changes: ${processedDiff ? processedDiff.substring(0, 1000) : "Not available"}${processedDiff && processedDiff.length > 1000 ? "..." : ""} 
+Recent Changes: ${processedDiff ? String(processedDiff).substring(0, 1000) : "Not available"}${processedDiff && String(processedDiff).length > 1000 ? "..." : ""} 
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
@@ -594,7 +594,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
       
       return {
         sessionId: session.id,
-        suggestion: suggestion, // Assuming 'suggestion' is defined after llmProvider.generateText(prompt)
+        suggestion: String(suggestion), // Assuming 'suggestion' is defined after llmProvider.generateText(prompt)
         context: context.slice(0, 3) // Return only top 3 context items to avoid overwhelming the agent
       };
     }
@@ -722,7 +722,7 @@ Structure your analysis with these sections:
     case "request_additional_context": {
       const contextTypeParam = typedParams.context_type;
       const queryOrPathParam = typedParams.query_or_path;
-      const reasoningParam = typedParams.reasoning; // Optional
+      const reasoningParamRaw = typedParams.reasoning; // Optional
       const sessionIdParam = typedParams.sessionId;
       // Add chunkIndexParam
       const chunkIndexParam = typedParams.chunk_index;
@@ -742,9 +742,11 @@ Structure your analysis with these sections:
             throw new Error(`Parameter 'chunk_index' for tool '${tool}' with context_type 'ADJACENT_FILE_CHUNKS' must be a non-negative integer. Received: ${typeof chunkIndexParam}`);
         }
       }
-      if (reasoningParam !== undefined && typeof reasoningParam !== 'string') {
-         // Log a warning if reasoning is provided but not a string, but don't throw an error as it's optional.
-         logger.warn(`Optional parameter 'reasoning' for tool '${tool}' was provided but not as a string. Received: ${typeof reasoningParam}. Ignoring.`);
+      let reasoningParamStr: string | undefined = undefined;
+      if (typeof reasoningParamRaw === 'string') {
+        reasoningParamStr = reasoningParamRaw;
+      } else if (reasoningParamRaw !== undefined) {
+        logger.warn(`Optional parameter 'reasoning' for tool '${tool}' was provided but not as a string. Received: ${typeof reasoningParamRaw}. Ignoring.`);
       }
       if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
         throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
@@ -753,7 +755,7 @@ Structure your analysis with these sections:
       // Get or create session (consistent with other tools)
       const session = getOrCreateSession(sessionId, repoPath);
 
-      logger.info(`Executing request_additional_context: type='${contextTypeParam}', query_or_path='${queryOrPathParam}', reasoning='${reasoningParam || 'N/A'}'`);
+      logger.info(`Executing request_additional_context: type='${contextTypeParam}', query_or_path='${queryOrPathParam}', reasoning='${reasoningParamStr || 'N/A'}'`);
 
       switch (contextTypeParam) {
         case 'MORE_SEARCH_RESULTS': {
@@ -1008,7 +1010,7 @@ export async function runAgentLoop(
     const session = getOrCreateSession(sessionId, repoPath);
     
     // Create agent state
-    const agentState = exports.createAgentState(session.id, query);
+    const agentState: AgentState = createAgentState(session.id, query);
     
     // Filter tools based on suggestion model availability
     const availableTools = toolRegistry.filter(tool => 
@@ -1074,7 +1076,7 @@ export async function runAgentLoop(
       }
       
       // Check if the agent wants to make tool calls
-      const toolCalls = exports.parseToolCalls(agentOutput);
+      const toolCalls = parseToolCalls(agentOutput);
       
       // If no tool calls, consider the agent's response as final
       if (toolCalls.length === 0) {
@@ -1101,7 +1103,7 @@ export async function runAgentLoop(
           
           // Execute tool call with timeout
           const toolOutput = await Promise.race([
-            exports.executeToolCall(
+            executeToolCall(
               toolCall,
               qdrantClient,
               repoPath,
