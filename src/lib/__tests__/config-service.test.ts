@@ -22,28 +22,31 @@ vi.mock('fs', () => {
   };
 });
 
-// Mock winston logger creation
+// Mock winston logger creation and transports
+const mockWinstonLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+  // Add other logger methods if used by ConfigService directly
+};
 vi.mock('winston', async (importOriginal) => {
   const originalWinston = await importOriginal<typeof winston>();
   return {
     ...originalWinston,
-    createLogger: vi.fn().mockReturnValue({
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      // Add other logger methods if used by ConfigService directly
-    }),
-    transports: { // Mock transports as well if ConfigService interacts with them directly
-        File: vi.fn(),
-        Stream: vi.fn(),
+    createLogger: vi.fn().mockReturnValue(mockWinstonLogger),
+    transports: {
+      File: vi.fn().mockImplementation(() => ({ // Mock the File transport constructor
+        // Mock any methods on the transport instance if ConfigService calls them
+        on: vi.fn(),
+        log: vi.fn(),
+      })),
+      Stream: vi.fn().mockImplementation(() => ({ // Mock Stream transport too
+        on: vi.fn(),
+        log: vi.fn(),
+      })),
     },
-    format: { // Mock format if needed
-        combine: vi.fn(),
-        timestamp: vi.fn(),
-        json: vi.fn(),
-        simple: vi.fn(),
-    }
+    format: originalWinston.format, // Keep original format or mock if needed
   };
 });
 
@@ -61,62 +64,43 @@ describe('ConfigService', () => {
     // Reset modules to ensure a fresh instance and re-evaluation of process.env
     vi.resetModules();
 
-    // After vi.resetModules(), fs is unmocked. We need to re-apply the mock behavior
-    // for the new ConfigService instance. The top-level vi.mock('fs', factory)
-    // defines the structure. Here, we ensure the functions within that structure are set up.
-    const fsMockModule = await import('fs'); 
-    const fsMock = fsMockModule.default; // Access the default export which holds the mock functions
+    // Re-import fs and get the mock after resetModules
+    const fsMockModule = await import('fs');
+    const fsMock = fsMockModule.default;
 
-    // This mock setup is critical for Winston's File transport initialization.
-    // When `new winston.transports.File({ filename: path.join(this.LOG_DIR, "codecompass.log") })` is called:
-    // 1. Winston checks if this.LOG_DIR exists.
-    // 2. If not, it tries to create it using mkdirSync with { recursive: true }.
+    // Basic fs mocks needed by ConfigService directly (not for Winston's internals)
     vi.mocked(fsMock.existsSync).mockImplementation((pathArg) => {
-      // console.log(`[createServiceInstance] fsMock.existsSync called with: ${pathArg}`);
-      if (pathArg === MOCK_CONFIG_DIR) return true; // Assume .codecompass dir exists
-      if (pathArg === MOCK_LOG_DIR) return false;  // Log dir does not exist, Winston will try to create it
-      return false; // Default for other paths
+      if (pathArg === MOCK_MODEL_CONFIG_FILE || pathArg === MOCK_DEEPSEEK_CONFIG_FILE) {
+        // Let specific tests control if config files exist by re-mocking readFileSync
+        return !!vi.mocked(fsMock.readFileSync).getMockImplementation()?.(pathArg as string, 'utf8');
+      }
+      if (pathArg === MOCK_CONFIG_DIR) return true; // Assume .codecompass dir "exists" for writes
+      // For LOG_DIR, Winston's File transport is now mocked, so it won't try to create it.
+      // ConfigService itself might still try to create LOG_DIR.
+      if (pathArg === MOCK_LOG_DIR) return false; // ConfigService will try to create it
+      return false;
     });
 
-    vi.mocked(fsMock.mkdirSync).mockImplementation((pathArg, options) => {
-      // console.log(`[createServiceInstance] fsMock.mkdirSync called with: ${pathArg}, options: ${JSON.stringify(options)}`);
-      // This must successfully "create" MOCK_LOG_DIR when Winston calls it.
-      if (pathArg === MOCK_LOG_DIR) {
-        // Simulate successful creation of the log directory
-        // To make it more robust, we can also update our existsSync mock to reflect this "creation"
-        // for subsequent calls within the same ConfigService instantiation, though Winston might not re-check.
-        vi.mocked(fsMock.existsSync).mockImplementation((p) => {
-            if (p === MOCK_CONFIG_DIR) return true;
-            if (p === MOCK_LOG_DIR) return true; // Now it "exists"
-            return false;
-        });
-        return undefined; 
-      }
-      // Handle creation of MOCK_CONFIG_DIR if it's part of a recursive call, though less likely to be the direct issue here.
-      if (pathArg === MOCK_CONFIG_DIR && options && (options as { recursive?: boolean }).recursive) {
+    vi.mocked(fsMock.mkdirSync).mockImplementation((pathArg) => {
+      // This mock is for ConfigService's own attempts to create LOG_DIR or CONFIG_DIR
+      if (pathArg === MOCK_LOG_DIR || pathArg === MOCK_CONFIG_DIR) {
+        // Simulate successful creation
+        vi.mocked(fsMock.existsSync).mockImplementation((p) => p === pathArg || p === MOCK_CONFIG_DIR);
         return undefined;
       }
-      // If any other path is attempted, it might indicate an unexpected call.
-      // For the ENOENT error, the primary concern is MOCK_LOG_DIR.
+      // Fallback for process.cwd() + 'logs'
+      if (pathArg === path.join(process.cwd(), 'logs')) {
+         vi.mocked(fsMock.existsSync).mockImplementation((p) => p === pathArg || p === MOCK_CONFIG_DIR);
+        return undefined;
+      }
       // console.warn(`[createServiceInstance] fsMock.mkdirSync called with unhandled path: ${pathArg}`);
-      // To prevent unexpected errors, simulate success for other paths too, or make it stricter.
       return undefined;
     });
-
     vi.mocked(fsMock.readFileSync).mockReturnValue('{}'); // Default for config files
 
-    // Re-mock winston for the new ConfigService instance
-    vi.mock('winston', async (importOriginal) => {
-      const originalWinston = await importOriginal<typeof winston>();
-      return {
-        ...originalWinston,
-        createLogger: vi.fn().mockReturnValue({
-          info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
-        }),
-        transports: { File: vi.fn(), Stream: vi.fn() },
-        format: { combine: vi.fn(), timestamp: vi.fn(), json: vi.fn(), simple: vi.fn() }
-      };
-    });
+    // Winston is already mocked at the top level.
+    // When ConfigService is imported, it will use the mocked createLogger and transports.
+
     const { ConfigService: FreshConfigService } = await import('../config-service');
     return new FreshConfigService() as ActualConfigService;
   };
@@ -134,22 +118,24 @@ describe('ConfigService', () => {
     vi.mocked(fsMock.writeFileSync).mockReset();
     vi.mocked(fsMock.mkdirSync).mockReset();
     
-    // Default behavior for existsSync and mkdirSync for each test
-    // This setup is for the general test case, createServiceInstance will override for its specific needs.
-    vi.mocked(fsMock.existsSync).mockImplementation((pathArg) => {
-        // console.log(`[beforeEach] fsMock.existsSync called with: ${pathArg}`);
-        if (pathArg === MOCK_CONFIG_DIR) return true;
-        if (pathArg === MOCK_LOG_DIR) return false; 
-        return false;
+    // Default behavior for fs mocks in beforeEach
+    vi.mocked(fsMock.existsSync).mockReturnValue(false); // Default to not existing
+    vi.mocked(fsMock.mkdirSync).mockImplementation((p) => {
+        // Simulate success for expected paths
+        if (p === MOCK_CONFIG_DIR || p === MOCK_LOG_DIR || p === path.join(process.cwd(), 'logs')) {
+            return undefined;
+        }
+        // console.warn(`[beforeEach] fsMock.mkdirSync called with unhandled path: ${p}`);
+        return undefined;
     });
-     vi.mocked(fsMock.mkdirSync).mockImplementation((pathArg, options) => {
-      // console.log(`[beforeEach] fsMock.mkdirSync called with: ${pathArg}, options: ${JSON.stringify(options)}`);
-      if (pathArg === MOCK_LOG_DIR || pathArg === MOCK_CONFIG_DIR || (typeof pathArg === 'string' && pathArg.startsWith(MOCK_CONFIG_DIR))) {
-        return undefined; 
-      }
-      return undefined; 
-    });
-    vi.mocked(fsMock.readFileSync).mockReturnValue('{}'); // Default for config files
+    vi.mocked(fsMock.readFileSync).mockReturnValue('{}');
+
+    // Reset winston transport mocks if necessary (though createLogger is the main one)
+    vi.mocked(winston.transports.File).mockClear();
+    vi.mocked(winston.transports.Stream).mockClear();
+    vi.mocked(winston.createLogger).mockClear().mockReturnValue(mockWinstonLogger);
+    Object.values(mockWinstonLogger).forEach(mockFn => mockFn.mockClear());
+
   });
 
   afterEach(() => {

@@ -256,60 +256,85 @@ describe('Repository Utilities', () => {
     });
   });
 
+import { ExecException } from 'child_process'; // Import ExecException for typing
+
+// ... (other imports)
+
+describe('Repository Utilities', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // ... (validateGitRepository and indexRepository tests) ...
+
   describe('getRepositoryDiff', () => {
     const repoPath = '/test/diff/repo';
-    const mockExec = exec as vi.MockedFunction<typeof exec>;
+    // const mockExec = exec as vi.MockedFunction<typeof exec>; // Not strictly needed if using vi.mocked(exec)
 
-    // Helper to set up mocks for validateGitRepository to return true
-    const setupValidRepoMocks = () => {
-        vi.mocked(fs.access).mockResolvedValue(undefined);
-        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+    // Helper to set up mocks for validateGitRepository to return true and git.log to return commits
+    const setupValidRepoAndCommitsMocks = () => {
+        vi.mocked(fs.access).mockResolvedValue(undefined as unknown as void); // Allow validate to pass
+        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main'); // Allow validate to pass
+        vi.mocked(git.log).mockResolvedValue([ // Ensure at least two commits
+          { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
+          { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
+        ] as any);
     };
-
+    
     // Helper to set up mocks for validateGitRepository to return false (e.g., .git access denied)
     const setupInvalidRepoAccessDeniedMocks = () => {
         vi.mocked(fs.access).mockRejectedValue(new Error('Permission denied'));
+        // git.resolveRef and git.log might not be called if fs.access fails first
     };
     // Helper to set up mocks for validateGitRepository to return false (e.g., no HEAD)
     const setupInvalidRepoNoHeadMocks = () => {
-        vi.mocked(fs.access).mockResolvedValue(undefined); // .git dir exists
+        vi.mocked(fs.access).mockResolvedValue(undefined as unknown as void); // .git dir exists
         vi.mocked(git.resolveRef).mockRejectedValue(new Error('No HEAD')); // But HEAD is invalid
+        // git.log might not be called if resolveRef fails
     };
 
+    beforeEach(() => {
+      // Clear all mocks to ensure clean state for each test in this describe block
+      vi.clearAllMocks();
+      // Default setup for tests that need a valid repo and commits for diffing
+      // Specific tests for invalid repo states will call their own setup helpers.
+      setupValidRepoAndCommitsMocks();
+    });
 
     it('should return "No Git repository found" if .git access is denied', async () => {
-        setupInvalidRepoAccessDeniedMocks(); 
+        setupInvalidRepoAccessDeniedMocks(); // Override beforeEach setup
         const result = await getRepositoryDiff(repoPath);
         expect(result).toBe("No Git repository found");
         expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(`Failed to validate Git repository at ${repoPath}: Permission denied`));
     });
     
     it('should return "No Git repository found" if HEAD cannot be resolved', async () => {
-        setupInvalidRepoNoHeadMocks();
+        setupInvalidRepoNoHeadMocks(); // Override beforeEach setup
         const result = await getRepositoryDiff(repoPath);
         expect(result).toBe("No Git repository found");
         expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(`Failed to validate Git repository at ${repoPath}: No HEAD`));
     });
 
-
     it('should return "No previous commits to compare" if less than 2 commits', async () => {
-      setupValidRepoMocks(); // Ensure validateGitRepository returns true
-      vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }]); // Only one commit
+      // setupValidRepoAndCommitsMocks(); // Already called in beforeEach, but this test needs a different git.log mock
+      vi.mocked(fs.access).mockResolvedValue(undefined as unknown as void); // Ensure validateGitRepository can pass
+      vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+      vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }] as any); // Only one commit
       const result = await getRepositoryDiff(repoPath);
       expect(result).toBe("No previous commits to compare");
     });
 
     it('should call git diff command and return stdout', async () => {
-      setupValidRepoMocks(); // Ensure validateGitRepository returns true
-      vi.mocked(git.log).mockResolvedValue([
-        { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
-        { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
-      ]);
+      // setupValidRepoAndCommitsMocks(); // Called in beforeEach
+
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (callback) {
-          // Simulate async behavior of exec for promisify
-          process.nextTick(() => callback(null, 'diff_content_stdout', ''));
+          if (command === 'git diff commit1_oid commit2_oid') {
+            process.nextTick(() => callback(null, 'diff_content_stdout', ''));
+          } else {
+            process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
+          }
         }
         // Return a mock ChildProcess object
         return {
@@ -328,10 +353,7 @@ describe('Repository Utilities', () => {
     });
 
     it('should truncate long diff output', async () => {
-      setupValidRepoMocks(); // Ensure validateGitRepository returns true
-      vi.mocked(git.log).mockResolvedValue([
-        { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
-      ]);
+      // setupValidRepoAndCommitsMocks(); // Called in beforeEach
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
@@ -350,12 +372,9 @@ describe('Repository Utilities', () => {
     });
 
     it('should handle errors from git diff command', async () => {
-      setupValidRepoMocks(); // Ensure validateGitRepository returns true
-      vi.mocked(git.log).mockResolvedValue([
-        { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
-      ]);
-      const mockError = new Error('Git command failed');
-      (mockError as any).stderr = 'error_stderr'; // Attach stderr to the error object if needed by promisify
+      // setupValidRepoAndCommitsMocks(); // Called in beforeEach
+      const mockError = new Error('Git command failed') as ExecException;
+      (mockError as any).stderr = 'error_stderr'; 
 
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
