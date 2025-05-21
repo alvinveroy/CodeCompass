@@ -1189,22 +1189,19 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
           agentState.steps.map((s: AgentStep) => {
-            let displayOutput: string;
-            if (typeof s.output === 'string') {
-              displayOutput = s.output;
-            } else if (s.output === null || s.output === undefined) {
-              // Explicitly convert null or undefined to their string representations
-              displayOutput = String(s.output); 
+            const toolName = s.tool; // s.tool is already a string
+            let outputString: string;
+            if (typeof s.output === 'object' && s.output !== null) {
+              try {
+                outputString = JSON.stringify(s.output);
+              } catch {
+                outputString = String(s.output); // Fallback for non-serializable objects
+              }
             } else {
-              // For other types (objects, arrays, functions, etc.)
-              // Try JSON.stringify first. If it returns undefined (e.g., for a function),
-              // then fallback to String(s.output).
-              const jsonStringified = JSON.stringify(s.output);
-              displayOutput = jsonStringified === undefined ? String(s.output) : jsonStringified;
+              outputString = String(s.output); // Handles primitives, null, undefined
             }
-            // Ensure we have a string, then take a substring.
-            const safePreviewText = (displayOutput || '').substring(0, 200);
-            return `Used ${s.tool} and found: ${safePreviewText}...`;
+            const safePreviewText = (outputString || 'No output').substring(0, 200);
+            return `Used ${toolName} and found: ${safePreviewText}...`;
           }).join("\n\n");
       }
     }

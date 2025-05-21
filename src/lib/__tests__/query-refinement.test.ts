@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, type Mock, type MockedFunction, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, type Mock, type MockedFunction } from 'vitest';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // 2. Mock external dependencies FIRST
@@ -63,7 +63,7 @@ describe('Query Refinement Tests', () => {
 
   describe('searchWithRefinement', () => {
     let searchWithRefinementSUT_local: (typeof import('../query-refinement.js'))['searchWithRefinement'];
-    let mockRefineQuery_for_searchTest: Mock<[string, DetailedQdrantSearchResult[], number], string>;
+    let mockRefineQuery_for_searchTest: MockedFunction<(query: string, results: DetailedQdrantSearchResult[], currentRelevance: number) => string>;
 
     beforeEach(async () => {
       vi.resetModules(); // Ensure clean state for vi.doMock
@@ -181,9 +181,9 @@ describe('Query Refinement Tests', () => {
 
   describe('refineQuery (main dispatcher - testing original logic)', () => {
     let refineQuerySUT_local: (typeof import('../query-refinement.js'))['refineQuery'];
-    let mockBroadenQuery_local: Mock<[string], string>;
-    let mockFocusQuery_local: Mock<[string, DetailedQdrantSearchResult[]], string>;
-    let mockTweakQuery_local: Mock<[string, DetailedQdrantSearchResult[]], string>;
+    let mockBroadenQuery_local: MockedFunction<(query: string) => string>;
+    let mockFocusQuery_local: MockedFunction<(query: string, results: DetailedQdrantSearchResult[]) => string>;
+    let mockTweakQuery_local: MockedFunction<(query: string, results: DetailedQdrantSearchResult[]) => string>;
 
     beforeEach(async () => {
       vi.resetModules(); // Ensure clean state for vi.doMock

@@ -16,8 +16,8 @@ module.exports = [
       "*.config.js", // Ignores other .config.js files (e.g., vitest.config.js)
       "*.config.ts", // Ignores .config.ts files
       "scripts/",
-      "src/lib/__tests__/**/*.ts", // More specific for these paths
-      "src/tests/**/*.ts"         // More specific for these paths
+      // "src/lib/__tests__/**/*.ts", // Re-enable linting for test files
+      // "src/tests/**/*.ts"         // Re-enable linting for test files
     ],
   },
 
