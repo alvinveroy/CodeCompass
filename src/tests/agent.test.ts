@@ -55,11 +55,13 @@ vi.mock('fs/promises', () => {
 vi.mock('../lib/agent', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/agent')>();
   // Define mocks inline, they won't be directly accessible from test scope for .mockImplementationOnce easily
-  // but runAgentLoop will use these mocked versions.
   return {
-    ...actual, // Spread actual implementations
-    parseToolCalls: vi.fn(), 
-    executeToolCall: vi.fn(), 
+    runAgentLoop: actual.runAgentLoop, // SUT is original
+    createAgentState: actual.createAgentState, // Original if tested directly
+    generateAgentSystemPrompt: actual.generateAgentSystemPrompt, // Original if tested directly
+    parseToolCalls: vi.fn(), // Internal dependency is mocked
+    executeToolCall: vi.fn(), // Internal dependency is mocked
+    toolRegistry: actual.toolRegistry, // Export original toolRegistry
   };
 });
 
