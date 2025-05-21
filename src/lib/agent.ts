@@ -414,6 +414,28 @@ export async function executeToolCall(
         files
       );
       
+      // Prepare file list for context
+      let filesContextString = "";
+      const maxFilesToShowWithoutSummary = configService.MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY;
+
+      if (files.length > maxFilesToShowWithoutSummary && suggestionModelAvailable) {
+        try {
+          const llmProvider = await getLLMProvider(); // Moved here as it's needed for summarization
+          const filesToSummarize = files.slice(0, 100); // Limit number of files sent for summarization to avoid overly long prompts
+          const fileListPrompt = `The user query is: "${query}". Based on this query, identify the most relevant files from the following list. Provide a concise summary or list of up to ${maxFilesToShowWithoutSummary} most important file paths. If many files seem equally relevant, you can state "Several relevant files found including [example1], [example2], etc."\n\nFile list:\n${filesToSummarize.join("\n")}`;
+          filesContextString = await llmProvider.generateText(fileListPrompt);
+          logger.info(`Summarized file list for generate_suggestion context. Query: "${query}", Original count: ${files.length}, Summarized: "${filesContextString}"`);
+        } catch (summaryError) {
+          const sErr = summaryError instanceof Error ? summaryError : new Error(String(summaryError));
+          logger.warn(`Failed to summarize file list for generate_suggestion. Error: ${sErr.message}. Falling back to truncated list.`);
+          filesContextString = `${files.slice(0, maxFilesToShowWithoutSummary).join(", ")}${files.length > maxFilesToShowWithoutSummary ? "..." : ""}`;
+        }
+      } else if (files.length > 0) {
+        filesContextString = `${files.slice(0, maxFilesToShowWithoutSummary).join(", ")}${files.length > maxFilesToShowWithoutSummary ? "..." : ""}`;
+      } else {
+        filesContextString = "No files found in repository for context.";
+      }
+      
       // Map search results to context
       const context = results.map(r => {
         const payload = r.payload;
