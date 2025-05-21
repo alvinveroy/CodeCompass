@@ -3,7 +3,8 @@ import git from 'isomorphic-git';
 import fsPromises from 'fs/promises'; // Explicitly use fsPromises for clarity
 import nodeFs from 'fs'; // For isomorphic-git's fs parameter
 import path from 'path';
-import { exec, type ExecException } from 'child_process'; // For mocking exec
+// import { exec, type ExecException } from 'child_process'; // For mocking exec - REMOVED
+import { type ExecException } from 'child_process'; // Keep type ExecException if needed elsewhere
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // Import functions to test
@@ -37,10 +38,29 @@ vi.mock('fs', async (importOriginal) => { // Mock standard 'fs' for isomorphic-g
         },
     };
 });
-vi.mock('child_process', () => ({
-  exec: vi.fn(),
-  // Add other exports like spawn if they were used and need mocking
-}));
+// vi.mock('child_process', () => ({ // REMOVED
+//   exec: vi.fn(),
+//   // Add other exports like spawn if they were used and need mocking
+// }));
+
+const mockExecAsync = vi.fn();
+vi.mock('util', async (importOriginal) => {
+  const actualUtil = await importOriginal<typeof import('util')>();
+  return {
+    ...actualUtil,
+    promisify: (fn: any) => {
+      // Assuming 'exec' is imported from 'child_process' in the SUT (repository.ts)
+      // and its 'name' property is 'exec'. This might need adjustment if fn.name is not reliable.
+      // A more robust check might involve checking fn against the actual child_process.exec if possible,
+      // but that can be tricky with mocks.
+      if (fn.name === 'exec') { 
+        return mockExecAsync;
+      }
+      return actualUtil.promisify(fn);
+    },
+  };
+});
+
 vi.mock('../config-service', () => ({
   configService: {
     COLLECTION_NAME: 'test_collection',
@@ -133,66 +153,31 @@ describe('Repository Utilities', () => {
 
     it('should call git diff command and return stdout', async () => {
       // Ensure mocks from setupValidRepoAndCommitsMocks are active
-      vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
-        const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        if (command === 'git diff commit1_oid commit2_oid') {
-          if (cb) cb(null, 'diff_content_stdout_explicit', ''); // Ensure error is null, stdout is string
-          else console.error("STDOUT TEST: CB UNDEFINED");
-        } else {
-          if (cb) cb(new Error(`Test mock (stdout): Unexpected exec command: ${command}`), '', '');
-          else console.error("STDOUT TEST: CB UNDEFINED, UNEXPECTED CMD");
-        }
-        return { on: vi.fn(), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
-      });
+      mockExecAsync.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(vi.mocked(exec)).toHaveBeenCalledWith(
+      expect(mockExecAsync).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
-        expect.objectContaining({ cwd: repoPath }),
-        expect.any(Function) 
+        expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
       );
       expect(result).toBe('diff_content_stdout_explicit');
     });
 
     it('should truncate long diff output', async () => {
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
-        const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        if (command === 'git diff commit1_oid commit2_oid') {
-          if (cb) cb(null, longDiff, ''); // Ensure error is null, stdout is string
-          else console.error("TRUNCATE TEST: CB UNDEFINED");
-        } else {
-          if (cb) cb(new Error(`Test mock (truncate): Unexpected exec command: ${command}`), '', '');
-          else console.error("TRUNCATE TEST: CB UNDEFINED, UNEXPECTED CMD");
-        }
-        return { on: vi.fn(), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
-      });
+      mockExecAsync.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
+
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
       expect(result.length).toBeLessThanOrEqual(10000 + "\n... (diff truncated)".length);
     });
 
     it('should handle errors from git diff command', async () => {
-      const mockError = new Error('Git command failed') as ExecException;
+      const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
       (mockError as any).code = 128; // Simulate a git error code
-
-      vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
-        const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        if (command === 'git diff commit1_oid commit2_oid') {
-            cb(mockError, '', 'error_stderr_content_from_callback_arg');
-        } else {
-            cb(new Error(`Test mock (error): Unexpected exec command: ${command}`), '', '');
-        }
-        return {
-            on: vi.fn((event, cbHandler) => { // Renamed cb to cbHandler to avoid conflict
-                if (event === 'close' && mockError.code) cbHandler(mockError.code);
-                else if (event === 'close') cbHandler(1); // Default close code if mockError.code is not set
-            }),
-            stdout: { on: vi.fn() },
-            stderr: { on: vi.fn() },
-        } as any;
-      });
+      mockError.stderr = 'error_stderr_content_from_exec_async_reject'; // stderr from execAsync rejection
+      mockExecAsync.mockRejectedValueOnce(mockError);
       
       // Clear logger before the call, as validateGitRepository might log
       logger.error.mockClear();
@@ -201,15 +186,12 @@ describe('Repository Utilities', () => {
       const result = await getRepositoryDiff(repoPath);
       
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
-      // The actual error object passed to logger.error will be the one from execAsync,
-      // which promisify(exec) enhances with stdout and stderr if they were part of the callback.
       expect(logger.error).toHaveBeenCalledWith(
         `Error retrieving git diff for ${repoPath}: Git command failed`,
-        expect.objectContaining({ // The error object itself
+        expect.objectContaining({
           message: 'Git command failed',
           code: 128,
-          // REMOVE this line if stderr is consistently not present on the logged error object:
-          // stderr: 'error_stderr_content_from_callback_arg', 
+          stderr: 'error_stderr_content_from_exec_async_reject', 
         })
       );
     });
