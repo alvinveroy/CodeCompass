@@ -50,37 +50,41 @@ beforeAll(async () => {
 });
 
 describe('Query Refinement Tests', () => {
+  let refineQuerySpy: vi.SpyInstance; // For searchWithRefinement tests
+
   beforeEach(async () => {
     vi.clearAllMocks();
-
-    // Reset our stand-alone mock and set default implementation
-    mockInternalRefineQuery.mockReset().mockImplementation((query, _results, relevance) => {
-      // This mock implementation is for when searchWithRefinement calls refineQuery internally.
-      // It should return a string that represents the refined query.
-      if (relevance < 0.3) return `${query} broadened by mockInternal`;
-      if (relevance < 0.7) return `${query} focused by mockInternal`;
-      return `${query} tweaked by mockInternal`;
-    });
 
     vi.mocked(generateEmbedding).mockResolvedValue([0.1,0.2,0.3]);
     vi.mocked(mockQdrantClientInstance.search).mockClear();
     vi.mocked(preprocessText).mockClear().mockImplementation((text: string) => text); // Ensure it's reset and has a default behavior
+
+    // Spies will be setup in specific describe/test blocks if needed
   });
 
   afterEach(() => { 
     vi.restoreAllMocks(); 
-    // Explicitly clear mock call history for the internal mock if not covered by restoreAllMocks for vi.fn()
-    mockInternalRefineQuery.mockClear();
   });
 
   describe('searchWithRefinement', () => {
-    // searchWithRefinement (original) will call refineQuery (which is QR_MOCK_REFINE_QUERY_FN)
+    beforeEach(() => {
+        // Spy on ActualQueryRefinementModule.refineQuery for these tests
+        refineQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'refineQuery')
+            .mockImplementation((query, _results, relevance) => {
+                if (relevance < 0.3) return `${query} broadened by spy`;
+                if (relevance < 0.7) return `${query} focused by spy`;
+                return `${query} tweaked by spy`;
+            });
+    });
+    afterEach(() => {
+        refineQuerySpy.mockRestore();
+    });
 
     it('should return results without refinement if relevance threshold is met initially', async () => {
       const mockResults = [{ id: '1', score: 0.8, payload: { content: 'highly relevant' } }];
       vi.mocked(mockQdrantClientInstance.search).mockResolvedValue(mockResults as any);
 
-      // Use the imported searchWithRefinement (which is the original, but calls mockInternalRefineQuery)
+      // Use the imported searchWithRefinement (which is the original, but calls the spied refineQuery)
       const { results, refinedQuery: actualRefinedQuery, relevanceScore } = await searchWithRefinement(
         mockQdrantClientInstance, 'initial query', [], undefined, undefined, 0.75
       );
@@ -90,10 +94,10 @@ describe('Query Refinement Tests', () => {
       expect(actualRefinedQuery).toBe('initial query');
       expect(relevanceScore).toBe(0.8);
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Completed search with 0 refinements'));
-      expect(mockInternalRefineQuery).not.toHaveBeenCalled();
+      expect(refineQuerySpy).not.toHaveBeenCalled();
     });
 
-    it('should refine query up to maxRefinements if threshold not met, calling mocked refineQuery', async () => {
+    it('should refine query up to maxRefinements if threshold not met, calling spied refineQuery', async () => {
       vi.mocked(mockQdrantClientInstance.search)
         .mockResolvedValueOnce([{ id: 'r1', score: 0.2, payload: { content: 'low relevance' } }] as any)
         .mockResolvedValueOnce([{ id: 'r2', score: 0.5, payload: { content: 'medium relevance' } }] as any)
@@ -108,16 +112,16 @@ describe('Query Refinement Tests', () => {
       expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3); // Initial + 2 refinements
       expect(results[0].id).toBe('r3');
       expect(relevanceScore).toBe(0.8);
-      // Iteration 1: query='original query', relevance=0.2. mockInternalRefineQuery returns 'original query broadened by mockInternal'
-      // Iteration 2: query='original query broadened by mockInternal', relevance=0.5. mockInternalRefineQuery returns 'original query broadened by mockInternal focused by mockInternal'
-      // Iteration 3: query='original query broadened by mockInternal focused by mockInternal', relevance=0.8. Loop breaks.
+      // Iteration 1: query='original query', relevance=0.2. refineQuerySpy returns 'original query broadened by spy'
+      // Iteration 2: query='original query broadened by spy', relevance=0.5. refineQuerySpy returns 'original query broadened by spy focused by spy'
+      // Iteration 3: query='original query broadened by spy focused by spy', relevance=0.8. Loop breaks.
       // The refinedQuery returned is the one that led to the successful search.
-      expect(actualRefinedQueryOutput).toBe('original query broadened by mockInternal focused by mockInternal'); 
+      expect(actualRefinedQueryOutput).toBe('original query broadened by spy focused by spy'); 
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Completed search with 2 refinements'));
-      expect(mockInternalRefineQuery).toHaveBeenCalledTimes(2); 
-      expect(mockInternalRefineQuery).toHaveBeenNthCalledWith(1, 'original query',
+      expect(refineQuerySpy).toHaveBeenCalledTimes(2); 
+      expect(refineQuerySpy).toHaveBeenNthCalledWith(1, 'original query',
         [{ id: 'r1', score: 0.2, payload: { content: 'low relevance' } }], 0.2);
-      expect(mockInternalRefineQuery).toHaveBeenNthCalledWith(2, 'original query broadened by mockInternal', 
+      expect(refineQuerySpy).toHaveBeenNthCalledWith(2, 'original query broadened by spy', 
         [{ id: 'r2', score: 0.5, payload: { content: 'medium relevance' } }], 0.5);
     });
     
@@ -155,7 +159,7 @@ describe('Query Refinement Tests', () => {
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
         expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Completed search with ${configService.MAX_REFINEMENT_ITERATIONS} refinements`));
-        expect(mockInternalRefineQuery).toHaveBeenCalledTimes(configService.MAX_REFINEMENT_ITERATIONS); 
+        expect(refineQuerySpy).toHaveBeenCalledTimes(configService.MAX_REFINEMENT_ITERATIONS); 
     });
   });
 

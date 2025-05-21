@@ -126,11 +126,15 @@ describe('Repository Utilities', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   describe('getRepositoryDiff', () => {
-    // beforeEach specific to getRepositoryDiff tests
-    // Default setup for tests that expect to reach the exec call
+    // Setup mocks specifically for tests that expect validateGitRepository to pass
+    // and git.log to return two commits, allowing exec to be called.
     beforeEach(() => {
-        setupValidRepositoryMocks(); // Ensures validateGitRepository passes
-        setupTwoCommitsLogMock();   // Ensures git.log returns 2 commits
+        vi.mocked(access).mockResolvedValue(undefined as unknown as void);
+        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+        vi.mocked(git.log).mockResolvedValue([
+            { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
+            { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
+        ] as any);
     });
 
     it('should call git diff command and return stdout', async () => {
