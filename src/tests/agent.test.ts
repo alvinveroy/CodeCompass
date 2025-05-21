@@ -1,6 +1,6 @@
-// DEFINE MOCK FUNCTIONS FOR FACTORY FIRST
-const mockInternalParseToolCalls = vi.hoisted(() => vi.fn());
-const mockInternalExecuteToolCall = vi.hoisted(() => vi.fn());
+// DEFINE MOCK FUNCTIONS FOR FACTORY FIRST - REMOVING THESE AS WE REMOVE THE FACTORY
+// const mockInternalParseToolCalls = vi.hoisted(() => vi.fn());
+// const mockInternalExecuteToolCall = vi.hoisted(() => vi.fn());
 
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert } from 'vitest';
 import { promises as fsPromises } from 'fs';
@@ -54,17 +54,7 @@ vi.mock('fs/promises', () => {
   };
 });
 
-// Mock the SUT module using the hoisted mocks
-vi.mock('../lib/agent', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/agent')>();
-  return {
-    ...actual,
-    parseToolCalls: mockInternalParseToolCalls(), // Call the hoisted function to get the vi.fn()
-    executeToolCall: mockInternalExecuteToolCall(), // Call the hoisted function to get the vi.fn()
-  };
-});
-
-
+// DO NOT mock '../lib/agent' itself with a factory. We will use vi.importActual and vi.spyOn.
 
 
 // Import functions from the SUT module directly
@@ -105,13 +95,11 @@ describe('Agent', () => {
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
-    mockedLoggerFromAgentPerspective.info.mockReset();
-    mockedLoggerFromAgentPerspective.warn.mockReset();
-    mockedLoggerFromAgentPerspective.error.mockReset();
-    mockedLoggerFromAgentPerspective.debug.mockReset();
-    
-    mockInternalParseToolCalls().mockReset().mockReturnValue([]); // Call to get the mock
-    mockInternalExecuteToolCall().mockReset().mockResolvedValue({ status: 'default mock success from factory mock' }); // Call to get the mock
+    // Clear logger mocks (assuming logger is imported from config-service which is mocked)
+    const { logger: agentLogger } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service');
+    if (agentLogger && typeof (agentLogger.info as vi.Mock).mockClear === 'function') { // Check if logger and its methods are mocks
+      (Object.values(agentLogger) as vi.Mock[]).forEach(mockFn => mockFn.mockClear?.());
+    }
 
     (validateGitRepository as vi.Mock).mockReset().mockResolvedValue(true);
     (getRepositoryDiff as vi.Mock).mockReset().mockResolvedValue('Default diff content');
@@ -151,38 +139,41 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    // Spies on ActualAgentModule are no longer needed here for parseToolCalls/executeToolCall
-    // as runAgentLoop (original) will call the factory-provided mocks.
+    let parseToolCallsSpy: vi.SpyInstance;
+    let executeToolCallSpy: vi.SpyInstance;
 
     beforeEach(() => {
         mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
+        // Spy on the methods of ActualAgentModule
+        parseToolCallsSpy = vi.spyOn(ActualAgentModule, 'parseToolCalls').mockReturnValue([]);
+        executeToolCallSpy = vi.spyOn(ActualAgentModule, 'executeToolCall').mockResolvedValue({ status: 'default spy success' });
     });
 
     afterEach(() => {
-        // No spies on ActualAgentModule to restore for parseToolCalls/executeToolCall here
+        parseToolCallsSpy.mockRestore();
+        executeToolCallSpy.mockRestore();
     });
 
     it('should execute a tool call and then provide final response', async () => {
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // LLM output for tool selection
 
-      // Configure the factory mock mockInternalParseToolCalls
-      mockInternalParseToolCalls() // Call to get the mock
+      // Configure the spies on ActualAgentModule
+      parseToolCallsSpy
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
         .mockReturnValueOnce([]); // Subsequent calls return empty
 
-      // Configure the factory mock mockInternalExecuteToolCall 
-      mockInternalExecuteToolCall().mockResolvedValueOnce({ status: 'search_code executed', results: [] }); // Call to get the mock
+      executeToolCallSpy.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.'); 
 
-      // Call the imported runAgentLoop (which is the original SUT function).
-      // It will internally call mockInternalParseToolCalls and mockInternalExecuteToolCall.
-      await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
+      // Call runAgentLoop from ActualAgentModule so it uses the spied internal functions
+      await ActualAgentModule.runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      // Assert on the factory mocks
-      expect(mockInternalExecuteToolCall()).toHaveBeenCalledTimes(1);
-      expect(mockInternalExecuteToolCall()).toHaveBeenCalledWith(
+      // Assert on the spies
+      expect(parseToolCallsSpy).toHaveBeenCalled(); // Check if parseToolCalls was called
+      expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
+      expect(executeToolCallSpy).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
@@ -192,17 +183,16 @@ describe('Agent', () => {
   
   describe('createAgentState (original)', () => {
     it('should create a new agent state with the correct structure', () => {
-      // createAgentState is original from the factory, so can be called directly or via ActualAgentModule
-      const result = createAgentState('test_session', 'Find auth code'); 
+      const result = ActualAgentModule.createAgentState('test_session', 'Find auth code'); 
       expect(result).toEqual({ sessionId: 'test_session', query: 'Find auth code', steps: [], context: [], isComplete: false });
     });
   });
 
   describe('generateAgentSystemPrompt (original)', () => {
     it('should include descriptions of all available tools', () => { 
-      // generateAgentSystemPrompt is original from the factory
-      const prompt = generateAgentSystemPrompt(toolRegistry); 
-      for (const tool of toolRegistry) { // Assert against the imported toolRegistry
+      // Call original function from ActualAgentModule
+      const prompt = ActualAgentModule.generateAgentSystemPrompt(ActualAgentModule.toolRegistry); 
+      for (const tool of ActualAgentModule.toolRegistry) { 
         expect(prompt).toContain(`Tool: ${tool.name}`);
       }
     });
