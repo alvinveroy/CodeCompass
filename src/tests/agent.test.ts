@@ -27,7 +27,20 @@ vi.mock('../lib/config-service', () => {
   };
 });
 
-// REMOVE: vi.mock('../lib/agent', ...) - We will spy on the actual module for internal calls.
+// Define mock functions for internal agent functions BEFORE the vi.mock call
+const mockInternalParseToolCalls = vi.fn();
+const mockInternalExecuteToolCall = vi.fn();
+
+vi.mock('../lib/agent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/agent')>();
+  return {
+    ...actual, // Spread actual implementations
+    parseToolCalls: mockInternalParseToolCalls, // Override with our mock
+    executeToolCall: mockInternalExecuteToolCall, // Override with our mock
+    // runAgentLoop will be the original from 'actual'
+    // createAgentState, generateAgentSystemPrompt will also be original
+  };
+});
 
 // Mock external dependencies (these are fine)
 vi.mock('../lib/llm-provider');
@@ -95,13 +108,13 @@ describe('Agent', () => {
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
-    // Spies will be setup in specific describe/test blocks if needed
-    // and restored in afterEach of those blocks.
-    
     mockedLoggerFromAgentPerspective.info.mockReset();
     mockedLoggerFromAgentPerspective.warn.mockReset();
     mockedLoggerFromAgentPerspective.error.mockReset();
     mockedLoggerFromAgentPerspective.debug.mockReset();
+    
+    mockInternalParseToolCalls.mockReset().mockReturnValue([]);
+    mockInternalExecuteToolCall.mockReset().mockResolvedValue({ status: 'default mock success from factory mock' });
 
     (validateGitRepository as vi.Mock).mockReset().mockResolvedValue(true);
     (getRepositoryDiff as vi.Mock).mockReset().mockResolvedValue('Default diff content');
@@ -141,46 +154,38 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    let parseToolCallsSpy: vi.SpyInstance;
-    let executeToolCallSpy: vi.SpyInstance;
+    // Spies on ActualAgentModule are no longer needed here for parseToolCalls/executeToolCall
+    // as runAgentLoop (original) will call the factory-provided mocks.
 
     beforeEach(() => {
         mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
-
-        // Spy on the internal functions of the *actual* module for this test suite
-        parseToolCallsSpy = vi.spyOn(ActualAgentModule, 'parseToolCalls');
-        executeToolCallSpy = vi.spyOn(ActualAgentModule, 'executeToolCall');
-
-        // Default mock implementations for the spies
-        parseToolCallsSpy.mockReturnValue([]);
-        executeToolCallSpy.mockResolvedValue({ status: 'default mock success from spy' });
     });
 
     afterEach(() => {
-        // Restore spies to their original implementations after each test in this suite
-        parseToolCallsSpy.mockRestore();
-        executeToolCallSpy.mockRestore();
+        // No spies on ActualAgentModule to restore for parseToolCalls/executeToolCall here
     });
 
     it('should execute a tool call and then provide final response', async () => {
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // LLM output for tool selection
 
-      // Configure parseToolCallsSpy to return a tool call for the first invocation
-      parseToolCallsSpy
+      // Configure the factory mock mockInternalParseToolCalls
+      mockInternalParseToolCalls
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
         .mockReturnValueOnce([]); // Subsequent calls return empty
 
-      executeToolCallSpy.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      // Configure the factory mock mockInternalExecuteToolCall
+      mockInternalExecuteToolCall.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.'); 
 
-      // Call the original runAgentLoop. It will use the spied versions of parseToolCalls and executeToolCall.
-      await ActualAgentModule.runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
+      // Call the imported runAgentLoop (which is the original SUT function).
+      // It will internally call mockInternalParseToolCalls and mockInternalExecuteToolCall.
+      await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      // Assert on the spies
-      expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
-      expect(executeToolCallSpy).toHaveBeenCalledWith(
+      // Assert on the factory mocks
+      expect(mockInternalExecuteToolCall).toHaveBeenCalledTimes(1);
+      expect(mockInternalExecuteToolCall).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
@@ -190,14 +195,16 @@ describe('Agent', () => {
   
   describe('createAgentState (original)', () => {
     it('should create a new agent state with the correct structure', () => {
-      const result = ActualAgentModule.createAgentState('test_session', 'Find auth code'); 
+      // createAgentState is original from the factory, so can be called directly or via ActualAgentModule
+      const result = createAgentState('test_session', 'Find auth code'); 
       expect(result).toEqual({ sessionId: 'test_session', query: 'Find auth code', steps: [], context: [], isComplete: false });
     });
   });
 
   describe('generateAgentSystemPrompt (original)', () => {
     it('should include descriptions of all available tools', () => { 
-      const prompt = generateAgentSystemPrompt(toolRegistry); // Use imported toolRegistry
+      // generateAgentSystemPrompt is original from the factory
+      const prompt = generateAgentSystemPrompt(toolRegistry); 
       for (const tool of toolRegistry) { // Assert against the imported toolRegistry
         expect(prompt).toContain(`Tool: ${tool.name}`);
       }
