@@ -111,6 +111,8 @@ describe('Repository Utilities', () => {
 
     it('should return "No previous commits to compare" if less than 2 commits', async () => {
       vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }] as any);
+      // Clear logger.info calls from validateGitRepository if it runs first
+      logger.info.mockClear(); 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toBe("No previous commits to compare");
       expect(logger.info).toHaveBeenCalledWith(`Not enough commits to generate a diff for ${repoPath}. Found 1 commits.`);
@@ -120,13 +122,14 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (callback) {
-          if (command === 'git diff commit1_oid commit2_oid') { // Commits are [latest, previous], so diff is previous.oid latest.oid
+          if (command === 'git diff commit1_oid commit2_oid') {
             process.nextTick(() => callback(null, 'diff_content_stdout', ''));
           } else {
             process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
           }
         }
-        return { stdout: { on: vi.fn(), pipe: vi.fn() }, stderr: { on: vi.fn(), pipe: vi.fn() }, on: vi.fn((event, cbListener) => { if (event === 'close') cbListener(0); }), } as any;
+        // exec returns a ChildProcess, ensure the mock is sufficient for promisify(exec)
+        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any;
       });
       const result = await getRepositoryDiff(repoPath);
       expect(vi.mocked(exec)).toHaveBeenCalledWith(
@@ -142,9 +145,13 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (callback) {
-          process.nextTick(() => callback(null, longDiff, ''));
+          if (command === 'git diff commit1_oid commit2_oid') {
+            process.nextTick(() => callback(null, longDiff, ''));
+          } else {
+            process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
+          }
         }
-        return { stdout: { on: vi.fn(), pipe: vi.fn() }, stderr: { on: vi.fn(), pipe: vi.fn() }, on: vi.fn((event, cbListener) => { if (event === 'close') cbListener(0); }), } as any;
+        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any;
       });
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -159,10 +166,15 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (callback) {
-          // This will cause execAsync to reject
-          process.nextTick(() => callback(mockError, '', 'error_stderr'));
+          if (command === 'git diff commit1_oid commit2_oid') {
+            process.nextTick(() => callback(mockError, '', 'error_stderr'));
+          } else {
+             // Fallback for unexpected commands, though the test focuses on the diff command
+            process.nextTick(() => callback(new Error(`Unexpected exec command in error test: ${command}`) as ExecException, '', ''));
+          }
         }
-        return { stdout: { on: vi.fn(), pipe: vi.fn() }, stderr: { on: vi.fn(), pipe: vi.fn() }, on: vi.fn((event, cbListener) => { if (event === 'close') cbListener(1); }), } as any;
+        // Simulate a ChildProcess that emits 'close' with an error code
+        return { on: vi.fn((event, cb) => { if (event === 'close') cb(mockError.code || 1); }) } as any;
       });
       const result = await getRepositoryDiff(repoPath);
       // The error message in getRepositoryDiff is `Failed to retrieve diff for ${repoPath}: ${err.message}`
@@ -170,7 +182,7 @@ describe('Repository Utilities', () => {
       // The logger in getRepositoryDiff logs the full error object as the third argument
       expect(logger.error).toHaveBeenCalledWith(
         `Error retrieving git diff for ${repoPath}: Git command failed`,
-        mockError // Check that the original error object is passed to the logger
+        expect.objectContaining({ message: 'Git command failed', stderr: 'error_stderr' })
       );
     });
   });
