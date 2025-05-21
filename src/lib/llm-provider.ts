@@ -32,6 +32,7 @@ class OllamaProvider implements LLMProvider {
     }
 
     logger.debug(`OllamaProvider: Cache miss. Generating text for prompt (length: ${prompt.length})`);
+    // The call to the Ollama API is wrapped with `withRetry` for robustness.
     try {
       const response = await withRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(

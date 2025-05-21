@@ -37,6 +37,17 @@ This module defines an abstraction layer for interacting with various Large Lang
     -   `providerCache`: A simple cache for the `LLMProvider` instance itself.
     -   `clearProviderCache()`: Exported function to manually clear the `providerCache`.
 
+### Internal Helper Functions
+
+The module also contains several internal helper functions that support `getLLMProvider` and `switchSuggestionModel`:
+
+-   `createTestProvider(suggestionProvider: string): LLMProvider`: Creates a provider instance specifically for test environments, potentially bypassing some live checks.
+-   `createProvider(providerName: string): Promise<LLMProvider>`: Instantiates the appropriate provider (e.g., `OllamaProvider`, `DeepSeekProvider`). Handles fallback logic (e.g., to Ollama if a DeepSeek API key is missing or connection fails).
+-   `handleTestEnvironment(normalizedModel: string, provider: string): Promise<boolean>`: Manages model switching logic specifically for test environments, including simulating provider unavailability.
+-   `checkProviderAvailability(provider: string, normalizedModel: string): Promise<boolean>`: Checks if a given provider is available and configured correctly, using the provider's own `checkConnection` method. Supports a `FORCE_PROVIDER_AVAILABLE` environment variable for testing.
+-   `setModelConfiguration(normalizedModel: string, provider: string): void`: Updates the `configService` with the new suggestion model, suggestion provider, and sets the embedding provider (always to "ollama").
+-   `configureEmbeddingProvider(provider: string): Promise<void>`: Ensures that if the suggestion provider is, for example, DeepSeek, Ollama is still checked for embedding capabilities.
+
 ## Notes
 
 -   Relies heavily on `configService` for all provider-specific configurations (API keys, URLs, model names).
