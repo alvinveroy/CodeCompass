@@ -38,15 +38,32 @@ vi.mock('fs/promises', () => {
   const readdirMock = vi.fn();
   const accessMock = vi.fn();
   const statMock = vi.fn();
+  // Define a mock Dirent structure that fsPromises.readdir would resolve with
+  const mockDirent = (name: string, isDir: boolean): fsPromises.Dirent => ({
+    name,
+    isFile: () => !isDir,
+    isDirectory: () => isDir,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isSymbolicLink: () => false,
+    isFIFO: () => false,
+    isSocket: () => false,
+  });
+
   const mockFsPromises = {
     readFile: readFileMock,
     readdir: readdirMock,
     access: accessMock,
     stat: statMock,
+    // If Dirent is used as a type like fsPromises.Dirent, it's not part of the value-level export
+    // Dirent is a type from the module, not a property of the fsPromises object.
   };
   return {
-    ...mockFsPromises,
-    default: mockFsPromises,
+    __esModule: true, // Important for CJS/ESM interop with mocks
+    ...mockFsPromises, // Spread for named exports if any were used like `import { readFile } from 'fs/promises'`
+    default: mockFsPromises, // For `import fsPromises from 'fs/promises'`
+    // To make fsPromises.Dirent available as a type, it's usually handled by @types/node
+    // The mock itself doesn't need to provide the Dirent type, just objects conforming to it.
   };
 });
 
@@ -101,7 +118,18 @@ describe('Agent', () => {
     (updateContext as vi.Mock).mockReset();
     (getRecentQueries as vi.Mock).mockReset().mockReturnValue([]);
     vi.mocked(readFile).mockReset().mockResolvedValue('Default file content from generic mock');
-    vi.mocked(readdir).mockReset().mockResolvedValue([{ name: 'entry1', isDirectory: () => false } as fsPromises.Dirent]);
+    // Define a helper for creating mock Dirent objects if not done in the mock factory
+    const createMockDirent = (name: string, isDir: boolean): fsPromises.Dirent => ({
+        name,
+        isFile: () => !isDir,
+        isDirectory: () => isDir,
+        isBlockDevice: () => false,
+        isCharacterDevice: () => false,
+        isSymbolicLink: () => false,
+        isFIFO: () => false,
+        isSocket: () => false,
+    });
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)]);
   });
   afterEach(() => { vi.restoreAllMocks(); });
 

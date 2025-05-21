@@ -27,7 +27,7 @@ import { DetailedQdrantSearchResult } from '../types';
 // Define a reusable mock Qdrant client
 const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
 // For testing original refineQuery, broadenQuery etc.
-let ActualQueryRefinementModule: typeof import('../lib/query-refinement');
+let ActualQueryRefinementModule: typeof import('../query-refinement');
 
 beforeAll(async () => {
   ActualQueryRefinementModule = await vi.importActual('../query-refinement'); // Corrected path

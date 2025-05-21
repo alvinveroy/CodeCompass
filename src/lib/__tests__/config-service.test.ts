@@ -5,7 +5,7 @@ import path from 'path';
 import { transports as winstonTransports, createLogger as winstonCreateLogger } from 'winston'; // Import named exports
 
 // Import the class directly for testing.
-import { ConfigService as ActualConfigService } from '../config-service';
+import { ConfigService as ActualConfigService, ConfigService } from '../config-service'; // Import ConfigService class itself
 // import fsActual from 'fs'; // Not strictly needed if we define the mock structure directly
 
 // Mock the entire fs module
@@ -79,8 +79,12 @@ describe('ConfigService', () => {
   const createServiceInstance = async () => {
     vi.resetModules(); // This is key
     // fs mocks are set per test *before* this is called.
-    const { ConfigService: FreshConfigService } = await import('../config-service');
-    return new FreshConfigService() as ActualConfigService;
+    // Import the ConfigService class directly for instance manipulation
+    const { ConfigService: ImportedConfigServiceClass } = await import('../config-service');
+    // Reset the private static instance variable
+    (ImportedConfigServiceClass as any).instance = undefined;
+    // Call the public static getter to create/get the new instance
+    return ImportedConfigServiceClass.getInstance() as ActualConfigService;
   };
 
   beforeEach(async () => {
@@ -118,10 +122,9 @@ describe('ConfigService', () => {
     
     // Get the MOCK_LOGGER_INSTANCE that the factory for winston mock returns
     // This relies on the factory structure: vi.mock('winston', () => { const MOCK_LOGGER_INSTANCE = {...}; return { createLogger: vi.fn().mockReturnValue(MOCK_LOGGER_INSTANCE), ... } })
-    const loggerInstanceFromMockFactory = createLoggerMock.getMockImplementation()?.(); // This calls the factory's createLogger mock impl if it exists
-                                                                                      // or the factory itself if createLogger is the factory.
-                                                                                      // More robust: access the MOCK_LOGGER_INSTANCE directly if it's exported by the mock factory.
-                                                                                      // For now, assuming the factory returns it or createLogger returns it.
+    // Access the mock logger instance directly from the mock setup
+    const loggerInstanceFromMockFactory = (winstonMockedModule as any).default.createLogger();
+
 
     if (loggerInstanceFromMockFactory) {
       Object.values(loggerInstanceFromMockFactory).forEach(fn => {
@@ -322,9 +325,11 @@ describe('ConfigService', () => {
     
     const winstonMockedModule = await import('winston');
     // Ensure we get the logger instance associated with *this* service instance
-    const loggerInstance = vi.mocked(winstonMockedModule.createLogger).mock.results.find(r => r.type === 'return')?.value;
+    // Retrieve the logger instance associated with *this* service instance
+    // This should be the instance returned by the mocked createLogger
+    const loggerInstance = service.logger; // Access the logger from the service instance itself
 
-    expect(loggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load model config'));
+    expect(loggerInstance!.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load model config'));
     expect(service.SUGGESTION_MODEL).toBe('llama3.1:8b'); // Should fall back to default
   });
 

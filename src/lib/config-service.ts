@@ -80,6 +80,24 @@ class ConfigService {
   public readonly LOG_DIR: string;
 
   private constructor() {
+    // Initialize logger first
+    this.logger = winston.createLogger({
+      level: process.env.NODE_ENV === "test" ? "error" : "info",
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+      ),
+      transports: [
+        // Log file transport will be added after LOG_DIR is determined
+        new winston.transports.Stream({
+          stream: process.stderr,
+          format: winston.format.simple(),
+          level: 'error',
+          silent: process.env.NODE_ENV === "test"
+        }),
+      ],
+    });
+
     this.CONFIG_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
     this.MODEL_CONFIG_FILE = path.join(this.CONFIG_DIR, 'model-config.json');
     this.DEEPSEEK_CONFIG_FILE = path.join(this.CONFIG_DIR, 'deepseek-config.json');
@@ -92,7 +110,13 @@ class ConfigService {
       }
     } catch (error) {
       // Fallback to local logs directory if user-specific one fails
-      console.error(`Failed to create user-specific log directory: ${(error as Error).message}. Falling back to local logs dir.`);
+      // Use logger if available, but console.error is safer here as logger might not be fully configured
+      // Or, if logger is guaranteed to be partially working (e.g. stderr stream), use it.
+      // For now, let's assume console.error is fine for this bootstrap phase.
+      // If logger is used, it must be after its basic initialization.
+      // this.logger.error(...) would be ideal if the stderr transport is already active.
+      // Given the logger is initialized above, we can try using it.
+      this.logger.error(`Failed to create user-specific log directory: ${(error as Error).message}. Falling back to local logs dir.`);
       this.LOG_DIR = path.join(process.cwd(), 'logs');
       if (!fs.existsSync(this.LOG_DIR)) {
         fs.mkdirSync(this.LOG_DIR, { recursive: true });
@@ -120,23 +144,6 @@ class ConfigService {
       this.QDRANT_HOST = defaultQdrantHost; // Use default if env var is not set or is empty/whitespace
     }
     this.COLLECTION_NAME = process.env.COLLECTION_NAME || "codecompass_collection"; // Default, not typically changed by user config
-
-    this.logger = winston.createLogger({
-      level: process.env.NODE_ENV === "test" ? "error" : "info",
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-      ),
-      transports: [
-        new winston.transports.File({ filename: path.join(this.LOG_DIR, "codecompass.log") }),
-        new winston.transports.Stream({
-          stream: process.stderr,
-          format: winston.format.simple(), // Keep simple for stderr readability
-          level: 'error', // Only log errors and above to stderr
-          silent: process.env.NODE_ENV === "test"
-        }),
-      ],
-    });
 
     // Validate and set OLLAMA_HOST
     const defaultOllamaHost = "http://127.0.0.1:11434";

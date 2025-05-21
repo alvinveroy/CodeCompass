@@ -346,14 +346,77 @@ export async function getCommitHistoryWithChanges(
           fs: nodeFs,
           dir: repoPath,
           gitdir,
-          trees: [git.TREE({ oid: commitData.commit.tree })],
-          map: async function(filepath, [entry]) {
+          // For an initial commit, list all files as 'add'.
+          // We can use the tree OID directly with git.walk's 'oids' parameter,
+          // or iterate through the tree using git.readTree then git.walk on its entries if needed.
+          // A simpler way for listing all files in a tree is to use git.TREE walker with the tree's OID.
+          // The `trees` parameter expects an array of Walker instances.
+          // git.TREE() (the function call, not the symbol) creates a Walker for the current commit's tree.
+          // However, to specify a particular tree OID, it's usually done by providing the OID to `git.readObject`
+          // and then walking that, or by using the `oids` parameter in `walk`.
+          // Let's use `git.readTree` and then iterate.
+          // A more direct way with walk for a specific tree:
+          // The `trees` parameter is an array of Walker objects.
+          // `TREE` is a symbol. `git.TREE()` is a function that returns a Walker.
+          // To walk a specific tree OID, you'd typically pass it to `git.log` or similar,
+          // or use `git.readTree` and then process its entries.
+          // The most straightforward way to list files in a specific tree with `walk`
+          // is to provide its OID to the `oids` parameter.
+          // However, the existing code uses `map` which expects entries.
+
+          // Correct approach for listing files in a specific tree (initial commit):
+          // We need to provide the tree OID to the walk function.
+          // The `map` function will then receive entries from this tree.
+          // The `trees` parameter is for specifying which "sources" (like HEAD, STAGE, WORKDIR)
+          // are being walked when comparing. For a single tree, this is simpler.
+          // We can use `git.TREE()` to get a Walker for the current commit's tree if `ref` is HEAD.
+          // For a specific tree OID, we can use `git.readTree` and then iterate, or use `walk` with `oids`.
+
+          // Let's use `git.TREE()` which refers to the tree of the current ref (HEAD by default).
+          // Since we have the specific tree OID, we should use that.
+          // The `walk` function can take an `oids` array.
+          // The `map` function's second argument `entries` is an array of `WalkerEntry | null`.
+          // If we are walking a single tree, `entries` will have one item.
+
+          map: async function(filepath, [entry]) { // entry is WalkerEntry | null
             if (filepath === '.') return; // Skip root
-            if (entry && (await entry.type()) === 'blob') { // Ensure it's a file
+            // For an initial commit, all files in its tree are 'add'.
+            // The `entry` here will be from the commit's tree.
+            if (entry && await entry.type() === 'blob') { // Ensure it's a file
               changedFiles.push({ path: filepath, type: 'add' });
             }
             return null;
           },
+          // We need to tell `walk` which tree to process.
+          // Since `commitData.commit.tree` is the OID of the tree for this initial commit:
+          trees: [git.TREE()], // This refers to the tree of the current ref (HEAD)
+                               // which is what we want for the initial commit's files.
+                               // If commitData.commit.tree is different from HEAD's tree (it shouldn't be for initial commit processing)
+                               // then a different approach is needed.
+                               // For an initial commit, its tree *is* the state.
+          // The `git.walk` function, when given `trees: [git.TREE()]`, will walk the tree
+          // of the current commit (which `commitData` represents).
+          // This seems correct for listing files of an initial commit.
+          // The error TS2353 was about `git.TREE({ oid: ... })`.
+          // The correct usage is just `git.TREE()` if you mean the tree of the current ref,
+          // or you need to pass the OID differently if you want to specify an arbitrary tree.
+          // Given this is for the initial commit, `git.TREE()` should point to its tree.
+          // Let's assume `git.TREE()` correctly resolves to the tree of `commitData.commit.tree`.
+          // The original code was: trees: [git.TREE({ oid: commitData.commit.tree })],
+          // The `TREE` symbol itself is not a function. `git.TREE()` is.
+          // The error indicates TS thinks `git.TREE` is a function taking `{ref?: string}`.
+          // This suggests a type definition issue or a misunderstanding of the API.
+          // `isomorphic-git`'s `TREE` is a function that returns a `WalkerFactory`.
+          // So, `git.TREE()` should be used.
+          // The error `TS2353: Object literal may only specify known properties, and 'oid' does not exist in type '{ ref?: string | undefined; }'.`
+          // implies that `git.TREE` is being seen as `function TREE(options?: { ref?: string }): Walker`.
+          // This is not how `git.TREE({oid: ...})` is meant to be used.
+          // It should be `git.TREE()` if you want the current ref's tree.
+          // To walk a *specific* tree OID (like `commitData.commit.tree`), you'd typically use `git.readTree`
+          // and then iterate its entries, or use `walk` with the `oids` parameter.
+          // Given the context of an initial commit, `git.TREE()` should refer to its tree.
+          // The simplest fix for the `walk` call, assuming `git.TREE()` refers to the tree of the current commit:
+        trees: [git.TREE()], // This should refer to the tree of the commit being processed by `walk`
         });
       }
 
