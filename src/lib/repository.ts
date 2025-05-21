@@ -36,7 +36,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     // Log the specific part that failed
-    logger.warn(`[validateGitRepository] Validation failed for ${repoPath}. Error: ${err.message}`, { stack: err.stack });
+    logger.warn(`[validateGitRepository] Validation failed for ${repoPath}. Error: ${err.message}`, { stack: err.stack, errorObj: err }); // Log more error details
     logger.warn(`Failed to validate Git repository at ${repoPath}: ${err.message}`);
     return false;
   }

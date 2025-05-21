@@ -18,10 +18,10 @@ vi.mock('../../utils/text-utils', () => ({
 
 // REMOVE: vi.mock('../lib/query-refinement', ...)
 
-// Define the mock function for refineQuery BEFORE the vi.mock call
 const mockInternalRefineQuery = vi.fn();
 
 vi.mock('../query-refinement', async (importOriginal) => {
+  // mockInternalRefineQuery must be defined above this factory.
   const actual = await importOriginal<typeof import('../query-refinement')>();
   return {
     ...actual, // Spread actual implementations
