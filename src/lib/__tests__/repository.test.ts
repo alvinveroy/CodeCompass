@@ -7,15 +7,26 @@ import { exec } from 'child_process'; // For mocking exec
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // Import functions to test
-import { 
-    validateGitRepository, 
-    indexRepository, 
+import {
+    validateGitRepository,
+    indexRepository,
     getRepositoryDiff,
     getCommitHistoryWithChanges
 } from '../repository';
 
 // Mock dependencies
-vi.mock('isomorphic-git');
+vi.mock('isomorphic-git', () => ({
+  default: { // Assuming 'git' is the default export object from 'isomorphic-git'
+    resolveRef: vi.fn(),
+    listFiles: vi.fn(),
+    log: vi.fn(),
+    readCommit: vi.fn(),
+    diffTrees: vi.fn(),
+    walk: vi.fn(),
+    TREE: vi.fn((args: any) => ({ _id: args?.oid || 'mock_tree_id_default', ...args })), // Mock for git.TREE
+    // Add any other functions from isomorphic-git that are used by repository.ts
+  }
+}));
 vi.mock('fs/promises');
 vi.mock('fs', async (importOriginal) => { // Mock standard 'fs' for isomorphic-git
     const actualFs = await importOriginal<typeof nodeFs>();
@@ -23,9 +34,7 @@ vi.mock('fs', async (importOriginal) => { // Mock standard 'fs' for isomorphic-g
         ...actualFs, // Spread actual fs to keep non-mocked parts if any
         default: { // if isomorphic-git expects default export
             ...actualFs,
-            // Mock specific functions if needed, e.g., for git.walk's fs parameter
         },
-        // Mock specific functions if needed
     };
 });
 vi.mock('child_process');
@@ -84,37 +93,31 @@ describe('Repository Utilities', () => {
     const repoPath = '/test/repo';
 
     it('should skip indexing if not a valid git repository', async () => {
-      // Mock validateGitRepository to return false for this specific call if it's not already mocked globally
-      // For simplicity, assume it's tested independently and here we control its output for indexRepository
-      // If validateGitRepository is imported directly, you can spy and mock it:
-      // vi.spyOn(await import('../repository'), 'validateGitRepository').mockResolvedValue(false);
-      // For now, let's assume we can control its behavior for this test.
-      // This requires validateGitRepository to be mockable or part of the module's exports.
-      // A simple way is to re-mock it within this describe block if needed, or ensure the global mock is set.
-      // For this example, we'll rely on the fact that validateGitRepository is also being tested.
-      // We'll assume it's mocked to return false for this test case.
-      // This is a bit tricky if validateGitRepository is in the same module.
-      // A better approach might be to extract validateGitRepository to its own module or pass it as a dependency.
-      // Let's assume for this test, we can ensure it returns false.
-      // One way: vi.mocked(validateGitRepository).mockResolvedValueOnce(false); // This won't work as it's not a mock by default.
-      // The easiest is to structure tests so validateGitRepository is mocked at a higher level or its module is fully mocked.
-      // Given the current structure, we'd rely on its independent test and assume it works.
-      // To force this path for indexRepository, we'd need to ensure validateGitRepository returns false.
-      // This might mean a more complex setup or refactoring.
-      // For now, let's assume we can test this path by ensuring validateGitRepository is false.
-      // This test is more of an integration test for this part.
-      // Let's simplify: if validateGitRepository is part of the same module, we can't easily mock its return for just one call to indexRepository
-      // without more advanced mocking techniques.
-      // So, we'll test the "happy path" of validateGitRepository returning true, and its own unit tests cover the false case.
-      // The "skip indexing" log would be tested in validateGitRepository's tests.
-      // Here, we'll test that if listFiles returns empty, it logs and returns.
-      vi.mocked(git.listFiles).mockResolvedValue([]); // No files
+      // Ensure validateGitRepository (called by indexRepository) returns false
+      vi.mocked(fs.access).mockResolvedValue(undefined); // .git dir might exist
+      vi.mocked(git.resolveRef).mockRejectedValue(new Error('No HEAD')); // But HEAD is invalid
+
       await indexRepository(mockQdrantClientInstance, repoPath);
-      expect(logger.warn).toHaveBeenCalledWith('No files to index in repository.');
+      expect(logger.warn).toHaveBeenCalledWith(`Skipping repository indexing: ${repoPath} is not a valid Git repository`);
       expect(mockQdrantClientInstance.upsert).not.toHaveBeenCalled();
     });
     
+    it('should skip indexing if valid git repository but no files to index', async () => {
+        // Ensure validateGitRepository (called by indexRepository) returns true
+        vi.mocked(fs.access).mockResolvedValue(undefined);
+        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+        vi.mocked(git.listFiles).mockResolvedValue([]); // No files
+
+        await indexRepository(mockQdrantClientInstance, repoPath);
+        expect(logger.warn).toHaveBeenCalledWith('No files to index in repository.');
+        expect(mockQdrantClientInstance.upsert).not.toHaveBeenCalled();
+    });
+    
     it('should correctly filter files and skip empty ones', async () => {
+        // Ensure validateGitRepository (called by indexRepository) returns true
+        vi.mocked(fs.access).mockResolvedValue(undefined);
+        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+
         vi.mocked(git.listFiles).mockResolvedValue(['file.ts', 'image.png', 'empty.js', 'node_modules/lib.js']);
         vi.mocked(fs.readFile).mockImplementation(async (fp) => {
             if (fp.toString().endsWith('empty.js')) return '';
@@ -133,6 +136,10 @@ describe('Repository Utilities', () => {
     });
 
     it('should index a small file as a single point', async () => {
+      // Ensure validateGitRepository (called by indexRepository) returns true
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+
       vi.mocked(git.listFiles).mockResolvedValue(['small.ts']);
       vi.mocked(fs.readFile).mockResolvedValue('short content'); // Length < CHUNK_SIZE (100)
       vi.mocked(fs.stat).mockResolvedValue({ mtime: new Date() } as any);
@@ -152,6 +159,10 @@ describe('Repository Utilities', () => {
     });
 
     it('should index a large file in multiple chunks', async () => {
+      // Ensure validateGitRepository (called by indexRepository) returns true
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+
       vi.mocked(git.listFiles).mockResolvedValue(['large.ts']);
       const longContent = 'a'.repeat(150); // CHUNK_SIZE=100, CHUNK_OVERLAP=20. Chunks: 0-100, 80-180 (actual 80-150)
       vi.mocked(fs.readFile).mockResolvedValue(longContent);
@@ -187,6 +198,10 @@ describe('Repository Utilities', () => {
     });
 
     it('should clean up stale entries from Qdrant', async () => {
+      // Ensure validateGitRepository (called by indexRepository) returns true
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+
       vi.mocked(git.listFiles).mockResolvedValue(['current.ts']); // Only current.ts is in the repo
       vi.mocked(fs.readFile).mockResolvedValue('current content');
       vi.mocked(fs.stat).mockResolvedValue({ mtime: new Date() } as any);
@@ -212,6 +227,10 @@ describe('Repository Utilities', () => {
     });
     
     it('should log error and continue if a single file indexing fails', async () => {
+        // Ensure validateGitRepository (called by indexRepository) returns true
+        vi.mocked(fs.access).mockResolvedValue(undefined);
+        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+
         vi.mocked(git.listFiles).mockResolvedValue(['good.ts', 'bad.ts']);
         vi.mocked(fs.readFile).mockImplementation(async (fp) => {
             if (fp.toString().endsWith('bad.ts')) throw new Error('Read failed for bad.ts');
@@ -230,39 +249,50 @@ describe('Repository Utilities', () => {
     const repoPath = '/test/diff/repo';
     const mockExec = exec as vi.MockedFunction<typeof exec>;
 
-    beforeEach(() => {
-        // Ensure validateGitRepository is true for these tests
-        // This requires a way to mock validateGitRepository if it's in the same module.
-        // For now, assume it's mocked globally or we test its effect.
-        // A direct mock like this won't work if it's not exported/imported as a mockable entity.
-        // vi.mocked(validateGitRepository).mockResolvedValue(true); // This line is problematic.
-        // Instead, we'll rely on the fact that validateGitRepository is tested elsewhere.
-        // The tests below will assume it would have returned true.
+    // Helper to set up mocks for validateGitRepository to return true
+    const setupValidRepoMocks = () => {
+        vi.mocked(fs.access).mockResolvedValue(undefined);
+        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+    };
+
+    // Helper to set up mocks for validateGitRepository to return false (e.g., .git access denied)
+    const setupInvalidRepoAccessDeniedMocks = () => {
+        vi.mocked(fs.access).mockRejectedValue(new Error('Permission denied'));
+    };
+    // Helper to set up mocks for validateGitRepository to return false (e.g., no HEAD)
+    const setupInvalidRepoNoHeadMocks = () => {
+        vi.mocked(fs.access).mockResolvedValue(undefined); // .git dir exists
+        vi.mocked(git.resolveRef).mockRejectedValue(new Error('No HEAD')); // But HEAD is invalid
+    };
+
+
+    it('should return "No Git repository found" if .git access is denied', async () => {
+        setupInvalidRepoAccessDeniedMocks(); 
+        const result = await getRepositoryDiff(repoPath);
+        expect(result).toBe("No Git repository found");
+        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(`Failed to validate Git repository at ${repoPath}: Permission denied`));
+    });
+    
+    it('should return "No Git repository found" if HEAD cannot be resolved', async () => {
+        setupInvalidRepoNoHeadMocks();
+        const result = await getRepositoryDiff(repoPath);
+        expect(result).toBe("No Git repository found");
+        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(`Failed to validate Git repository at ${repoPath}: No HEAD`));
     });
 
-    it('should return "No Git repository found" if validateGitRepository returns false', async () => {
-        // To test this path, we need to ensure validateGitRepository returns false.
-        // This is hard if it's not easily mockable for this specific call.
-        // This test case is better suited for validateGitRepository's own tests.
-        // For getRepositoryDiff, we assume validateGitRepository works.
-        // If we could mock it here:
-        // const { validateGitRepository: mockValidate } = await import('../repository');
-        // vi.mocked(mockValidate).mockResolvedValueOnce(false);
-        // const result = await getRepositoryDiff(repoPath);
-        // expect(result).toBe("No Git repository found");
-        // This test is omitted due to difficulty in targeted mocking of same-module function.
-    });
 
     it('should return "No previous commits to compare" if less than 2 commits', async () => {
-      vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: {} as any }]); // Only one commit
+      setupValidRepoMocks(); // Ensure validateGitRepository returns true
+      vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }]); // Only one commit
       const result = await getRepositoryDiff(repoPath);
       expect(result).toBe("No previous commits to compare");
     });
 
     it('should call git diff command and return stdout', async () => {
+      setupValidRepoMocks(); // Ensure validateGitRepository returns true
       vi.mocked(git.log).mockResolvedValue([
-        { oid: 'commit2_oid', commit: {} as any }, 
-        { oid: 'commit1_oid', commit: {} as any }
+        { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } }, 
+        { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
       ]);
       mockExec.mockImplementation((command, options, callback) => {
         if (callback) callback(null, 'diff_content_stdout', '');
@@ -278,8 +308,9 @@ describe('Repository Utilities', () => {
     });
 
     it('should truncate long diff output', async () => {
+      setupValidRepoMocks(); // Ensure validateGitRepository returns true
       vi.mocked(git.log).mockResolvedValue([
-        { oid: 'c2', commit: {} as any }, { oid: 'c1', commit: {} as any }
+        { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
       ]);
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000
       mockExec.mockImplementation((cmd, opts, cb) => {
@@ -292,8 +323,9 @@ describe('Repository Utilities', () => {
     });
 
     it('should handle errors from git diff command', async () => {
+      setupValidRepoMocks(); // Ensure validateGitRepository returns true
       vi.mocked(git.log).mockResolvedValue([
-        { oid: 'c2', commit: {} as any }, { oid: 'c1', commit: {} as any }
+        { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
       ]);
       mockExec.mockImplementation((cmd, opts, cb) => {
         if (cb) cb(new Error('Git command failed'), '', 'error_stderr');
@@ -309,22 +341,37 @@ describe('Repository Utilities', () => {
     const repoPath = '/test/history/repo';
 
     it('should retrieve commit history with changed files', async () => {
+        // Ensure validateGitRepository returns true for this test (though not directly called by getCommitHistoryWithChanges, good practice for consistency if it were)
+        vi.mocked(fs.access).mockResolvedValue(undefined);
+        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+
         const mockCommits = [
-            { oid: 'commit2', commit: { message: 'Feat: new feature', author: {} as any, committer: {} as any, tree: 'tree2_oid', parent: ['commit1_oid'] } },
-            { oid: 'commit1', commit: { message: 'Initial commit', author: {} as any, committer: {} as any, tree: 'tree1_oid', parent: [] } },
+            { oid: 'commit2', commit: { message: 'Feat: new feature', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, tree: 'tree2_oid', parent: ['commit1_oid'] } },
+            { oid: 'commit1', commit: { message: 'Initial commit', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, tree: 'tree1_oid', parent: [] } },
         ];
-        vi.mocked(git.log).mockResolvedValue(mockCommits as any); // Cast as any to simplify commit structure
-        vi.mocked(git.readCommit)
-            .mockImplementation(async ({ oid }) => {
-                if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'] } } as any;
-                if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [] } } as any;
-                return {} as any;
-            });
-        vi.mocked(git.diffTrees).mockResolvedValue([['file.ts', 'modify', 'blob1', 'blob2', 'mode1', 'mode2'] as any]);
+        vi.mocked(git.log).mockResolvedValue(mockCommits as any); 
         
-        // Mock for initial commit walk
-        vi.mocked(git.walk).mockImplementation(async ({ map }) => {
-            await map('initial.ts', [{ type: async () => 'blob' }] as any); // Simulate one file in initial commit
+        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => {
+            if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as any;
+            if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any;
+            // Fallback for parent commit lookup if not explicitly mocked (e.g. during diffTrees for parent)
+            if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any; // Ensure parent has a tree
+            return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as any;
+        });
+        
+        vi.mocked(git.diffTrees).mockImplementation(async (args: { fs: any, dir: string, gitdir: string, ref1: string, ref2: string }) => {
+            if (args.ref1 === 'tree1_oid' && args.ref2 === 'tree2_oid') { // Diff between commit1 and commit2
+                 return [['file.ts', 'modify', 'blob_before', 'blob_after', 'mode_before', 'mode_after']] as any; 
+            }
+            return [] as any;
+        });
+        
+        vi.mocked(git.walk).mockImplementation(async ({ fs: nodeFs, dir, gitdir, trees, map }) => {
+            // Simulate one file 'initial.ts' in the initial commit (tree1_oid)
+            const treeOidToWalk = trees[0]._id; // Assuming TREE mock returns {_id: oid}
+            if (treeOidToWalk === 'tree1_oid') { 
+                 await map('initial.ts', [{ type: async () => 'blob', oid: async () => 'blob_oid_initial' }] as any);
+            }
             return [];
         });
 

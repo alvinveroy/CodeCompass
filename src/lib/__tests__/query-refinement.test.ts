@@ -20,11 +20,11 @@ vi.mock('../config-service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('../ollama'); // For generateEmbedding
-vi.mock('../utils/text-utils'); // For preprocessText
+vi.mock('../../utils/text-utils'); // For preprocessText (Corrected path)
 
 // Import mocked versions
 import { generateEmbedding } from '../ollama';
-import { preprocessText } from '../utils/text-utils';
+import { preprocessText } from '../../utils/text-utils'; // Corrected path
 import { configService, logger } from '../config-service';
 import { DetailedQdrantSearchResult } from '../types';
 

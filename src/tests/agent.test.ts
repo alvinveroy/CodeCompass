@@ -44,27 +44,26 @@ vi.mock('../lib/llm-provider');
 vi.mock('../lib/state');
 vi.mock('../lib/query-refinement');
 vi.mock('../lib/repository');
-vi.mock('isomorphic-git');
-vi.mock('fs/promises', () => ({ // Mock fs/promises
-  default: { // if fs is imported as `import fs from 'fs/promises'`
+vi.mock('isomorphic-git'); // Auto-mock for isomorphic-git, specific functions will be spied/mocked below
+vi.mock('fs/promises', async (importOriginal) => {
+  const actual = await importOriginal() as typeof fsPromises;
+  return {
+    ...actual, // Spread actual module to keep other exports if any
     readFile: vi.fn(),
     readdir: vi.fn(),
-    // Add other fs methods if used by agent.ts directly or indirectly through tested functions
-  },
-  readFile: vi.fn(), // if fs.readFile is imported as `import { readFile } from 'fs/promises'`
-  readdir: vi.fn(),
-}));
+    // Add other fs methods if used by agent.ts directly or indirectly
+  };
+});
 
 
 // Import mocked versions for easier access in tests
+// For fs/promises, we import the mocked named exports directly
 import { getLLMProvider } from '../lib/llm-provider';
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries } from '../lib/state';
 import { searchWithRefinement } from '../lib/query-refinement';
 import { validateGitRepository, getRepositoryDiff } from '../lib/repository';
 import git from 'isomorphic-git';
-// If fs is imported as `import fs from 'fs/promises'`, use fs.default.readFile
-// If imported as `import { readFile } from 'fs/promises'`, use readFile directly
-const { readFile, readdir } = fsPromises; // Or fsPromises.default if that's how you mock it
+import { readFile, readdir } from 'fs/promises'; // Import mocked versions
 
 // Define a reusable mock LLM provider
 const mockLLMProviderInstance = {
@@ -101,8 +100,8 @@ describe('Agent', () => {
     (addSuggestion as jest.Mock).mockImplementation(() => {});
     (updateContext as jest.Mock).mockImplementation(() => {});
     (getRecentQueries as jest.Mock).mockReturnValue([]);
-    (readFile as jest.Mock).mockResolvedValue('Default file content');
-    (readdir as jest.Mock).mockResolvedValue([{ name: 'entry1', isDirectory: () => false }]);
+    vi.mocked(readFile).mockResolvedValue('Default file content');
+    vi.mocked(readdir).mockResolvedValue([{ name: 'entry1', isDirectory: () => false } as fsPromises.Dirent]);
   });
 
   // ... existing tests for parseToolCalls and createAgentState ...
@@ -316,7 +315,10 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       describe('type: DIRECTORY_LISTING', () => {
           it('should list directory entries', async () => {
-              (readdir as jest.Mock).mockResolvedValueOnce([{ name: 'file.ts', isDirectory: () => false }, { name: 'subdir', isDirectory: () => true }]);
+              vi.mocked(readdir).mockResolvedValueOnce([
+                { name: 'file.ts', isDirectory: () => false }, 
+                { name: 'subdir', isDirectory: () => true }
+              ] as fsPromises.Dirent[]);
               const result = await executeToolCall(
                   { tool: 'request_additional_context', parameters: { context_type: 'DIRECTORY_LISTING', query_or_path: 'src' } },
                   mockQdrantClient, repoPath, suggestionModelAvailable

@@ -46,16 +46,29 @@ describe('ConfigService', () => {
   const MOCK_LOG_DIR = path.join(MOCK_CONFIG_DIR, 'logs');
 
   // Helper to reset and instantiate ConfigService
-  const createServiceInstance = () => {
+  const createServiceInstance = async () => {
     // Reset modules to ensure a fresh instance and re-evaluation of process.env
     // This is crucial because ConfigService reads process.env in its constructor.
-    vi.resetModules(); 
+    vi.resetModules();
     // Re-import the class after resetModules
-    const { ConfigService: FreshConfigService } = require('../config-service');
+    // We need to re-mock winston and fs as they are used by the constructor after reset
+    vi.mock('fs'); 
+    vi.mock('winston', async (importOriginal) => {
+      const originalWinston = await importOriginal<typeof winston>();
+      return {
+        ...originalWinston,
+        createLogger: vi.fn().mockReturnValue({
+          info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
+        }),
+        transports: { File: vi.fn(), Stream: vi.fn() },
+        format: { combine: vi.fn(), timestamp: vi.fn(), json: vi.fn(), simple: vi.fn() }
+      };
+    });
+    const { ConfigService: FreshConfigService } = await import('../config-service');
     return new FreshConfigService() as ActualConfigService;
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalEnv = { ...process.env }; // Backup original process.env
     process.env.HOME = MOCK_HOME_DIR; // Mock HOME directory
 
@@ -78,8 +91,8 @@ describe('ConfigService', () => {
     vi.unstubAllEnvs(); // Vitest specific: clear env stubs
   });
 
-  it('should initialize with default values when no env vars or config files', () => {
-    const service = createServiceInstance();
+  it('should initialize with default values when no env vars or config files', async () => {
+    const service = await createServiceInstance();
     expect(service.OLLAMA_HOST).toBe('http://127.0.0.1:11434');
     expect(service.SUGGESTION_MODEL).toBe('llama3.1:8b'); // Default for Ollama
     expect(service.LLM_PROVIDER).toBe('ollama');
@@ -87,60 +100,60 @@ describe('ConfigService', () => {
     // ... test other important defaults
   });
 
-  it('should load OLLAMA_HOST from environment variable if valid', () => {
+  it('should load OLLAMA_HOST from environment variable if valid', async () => {
     process.env.OLLAMA_HOST = 'http://customhost:1234';
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     expect(service.OLLAMA_HOST).toBe('http://customhost:1234');
   });
 
-  it('should fallback to default OLLAMA_HOST if env var is invalid URL', () => {
+  it('should fallback to default OLLAMA_HOST if env var is invalid URL', async () => {
     process.env.OLLAMA_HOST = 'invalid-url-format';
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     expect(service.OLLAMA_HOST).toBe('http://127.0.0.1:11434');
     expect(service.logger.warn).toHaveBeenCalledWith(expect.stringContaining('OLLAMA_HOST environment variable "invalid-url-format" is not a valid URL'));
   });
   
-  it('should load SUGGESTION_MODEL from model-config.json if present', () => {
+  it('should load SUGGESTION_MODEL from model-config.json if present', async () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_MODEL_CONFIG_FILE);
     vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ SUGGESTION_MODEL: 'file_model_from_json' }));
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     expect(service.SUGGESTION_MODEL).toBe('file_model_from_json');
   });
 
-  it('should prioritize model-config.json over environment variables for SUGGESTION_MODEL', () => {
+  it('should prioritize model-config.json over environment variables for SUGGESTION_MODEL', async () => {
     process.env.SUGGESTION_MODEL = 'env_model';
     vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_MODEL_CONFIG_FILE);
     vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ SUGGESTION_MODEL: 'file_model_override' }));
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     expect(service.SUGGESTION_MODEL).toBe('file_model_override');
   });
 
-  it('should load DEEPSEEK_API_KEY from deepseek-config.json', () => {
+  it('should load DEEPSEEK_API_KEY from deepseek-config.json', async () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_DEEPSEEK_CONFIG_FILE);
     vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ DEEPSEEK_API_KEY: 'deepseek_key_from_file' }));
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     expect(service.DEEPSEEK_API_KEY).toBe('deepseek_key_from_file');
   });
 
-  it('should derive SUMMARIZATION_MODEL from SUGGESTION_MODEL if not set', () => {
+  it('should derive SUMMARIZATION_MODEL from SUGGESTION_MODEL if not set', async () => {
     process.env.SUGGESTION_MODEL = 'test_suggestion_model';
     // Ensure SUMMARIZATION_MODEL is not in env or file
     delete process.env.SUMMARIZATION_MODEL;
     vi.mocked(fs.existsSync).mockReturnValue(false); // No config files
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     expect(service.SUMMARIZATION_MODEL).toBe('test_suggestion_model');
   });
 
-  it('should load SUMMARIZATION_MODEL from environment if set', () => {
+  it('should load SUMMARIZATION_MODEL from environment if set', async () => {
     process.env.SUGGESTION_MODEL = 'default_suggestion';
     process.env.SUMMARIZATION_MODEL = 'env_summary_model';
     vi.mocked(fs.existsSync).mockReturnValue(false);
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     expect(service.SUMMARIZATION_MODEL).toBe('env_summary_model');
   });
 
-  it('should persist model configuration when setSuggestionModel is called', () => {
-    const service = createServiceInstance();
+  it('should persist model configuration when setSuggestionModel is called', async () => {
+    const service = await createServiceInstance();
     service.setSuggestionModel('new_persisted_model');
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
       MOCK_MODEL_CONFIG_FILE,
@@ -148,8 +161,8 @@ describe('ConfigService', () => {
     );
   });
   
-  it('should persist DeepSeek API key when setDeepSeekApiKey is called', () => {
-    const service = createServiceInstance();
+  it('should persist DeepSeek API key when setDeepSeekApiKey is called', async () => {
+    const service = await createServiceInstance();
     service.setDeepSeekApiKey('new_deepseek_key');
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
       MOCK_DEEPSEEK_CONFIG_FILE,
@@ -157,26 +170,26 @@ describe('ConfigService', () => {
     );
   });
 
-  it('should handle malformed model-config.json gracefully', () => {
+  it('should handle malformed model-config.json gracefully', async () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_MODEL_CONFIG_FILE);
     vi.mocked(fs.readFileSync).mockReturnValue('{"SUGGESTION_MODEL": "bad_json_no_closing_brace'); // Malformed
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     expect(service.logger.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load model config'));
     expect(service.SUGGESTION_MODEL).toBe('llama3.1:8b'); // Falls back to default
   });
 
-  it('should correctly set global state variables via initializeGlobalState', () => {
+  it('should correctly set global state variables via initializeGlobalState', async () => {
     process.env.SUGGESTION_PROVIDER = 'test_provider_global';
     process.env.SUGGESTION_MODEL = 'test_model_global';
-    const service = createServiceInstance(); // Constructor calls initializeGlobalState
+    const service = await createServiceInstance(); // Constructor calls initializeGlobalState
     
     // Access global directly for verification (this is what the code does)
     expect(global.CURRENT_SUGGESTION_PROVIDER).toBe('test_provider_global');
     expect(global.CURRENT_SUGGESTION_MODEL).toBe('test_model_global');
   });
 
-  it('reloadConfigsFromFile should re-read environment and file configs', () => {
-    const service = createServiceInstance();
+  it('reloadConfigsFromFile should re-read environment and file configs', async () => {
+    const service = await createServiceInstance();
     // Initial state
     expect(service.SUGGESTION_MODEL).toBe('llama3.1:8b');
 
@@ -193,17 +206,17 @@ describe('ConfigService', () => {
 
   // Test getters for all new config values (AGENT_DEFAULT_MAX_STEPS, etc.)
   // Example for AGENT_DEFAULT_MAX_STEPS
-  it('AGENT_DEFAULT_MAX_STEPS getter should return correct value from env or default', () => {
-    const serviceDefault = createServiceInstance();
+  it('AGENT_DEFAULT_MAX_STEPS getter should return correct value from env or default', async () => {
+    const serviceDefault = await createServiceInstance();
     expect(serviceDefault.AGENT_DEFAULT_MAX_STEPS).toBe(serviceDefault.DEFAULT_AGENT_DEFAULT_MAX_STEPS);
 
     process.env.AGENT_DEFAULT_MAX_STEPS = '5';
-    const serviceEnv = createServiceInstance();
+    const serviceEnv = await createServiceInstance();
     expect(serviceEnv.AGENT_DEFAULT_MAX_STEPS).toBe(5);
   });
 
   // Test log directory creation fallback
-  it('should fallback to local logs directory if user-specific one fails', () => {
+  it('should fallback to local logs directory if user-specific one fails', async () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_LOG_DIR); // Simulate log dir exists check
     vi.mocked(fs.mkdirSync).mockImplementation((p) => {
       if (p === MOCK_LOG_DIR) {
@@ -211,7 +224,7 @@ describe('ConfigService', () => {
       }
       return undefined;
     });
-    const service = createServiceInstance();
+    const service = await createServiceInstance();
     // Check if logger.warn was called about fallback (difficult without direct access to logger instance used by constructor)
     // Check if the final LOG_DIR is the fallback path
     expect(service.LOG_DIR).toBe(path.join(process.cwd(), 'logs'));
