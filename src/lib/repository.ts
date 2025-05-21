@@ -342,7 +342,7 @@ export async function getCommitHistoryWithChanges(
         }));
       } else {
         // Initial commit, list all files as 'add'
-        await gitWalk({
+        await git.walk({
           fs: nodeFs,
           dir: repoPath,
           gitdir,
