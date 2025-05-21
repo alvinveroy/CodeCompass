@@ -30,8 +30,6 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
     // logger.info(`Valid Git repository at: ${repoPath}`); // Retain this info log as per best practice
     return true;
   } catch (error: unknown) {
-    // const err = error instanceof Error ? error : new Error(String(error)); // No longer needed if not logging err.message
-    // logger.warn(`Failed to validate Git repository at ${repoPath}: ${err.message}`); // Retain this warn log
     return false;
   }
 }
