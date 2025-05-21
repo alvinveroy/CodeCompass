@@ -86,7 +86,8 @@ export const toolRegistry: Tool[] = [
 ];
 
 // Helper function to get processed diff (summarized or truncated if necessary)
-async function getProcessedDiff(
+// Exported for spying
+export async function getProcessedDiff(
   repoPath: string,
   suggestionModelAvailable: boolean
 ): Promise<string> {
@@ -131,7 +132,8 @@ async function getProcessedDiff(
 }
 
 // Helper function to process (summarize if needed) a single snippet
-async function processSnippet(
+// Exported for spying
+export async function processSnippet(
   snippet: string,
   query: string, // The user's query for context-aware summarization
   filepath: string, // Filepath for context
@@ -371,7 +373,7 @@ export async function executeToolCall(
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
 
-        const processedSnippet = await processSnippet(
+        const processedSnippet = await exports.processSnippet(
           payload.content, 
           query, // Pass the current tool's query
           filepathDisplay, 
@@ -418,7 +420,7 @@ export async function executeToolCall(
         : [];
       
       // Use the new helper function to get the processed diff
-      const processedDiff = await getProcessedDiff(repoPath, suggestionModelAvailable);
+      const processedDiff = await exports.getProcessedDiff(repoPath, suggestionModelAvailable);
       
       // Update context in session
       updateContext(session.id, repoPath, files);
@@ -441,7 +443,7 @@ export async function executeToolCall(
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         
-        const processedSnippet = await processSnippet(
+        const processedSnippet = await exports.processSnippet(
           payload.content,
           query, // Pass the current tool's query
           filepathDisplay,
@@ -497,7 +499,7 @@ export async function executeToolCall(
         : [];
       
       // Use the new helper function to get the processed diff
-      const processedDiff = await getProcessedDiff(repoPath, suggestionModelAvailable);
+      const processedDiff = await exports.getProcessedDiff(repoPath, suggestionModelAvailable);
       
       // Update context in session
       updateContext(session.id, repoPath, files);
@@ -544,7 +546,7 @@ export async function executeToolCall(
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
 
-        const processedSnippet = await processSnippet(
+        const processedSnippet = await exports.processSnippet(
           payload.content,
           query, // Pass the current tool's query
           filepathDisplay,
@@ -658,7 +660,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
 
-        const processedSnippet = await processSnippet(
+        const processedSnippet = await exports.processSnippet(
           payload.content,
           query, // Pass the current tool's query
           filepathDisplay,
@@ -774,7 +776,7 @@ Structure your analysis with these sections:
             if (payload.is_chunked) {
               filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
             }
-            const processedSnippet = await processSnippet(
+            const processedSnippet = await exports.processSnippet(
               payload.content,
               queryOrPathParam,
               filepathDisplay,
@@ -1006,7 +1008,7 @@ export async function runAgentLoop(
     const session = getOrCreateSession(sessionId, repoPath);
     
     // Create agent state
-    const agentState = createAgentState(session.id, query);
+    const agentState = exports.createAgentState(session.id, query);
     
     // Filter tools based on suggestion model availability
     const availableTools = toolRegistry.filter(tool => 
@@ -1014,7 +1016,7 @@ export async function runAgentLoop(
     );
     
     // Generate system prompt
-    const systemPrompt = generateAgentSystemPrompt(availableTools);
+    const systemPrompt = exports.generateAgentSystemPrompt(availableTools);
     
     // Initial user prompt
     let userPrompt = `User query: ${query}\n\nAnalyze this query and determine which tools to use to provide the best response.`;
@@ -1072,7 +1074,7 @@ export async function runAgentLoop(
       }
       
       // Check if the agent wants to make tool calls
-      const toolCalls = parseToolCalls(agentOutput);
+      const toolCalls = exports.parseToolCalls(agentOutput);
       
       // If no tool calls, consider the agent's response as final
       if (toolCalls.length === 0) {
@@ -1099,7 +1101,7 @@ export async function runAgentLoop(
           
           // Execute tool call with timeout
           const toolOutput = await Promise.race([
-            executeToolCall(
+            exports.executeToolCall(
               toolCall,
               qdrantClient,
               repoPath,
