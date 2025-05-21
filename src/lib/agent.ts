@@ -3,7 +3,6 @@ import { getLLMProvider } from "./llm-provider";
 // import { incrementCounter, timeExecution } from "./metrics"; // Metrics removed
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { AgentState, AgentStep } from "./types";
 import { searchWithRefinement } from "./query-refinement"; // Changed import path
 import { validateGitRepository, getRepositoryDiff } from "./repository";
 import { AgentState, AgentStep, ParsedToolCall } from "./types"; // Added ParsedToolCall
