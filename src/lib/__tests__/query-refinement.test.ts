@@ -27,10 +27,6 @@ import { DetailedQdrantSearchResult } from '../types';
 // Define a reusable mock Qdrant client
 const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
 
-// Define spies outside describe blocks if they are used across multiple describes,
-// or inside if specific to one.
-// Spies on original module's functions are removed as vi.doMock will replace them.
-// let refineQuerySpy: any;
 // let broadenQuerySpy: any;
 // let focusQueryBasedOnResultsSpy: any;
 // let tweakQuerySpy: any;
@@ -38,10 +34,12 @@ const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
 describe('Query Refinement Tests', () => {
   let ActualQueryRefinementModule: typeof import('../query-refinement.js');
   let searchWithRefinementSUT: typeof ActualQueryRefinementModule.searchWithRefinement;
-  let refineQuerySUT: typeof ActualQueryRefinementModule.refineQuery;
+  let refineQuerySUT_for_direct_testing: typeof ActualQueryRefinementModule.refineQuery; // Renamed for clarity
 
   beforeAll(async () => {
-    // ActualQueryRefinementModule import removed from here. SUTs will be imported after mocks.
+    // Import the actual module once
+    vi.resetModules(); // Ensure we get a fresh module if other tests modified it
+    ActualQueryRefinementModule = await import('../query-refinement.js');
   });
 
   beforeEach(async () => {
@@ -56,47 +54,31 @@ describe('Query Refinement Tests', () => {
       (Object.values(queryRefinementLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     }
 
-    // For SUT import, we need to ensure it gets the potentially mocked module
-    // This dynamic import will pick up mocks set by vi.doMock if active
-    // SUTs are now imported within specific describe blocks after mocks are set up.
-    // const SUTModule = await import('../query-refinement.js');
-    // searchWithRefinementSUT = SUTModule.searchWithRefinement;
-    // refineQuerySUT = SUTModule.refineQuery; 
+    // Assign SUTs from the pre-imported actual module
+    searchWithRefinementSUT = ActualQueryRefinementModule.searchWithRefinement;
+    refineQuerySUT_for_direct_testing = ActualQueryRefinementModule.refineQuery;
   });
 
   afterEach(() => { 
-    vi.restoreAllMocks(); // Restores original implementations
+    vi.restoreAllMocks(); // Restores original implementations, including spies
   });
 
   describe('searchWithRefinement', () => {
-    let mockRefineQueryForSearchTest: Mock; // Specific mock for these tests
+    let mockRefineQueryForSearchTest: Mock<any[], string>; // Typed spy
 
     beforeEach(async () => {
-      vi.resetModules(); // Ensure a clean slate for module mocking
-
-      // This mock will be used by searchWithRefinementSUT
-      mockRefineQueryForSearchTest = vi.fn((query, _results, relevance) => {
-        // console.log(`mockRefineQueryForSearchTest CALLED with query: ${query}, relevance: ${relevance}`);
-        if (relevance < 0.3) return `${query} broadened by doMock`;
+      // Spy on 'refineQuery' from the ActualQueryRefinementModule
+      // searchWithRefinementSUT (which is ActualQueryRefinementModule.searchWithRefinement)
+      // will call this spied version.
+      mockRefineQueryForSearchTest = vi.spyOn(ActualQueryRefinementModule, 'refineQuery').mockImplementation((query, _results, relevance) => {
+        if (relevance < 0.3) return `${query} broadened by doMock`; // Keep "doMock" in string for less churn if needed
         if (relevance < 0.7) return `${query} focused by doMock`;
         return `${query} tweaked by doMock`;
       });
-
-      vi.doMock('../query-refinement.js', async (importOriginal) => {
-        const originalModule = await importOriginal<typeof import('../query-refinement.js')>();
-        return {
-          ...originalModule,
-          refineQuery: mockRefineQueryForSearchTest, // searchWithRefinement will use this
-        };
-      });
-      // Import SUT *after* doMock is set up
-      const SUTModule = await import('../query-refinement.js');
-      searchWithRefinementSUT = SUTModule.searchWithRefinement;
     });
 
     afterEach(() => {
-      vi.doUnmock('../query-refinement.js');
-      // vi.resetAllMocks(); // vi.restoreAllMocks() in outer afterEach should handle this. Or use vi.clearAllMocks() if issues.
+      // vi.restoreAllMocks() in the outer afterEach will handle restoring the spy.
     });
     
     it('should return results without refinement if relevance threshold is met initially', async () => {
@@ -188,41 +170,30 @@ describe('Query Refinement Tests', () => {
 
   describe('refineQuery (main dispatcher - testing original logic)', () => {
     // let ActualQRModuleForThisDescribe: typeof import('../query-refinement.js'); // Not strictly needed if SUTRefineQuery is used
-    let SUTRefineQuery: (typeof import('../query-refinement.js'))['refineQuery'];
+    // SUTRefineQuery_for_direct_testing is already ActualQueryRefinementModule.refineQuery
     
-    let mockBroadenQuery: Mock;
-    let mockFocusQuery: Mock;
-    let mockTweakQuery: Mock;
+    let mockBroadenQuery: Mock<any[], string>;
+    let mockFocusQuery: Mock<any[], string>;
+    let mockTweakQuery: Mock<any[], string>;
 
     // beforeAll removed as module is imported fresh in beforeEach after vi.doMock
 
     beforeEach(async () => {
-      mockBroadenQuery = vi.fn().mockReturnValue('mock_broadened_by_doMock_local');
-      mockFocusQuery = vi.fn().mockReturnValue('mock_focused_by_doMock_local');
-      mockTweakQuery = vi.fn().mockReturnValue('mock_tweaked_by_doMock_local');
-
-      vi.doMock('../query-refinement.js', async (importOriginal) => {
-        const originalModule = await importOriginal<typeof import('../query-refinement.js')>();
-        return {
-          ...originalModule,
-          broadenQuery: mockBroadenQuery,
-          focusQueryBasedOnResults: mockFocusQuery,
-          tweakQuery: mockTweakQuery,
-        };
-      });
-
-      // Import the SUT *after* doMock is set up to get the version with mocked internals
-      const MockedQRModule = await import('../query-refinement.js');
-      SUTRefineQuery = MockedQRModule.refineQuery;
+      // Spy on the internal functions called by refineQuerySUT_for_direct_testing
+      mockBroadenQuery = vi.spyOn(ActualQueryRefinementModule, 'broadenQuery')
+        .mockReturnValue('mock_broadened_by_doMock_local'); // Keep "doMock" in string for less churn
+      mockFocusQuery = vi.spyOn(ActualQueryRefinementModule, 'focusQueryBasedOnResults')
+        .mockReturnValue('mock_focused_by_doMock_local');
+      mockTweakQuery = vi.spyOn(ActualQueryRefinementModule, 'tweakQuery')
+        .mockReturnValue('mock_tweaked_by_doMock_local');
     });
 
     afterEach(() => {
-      vi.doUnmock('../query-refinement.js');
-      // vi.resetAllMocks(); // vi.restoreAllMocks() in outer afterEach should handle this.
+      // vi.restoreAllMocks() in the outer afterEach will handle restoring these spies.
     });
     
     it('should call broadenQuery (mocked) and return its result for very low relevance (<0.3)', async () => {
-      const result = SUTRefineQuery("original", [], 0.1); 
+      const result = refineQuerySUT_for_direct_testing("original", [], 0.1); 
       expect(mockBroadenQuery).toHaveBeenCalledWith("original"); 
       expect(result).toBe('mock_broadened_by_doMock_local');
       expect(mockFocusQuery).not.toHaveBeenCalled();
@@ -231,7 +202,7 @@ describe('Query Refinement Tests', () => {
 
     it('should call focusQueryBasedOnResults (mocked) for mediocre relevance (0.3 <= relevance < 0.7)', async () => {
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-      const result = SUTRefineQuery("original", mockResults, 0.5);
+      const result = refineQuerySUT_for_direct_testing("original", mockResults, 0.5);
       expect(mockFocusQuery).toHaveBeenCalledWith("original", mockResults);
       expect(result).toBe('mock_focused_by_doMock_local');
       expect(mockBroadenQuery).not.toHaveBeenCalled();
@@ -240,7 +211,7 @@ describe('Query Refinement Tests', () => {
 
     it('should call tweakQuery (mocked) for decent relevance (>=0.7)', async () => {
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-      const result = SUTRefineQuery("original", mockResults, 0.7);
+      const result = refineQuerySUT_for_direct_testing("original", mockResults, 0.7);
       expect(mockTweakQuery).toHaveBeenCalledWith("original", mockResults);
       expect(result).toBe('mock_tweaked_by_doMock_local');
       expect(mockBroadenQuery).not.toHaveBeenCalled();

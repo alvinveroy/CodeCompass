@@ -281,17 +281,22 @@ export function parseToolCalls(output: string): ParsedToolCall[] {
         logger.debug("Successfully parsed JSON", { parsedJson });
         
         // Type guard for ParsedToolCall
-        const isParsedToolCall = (p: unknown): p is ParsedToolCall =>
-          p && typeof p === 'object' && p !== null &&
-          'tool' in p && typeof p.tool === 'string' &&
-          'parameters' in p && typeof p.parameters === 'object' && p.parameters !== null;
+        const isParsedToolCall = (item: unknown): item is ParsedToolCall => {
+          if (typeof item !== 'object' || item === null) {
+            return false;
+          }
+          // Now item is confirmed to be an object and not null
+          const p = item as Record<string, unknown>; // Cast to Record for safer 'in' checks if preferred, or use item directly
+          return (
+            'tool' in p && typeof p.tool === 'string' &&
+            'parameters' in p && typeof p.parameters === 'object' && p.parameters !== null
+          );
+        };
 
         if (isParsedToolCall(parsedJson)) {
-          // Explicitly type after guard to satisfy linter for member access
-          const toolCallData: ParsedToolCall = parsedJson;
           results.push({
-            tool: toolCallData.tool,
-            parameters: toolCallData.parameters
+            tool: parsedJson.tool, // Access directly after type guard
+            parameters: parsedJson.parameters // Access directly after type guard
           });
         } else {
           logger.warn("Parsed JSON part does not match expected tool call structure", { parsedJsonPart: jsonPart });
@@ -1127,13 +1132,12 @@ export async function runAgentLoop(
           // Add step to agent state
           const newStep: AgentStep = {
             tool: toolCall.tool,
-            // Ensure parameters is Record<string, unknown>; ParsedToolCall already defines it this way.
-            input: toolCall.parameters as Record<string, unknown>,
+            input: toolCall.parameters, // No assertion needed, ParsedToolCall defines parameters as Record<string, unknown>
             output: toolOutput,
             reasoning: agentOutput
           };
           agentState.steps.push(newStep);
-          
+
           // Add context from tool output
           agentState.context.push(toolOutput);
           
@@ -1185,8 +1189,8 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
           agentState.steps.map((s: AgentStep) => {
-            const outputStr = JSON.stringify(s.output);
-            return `Used ${s.tool} and found: ${(outputStr || '').substring(0, 200)}...`;
+            const outputStr = typeof s.output === 'string' ? s.output : JSON.stringify(s.output);
+            return `Used ${s.tool} and found: ${(outputStr || String(s.output) || '').substring(0, 200)}...`;
           }).join("\n\n");
       }
     }
