@@ -5,22 +5,24 @@ import nodeFs from 'fs'; // For isomorphic-git's fs parameter
 import path from 'path';
 import { exec as actualChildProcessExec, type ExecException } from 'child_process'; // Keep for type
 import { QdrantClient } from '@qdrant/js-client-rest';
+import * as util from 'util'; // Import actual util to get original promisify
 
-// This variable will hold the mock function created by the 'util' mock factory.
-// It needs to be `let` and will be assigned when the factory runs.
-let MOCK_EXEC_ASYNC_INSTANCE: vi.Mock;
+// This will be our mock for execAsync. We'll retrieve it after mocking.
+let mockExecAsync: vi.Mock; 
 
 vi.mock('util', async (importOriginal) => {
-  const actualUtil = await importOriginal<typeof import('util')>();
-  const factoryCreatedMock = vi.fn(); // Create the mock fn inside the factory
-  MOCK_EXEC_ASYNC_INSTANCE = factoryCreatedMock; // Assign to the outer scope variable
+  const actualUtilModule = await importOriginal<typeof import('util')>();
+  const factoryMockFn = vi.fn();
+  // Assign to the outer variable *after* it's created.
+  // This assignment happens when the factory runs.
+  mockExecAsync = factoryMockFn; 
   return {
-    ...actualUtil,
+    ...actualUtilModule,
     promisify: (fnToPromisify: any) => {
-      if (fnToPromisify === actualChildProcessExec) { 
-        return factoryCreatedMock; // Return the mock created in this factory scope
+      if (fnToPromisify === actualChildProcessExec) {
+        return factoryMockFn; 
       }
-      return actualUtil.promisify(fnToPromisify);
+      return actualUtilModule.promisify(fnToPromisify);
     },
   };
 });
@@ -87,14 +89,13 @@ const mockQdrantClientInstance = {
 describe('Repository Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // MOCK_EXEC_ASYNC_INSTANCE might not be initialized if the mock factory for 'util'
-    // hasn't run yet for some reason (e.g. if 'util' is not imported by the SUT).
-    // However, getRepositoryDiff *does* import and use promisify from 'util'.
-    if (MOCK_EXEC_ASYNC_INSTANCE) {
-        MOCK_EXEC_ASYNC_INSTANCE.mockReset();
+    // mockExecAsync should be initialized by the time beforeEach runs,
+    // because the SUT (repository.ts) imports 'util' and thus triggers the mock factory.
+    if (mockExecAsync) {
+      mockExecAsync.mockReset();
     } else {
-        // This case indicates a problem with the test setup or mock execution order.
-        console.warn("MOCK_EXEC_ASYNC_INSTANCE was not initialized in repository.test.ts beforeEach");
+      // This would indicate a serious issue with mock setup or test execution order.
+      console.error("CRITICAL: mockExecAsync was not initialized by the 'util' mock factory!");
     }
   });
 
@@ -163,12 +164,12 @@ describe('Repository Utilities', () => {
 
     it('should call git diff command and return stdout', async () => {
       setupValidRepoAndCommitsMocks();
-      if (!MOCK_EXEC_ASYNC_INSTANCE) throw new Error("mockExecAsyncInstance not initialized for stdout test");
-      MOCK_EXEC_ASYNC_INSTANCE.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
+      if (!mockExecAsync) throw new Error("mockExecAsync not initialized for stdout test");
+      mockExecAsync.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(MOCK_EXEC_ASYNC_INSTANCE).toHaveBeenCalledWith(
+      expect(mockExecAsync).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
       );
@@ -177,9 +178,9 @@ describe('Repository Utilities', () => {
 
     it('should truncate long diff output', async () => {
       setupValidRepoAndCommitsMocks();
-      if (!MOCK_EXEC_ASYNC_INSTANCE) throw new Error("mockExecAsyncInstance not initialized for truncate test");
+      if (!mockExecAsync) throw new Error("mockExecAsync not initialized for truncate test");
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      MOCK_EXEC_ASYNC_INSTANCE.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
+      mockExecAsync.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -188,11 +189,11 @@ describe('Repository Utilities', () => {
 
     it('should handle errors from git diff command', async () => {
       setupValidRepoAndCommitsMocks();
-      if (!MOCK_EXEC_ASYNC_INSTANCE) throw new Error("mockExecAsyncInstance not initialized for error test");
+      if (!mockExecAsync) throw new Error("mockExecAsync not initialized for error test");
       const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
       (mockError as any).code = 128;
       mockError.stderr = 'stderr from rejected execAsync'; 
-      MOCK_EXEC_ASYNC_INSTANCE.mockRejectedValueOnce(mockError);
+      mockExecAsync.mockRejectedValueOnce(mockError);
       
       // Clear logger before the call, as validateGitRepository might log
       logger.error.mockClear(); 
@@ -218,6 +219,16 @@ describe('Repository Utilities', () => {
     vi.restoreAllMocks();
   });
 });
+
+// Helper function (ensure it's defined or inlined in tests)
+const setupValidRepoAndCommitsMocks = () => {
+    vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
+    vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+    vi.mocked(git.log).mockResolvedValue([
+      { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
+      { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
+    ] as any);
+};
 /*
 // This SEARCH block is intentionally left almost empty to replace the rest of the file
 // with the user's provided content for the getCommitHistoryWithChanges tests and the
