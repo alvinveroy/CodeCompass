@@ -71,8 +71,17 @@ vi.mock('../lib/agent', async (importOriginal) => {
 });
 
 // THEN import from the SUT module and other modules
-import { runAgentLoop, parseToolCalls, executeToolCall, createAgentState, generateAgentSystemPrompt, toolRegistry } from '../lib/agent';
-import * as actualAgentFunctions from '../lib/agent'; // For testing originals
+// parseToolCalls and executeToolCall imported here ARE the mocks from the factory.
+import { 
+  runAgentLoop, 
+  parseToolCalls, 
+  executeToolCall,
+  createAgentState, 
+  generateAgentSystemPrompt, 
+  toolRegistry // Assuming toolRegistry is not mocked and should be original
+} from '../lib/agent';
+// For testing original implementations of parseToolCalls/executeToolCall etc.
+import * as actualAgentFunctionsOriginal from '../lib/agent'; 
 // Import mocked dependencies
 import { getLLMProvider } from '../lib/llm-provider';
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from '../lib/state';
@@ -128,9 +137,14 @@ describe('Agent', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   describe('parseToolCalls (original)', () => {
+    let actualParseToolCallsFn: typeof actualAgentFunctionsOriginal.parseToolCalls;
+    beforeAll(async () => {
+        const actualModule = await vi.importActual<typeof actualAgentFunctionsOriginal>('../lib/agent');
+        actualParseToolCallsFn = actualModule.parseToolCalls;
+    });
     it('should parse valid tool calls', () => {
       const output = `TOOL_CALL: {"tool":"search_code","parameters":{"query":"authentication"}}`;
-      const result = actualAgentFunctions.parseToolCalls(output);
+      const result = actualParseToolCallsFn(output); // Use the actual function
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ tool: 'search_code', parameters: { query: 'authentication' } });
     });
@@ -138,9 +152,14 @@ describe('Agent', () => {
   });
   
   describe('executeToolCall (original)', () => {
+    let actualExecuteToolCallFn: typeof actualAgentFunctionsOriginal.executeToolCall;
+    beforeAll(async () => {
+        const actualModule = await vi.importActual<typeof actualAgentFunctionsOriginal>('../lib/agent');
+        actualExecuteToolCallFn = actualModule.executeToolCall;
+    });
     const repoPath = '/test/repo'; // Define repoPath for these tests
     it('should throw if tool requires model and model is unavailable', async () => {
-      await expect(actualAgentFunctions.executeToolCall(
+      await expect(actualExecuteToolCallFn( // Use the actual function
         { tool: 'generate_suggestion', parameters: { query: 'test' } },
         mockQdrantClientInstance, repoPath, false // suggestionModelAvailable = false
       )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available');
@@ -190,15 +209,17 @@ describe('Agent', () => {
   
   describe('createAgentState (original)', () => {
     it('should create a new agent state with the correct structure', () => {
-      const result = actualAgentFunctions.createAgentState('test_session', 'Find auth code');
+      // createAgentState is original because it's not overridden in the vi.mock factory for '../lib/agent'
+      const result = createAgentState('test_session', 'Find auth code'); 
       expect(result).toEqual({ sessionId: 'test_session', query: 'Find auth code', steps: [], context: [], isComplete: false });
     });
   });
 
   describe('generateAgentSystemPrompt (original)', () => {
     it('should include descriptions of all available tools', async () => {
-      const prompt = actualAgentFunctions.generateAgentSystemPrompt(actualAgentFunctions.toolRegistry);
-      for (const tool of actualAgentFunctions.toolRegistry) {
+      // generateAgentSystemPrompt and toolRegistry are original as they are not overridden in the factory
+      const prompt = generateAgentSystemPrompt(toolRegistry); 
+      for (const tool of toolRegistry) {
         expect(prompt).toContain(`Tool: ${tool.name}`);
       }
     });

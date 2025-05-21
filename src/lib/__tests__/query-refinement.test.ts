@@ -31,13 +31,15 @@ vi.mock('../query-refinement', async (importOriginal) => {
 // Import after mocks. refineQuery, broadenQuery etc. here ARE the mocks from the factory.
 import {
   searchWithRefinement,
-  refineQuery,
-  broadenQuery,
-  focusQueryBasedOnResults,
-  tweakQuery
+  refineQuery, // This is the mock from the factory
+  broadenQuery, // This is the mock from the factory
+  focusQueryBasedOnResults, // This is the mock from the factory
+  tweakQuery // This is the mock from the factory
 } from '../query-refinement';
 // Import the SUT module again using import * as ... to access original implementations for direct testing.
-import * as actualQueryRefinementFunctions from '../query-refinement';
+// Note: actualQueryRefinementFunctions.refineQuery etc. will be THE MOCKS due to the factory.
+// Use vi.importActual for true original functions.
+import * as actualQueryRefinementFunctionsOriginalFallback from '../query-refinement'; // Renamed to avoid confusion, will use importActual
 
 // Import mocked dependencies
 import { generateEmbedding } from '../ollama';
@@ -155,12 +157,19 @@ describe('Query Refinement Tests', () => {
   });
   
   describe('refineQuery (main dispatcher - testing original logic)', () => {
-    // Testing actualQueryRefinementFunctions.refineQuery (original).
-    // Its internal calls to broadenQuery, focusQueryBasedOnResults, tweakQuery are mocked.
+    // Testing the original refineQuery function.
+    // Its internal calls to broadenQuery, focusQueryBasedOnResults, tweakQuery should be to the *mocked* versions
+    // because those are what the module exports due to the vi.mock factory.
+    let actualRefineQueryFn: typeof actualQueryRefinementFunctionsOriginalFallback.refineQuery;
+    
+    beforeAll(async () => {
+        const actualModule = await vi.importActual<typeof import('../query-refinement')>('../query-refinement');
+        actualRefineQueryFn = actualModule.refineQuery;
+    });
         
     it('should call broadenQuery (mocked) and return its result for very low relevance (<0.3)', () => {
-      const result = actualQueryRefinementFunctions.refineQuery("original", [], 0.1);
-      expect(broadenQuery).toHaveBeenCalledWith("original"); // Assert on the imported mock
+      const result = actualRefineQueryFn("original", [], 0.1); // Use the actual (original) refineQuery
+      expect(broadenQuery).toHaveBeenCalledWith("original"); // broadenQuery is the imported mock
       expect(result).toBe('spy_broadened_return_val'); // This comes from broadenQuery mockReturnValue
       expect(focusQueryBasedOnResults).not.toHaveBeenCalled(); // Assert on the imported mock
       expect(tweakQuery).not.toHaveBeenCalled(); // Assert on the imported mock
@@ -168,7 +177,7 @@ describe('Query Refinement Tests', () => {
     
     it('should call focusQueryBasedOnResults (mocked) for mediocre relevance (0.3 <= relevance < 0.7)', () => {
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-      const result = actualQueryRefinementFunctions.refineQuery("original", mockResults, 0.5);
+      const result = actualRefineQueryFn("original", mockResults, 0.5); // Use the actual (original) refineQuery
       expect(focusQueryBasedOnResults).toHaveBeenCalledWith("original", mockResults); // Assert on the imported mock
       expect(result).toBe('spy_focused_return_val'); // This comes from focusQueryBasedOnResults mockReturnValue
       expect(broadenQuery).not.toHaveBeenCalled(); // Assert on the imported mock
@@ -177,7 +186,7 @@ describe('Query Refinement Tests', () => {
 
     it('should call tweakQuery (mocked) for decent relevance (>=0.7)', () => {
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-      const result = actualQueryRefinementFunctions.refineQuery("original", mockResults, 0.7);
+      const result = actualRefineQueryFn("original", mockResults, 0.7); // Use the actual (original) refineQuery
       expect(tweakQuery).toHaveBeenCalledWith("original", mockResults); // Assert on the imported mock
       expect(result).toBe('spy_tweaked_return_val'); // This comes from tweakQuery mockReturnValue
       expect(broadenQuery).not.toHaveBeenCalled(); // Assert on the imported mock
