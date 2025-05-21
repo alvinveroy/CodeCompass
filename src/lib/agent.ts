@@ -61,6 +61,17 @@ export const toolRegistry: Tool[] = [
       sessionId: "string (optional) - Session ID to maintain context across requests"
     },
     requiresModel: true
+  },
+  {
+    name: "request_additional_context",
+    description: "Request additional or different types of context when current information is insufficient. Use this to get more search results, full file content, or list files in a directory.",
+    parameters: {
+      context_type: "string - Type of context needed. Enum: ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING']",
+      query_or_path: "string - The original search query (for MORE_SEARCH_RESULTS), the full file path (for FULL_FILE_CONTENT), or the directory path (for DIRECTORY_LISTING)",
+      reasoning: "string - Brief explanation of why this additional context is needed and how it will help answer the user's query.",
+      sessionId: "string (optional) - Session ID to maintain context across requests"
+    },
+    requiresModel: false // The tool itself doesn't require an LLM, though its sub-operations might (e.g., summarization)
   }
 ];
 
@@ -191,8 +202,9 @@ HANDLING INSUFFICIENT CONTEXT:
 - If initial search results for a broad or complex query are sparse, of low relevance, or clearly incomplete:
     - Consider re-using the 'search_code' or 'get_repository_context' tools with a refined, broadened, or more targeted query. Explain your reasoning for the new query.
 - If you believe specific information is missing that could be obtained (e.g., full file content, details about a specific module, wider search results):
-    - If a tool like 'request_broader_context' (Note: this tool may not be available yet, but plan as if it could be) is appropriate, clearly state what information you would request and why it's needed. If the tool is available, use it.
-    - If such a tool is not available, or if you cannot improve the context through existing tools, clearly state in your response that the answer is based on limited information and specify what information was lacking.
+    - Use the 'request_additional_context' tool. Specify the 'context_type' (e.g., 'MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING'), provide the relevant 'query_or_path', and explain your 'reasoning'.
+    - Example: If you need the full content of 'src/utils/auth.ts', use TOOL_CALL: {"tool": "request_additional_context", "parameters": {"context_type": "FULL_FILE_CONTENT", "query_or_path": "src/utils/auth.ts", "reasoning": "Need to see the full implementation of authentication helpers."}}
+    - If after using available tools (including 'request_additional_context') you still lack sufficient information, clearly state in your response that the answer is based on limited information and specify what was lacking.
 - Do not hallucinate or provide speculative answers beyond the available context. If you cannot answer confidently, explain what's missing.
 
 ## Example 1: Simple Code Search
@@ -679,6 +691,95 @@ Structure your analysis with these sections:
       };
     }
     
+    case "request_additional_context": {
+      const contextTypeParam = typedParams.context_type;
+      const queryOrPathParam = typedParams.query_or_path;
+      const reasoningParam = typedParams.reasoning; // Optional, but good for logging
+      const sessionIdParam = typedParams.sessionId;
+
+      if (typeof contextTypeParam !== 'string' || !['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING'].includes(contextTypeParam)) {
+        throw new Error(`Parameter 'context_type' for tool '${tool}' must be one of ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING']. Received: ${contextTypeParam}`);
+      }
+      if (typeof queryOrPathParam !== 'string') {
+        throw new Error(`Parameter 'query_or_path' for tool '${tool}' must be a string. Received: ${typeof queryOrPathParam}`);
+      }
+      if (reasoningParam !== undefined && typeof reasoningParam !== 'string') {
+         logger.warn(`Optional parameter 'reasoning' for tool '${tool}' was provided but not as a string. Received: ${typeof reasoningParam}. Ignoring.`);
+      }
+      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
+        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
+      }
+      const sessionId: string | undefined = sessionIdParam;
+      const session = getOrCreateSession(sessionId, repoPath);
+
+      logger.info(`Executing request_additional_context: type='${contextTypeParam}', query_or_path='${queryOrPathParam}', reasoning='${reasoningParam || 'N/A'}'`);
+
+      switch (contextTypeParam) {
+        case 'MORE_SEARCH_RESULTS': {
+          const currentSearchLimit = configService.QDRANT_SEARCH_LIMIT_DEFAULT;
+          const increasedLimit = Math.min(currentSearchLimit + 10, 50); // Increase limit, cap at 50 for now
+          logger.info(`Requesting more search results for query: "${queryOrPathParam}". Original limit: ${currentSearchLimit}, New limit: ${increasedLimit}`);
+          
+          // For simplicity, we'll use the existing searchWithRefinement but override the limit.
+          // A more sophisticated approach might involve a dedicated Qdrant call here.
+          // We need to pass the files list if available from the session context.
+          const isGitRepo = await validateGitRepository(repoPath);
+          const files = isGitRepo
+            ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
+            : [];
+
+          // Temporarily override QDRANT_SEARCH_LIMIT_DEFAULT for this call if possible, or pass it.
+          // searchWithRefinement doesn't currently take limit as a direct param, it uses configService.
+          // For now, we'll just re-run with the same logic, relying on refinement to potentially find more.
+          // TODO: Enhance searchWithRefinement to accept a limit override.
+          // For now, let's just log that we would increase the limit.
+          logger.warn(`Limitation: searchWithRefinement currently uses default limit. Request for MORE_SEARCH_RESULTS will re-run search with existing logic. Query: ${queryOrPathParam}`);
+          const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
+            qdrantClient,
+            queryOrPathParam, // Use the provided query
+            files
+          );
+           const formattedResultsPromises = results.map(async r => { /* ... (same formatting as in search_code) ... */
+            const payload = r.payload;
+            let filepathDisplay = payload.filepath;
+            if (payload.is_chunked) {
+              filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
+            }
+            const processedSnippetContent = await processSnippet(payload.content, queryOrPathParam, filepathDisplay, suggestionModelAvailable);
+            return { filepath: filepathDisplay, snippet: processedSnippetContent, relevance: r.score };
+          });
+          const formattedResults = await Promise.all(formattedResultsPromises);
+          return { sessionId: session.id, status: `Retrieved potentially more search results for query "${queryOrPathParam}" (refined to "${refinedQuery}"). Found ${results.length} items.`, results: formattedResults, relevanceScore };
+        }
+        case 'FULL_FILE_CONTENT': {
+          const targetFile = path.resolve(repoPath, queryOrPathParam);
+          logger.info(`Requesting full content for file: "${targetFile}"`);
+          try {
+            const content = await fs.readFile(targetFile, 'utf8');
+            // Use processSnippet to potentially summarize if very large
+            const processedContent = await processSnippet(content, "Full file content request", queryOrPathParam, suggestionModelAvailable);
+            return { sessionId: session.id, filepath: queryOrPathParam, content: processedContent };
+          } catch (error) {
+            logger.error(`Failed to read file "${targetFile}": ${error instanceof Error ? error.message : String(error)}`);
+            return { sessionId: session.id, error: `Failed to read file: ${queryOrPathParam}. Ensure the path is correct relative to the repository root.` };
+          }
+        }
+        case 'DIRECTORY_LISTING': {
+          const targetDir = path.resolve(repoPath, queryOrPathParam);
+          logger.info(`Requesting directory listing for: "${targetDir}"`);
+          try {
+            const entries = await fs.readdir(targetDir, { withFileTypes: true });
+            const listing = entries.map(entry => `${entry.name}${entry.isDirectory() ? '/' : ''}`);
+            return { sessionId: session.id, directory: queryOrPathParam, listing: listing.slice(0, 100) }; // Limit listing size
+          } catch (error) {
+            logger.error(`Failed to list directory "${targetDir}": ${error instanceof Error ? error.message : String(error)}`);
+            return { sessionId: session.id, error: `Failed to list directory: ${queryOrPathParam}. Ensure the path is correct relative to the repository root.` };
+          }
+        }
+        default: // Should not happen due to earlier check
+          throw new Error(`Unsupported context_type: ${contextTypeParam}`);
+      }
+    }
     default:
       throw new Error(`Tool execution not implemented: ${tool}`);
   }
