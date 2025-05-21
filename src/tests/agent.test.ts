@@ -54,14 +54,19 @@ vi.mock('fs/promises', () => {
 // This alias is used to access original implementations when needed, bypassing the mock factory for direct tests.
 import * as ActualAgentModuleForOriginalTests from '../lib/agent'; 
 
-// Create spies that will be injected by the mock factory for runAgentLoop tests
-const parseToolCallsSpyForRunAgentLoop = vi.spyOn(ActualAgentModuleForOriginalTests, 'parseToolCalls');
-const executeToolCallSpyForRunAgentLoop = vi.spyOn(ActualAgentModuleForOriginalTests, 'executeToolCall');
+// DECLARE spies first. They will be initialized before the mock factory runs.
+let parseToolCallsSpyForRunAgentLoop: ReturnType<typeof vi.spyOn>;
+let executeToolCallSpyForRunAgentLoop: ReturnType<typeof vi.spyOn>;
 
 vi.mock('../lib/agent', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../lib/agent')>();
+  const originalModule = await importOriginal<typeof import('../lib/agent')>();
+  // INITIALIZE spies here, on the original module, before returning the mock definition.
+  // This ensures they exist when the factory is evaluated.
+  parseToolCallsSpyForRunAgentLoop = vi.spyOn(originalModule, 'parseToolCalls');
+  executeToolCallSpyForRunAgentLoop = vi.spyOn(originalModule, 'executeToolCall');
+  
   return {
-    ...original, // By default, use original implementations for most functions
+    ...originalModule, // By default, use original implementations for most functions
     // For tests of runAgentLoop, we want its calls to parseToolCalls and executeToolCall to be these spies.
     parseToolCalls: parseToolCallsSpyForRunAgentLoop,
     executeToolCall: executeToolCallSpyForRunAgentLoop,

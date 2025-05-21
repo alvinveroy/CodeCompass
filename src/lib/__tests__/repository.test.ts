@@ -205,12 +205,41 @@ describe('Repository Utilities', () => {
 
         const mockCommits = [
             { oid: 'commit2', commit: { message: 'Feat: new feature', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, tree: 'tree2_oid', parent: ['commit1_oid'] } },
-        setupInvalidRepoAccessDeniedMocks();
-        const result = await getRepositoryDiff(repoPath);
-        expect(result).toBe("No Git repository found");
+            { oid: 'commit1', commit: { message: 'Initial commit', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, tree: 'tree1_oid', parent: [] } },
+        ];
+        vi.mocked(git.log).mockResolvedValue(mockCommits as any);
+
+        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => {
+            if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as any;
+            if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any;
+            if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any;
+            return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as any;
+        });
+
+        vi.mocked(git.diffTrees).mockImplementation(async (args: { fs: any, dir: string, gitdir: string, ref1: string, ref2: string }) => {
+            if (args.ref1 === 'tree1_oid' && args.ref2 === 'tree2_oid') {
+                 return [['file.ts', 'modify', 'blob_before', 'blob_after', 'mode_before', 'mode_after']] as any;
+            }
+            return [] as any;
+        });
+
+        vi.mocked(git.walk).mockImplementation(async ({ fs: nodeFsAlias, dir, gitdir, trees, map }) => {
+            const treeOidToWalk = trees[0]._id;
+            if (treeOidToWalk === 'tree1_oid') {
+                 await map('initial.ts', [{ type: async () => 'blob', oid: async () => 'blob_oid_initial' }] as any);
+            }
+            return [];
+        });
+
+        const history = await getCommitHistoryWithChanges(repoPath, { count: 2 });
+        expect(history).toHaveLength(2);
+        expect(history[0].oid).toBe('commit2');
+        expect(history[0].changedFiles).toEqual([{ path: 'file.ts', type: 'modify' }]);
+        expect(history[1].oid).toBe('commit1');
+        expect(history[1].changedFiles).toEqual([{ path: 'initial.ts', type: 'add' }]);
     });
 
-    it('should return "No Git repository found" if HEAD cannot be resolved', async () => {
+    it('should handle errors from git.log', async () => {
         setupInvalidRepoNoHeadMocks();
         const result = await getRepositoryDiff(repoPath);
         expect(result).toBe("No Git repository found");

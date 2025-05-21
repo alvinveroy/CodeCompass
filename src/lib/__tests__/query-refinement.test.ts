@@ -22,16 +22,23 @@ vi.mock('../../utils/text-utils', () => ({
 // This alias is used to access original implementations when needed.
 import * as ActualQueryRefinementModuleForOriginalTests from '../query-refinement';
 
-// Create spies that will be injected by the mock factory.
-const refineQuerySpyForSearchWithRefinement = vi.spyOn(ActualQueryRefinementModuleForOriginalTests, 'refineQuery');
-const broadenQuerySpyForRefineQuery = vi.spyOn(ActualQueryRefinementModuleForOriginalTests, 'broadenQuery');
-const focusQueryBasedOnResultsSpyForRefineQuery = vi.spyOn(ActualQueryRefinementModuleForOriginalTests, 'focusQueryBasedOnResults');
-const tweakQuerySpyForRefineQuery = vi.spyOn(ActualQueryRefinementModuleForOriginalTests, 'tweakQuery');
+// DECLARE spies first.
+let refineQuerySpyForSearchWithRefinement: ReturnType<typeof vi.spyOn>;
+let broadenQuerySpyForRefineQuery: ReturnType<typeof vi.spyOn>;
+let focusQueryBasedOnResultsSpyForRefineQuery: ReturnType<typeof vi.spyOn>;
+let tweakQuerySpyForRefineQuery: ReturnType<typeof vi.spyOn>;
+
 
 vi.mock('../query-refinement', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../query-refinement')>();
+  const originalModule = await importOriginal<typeof import('../query-refinement')>();
+  // INITIALIZE spies here, on the original module.
+  refineQuerySpyForSearchWithRefinement = vi.spyOn(originalModule, 'refineQuery');
+  broadenQuerySpyForRefineQuery = vi.spyOn(originalModule, 'broadenQuery');
+  focusQueryBasedOnResultsSpyForRefineQuery = vi.spyOn(originalModule, 'focusQueryBasedOnResults');
+  tweakQuerySpyForRefineQuery = vi.spyOn(originalModule, 'tweakQuery');
+
   return {
-    ...original, // By default, use original implementations
+    ...originalModule, // By default, use original implementations
     // For tests of searchWithRefinement, its call to refineQuery should be this spy.
     refineQuery: refineQuerySpyForSearchWithRefinement,
     // For tests of refineQuery (original), its calls to helpers should be these spies.
