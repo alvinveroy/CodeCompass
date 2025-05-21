@@ -55,6 +55,27 @@ vi.mock('../lib/llm-provider');
 vi.mock('../lib/state');
 vi.mock('../lib/query-refinement');
 vi.mock('../lib/repository');
+
+// Modify the vi.mock factory for '../lib/agent':
+vi.mock('../lib/agent', async (importOriginal) => {
+  const originalModule = await importOriginal<typeof import('../lib/agent')>();
+  // Create new mocks for each test run if the factory is re-evaluated
+  const executeToolCallMock = vi.fn();
+  const parseToolCallsMock = vi.fn();
+  return {
+    // Explicitly list all exports from agent.ts
+    runAgentLoop: originalModule.runAgentLoop, // Ensure this is the original
+    executeToolCall: executeToolCallMock,    // This is our mock
+    parseToolCalls: parseToolCallsMock,      // This is our mock
+    createAgentState: originalModule.createAgentState, // Keep original
+    generateAgentSystemPrompt: originalModule.generateAgentSystemPrompt, // Keep original
+    toolRegistry: originalModule.toolRegistry, // Keep original
+    // Add any other exports from agent.ts, mapping them to originalModule.exportName
+    // For example, if agent.ts also exports 'getProcessedDiff' (though it's internal currently):
+    // getProcessedDiff: originalModule.getProcessedDiff, 
+  };
+});
+
 vi.mock('isomorphic-git');
 vi.mock('fs/promises', () => {
   const readFileMock = vi.fn();
@@ -434,17 +455,15 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
 
-    beforeEach(() => { // Added beforeEach for runAgentLoop describe block
-      // Reset mocks that are part of the ../lib/agent mock factory or spied upon
-      // Assuming executeToolCall and parseToolCalls are mocked via vi.mock factory for agent.ts
-      // If they are spied on an actual import, this is correct.
-      // If they are vi.fn() from a vi.mock factory, they are reset by vi.clearAllMocks() in the outer beforeEach.
-      // For clarity, explicitly reset them if they are indeed from a mock factory and used across tests.
-      // If executeToolCall and parseToolCalls are directly imported and then spied, this is fine.
-      // Based on the problem description, they should be mocked via the factory.
-      // So, vi.mocked(executeToolCall) and vi.mocked(parseToolCalls) will refer to the factory's mocks.
+    beforeEach(() => { 
+      // vi.clearAllMocks() in the top-level beforeEach should handle clearing call history.
+      // executeToolCall and parseToolCalls are now guaranteed to be the mocks from the factory.
       (executeToolCall as vi.Mock).mockReset();
       (parseToolCalls as vi.Mock).mockReset();
+
+      // Default implementations can be set here if common, or in each test.
+      (parseToolCalls as vi.Mock).mockReturnValue([]); 
+      (executeToolCall as vi.Mock).mockResolvedValue({ status: 'default mock success' });
     });
 
     it('should complete and return final response if agent does not call tools', async () => {
