@@ -68,9 +68,9 @@ The following prioritization aims to tackle foundational improvements first, bui
         *   [ ] **Consider:** Allow the agent to explicitly request "more detail" or "full content" for a summarized item if it deems it necessary.
 
 2.  **Task P2.2 (Formerly Task 5.1): Context-Aware Agent System Prompt:**
-    *   [ ] Modify `src/lib/agent.ts` (`generateAgentSystemPrompt` function):
-        *   [ ] Add instructions for the agent to self-assess the sufficiency of retrieved context relative to the query's scope.
-        *   [ ] Guide the agent on how to react to insufficient context (e.g., "If initial search results are sparse or low-relevance for a broad query, consider using `get_repository_context` with a broader query, or explicitly request a wider search using `request_broader_context` tool if available.").
+    *   [x] Modify `src/lib/agent.ts` (`generateAgentSystemPrompt` function):
+        *   [x] Add instructions for the agent to self-assess the sufficiency of retrieved context relative to the query's scope.
+        *   [x] Guide the agent on how to react to insufficient context (e.g., "If initial search results are sparse or low-relevance for a broad query, consider using `get_repository_context` with a broader query, or explicitly request a wider search using `request_broader_context` tool if available.").
 
 3.  **Task P2.3 (Advanced - Formerly Task 6.1): LLM-Powered Query Refinement:**
     *   [ ] Modify `src/lib/query-refinement.ts`:
