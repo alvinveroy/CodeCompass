@@ -158,3 +158,12 @@ function extractKeywords(text: string): string[] {
   // Return unique keywords
   return [...new Set(keywords)];
 }
+
+// Export internal functions for testing if needed
+export {
+  refineQuery,
+  broadenQuery,
+  focusQueryBasedOnResults,
+  tweakQuery,
+  extractKeywords
+};

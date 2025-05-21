@@ -533,3 +533,4 @@ class ConfigService {
 
 export const configService = ConfigService.getInstance();
 export const logger = configService.logger;
+export { ConfigService };
