@@ -380,6 +380,7 @@ describe('ConfigService', () => {
 
   // Test log directory creation fallback
   it('should fallback to local logs directory if user-specific one fails', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     // Specific fs setup for this test
     vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => {
         const pathStr = String(p);
@@ -400,17 +401,13 @@ describe('ConfigService', () => {
 
     const service = await createServiceInstance(); // This will trigger logger setup and dir creation attempts
     
-    const winstonMockedModule = await import('winston');
-    // Get the logger instance associated with *this* service instance.
-    // createLogger is cleared in beforeEach, then called once by new ConfigService().
-    const loggerInstance = vi.mocked(winstonMockedModule.createLogger).mock.results[0]?.value;
-
     expect(service.LOG_DIR).toBe(path.join(process.cwd(), 'logs')); // Check it fell back
-    expect(loggerInstance.warn).toHaveBeenCalledWith(
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining('Failed to create user-specific log directory: Permission denied for user log dir. Falling back to local logs dir.')
     );
     // Check that mkdirSync was called for the fallback directory
     expect(vi.mocked(fs.mkdirSync)).toHaveBeenCalledWith(path.join(process.cwd(), 'logs'), { recursive: true });
+    // consoleErrorSpy.mockRestore(); // Handled by vi.restoreAllMocks() in afterEach
   });
 
 });

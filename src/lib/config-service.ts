@@ -371,10 +371,10 @@ class ConfigService {
   }
 
   private initializeGlobalState(): void {
-    global.CURRENT_LLM_PROVIDER = this.LLM_PROVIDER;
-    global.CURRENT_SUGGESTION_PROVIDER = this.SUGGESTION_PROVIDER;
-    global.CURRENT_EMBEDDING_PROVIDER = this.EMBEDDING_PROVIDER;
-    global.CURRENT_SUGGESTION_MODEL = this.SUGGESTION_MODEL;
+    global.CURRENT_LLM_PROVIDER = this._llmProvider;
+    global.CURRENT_SUGGESTION_PROVIDER = this._suggestionProvider;
+    global.CURRENT_EMBEDDING_PROVIDER = this._embeddingProvider;
+    global.CURRENT_SUGGESTION_MODEL = this._suggestionModel;
   }
 
   // Getters use global first (as they might be changed dynamically), then internal state.

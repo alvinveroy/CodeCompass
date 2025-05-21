@@ -37,7 +37,10 @@ vi.mock('fs', async (importOriginal) => { // Mock standard 'fs' for isomorphic-g
         },
     };
 });
-vi.mock('child_process');
+vi.mock('child_process', () => ({
+  exec: vi.fn(),
+  // Add other exports like spawn if they were used and need mocking
+}));
 vi.mock('../config-service', () => ({
   configService: {
     COLLECTION_NAME: 'test_collection',

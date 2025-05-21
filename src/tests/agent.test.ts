@@ -449,7 +449,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await runAgentLoop('simple query', 'session1', mockQdrantClient, repoPath, true);
+      const result = await agentModule.runAgentLoop('simple query', 'session1', mockQdrantClient, repoPath, true);
 
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2); 
       expect(result).toContain('Final agent response, no tools needed.');
@@ -484,7 +484,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
+      const result = await agentModule.runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); 
       expect(execSpy).toHaveBeenCalledTimes(1);
@@ -523,7 +523,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await runAgentLoop('extend loop query', 'session3', mockQdrantClient, repoPath, true);
+      const result = await agentModule.runAgentLoop('extend loop query', 'session3', mockQdrantClient, repoPath, true);
 
       expect(mockedLoggerFromAgentPerspective.info).toHaveBeenCalledWith(
         'Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.'
@@ -568,7 +568,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       // If it tries to extend at step 2 (index 2), currentMaxSteps is already 3.
       // The warning "Agent loop reached absolute maximum steps (3) and will terminate." will be logged *before* step 3 (index 3) would run.
 
-      // agentModule is already in scope from the describe block's beforeAll or beforeEach
+      const agentModule = await import('../lib/agent'); 
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
@@ -644,9 +644,9 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
+      const result = await agentModule.runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
 
-      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith("Agent (step 1): Reasoning timed out or failed: Simulated Agent reasoning timed out by test");
+      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out");
       expect(executeToolCallSpy).toHaveBeenCalledWith(
           expect.objectContaining({ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }),
           mockQdrantClient, repoPath, true
@@ -681,7 +681,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
+      const result = await agentModule.runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
 
       // The error logged by agent.ts is the raw error message string
       expect(mockedLoggerFromAgentPerspective.error).toHaveBeenCalledWith(
