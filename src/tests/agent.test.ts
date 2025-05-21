@@ -78,7 +78,7 @@ import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQu
 import { searchWithRefinement } from '../lib/query-refinement';
 // AFTER importing agent.ts (implicitly via other SUT imports), import the logger from the mocked module
 // This logger will be the one created by the vi.mock factory.
-import { logger as mockedLoggerFromAgentPerspective } from '../lib/config-service';
+import { logger as mockedLoggerFromAgentPerspective, configService as agentTestConfig } from '../lib/config-service'; // Import agentTestConfig
 import { validateGitRepository, getRepositoryDiff } from '../lib/repository';
 import git from 'isomorphic-git';
 import { readFile, readdir } from 'fs/promises'; // Import mocked versions
@@ -332,9 +332,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
             mockQdrantClient, 
             'original query', 
             ['fileA.ts', 'fileB.ts'], // Expect the files from git.listFiles
-            agentMockConfig.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS, // This is 10
-            undefined, // maxRefinements
-            undefined  // relevanceThreshold
+            agentMockConfig.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS // This is 10
+            // No 5th or 6th argument expected here as agent.ts calls searchWithRefinement with 4 arguments
           );
         });
       });
@@ -620,14 +619,14 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
     it('should handle agent reasoning timeout by using fallback tool call', async () => {
       const agentModule = await import('../lib/agent'); // Import agentModule for spy
-      const configForTimeout = (await import('../lib/config-service')).configService; // Get mocked config for timeout value
+      // Use agentTestConfig imported at the top of the file for AGENT_QUERY_TIMEOUT
 
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
           // Simulate timeout for the main reasoning call
           .mockImplementationOnce(async () => { // For the reasoning step that should time out
-            await new Promise(resolve => setTimeout(resolve, configForTimeout.AGENT_QUERY_TIMEOUT + 200)); // Wait longer than timeout
+            await new Promise(resolve => setTimeout(resolve, agentTestConfig.AGENT_QUERY_TIMEOUT + 200)); // Wait longer than timeout
             throw new Error("Simulated Agent reasoning timed out by test"); // Then reject
           })
           .mockResolvedValueOnce("Final response after fallback."); // LLM call after fallback tool
@@ -662,10 +661,12 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       );
       expect(result).toContain("Final response after fallback.");
       expect(addSuggestion).toHaveBeenCalledWith('session5', 'reasoning timeout query', expect.stringContaining('Final response after fallback.'));
-    }, configForTimeout.AGENT_QUERY_TIMEOUT + 10000); // Increased Vitest test timeout slightly more
+    }, agentTestConfig.AGENT_QUERY_TIMEOUT + 10000); // Increased Vitest test timeout slightly more
 
     it('should handle tool execution timeout by adding error to prompt', async () => {
       const agentModule = await import('../lib/agent'); // Ensure agentModule is in scope for spyOn
+      // Agent's internal tool execution timeout is hardcoded to 90000ms.
+      // Vitest test timeout (last arg to 'it') should be > 90000ms.
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification

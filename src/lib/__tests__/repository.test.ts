@@ -110,8 +110,9 @@ describe('Repository Utilities', () => {
     });
 
     it('should return "No previous commits to compare" if less than 2 commits', async () => {
+      // setupValidRepoAndCommitsMocks(); // Already called by beforeEach of describe('getRepositoryDiff')
       vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }] as any);
-      // Clear logger.info calls from validateGitRepository if it runs first
+      // Clear logger.info calls that might have occurred during validateGitRepository
       logger.info.mockClear(); 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toBe("No previous commits to compare");
@@ -121,21 +122,24 @@ describe('Repository Utilities', () => {
     it('should call git diff command and return stdout', async () => {
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        if (callback) {
-          if (command === 'git diff commit1_oid commit2_oid') {
-            process.nextTick(() => callback(null, 'diff_content_stdout', ''));
-          } else {
-            process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
-          }
+        // Ensure callback is always called for promisify(exec) to work
+        if (command === 'git diff commit1_oid commit2_oid') {
+          if (callback) process.nextTick(() => callback(null, 'diff_content_stdout', ''));
+        } else {
+          if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
         }
-        // exec returns a ChildProcess, ensure the mock is sufficient for promisify(exec)
+        // exec returns a ChildProcess, this part is less critical if callback is handled for promisify
         return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any;
       });
       const result = await getRepositoryDiff(repoPath);
+      // Check if exec was called (promisify might not pass the callback if it uses event listeners)
+      // For now, let's assume the promisify will make exec be called without a direct callback in some cases.
+      // The key is that execAsync should resolve.
       expect(vi.mocked(exec)).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath }),
-        expect.any(Function)
+        expect.any(Function) // This checks if the callback form was used by promisify, might not always be true.
+                               // More robust: check command and options, then result.
       );
       expect(result).toBe('diff_content_stdout');
     });
@@ -144,12 +148,10 @@ describe('Repository Utilities', () => {
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        if (callback) {
-          if (command === 'git diff commit1_oid commit2_oid') {
-            process.nextTick(() => callback(null, longDiff, ''));
-          } else {
-            process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
-          }
+        if (command === 'git diff commit1_oid commit2_oid') {
+          if (callback) process.nextTick(() => callback(null, longDiff, ''));
+        } else {
+          if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
         }
         return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any;
       });
@@ -165,13 +167,10 @@ describe('Repository Utilities', () => {
 
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
         const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        if (callback) {
-          if (command === 'git diff commit1_oid commit2_oid') {
-            process.nextTick(() => callback(mockError, '', 'error_stderr'));
-          } else {
-             // Fallback for unexpected commands, though the test focuses on the diff command
-            process.nextTick(() => callback(new Error(`Unexpected exec command in error test: ${command}`) as ExecException, '', ''));
-          }
+        if (command === 'git diff commit1_oid commit2_oid') {
+          if (callback) process.nextTick(() => callback(mockError, '', 'error_stderr'));
+        } else {
+          if (callback) process.nextTick(() => callback(new Error(`Unexpected exec command in error test: ${command}`) as ExecException, '', ''));
         }
         // Simulate a ChildProcess that emits 'close' with an error code
         return { on: vi.fn((event, cb) => { if (event === 'close') cb(mockError.code || 1); }) } as any;
@@ -189,7 +188,7 @@ describe('Repository Utilities', () => {
   
   // ... getCommitHistoryWithChanges tests ...
 
-  afterEach(() => { // Ensure this is at the top level of the describe block for Repository Utilities
+  afterEach(() => { 
     vi.restoreAllMocks();
   });
 });

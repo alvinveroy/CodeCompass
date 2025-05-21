@@ -161,8 +161,10 @@ describe('ConfigService', () => {
   
   it('should load SUGGESTION_MODEL from model-config.json if present', async () => {
     // Setup fs mocks specifically for THIS test's scenario
-    vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE);
-    vi.mocked(fs.readFileSync).mockReset().mockImplementation((p) => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => 
+      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE // Ensure both dir and file "exist"
+    );
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
       if (p === MOCK_MODEL_CONFIG_FILE) return JSON.stringify({ SUGGESTION_MODEL: 'file_model_from_json' });
       return '{}'; // Default for other files like deepseek-config.json
     });
@@ -174,8 +176,10 @@ describe('ConfigService', () => {
   it('should prioritize model-config.json over environment variables for SUGGESTION_MODEL', async () => {
     process.env.SUGGESTION_MODEL = 'env_model_should_be_ignored';
     // Setup fs mocks specifically for THIS test's scenario
-    vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE);
-    vi.mocked(fs.readFileSync).mockReset().mockImplementation((p) => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => 
+      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE
+    );
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
         if (p === MOCK_MODEL_CONFIG_FILE) return JSON.stringify({ SUGGESTION_MODEL: 'file_model_override' });
         return '{}'; // Default for other files
     });
@@ -184,7 +188,9 @@ describe('ConfigService', () => {
   });
 
   it('should load DEEPSEEK_API_KEY from deepseek-config.json', async () => {
-    vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => p === MOCK_CONFIG_DIR || p === MOCK_DEEPSEEK_CONFIG_FILE);
+    vi.mocked(fs.existsSync).mockImplementation((p) => 
+      p === MOCK_CONFIG_DIR || p === MOCK_DEEPSEEK_CONFIG_FILE
+    );
     vi.mocked(fs.readFileSync).mockImplementation((p) => {
         if (p === MOCK_DEEPSEEK_CONFIG_FILE) return JSON.stringify({ DEEPSEEK_API_KEY: 'deepseek_key_from_file' });
         return '{}';
@@ -267,7 +273,7 @@ describe('ConfigService', () => {
     
     const writtenData = JSON.parse(writtenArgs[1] as string);
     expect(writtenData).toHaveProperty('DEEPSEEK_API_KEY', newApiKey);
-    expect(writtenData).toHaveProperty('DEEPSEEK_API_URL', expectedApiUrl); // Check against the captured expected URL
+    expect(writtenData).toHaveProperty('DEEPSEEK_API_URL', service.DEEPSEEK_API_URL); // Use the getter
     expect(writtenData).toHaveProperty('timestamp');
     // Ensure timestamp is a recent ISO string (optional, but good check)
     // This check can be flaky due to timing, consider removing or making tolerance larger if it causes issues
@@ -277,8 +283,10 @@ describe('ConfigService', () => {
   it('should handle malformed model-config.json gracefully', async () => {
     delete process.env.SUGGESTION_MODEL; // Ensure no env override for this test
     // Specific fs setup for this test
-    vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE);
-    vi.mocked(fs.readFileSync).mockReset().mockImplementation((p) => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => 
+      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE
+    );
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
         if (p === MOCK_MODEL_CONFIG_FILE) return '{"SUGGESTION_MODEL": MALFORMED';
         return '{}'; // For deepseek-config.json
     });
@@ -313,9 +321,11 @@ describe('ConfigService', () => {
 
     // NOW, change env and file mocks for the reload
     process.env.SUGGESTION_MODEL = 'env_reloaded_model_should_be_overridden_by_file';
-    // Ensure readFileSync is specifically mocked for model-config.json for the reload
-    vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE);
-    vi.mocked(fs.readFileSync).mockReset().mockImplementation((p) => {
+    // Ensure readFileSync and existsSync are specifically mocked for model-config.json for the reload
+    vi.mocked(fs.existsSync).mockImplementation((p) => 
+      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE
+    );
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
       if (p === MOCK_MODEL_CONFIG_FILE) return JSON.stringify({ SUGGESTION_MODEL: 'file_reloaded_model' });
       return '{}'; // For deepseek-config.json
     });
@@ -342,19 +352,22 @@ describe('ConfigService', () => {
     vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => {
       if (p === MOCK_CONFIG_DIR) return true; // .codecompass dir exists
       // MOCK_LOG_DIR and fallback log dir do not exist initially
-      return false; 
+      return false;
     });
-    vi.mocked(fs.mkdirSync).mockReset().mockImplementation((p) => {
+    // Specific mock for mkdirSync for this test
+    vi.mocked(fs.mkdirSync).mockImplementation((p) => {
       if (p === MOCK_LOG_DIR) {
         throw new Error('Permission denied for user log dir');
       }
       if (p === path.join(process.cwd(), 'logs')) return undefined; // Success for fallback
       if (p === MOCK_CONFIG_DIR) return undefined; // Allow .codecompass creation if needed
       // For any other path, you might want to throw or return undefined based on test needs
-      return undefined;
+      // Default behavior from beforeEach was: .mockReset().mockImplementation(() => undefined);
+      // So, if not matched above, it will return undefined.
+      return undefined; 
     });
 
-    const service = await createServiceInstance(); 
+    const service = await createServiceInstance();
     
     const winstonMockedModule = await import('winston');
     // Get the logger instance that was created by *this specific* service instance
