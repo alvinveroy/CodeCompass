@@ -562,7 +562,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('Final response after hitting absolute max.'); // Final response generation
 
       // Spies are reset in afterEach, but we need to set new return values for parseToolCalls
-      const agentModule = await import('../lib/agent'); // ensure module is imported for spyOn
+      // const agentModule = await import('../lib/agent'); // ensure module is imported for spyOn - REMOVED as agentModule should be in scope
       vi.spyOn(agentModule, 'parseToolCalls')
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'step 1 query' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'extend from step 2' } }])
@@ -581,7 +581,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       mockedLoggerFromAgentPerspective.warn.mockClear(); // Clear before runAgentLoop
 
-      const result = await runAgentLoop('absolute max query', 'session4', mockQdrantClient, repoPath, true);
+      const result = await agentModule.runAgentLoop('absolute max query', 'session4', mockQdrantClient, repoPath, true); // Use agentModule
 
       expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(expect.stringContaining('Agent requested more processing steps, but already at or beyond absoluteMaxSteps.'));
       expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(expect.stringContaining('Agent loop reached absolute maximum steps (3) and will terminate.'));

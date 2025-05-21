@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs'; // Use actual fs for mocking its methods
 import path from 'path';
-import winston from 'winston';
+// Import specific parts of winston that the test needs to interact with directly
+import { transports as winstonTransports, createLogger as winstonCreateLogger } from 'winston'; // Import named exports
 
 // Import the class directly for testing.
 import { ConfigService as ActualConfigService } from '../config-service';
@@ -50,20 +51,18 @@ vi.mock('winston', () => {
         json: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
         // Add any other winston.format properties if ConfigService starts using them
       };
-
-      return {
-        createLogger: vi.fn().mockReturnValue(MOCK_LOGGER_INSTANCE), // Use the instance defined in this factory
+      
+      const mockedWinstonParts = {
+        createLogger: vi.fn().mockReturnValue(MOCK_LOGGER_INSTANCE),
         transports: {
-          File: vi.fn().mockImplementation(() => ({
-            on: vi.fn(),
-            log: vi.fn(),
-          })),
-          Stream: vi.fn().mockImplementation(() => ({
-            on: vi.fn(),
-            log: vi.fn(),
-          })),
+          File: vi.fn().mockImplementation(() => ({ on: vi.fn(), log: vi.fn() })),
+          Stream: vi.fn().mockImplementation(() => ({ on: vi.fn(), log: vi.fn() })),
         },
-        format: mockFormat, // USE the explicitly mocked format object
+        format: mockFormat,
+      };
+      return {
+        ...mockedWinstonParts, // For named imports like `import { transports } from 'winston'`
+        default: mockedWinstonParts, // For `import winston from 'winston'` in ConfigService
       };
     });
 
@@ -148,15 +147,16 @@ describe('ConfigService', () => {
     vi.mocked(fsMock.readFileSync).mockReturnValue('{}');
 
     // Reset winston transport mocks if necessary
-    vi.mocked(winston.transports.File).mockClear();
-    vi.mocked(winston.transports.Stream).mockClear();
+    // Use the imported named 'transports' and 'createLogger'
+    vi.mocked(winstonTransports.File).mockClear();
+    vi.mocked(winstonTransports.Stream).mockClear();
     
     // To clear/reset the logger for each test:
     // 1. Import the mocked winston.
     // 2. Get the instance that createLogger returns.
     // 3. Clear the methods on that instance.
-    const winstonMocked = await import('winston'); // This gets the mocked module
-    const loggerInstanceFromMock = vi.mocked(winstonMocked.createLogger).getMockImplementation()?.(); // Execute the mock fn to get the returned MOCK_LOGGER_INSTANCE
+    // const winstonMocked = await import('winston'); // This gets the mocked module - no longer needed with named import
+    const loggerInstanceFromMock = vi.mocked(winstonCreateLogger).getMockImplementation()?.(); // Execute the mock fn to get the returned MOCK_LOGGER_INSTANCE
 
     if (loggerInstanceFromMock) {
       Object.values(loggerInstanceFromMock).forEach(mockFn => {
@@ -166,11 +166,11 @@ describe('ConfigService', () => {
       });
     }
     // Also clear calls to createLogger itself
-    vi.mocked(winstonMocked.createLogger).mockClear();
+    vi.mocked(winstonCreateLogger).mockClear();
     // Ensure it's still set to return the (now internally cleared) MOCK_LOGGER_INSTANCE
     // This is important if createServiceInstance() is called multiple times or if state leaks.
     if (loggerInstanceFromMock) {
-        vi.mocked(winstonMocked.createLogger).mockReturnValue(loggerInstanceFromMock);
+        vi.mocked(winstonCreateLogger).mockReturnValue(loggerInstanceFromMock);
     }
   });
 
