@@ -726,7 +726,8 @@ Structure your analysis with these sections:
             qdrantClient,
             queryOrPathParam, // This is the original query
             files,
-            moreResultsLimit // Pass the increased limit
+            moreResultsLimit // Pass the increased limit as the customLimit argument
+            // maxRefinements and relevanceThreshold will use their default values
           );
           addQuery(session.id, queryOrPathParam, results, relevanceScore); // Log this specific request
 

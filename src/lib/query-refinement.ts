@@ -11,6 +11,7 @@ export async function searchWithRefinement(
   client: QdrantClient,
   query: string,
   files: string[] = [],
+  customLimit?: number,
   maxRefinements = 2,
   relevanceThreshold = 0.7
 ): Promise<{ results: DetailedQdrantSearchResult[], refinedQuery: string, relevanceScore: number }> {
@@ -25,10 +26,13 @@ export async function searchWithRefinement(
     // Generate embedding for the current query
     const embedding = await generateEmbedding(currentQuery);
 
+    // Determine the search limit
+    const searchLimit = (customLimit && customLimit > 0) ? customLimit : configService.QDRANT_SEARCH_LIMIT_DEFAULT;
+
     // Search Qdrant
     const searchResults = await client.search(configService.COLLECTION_NAME, {
       vector: embedding,
-      limit: configService.QDRANT_SEARCH_LIMIT_DEFAULT, // Use configured limit
+      limit: searchLimit, // Use the determined searchLimit
       filter: files.length ? { must: [{ key: "filepath", match: { any: files } }] } : undefined,
     });
 
