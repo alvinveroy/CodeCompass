@@ -209,8 +209,16 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
 const execAsync = promisify(exec); // Promisify exec for async/await usage
 const MAX_DIFF_LENGTH = 10000; // Max characters for diff output
 
-export async function getRepositoryDiff(repoPath: string): Promise<string> {
-  const isGitRepo = await validateGitRepository(repoPath);
+export async function getRepositoryDiff(
+  repoPath: string,
+  // Add an optional validator parameter for testing
+  validatorFunc?: (p: string) => Promise<boolean>
+): Promise<string> {
+  // Use the provided validator if available, otherwise default to the module's own validateGitRepository
+  const isGitRepo = validatorFunc
+    ? await validatorFunc(repoPath)
+    : await validateGitRepository(repoPath);
+
   if (!isGitRepo) {
     logger.warn(`Cannot get repository diff: ${repoPath} is not a valid Git repository`);
     return "No Git repository found";
