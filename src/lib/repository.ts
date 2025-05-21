@@ -328,18 +328,55 @@ export async function getCommitHistoryWithChanges(
           oid: parentOid,
         });
 
-        const diffResult = await git.diffTrees({
+        // Manual diff logic using git.walk
+        // For git.TREE, we pass the tree OID as the 'ref' argument.
+        // This relies on isomorphic-git's TREE walker factory being able to resolve a tree OID passed as 'ref'.
+        // If this specific usage is problematic, an alternative would be to read the tree objects
+        // and then use their entries, but `walk` with `TREE` walkers is idiomatic for diff-like operations.
+        await git.walk({
           fs: nodeFs,
           dir: repoPath,
           gitdir,
-          ref1: parentCommitData.commit.tree, // Parent's tree OID
-          ref2: commitData.commit.tree,      // Current commit's tree OID
+          trees: [git.TREE({ ref: parentCommitData.commit.tree }), git.TREE({ ref: commitData.commit.tree })],
+          map: async function(filepath, entries) {
+            if (filepath === '.') return null; // Skip root
+            const [entry1, entry2] = entries; // entry from parent tree, entry from current tree
+
+            const type1 = entry1 ? await entry1.type() : null;
+            const oid1 = entry1 ? await entry1.oid() : null;
+            // const mode1 = entry1 ? await entry1.mode() : null; // mode1 not used in current logic
+
+            const type2 = entry2 ? await entry2.type() : null;
+            const oid2 = entry2 ? await entry2.oid() : null;
+            // const mode2 = entry2 ? await entry2.mode() : null; // mode2 not used in current logic
+
+            if (type1 === 'blob' || type2 === 'blob') { // Only consider file changes
+              if (!entry1 && entry2) { // File added
+                changedFiles.push({ path: filepath, type: 'add' });
+              } else if (entry1 && !entry2) { // File deleted
+                changedFiles.push({ path: filepath, type: 'delete' });
+              } else if (entry1 && entry2) { // File potentially modified or typechanged
+                if (oid1 !== oid2) {
+                  changedFiles.push({ path: filepath, type: 'modify' });
+                } else {
+                  // OIDs are the same. Could be a mode change or typechange if types differ.
+                  // For simplicity, if OIDs are same, we consider it 'equal' for content.
+                  // `git diffTrees` might report 'typechange' if modes imply different types (e.g. blob vs symlink)
+                  // but here we primarily focus on content changes (OID difference).
+                  // If type1 and type2 (both blobs) differ in mode, it's a mode change.
+                  // If type1 is blob and type2 is symlink (or vice-versa) with same path, it's a typechange.
+                  // The current logic only pushes 'modify' if OIDs differ.
+                  // To capture typechange more explicitly:
+                  if (type1 !== type2) {
+                     changedFiles.push({ path: filepath, type: 'typechange' });
+                  }
+                  // Note: Mode-only changes are not captured by this logic if OIDs are identical.
+                }
+              }
+            }
+            return null;
+          }
         });
-        // diffResult is an array of [filepath, type, before-oid, after-oid, before-mode, after-mode]
-        changedFiles = diffResult.map(d => ({
-          path: d[0],
-          type: d[1] as CommitChange['type'],
-        }));
       } else {
         // Initial commit, list all files as 'add'
         await git.walk({
