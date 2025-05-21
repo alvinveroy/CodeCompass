@@ -12,10 +12,7 @@ import { QdrantClient } from '@qdrant/js-client-rest'; // Ensure QdrantClient is
 // vi.mock('isomorphic-git'); // Already present from user
 // vi.mock('fs/promises'); // Already present from user
 
-// Import ALL functions from agent.ts (these are the originals)
-import * as agent from '../lib/agent';
-    
-// Mock dependencies used by agent.ts
+// Mock external dependencies FIRST
 vi.mock('../lib/config-service', () => {
   const loggerInstance = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
   return {
@@ -42,8 +39,8 @@ vi.mock('../lib/config-service', () => {
 });
 vi.mock('../lib/llm-provider');
 vi.mock('../lib/state');
-vi.mock('../lib/query-refinement'); 
-vi.mock('../lib/repository');     
+vi.mock('../lib/query-refinement');
+vi.mock('../lib/repository');
 vi.mock('isomorphic-git');
 vi.mock('fs/promises', () => { // Ensure this mock is complete for fs/promises
   const readFileMock = vi.fn();
@@ -63,15 +60,27 @@ vi.mock('fs/promises', () => { // Ensure this mock is complete for fs/promises
   };
 });
 
+// THEN mock the SUT module itself, creating mocks INSIDE the factory
+vi.mock('../lib/agent', async (importOriginal) => {
+  const originalModule = await importOriginal<typeof import('../lib/agent')>();
+  return {
+    ...originalModule, // Originals for SUTs like runAgentLoop
+    parseToolCalls: vi.fn(),    // Factory-created mock
+    executeToolCall: vi.fn(),   // Factory-created mock
+  };
+});
 
+// THEN import from the SUT module and other modules
+import { runAgentLoop, parseToolCalls, executeToolCall, createAgentState, generateAgentSystemPrompt, toolRegistry } from '../lib/agent';
+import * as actualAgentFunctions from '../lib/agent'; // For testing originals
 // Import mocked dependencies
 import { getLLMProvider } from '../lib/llm-provider';
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries } from '../lib/state';
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from '../lib/state';
 import { searchWithRefinement } from '../lib/query-refinement';
-import { logger as mockedLoggerFromAgentPerspective, configService as agentTestConfig } from '../lib/config-service'; 
-import { validateGitRepository, getRepositoryDiff } from '../lib/repository';
+import { logger as mockedLoggerFromAgentPerspective, configService as agentTestConfig } from '../lib/config-service';
+import { validateGitRepository, getRepositoryDiff, getCommitHistoryWithChanges } from '../lib/repository';
 import git from 'isomorphic-git';
-import { readFile, readdir } from 'fs/promises'; 
+import { readFile, readdir, stat, access } from 'fs/promises'; // Ensure all used fs/promises are here
 
 const mockLLMProviderInstance = {
   generateText: vi.fn(),
@@ -84,15 +93,15 @@ const mockQdrantClientInstance = {
 
 
 describe('Agent', () => {
-  let parseToolCallsSpy: vi.SpyInstance<[string], { tool: string; parameters: unknown; }[]>;
-  let executeToolCallSpy: vi.SpyInstance<Parameters<typeof agent.executeToolCall>, ReturnType<typeof agent.executeToolCall>>;
+  // let parseToolCallsSpy: vi.SpyInstance<[string], { tool: string; parameters: unknown; }[]>; // Removed
+  // let executeToolCallSpy: vi.SpyInstance<Parameters<typeof agent.executeToolCall>, ReturnType<typeof agent.executeToolCall>>; // Removed
 
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // Spy on functions within the imported agent module object
-    parseToolCallsSpy = vi.spyOn(agent, 'parseToolCalls').mockReturnValue([]); // Default mock
-    executeToolCallSpy = vi.spyOn(agent, 'executeToolCall').mockResolvedValue({ status: 'default mock success' }); // Default mock
+    // parseToolCalls and executeToolCall are the mocks from the factory
+    (parseToolCalls as vi.Mock).mockReset().mockReturnValue([]);
+    (executeToolCall as vi.Mock).mockReset().mockResolvedValue({ status: 'default mock success' });
     
     (getLLMProvider as vi.Mock).mockResolvedValue(mockLLMProviderInstance);
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
@@ -118,21 +127,20 @@ describe('Agent', () => {
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  describe('parseToolCalls', () => { // Testing original agent.parseToolCalls
+  describe('parseToolCalls (original)', () => {
     it('should parse valid tool calls', () => {
       const output = `TOOL_CALL: {"tool":"search_code","parameters":{"query":"authentication"}}`;
-      // No need for vi.importActual here, agent.parseToolCalls is the original
-      const result = agent.parseToolCalls(output);
+      const result = actualAgentFunctions.parseToolCalls(output);
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ tool: 'search_code', parameters: { query: 'authentication' } });
     });
     // ... other tests for agent.parseToolCalls ...
   });
   
-  describe('executeToolCall', () => { // Testing original agent.executeToolCall
+  describe('executeToolCall (original)', () => {
     const repoPath = '/test/repo'; // Define repoPath for these tests
     it('should throw if tool requires model and model is unavailable', async () => {
-      await expect(agent.executeToolCall(
+      await expect(actualAgentFunctions.executeToolCall(
         { tool: 'generate_suggestion', parameters: { query: 'test' } },
         mockQdrantClientInstance, repoPath, false // suggestionModelAvailable = false
       )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available');
@@ -156,22 +164,21 @@ describe('Agent', () => {
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // Step 1 reasoning
       
-      // runAgentLoop will call agent.parseToolCalls and agent.executeToolCall,
-      // which are now spied upon by parseToolCallsSpy and executeToolCallSpy.
-      parseToolCallsSpy
+      // runAgentLoop will call the mocked parseToolCalls and executeToolCall
+      (parseToolCalls as vi.Mock)
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
         .mockReturnValueOnce([]);  // For the second reasoning step (should return no tools)
       
-      executeToolCallSpy.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      (executeToolCall as vi.Mock).mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 
       // After tool execution, LLM generates final response (no more tool calls)
       // This is the third call to generateText in this test's flow.
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.');
       
-      await agent.runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
+      await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
       
-      expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
-      expect(executeToolCallSpy).toHaveBeenCalledWith(
+      expect(executeToolCall).toHaveBeenCalledTimes(1);
+      expect(executeToolCall).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
@@ -181,17 +188,17 @@ describe('Agent', () => {
     // ... other runAgentLoop tests ...
   });
   
-  describe('createAgentState', () => { // Test the original agent.createAgentState
+  describe('createAgentState (original)', () => {
     it('should create a new agent state with the correct structure', () => {
-      const result = agent.createAgentState('test_session', 'Find auth code'); // Use actual
+      const result = actualAgentFunctions.createAgentState('test_session', 'Find auth code');
       expect(result).toEqual({ sessionId: 'test_session', query: 'Find auth code', steps: [], context: [], isComplete: false });
     });
   });
 
-  describe('generateAgentSystemPrompt', () => { // Test the original agent.generateAgentSystemPrompt
+  describe('generateAgentSystemPrompt (original)', () => {
     it('should include descriptions of all available tools', async () => {
-      const prompt = agent.generateAgentSystemPrompt(agent.toolRegistry); // Use actual
-      for (const tool of agent.toolRegistry) { // Use actual
+      const prompt = actualAgentFunctions.generateAgentSystemPrompt(actualAgentFunctions.toolRegistry);
+      for (const tool of actualAgentFunctions.toolRegistry) {
         expect(prompt).toContain(`Tool: ${tool.name}`);
       }
     });

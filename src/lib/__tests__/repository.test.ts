@@ -1,27 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { type ExecException } from 'child_process'; // Keep type import
-import * as cp from 'child_process'; // Import namespace to spy on exec
-import { promises as fsPromises } from 'fs';
-import git from 'isomorphic-git';
-import path from 'path';
-// import nodeFs from 'fs'; // Not needed if fsPromises covers fs needs for git
+import { type ExecException } from 'child_process'; // For type annotation
+// ... other imports for SUT, fsPromises, git, path, configService, logger ...
 
-// Import SUT and other dependencies
-import { getRepositoryDiff } from '../repository';
-import { logger, configService } from '../config-service'; // Import configService as well
-// ... other necessary imports ...
-// Import functions to test (ensure all are imported if their tests are present)
-import {
-    validateGitRepository,
-    indexRepository,
-    // getRepositoryDiff, // Already imported
-    getCommitHistoryWithChanges
-} from '../repository';
-import { QdrantClient } from '@qdrant/js-client-rest'; // If used by other tests in this file
+// 1. Mock 'child_process' and specifically its 'exec' export
+const MOCKED_CP_EXEC_FN = vi.fn(); // This is the vi.fn() we will control
+vi.mock('child_process', async (importOriginal) => {
+  const actualCp = await importOriginal<typeof import('child_process')>();
+  return {
+    ...actualCp, // Keep other child_process exports (like spawn, fork, etc.)
+    exec: MOCKED_CP_EXEC_FN, // Replace 'exec' with our mock function
+  };
+});
 
-// Mock dependencies of repository.ts that are not part of the SUT itself
+// REMOVE any vi.mock('util', ...) related to promisify.
+// The SUT will import the original 'promisify' from 'util' and apply it to our MOCKED_CP_EXEC_FN.
+
+// Mock other external dependencies
 vi.mock('isomorphic-git', () => ({
-  default: { 
+  default: {
     resolveRef: vi.fn(),
     listFiles: vi.fn(),
     log: vi.fn(),
@@ -31,16 +27,12 @@ vi.mock('isomorphic-git', () => ({
     TREE: vi.fn((args: any) => ({ _id: args?.oid || 'mock_tree_id_default', ...args })),
   }
 }));
-vi.mock('fs/promises', () => ({ 
-  readFile: vi.fn(), 
-  readdir: vi.fn(), 
-  access: vi.fn(), 
-  stat: vi.fn() 
+vi.mock('fs/promises', () => ({
+  readFile: vi.fn(),
+  readdir: vi.fn(),
+  access: vi.fn(),
+  stat: vi.fn()
 }));
-// config-service is complex, ensure its mock is comprehensive or use its actual instance carefully
-// For repository tests, we mostly care that it provides COLLECTION_NAME.
-// The existing mock for config-service in other files might be suitable if adapted.
-// For now, assuming the import from '../config-service' gets a working logger and configService.COLLECTION_NAME.
 vi.mock('../config-service', () => { // Re-add the mock for config-service if it was removed
     const loggerInstance = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
     return {
@@ -56,8 +48,17 @@ vi.mock('../config-service', () => { // Re-add the mock for config-service if it
 });
 vi.mock('../ollama'); // If generateEmbedding is used by repository.ts (it's not directly)
 
+// Import SUT and other necessary modules AFTER all vi.mock calls
+import { getRepositoryDiff, validateGitRepository, getCommitHistoryWithChanges, indexRepository } from '../repository';
+import { logger, configService } from '../config-service'; // Import configService as well
+import { promises as fsPromises } from 'fs'; // For vi.mocked(fsPromises.access)
+import git from 'isomorphic-git'; // For vi.mocked(git.log)
+import path from 'path';
+import { QdrantClient } from '@qdrant/js-client-rest'; // If used by other tests in this file
+
+
 describe('Repository Utilities', () => {
-  let execSpy: vi.SpyInstance;
+  // let execSpy: vi.SpyInstance; // Removed
   const repoPath = '/test/diff/repo'; // Define repoPath here for wider scope if needed
   const setupValidRepoAndCommitsMocks = () => {
       vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
@@ -69,17 +70,21 @@ describe('Repository Utilities', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    // Spy on child_process.exec for each test
-    execSpy = vi.spyOn(cp, 'exec');
-    
-    // Reset other mocks
+    vi.clearAllMocks(); // Clears call history and resets implementations to default (empty fn)
+    MOCKED_CP_EXEC_FN.mockReset(); // Reset our specific exec mock
+
+    // Reset mocks for fs/promises and isomorphic-git correctly
     vi.mocked(fsPromises.access).mockReset();
+    vi.mocked(fsPromises.readFile).mockReset();
+    vi.mocked(fsPromises.readdir).mockReset();
+    vi.mocked(fsPromises.stat).mockReset();
+
     vi.mocked(git.resolveRef).mockReset();
     vi.mocked(git.log).mockReset();
-    // Clear logger mocks from the imported logger instance
-    // The logger instance is part of the configService mock, so it's fresh or reset with vi.clearAllMocks()
-    // However, explicit clearing of its methods is safer if the mock structure changes.
+    vi.mocked(git.readCommit).mockReset();
+    vi.mocked(git.diffTrees).mockReset();
+    vi.mocked(git.walk).mockReset();
+    // No need to reset git.TREE as it's a constructor-like mock
     logger.info.mockClear(); 
     logger.warn.mockClear();
     logger.error.mockClear();
@@ -95,17 +100,15 @@ describe('Repository Utilities', () => {
     });
 
     it('should call git diff command and return stdout', async () => {
-      setupValidRepoAndCommitsMocks(); // Called in beforeEach for the describe block, but explicit here for clarity if that changes
-      execSpy.mockImplementationOnce((_cmd, _opts, callback) => {
-        callback(null, 'diff_content_stdout_explicit', ''); // error, stdout, stderr
+      setupValidRepoAndCommitsMocks();
+      MOCKED_CP_EXEC_FN.mockImplementationOnce((_cmd, _opts, callback) => {
+        callback(null, 'diff_content_stdout_explicit', '');
       });
-
       const result = await getRepositoryDiff(repoPath);
-      
-      expect(execSpy).toHaveBeenCalledWith(
+      expect(MOCKED_CP_EXEC_FN).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid',
-        expect.objectContaining({ cwd: repoPath }), // Options passed to exec
-        expect.any(Function) // Callback function
+        expect.objectContaining({ cwd: repoPath }),
+        expect.any(Function)
       );
       expect(result).toBe('diff_content_stdout_explicit');
     });
@@ -113,24 +116,23 @@ describe('Repository Utilities', () => {
     it('should truncate long diff output', async () => {
       setupValidRepoAndCommitsMocks();
       const longDiff = 'a'.repeat(10001);
-      execSpy.mockImplementationOnce((_cmd, _opts, callback) => {
+      MOCKED_CP_EXEC_FN.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(null, longDiff, '');
       });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
     });
-    
+
     it('should handle errors from git diff command', async () => {
       setupValidRepoAndCommitsMocks();
       const mockError = new Error('Git command failed') as ExecException;
       (mockError as any).code = 128; // Standard for many git errors
       const stderrText = 'stderr from exec callback';
-      // Stderr is passed as the third argument to the callback for exec
-      execSpy.mockImplementationOnce((_cmd, _opts, callback) => {
+      MOCKED_CP_EXEC_FN.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(mockError, '', stderrText);
       });
-      
+
       const result = await getRepositoryDiff(repoPath);
       
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
