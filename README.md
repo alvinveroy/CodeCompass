@@ -155,7 +155,7 @@ QDRANT_HOST=http://localhost:6333
 # COLLECTION_NAME: Name of the Qdrant collection for this repository.
 # It's good practice to use a unique name per repository if you manage multiple.
 # COLLECTION_NAME=codecompass_default_collection
-# QDRANT_SEARCH_LIMIT_DEFAULT: Default number of results to fetch from Qdrant. Default: 10
+# QDRANT_SEARCH_LIMIT_DEFAULT: Default number of results to fetch from Qdrant during standard searches. Default: 10
 # QDRANT_SEARCH_LIMIT_DEFAULT=10
 
 # --- Ollama Configuration (for local LLM and embeddings) ---
@@ -211,6 +211,39 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
 # MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY: Maximum length of a code snippet to include in context without summarization.
 # Snippets longer than this will be summarized by an LLM if available. Default: 1500
 # MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY=1500
+
+# MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL: Maximum length of a git diff to include in context without summarization.
+# Diffs longer than this will be summarized by an LLM if available. Default: 3000
+# MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL=3000
+
+# AGENT_DEFAULT_MAX_STEPS: Default maximum number of steps (tool calls or LLM responses) the agent will take. Default: 10
+# AGENT_DEFAULT_MAX_STEPS=10
+
+# AGENT_ABSOLUTE_MAX_STEPS: Absolute maximum number of steps the agent can take, even if it requests more. Default: 15
+# AGENT_ABSOLUTE_MAX_STEPS=15
+
+# MAX_REFINEMENT_ITERATIONS: Maximum number of iterations for query refinement. Default: 3
+# MAX_REFINEMENT_ITERATIONS=3
+
+# FILE_INDEXING_CHUNK_SIZE_CHARS: Target size for chunks when indexing large files (in characters). Default: 1000
+# FILE_INDEXING_CHUNK_SIZE_CHARS=1000
+
+# FILE_INDEXING_CHUNK_OVERLAP_CHARS: Overlap between chunks when indexing large files (in characters). Default: 200
+# FILE_INDEXING_CHUNK_OVERLAP_CHARS=200
+
+# SUMMARIZATION_MODEL: LLM model to use for summarization tasks (e.g., long diffs, long snippets).
+# If empty or not set, defaults to the SUGGESTION_MODEL.
+# SUMMARIZATION_MODEL= # Example: llama3.1:8b or deepseek-coder
+
+# REFINEMENT_MODEL: LLM model to use for LLM-powered query refinement.
+# If empty or not set, defaults to the SUGGESTION_MODEL.
+# REFINEMENT_MODEL= # Example: llama3.1:8b or deepseek-coder
+
+# REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS: Number of search results to fetch when agent uses 'request_additional_context' with type 'MORE_SEARCH_RESULTS'. Default: 20
+# REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS=20
+
+# AGENT_QUERY_TIMEOUT: Timeout in milliseconds for agent's LLM reasoning steps. Default: 180000 (3 minutes)
+# AGENT_QUERY_TIMEOUT=180000
 ```
 
 **Note**: When setting environment variables directly or via MCP client configurations, you do not need to create a `.env` file. The list above serves as a reference for the variable names and their purposes. For a local setup with Ollama, the default settings often work without needing to set many environment variables, unless you want to customize models or providers. If using cloud providers like DeepSeek, setting the respective `API_KEY` and adjusting `LLM_PROVIDER` and `SUGGESTION_MODEL` is necessary.
