@@ -466,28 +466,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       const agentModule = await import('../lib/agent');
       const parseSpy = vi.spyOn(agentModule, 'parseToolCalls')
         .mockImplementationOnce((output: string) => {
-          // Robust parsing based on user's analysis
-          const lines = output.split('\n');
-          const toolCalls = [];
-          for (const line of lines) {
-            if (line.startsWith('TOOL_CALL:')) {
-              try {
-                const jsonPart = line.substring('TOOL_CALL:'.length).trim();
-                const parsed = JSON.parse(jsonPart);
-                if (parsed && parsed.tool && parsed.parameters) {
-                  toolCalls.push({ tool: parsed.tool, parameters: parsed.parameters });
-                }
-              } catch (e) {
-                // If parsing fails for a line, log it for test debugging but continue
-                console.error(`[Test Debug] parseToolCalls mock failed to parse: ${line}`, e);
-              }
-            }
+          // More robust parsing based on the actual parseToolCalls implementation
+          if (output === 'TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') {
+            return [{ tool: 'search_code', parameters: { query: 'tool query' } }];
           }
-          // For this specific test, we expect one specific tool call from the mocked LLM output
-          if (toolCalls.length === 1 && toolCalls[0].tool === 'search_code' && toolCalls[0].parameters.query === 'tool query') {
-            return toolCalls;
-          }
-          return []; // Return empty if the expected tool call isn't found
+          // Log unexpected output for debugging if the test fails
+          // console.log('[Test Debug] parseToolCalls mock received unexpected output for first call:', output);
+          return []; 
         })
         .mockReturnValueOnce([]); // For the second reasoning step (final response)
 
@@ -533,7 +518,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         return { status: 'unknown tool executed' };
       });
 
-      mockedLoggerFromAgentPerspective.info.mockClear(); 
+      mockedLoggerFromAgentPerspective.info.mockClear();
       mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
@@ -541,7 +526,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       const result = await runAgentLoop('extend loop query', 'session3', mockQdrantClient, repoPath, true);
 
       expect(mockedLoggerFromAgentPerspective.info).toHaveBeenCalledWith(
-        expect.stringContaining('Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.')
+        'Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.'
       );
       expect(result).toContain('Final response in extended step.');
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(4); // verify + 3 reasoning steps
@@ -614,11 +599,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       // The order of these warnings might vary depending on exact logic flow if both conditions are met closely.
       // Check for both, but don't assume order unless the SUT guarantees it.
+      // The SUT logs "Agent requested more processing steps, but already at or beyond absoluteMaxSteps." first if applicable,
+      // then "Agent loop reached absolute maximum steps (...) and will terminate." if the loop condition step >= absoluteMaxSteps is met.
       expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Agent requested more processing steps, but already at or beyond absoluteMaxSteps.')
+        'Agent requested more processing steps, but already at or beyond absoluteMaxSteps.'
       );
       expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Agent loop reached absolute maximum steps (3) and will terminate.')
+        `Agent loop reached absolute maximum steps (${agentTestConfig.AGENT_ABSOLUTE_MAX_STEPS}) and will terminate.`
       );
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(5); // verify + 3 reasoning steps + 1 final response
       expect(result).toContain('Final response after hitting absolute max.');
@@ -627,33 +614,28 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     });
 
     it('should handle agent reasoning timeout by using fallback tool call', async () => {
-      const agentModule = await import('../lib/agent'); // Import agentModule for spy
-      // Use agentTestConfig imported at the top of the file for AGENT_QUERY_TIMEOUT
+      const agentModule = await import('../lib/agent'); 
+      const agentConfigForTest = (await import('../lib/config-service')).configService; // Get the mocked config
 
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
-          // Simulate timeout for the main reasoning call
-          .mockImplementationOnce(() => { // For the reasoning step that should time out
-            return new Promise((_resolveUnused, reject) => // Use reject
-                setTimeout(() => reject(new Error("Simulated Agent reasoning timed out by test")), agentTestConfig.AGENT_QUERY_TIMEOUT + 200)
+          .mockImplementationOnce(() => { 
+            return new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("Simulated Agent reasoning timed out by test")), agentConfigForTest.AGENT_QUERY_TIMEOUT + 200)
             );
           })
-          .mockResolvedValueOnce("Final response after fallback."); // LLM call after fallback tool
+          .mockResolvedValueOnce("Final response after fallback."); 
       
       vi.spyOn(agentModule, 'parseToolCalls')
-          .mockImplementationOnce((outputFromLLM) => { // For the fallback tool call generated by agent.ts
-              // agent.ts, upon reasoning timeout, constructs:
-              // TOOL_CALL: {"tool":"search_code","parameters":{"query":"<original_query>","sessionId":"<session_id>"}}
-              if (outputFromLLM.includes('"tool":"search_code"') && 
-                  outputFromLLM.includes('"query":"reasoning timeout query"') &&
-                  outputFromLLM.includes('"sessionId":"session5"')) { 
+          .mockImplementationOnce((outputFromLLM) => { 
+              if (outputFromLLM === `TOOL_CALL: ${JSON.stringify({tool: "search_code",parameters: { query: "reasoning timeout query", sessionId: "session5" }})}`) {
                   return [{ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }];
               }
-              logger.warn(`[Test Debug] Fallback parseToolCalls received unexpected: ${outputFromLLM}`);
+              // console.log(`[Test Debug] Fallback parseToolCalls received unexpected: ${outputFromLLM}`);
               return [];
           })
-          .mockReturnValueOnce([]); // For final response generation after fallback tool execution
+          .mockReturnValueOnce([]); 
 
       const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockResolvedValue({ status: 'fallback search_code executed', results: [] });
       
@@ -664,36 +646,36 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
 
-      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(expect.stringContaining("Agent (step 1): Reasoning timed out or failed: Simulated Agent reasoning timed out by test"));
+      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith("Agent (step 1): Reasoning timed out or failed: Simulated Agent reasoning timed out by test");
       expect(executeToolCallSpy).toHaveBeenCalledWith(
           expect.objectContaining({ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }),
           mockQdrantClient, repoPath, true
       );
       expect(result).toContain("Final response after fallback.");
       expect(addSuggestion).toHaveBeenCalledWith('session5', 'reasoning timeout query', expect.stringContaining('Final response after fallback.'));
-    }, agentTestConfig.AGENT_QUERY_TIMEOUT + 10000); // Increased Vitest test timeout slightly more
+    }, agentConfigForTest.AGENT_QUERY_TIMEOUT + 10000); 
 
     it('should handle tool execution timeout by adding error to prompt', async () => {
-      const agentModule = await import('../lib/agent'); // Ensure agentModule is in scope for spyOn
-      // Agent's internal tool execution timeout is hardcoded to 90000ms.
-      // Vitest test timeout (last arg to 'it') should be > 90000ms.
+      const agentModule = await import('../lib/agent'); 
+      
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
-          .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
-          .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') // Reasoning 1
-          .mockResolvedValueOnce('Final response after tool timeout.'); // Reasoning 2 (after error)
+          .mockResolvedValueOnce("Test response from verifyLLMProvider") 
+          .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') 
+          .mockResolvedValueOnce('Final response after tool timeout.'); 
 
       vi.spyOn(agentModule, 'parseToolCalls')
-          .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }]) // For first reasoning
-          .mockReturnValueOnce([]); // For second reasoning (final response)
+          .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }]) 
+          .mockReturnValueOnce([]); 
       
-      // Simulate tool execution timeout (agent.ts uses 90000ms for tool timeout)
-      const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockImplementationOnce(async () => {
-        await new Promise(resolve => setTimeout(resolve, 90000 + 200)); // Wait longer than timeout
-        throw new Error("Simulated Tool execution timed out: search_code"); // Then reject
+      const toolExecutionTimeoutError = new Error("Simulated Tool execution timed out: search_code");
+      vi.spyOn(agentModule, 'executeToolCall').mockImplementationOnce(async () => {
+        // Simulate the timeout behavior of Promise.race in agent.ts
+        return new Promise((_, reject) => {
+            setTimeout(() => reject(toolExecutionTimeoutError), 10); // Short delay, actual timeout is in agent.ts
+        });
       });
       
-      // Clear all logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
       mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.error.mockClear();
@@ -701,12 +683,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
 
+      // The error logged by agent.ts is the raw error message string
       expect(mockedLoggerFromAgentPerspective.error).toHaveBeenCalledWith(
-        "Error executing tool search_code", // The message part of the log
-        { error: "Simulated Tool execution timed out: search_code" } // The metadata object part
+        "Error executing tool search_code", 
+        { error: "Simulated Tool execution timed out: search_code" } 
       );
       
-      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // verify, reasoning1, reasoning2(after error)
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); 
       const llmCalls = mockLLMProviderInstance.generateText.mock.calls;
       // The last call to generateText (index 2) should contain the error message in its prompt.
       const finalPromptArg = llmCalls[2][0]; 
