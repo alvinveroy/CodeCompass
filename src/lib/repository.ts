@@ -24,19 +24,13 @@ export interface CommitDetail {
 
 export async function validateGitRepository(repoPath: string): Promise<boolean> {
   try {
-    logger.debug(`[validateGitRepository] Validating path: ${repoPath}`);
     const gitdir = path.join(repoPath, ".git");
-    logger.debug(`[validateGitRepository] Checking access to gitdir: ${gitdir}`);
     await fs.access(gitdir);
-    logger.debug(`[validateGitRepository] gitdir access successful. Resolving HEAD ref...`);
-    const resolvedRef = await git.resolveRef({ fs: nodeFs, dir: repoPath, gitdir, ref: "HEAD" });
-    logger.debug(`[validateGitRepository] HEAD ref resolved to: ${resolvedRef}`);
+    await git.resolveRef({ fs: nodeFs, dir: repoPath, gitdir, ref: "HEAD" });
     logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    // Log the specific part that failed
-    logger.warn(`[validateGitRepository] Validation failed for ${repoPath}. Error: ${err.message}`, { stack: err.stack, errorObj: err }); // Log more error details
     logger.warn(`Failed to validate Git repository at ${repoPath}: ${err.message}`);
     return false;
   }
