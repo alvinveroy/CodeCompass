@@ -7,6 +7,20 @@ import { v4 as uuidv4 } from "uuid";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
 import { generateEmbedding } from "./ollama";
+import nodeFs from 'fs'; // Standard fs for isomorphic-git functions requiring it
+
+export interface CommitChange {
+  path: string;
+  type: 'equal' | 'modify' | 'add' | 'delete' | 'typechange';
+}
+
+export interface CommitDetail {
+  oid: string;
+  message: string;
+  author: { name: string; email: string; timestamp: number; timezoneOffset: number };
+  committer: { name: string; email: string; timestamp: number; timezoneOffset: number };
+  changedFiles: CommitChange[];
+}
 
 export async function validateGitRepository(repoPath: string): Promise<boolean> {
   try {
@@ -239,5 +253,107 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error("Error retrieving git diff", { message: err.message, stack: err.stack });
     return `Failed to retrieve diff: ${err.message}`;
+  }
+}
+
+export async function getCommitHistoryWithChanges(
+  repoPath: string,
+  options?: { since?: Date; count?: number; ref?: string }
+): Promise<CommitDetail[]> {
+  const gitdir = path.join(repoPath, ".git");
+  const detailedCommits: CommitDetail[] = [];
+
+  try {
+    const logOptions: {
+      fs: typeof nodeFs; // Use the imported standard fs
+      dir: string;
+      gitdir: string;
+      depth?: number;
+      since?: Date;
+      ref?: string;
+    } = {
+      fs: nodeFs,
+      dir: repoPath,
+      gitdir,
+    };
+
+    if (options?.count) {
+      logOptions.depth = options.count;
+    }
+    if (options?.since) {
+      logOptions.since = options.since;
+    }
+    if (options?.ref) {
+      logOptions.ref = options.ref;
+    }
+
+    const commits = await git.log(logOptions);
+
+    for (const commitEntry of commits) {
+      // commitEntry from git.log already has oid, message, author, committer
+      // We need to read the full commit to get tree and parent info reliably
+      const commitData = await git.readCommit({
+        fs: nodeFs,
+        dir: repoPath,
+        gitdir,
+        oid: commitEntry.oid,
+      });
+
+      let changedFiles: CommitChange[] = [];
+
+      if (commitData.commit.parent && commitData.commit.parent.length > 0) {
+        // Not an initial commit, compare with the first parent
+        const parentOid = commitData.commit.parent[0];
+        const parentCommitData = await git.readCommit({
+          fs: nodeFs,
+          dir: repoPath,
+          gitdir,
+          oid: parentOid,
+        });
+
+        const diffResult = await git.diffTrees({
+          fs: nodeFs,
+          dir: repoPath,
+          gitdir,
+          ref1: parentCommitData.commit.tree, // Parent's tree OID
+          ref2: commitData.commit.tree,      // Current commit's tree OID
+        });
+        // diffResult is an array of [filepath, type, before-oid, after-oid, before-mode, after-mode]
+        changedFiles = diffResult.map(d => ({
+          path: d[0],
+          type: d[1] as CommitChange['type'],
+        }));
+      } else {
+        // Initial commit, list all files as 'add'
+        await git.walk({
+          fs: nodeFs,
+          dir: repoPath,
+          gitdir,
+          trees: [git.TREE({ oid: commitData.commit.tree })],
+          map: async function(filepath, [entry]) {
+            if (filepath === '.') return; // Skip root
+            if (entry && (await entry.type()) === 'blob') { // Ensure it's a file
+              changedFiles.push({ path: filepath, type: 'add' });
+            }
+            return null;
+          },
+        });
+      }
+
+      detailedCommits.push({
+        oid: commitEntry.oid,
+        message: commitEntry.commit.message,
+        author: commitEntry.commit.author,
+        committer: commitEntry.commit.committer,
+        changedFiles,
+      });
+    }
+    logger.info(`Retrieved ${detailedCommits.length} commits with changes for ${repoPath}`);
+    return detailedCommits;
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Failed to get commit history with changes for ${repoPath}: ${err.message}`, { stack: err.stack });
+    // Depending on desired behavior, you might want to re-throw or return empty array
+    throw err; // Or return [];
   }
 }
