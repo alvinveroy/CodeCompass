@@ -37,6 +37,7 @@ class ConfigService {
   private _claudeApiKey: string;
 
   private _qdrantSearchLimitDefault: number; // Added for Qdrant search limit
+  private _maxDiffLengthForContextTool: number;
 
   private _useMixedProviders: boolean;
   private _suggestionProvider: string;
@@ -154,6 +155,7 @@ class ConfigService {
     this._deepSeekRpmLimit = parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this.DEEPSEEK_RPM_LIMIT_DEFAULT;
     this._agentQueryTimeout = parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this.AGENT_QUERY_TIMEOUT_DEFAULT;
     this._qdrantSearchLimitDefault = parseInt(process.env.QDRANT_SEARCH_LIMIT_DEFAULT || '', 10) || this.DEFAULT_QDRANT_SEARCH_LIMIT; // Initialize Qdrant search limit
+    this._maxDiffLengthForContextTool = parseInt(process.env.MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL || '', 10) || 3000; // Default 3000 chars
     this._openAIApiKey = process.env.OPENAI_API_KEY || "";
     this._geminiApiKey = process.env.GEMINI_API_KEY || "";
     this._claudeApiKey = process.env.CLAUDE_API_KEY || "";
@@ -260,6 +262,7 @@ class ConfigService {
     process.env.OLLAMA_HOST = this.OLLAMA_HOST; // Ensure OLLAMA_HOST from env/default is in process.env
     process.env.QDRANT_HOST = this.QDRANT_HOST; // Ensure QDRANT_HOST from env/default is in process.env
     process.env.QDRANT_SEARCH_LIMIT_DEFAULT = String(this._qdrantSearchLimitDefault); // Ensure QDRANT_SEARCH_LIMIT_DEFAULT is in process.env
+    process.env.MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL = String(this._maxDiffLengthForContextTool);
     process.env.OPENAI_API_KEY = this._openAIApiKey;
     process.env.GEMINI_API_KEY = this._geminiApiKey;
     process.env.CLAUDE_API_KEY = this._claudeApiKey;
@@ -276,6 +279,7 @@ class ConfigService {
     this._deepSeekRpmLimit = parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this.DEEPSEEK_RPM_LIMIT_DEFAULT;
     this._agentQueryTimeout = parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this.AGENT_QUERY_TIMEOUT_DEFAULT;
     this._qdrantSearchLimitDefault = parseInt(process.env.QDRANT_SEARCH_LIMIT_DEFAULT || '', 10) || this.DEFAULT_QDRANT_SEARCH_LIMIT; // Re-initialize Qdrant search limit
+    this._maxDiffLengthForContextTool = parseInt(process.env.MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL || '', 10) || 3000;
     this._openAIApiKey = process.env.OPENAI_API_KEY || "";
     this._geminiApiKey = process.env.GEMINI_API_KEY || "";
     this._claudeApiKey = process.env.CLAUDE_API_KEY || "";
@@ -305,6 +309,7 @@ class ConfigService {
   get DEEPSEEK_RPM_LIMIT(): number { return parseInt(process.env.DEEPSEEK_RPM_LIMIT || '', 10) || this._deepSeekRpmLimit; }
   get AGENT_QUERY_TIMEOUT(): number { return parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this._agentQueryTimeout; }
   get QDRANT_SEARCH_LIMIT_DEFAULT(): number { return parseInt(process.env.QDRANT_SEARCH_LIMIT_DEFAULT || '', 10) || this._qdrantSearchLimitDefault; } // Getter for Qdrant search limit
+  get MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL(): number { return this._maxDiffLengthForContextTool; }
   get OPENAI_API_KEY(): string { return process.env.OPENAI_API_KEY || this._openAIApiKey; }
   get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || this._geminiApiKey; }
   get CLAUDE_API_KEY(): string { return process.env.CLAUDE_API_KEY || this._claudeApiKey; }

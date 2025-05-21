@@ -64,6 +64,51 @@ export const toolRegistry: Tool[] = [
   }
 ];
 
+// Helper function to get processed diff (summarized or truncated if necessary)
+async function getProcessedDiff(
+  repoPath: string,
+  suggestionModelAvailable: boolean
+): Promise<string> {
+  let diffContent = await getRepositoryDiff(repoPath);
+
+  // Check if diffContent is one of the "no useful diff" messages
+  const noUsefulDiffMessages = [
+    "No Git repository found",
+    "No changes found in the last two commits.",
+    "Not enough commits to compare.", // Add any other similar messages from getRepositoryDiff
+  ];
+  const isEffectivelyEmptyDiff = !diffContent || noUsefulDiffMessages.includes(diffContent);
+
+  if (!isEffectivelyEmptyDiff) {
+    const MAX_DIFF_LENGTH = configService.MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL;
+
+    if (diffContent.length > MAX_DIFF_LENGTH) {
+      if (suggestionModelAvailable) {
+        try {
+          const llmProvider = await getLLMProvider();
+          const summaryPrompt = `Summarize the following git diff concisely, focusing on the most significant changes, additions, and deletions (e.g., 3-5 key bullet points or a short paragraph). The project is "${path.basename(repoPath)}".\n\nGit Diff:\n${diffContent}`;
+          const summarizedDiff = await llmProvider.generateText(summaryPrompt);
+          logger.info(`Summarized large diff content for repository: ${repoPath}`);
+          return summarizedDiff; // Return the summary
+        } catch (summaryError) {
+          const sErr = summaryError instanceof Error ? summaryError : new Error(String(summaryError));
+          logger.warn(`Failed to summarize diff for ${repoPath}. Using truncated diff. Error: ${sErr.message}`);
+          return `Diff is large. Summary attempt failed. Truncated diff:\n${diffContent.substring(0, MAX_DIFF_LENGTH)}...`;
+        }
+      } else {
+        logger.warn(`Suggestion model not available to summarize large diff for ${repoPath}. Using truncated diff.`);
+        return `Diff is large. Full content omitted as suggestion model is offline. Truncated diff:\n${diffContent.substring(0, MAX_DIFF_LENGTH)}...`;
+      }
+    }
+    // If diff is not too long, return it as is
+    return diffContent;
+  } else if (!diffContent) {
+    return "No diff information available.";
+  }
+  // If it's one of the noUsefulDiffMessages, return it as is
+  return diffContent;
+}
+
 // Create a new agent state
 export function createAgentState(sessionId: string, query: string): AgentState {
   return {
@@ -78,6 +123,9 @@ export function createAgentState(sessionId: string, query: string): AgentState {
 // Generate the agent system prompt
 function generateAgentSystemPrompt(availableTools: Tool[]): string {
   return `You are CodeCompass Agent, an AI assistant that helps developers understand and work with codebases.
+You will be provided with context from the repository, which may include search results, file content, and summaries of recent changes (diffs).
+If a diff is very large, a summary will be given. Use all provided information to inform your responses and plans.
+
 You have access to the following tools:
 
 ${availableTools.map(tool => `
@@ -278,7 +326,9 @@ export async function executeToolCall(
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      const _diff = await getRepositoryDiff(repoPath);
+      
+      // Use the new helper function to get the processed diff
+      const processedDiff = await getProcessedDiff(repoPath, suggestionModelAvailable);
       
       // Update context in session
       updateContext(session.id, repoPath, files);
@@ -320,7 +370,7 @@ export async function executeToolCall(
         sessionId: session.id,
         refinedQuery,
         recentQueries,
-        diff: _diff,
+        diff: processedDiff, // Use the processed (potentially summarized or truncated) diff
         results: context
       };
     }
@@ -346,7 +396,9 @@ export async function executeToolCall(
       const files = isGitRepo
         ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
         : [];
-      const _diff = await getRepositoryDiff(repoPath);
+      
+      // Use the new helper function to get the processed diff
+      const processedDiff = await getProcessedDiff(repoPath, suggestionModelAvailable);
       
       // Update context in session
       updateContext(session.id, repoPath, files);
@@ -386,7 +438,7 @@ export async function executeToolCall(
 **Context**:
 Repository: ${repoPath}
 Files: ${files.slice(0, 10).join(", ")}${files.length > 10 ? "..." : ""}
-Recent Changes: ${_diff ? _diff.substring(0, 500) : ""}${_diff && _diff.length > 500 ? "..." : ""}
+Recent Changes: ${processedDiff ? processedDiff.substring(0, 1000) : "Not available"}${processedDiff && processedDiff.length > 1000 ? "..." : ""} 
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
