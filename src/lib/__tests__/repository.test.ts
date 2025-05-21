@@ -134,14 +134,14 @@ describe('Repository Utilities', () => {
     it('should call git diff command and return stdout', async () => {
       // Ensure mocks from setupValidRepoAndCommitsMocks are active
       vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
-        // This mock is for the specific call in this test.
-        // Assumes options are always passed by promisify.
         if (command === 'git diff commit1_oid commit2_oid') {
-          process.nextTick(() => callback(null, 'diff_content_stdout', ''));
+          // Directly call the callback with defined stdout
+          callback!(null, 'diff_content_stdout', ''); 
         } else {
-          process.nextTick(() => callback(new Error(`Test mock: Unexpected exec command: ${command}`), '', ''));
+          callback!(new Error(`Test mock (stdout): Unexpected exec command: ${command}`), '', '');
         }
-        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any; 
+        // Return a minimal ChildProcess-like object, though promisify doesn't use it.
+        return { on: vi.fn(), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
       });
 
       const result = await getRepositoryDiff(repoPath);
@@ -158,11 +158,11 @@ describe('Repository Utilities', () => {
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
       vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
         if (command === 'git diff commit1_oid commit2_oid') {
-            process.nextTick(() => callback(null, longDiff, ''));
+          callback!(null, longDiff, '');
         } else {
-            process.nextTick(() => callback(new Error(`Test mock: Unexpected exec command for truncate: ${command}`), '', ''));
+          callback!(new Error(`Test mock (truncate): Unexpected exec command: ${command}`), '', '');
         }
-        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
+        return { on: vi.fn(), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
       });
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -172,19 +172,21 @@ describe('Repository Utilities', () => {
     it('should handle errors from git diff command', async () => {
       const mockError = new Error('Git command failed') as ExecException;
       (mockError as any).code = 128; // Simulate a git error code
-      // stderr is not explicitly set on mockError here, but execAsync passes it if callback provides it.
-      // The important part is that the callback receives an error object.
+      // Explicitly add stderr to the error object that the callback will pass.
+      // Promisify might pick this up.
+      (mockError as any).stderr = 'error_stderr_content_from_callback_on_error_obj'; 
 
       vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
         if (command === 'git diff commit1_oid commit2_oid') {
-            process.nextTick(() => callback(mockError, '', 'error_stderr_content_from_callback'));
+            // Pass the mockError. The callback also receives stdout and stderr args.
+            callback!(mockError, '', 'error_stderr_content_from_callback_arg'); 
         } else {
-            process.nextTick(() => callback(new Error(`Test mock: Unexpected exec command for error handling: ${command}`), '', ''));
+            callback!(new Error(`Test mock (error): Unexpected exec command: ${command}`), '', '');
         }
         return { 
             on: vi.fn((event, cb) => { 
                 if (event === 'close' && mockError.code) cb(mockError.code); 
-                else if (event === 'close') cb(1);
+                else if (event === 'close') cb(1); // Default close code if mockError.code is not set
             }),
             stdout: { on: vi.fn() }, 
             stderr: { on: vi.fn() }, 
@@ -201,12 +203,12 @@ describe('Repository Utilities', () => {
       // The actual error object passed to logger.error will be the one from execAsync,
       // which promisify(exec) enhances with stdout and stderr if they were part of the callback.
       expect(logger.error).toHaveBeenCalledWith(
-        `Error retrieving git diff for ${repoPath}: Git command failed`, 
-        expect.objectContaining({ // Check for properties added by promisify(exec)
-            message: 'Git command failed',
-            // stderr should be what the callback provided
-            stderr: 'error_stderr_content_from_callback', 
-            code: 128
+        `Error retrieving git diff for ${repoPath}: Git command failed`,
+        expect.objectContaining({
+          message: 'Git command failed',
+          code: 128,
+          // Check which stderr promisify actually attaches. It should be from the callback's stderr argument.
+          stderr: 'error_stderr_content_from_callback_arg', 
         })
       );
     });

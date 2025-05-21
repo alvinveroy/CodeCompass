@@ -568,7 +568,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       // If it tries to extend at step 2 (index 2), currentMaxSteps is already 3.
       // The warning "Agent loop reached absolute maximum steps (3) and will terminate." will be logged *before* step 3 (index 3) would run.
 
-      const agentModule = await import('../lib/agent'); 
+      // const agentModule = await import('../lib/agent'); // Duplicate removed
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
