@@ -332,9 +332,9 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
             mockQdrantClient, 
             'original query', 
             ['fileA.ts', 'fileB.ts'], // Expect the files from git.listFiles
-            agentMockConfig.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS, // This is 10 from the mock configService in agent.test.ts
-            undefined, 
-            undefined 
+            agentMockConfig.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS, // This is 10
+            undefined, // maxRefinements
+            undefined  // relevanceThreshold
           );
         });
       });
@@ -467,8 +467,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       
       const agentModule = await import('../lib/agent');
       const parseSpy = vi.spyOn(agentModule, 'parseToolCalls')
-        .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }]) 
-        .mockReturnValueOnce([]); 
+        .mockImplementationOnce((output) => { // Make this mock robust
+          if (output.includes('TOOL_CALL: {"tool": "search_code"')) {
+            return [{ tool: 'search_code', parameters: { query: 'tool query' } }];
+          }
+          return [];
+        })
+        .mockReturnValueOnce([]); // For the second reasoning step (final response)
 
       const execSpy = vi.spyOn(agentModule, 'executeToolCall').mockResolvedValue({ status: 'search_code executed', results: [] });
       
@@ -605,9 +610,11 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
           // Simulate timeout for the main reasoning call
-          .mockImplementationOnce(() => {
-            return new Promise((_, reject) => setTimeout(() => reject(new Error("Agent reasoning timed out")), configForTimeout.AGENT_QUERY_TIMEOUT + 100));
-           })
+          .mockImplementationOnce(() => { // For the reasoning step that should time out
+            return new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("Simulated Agent reasoning timed out by test")), configForTimeout.AGENT_QUERY_TIMEOUT + 200) // Ensure it's longer
+            );
+          })
           .mockResolvedValueOnce("Final response after fallback."); // LLM call after fallback tool
       vi.spyOn(agentModule, 'parseToolCalls')
           .mockImplementationOnce((outputFromLLM) => { // For the fallback
@@ -627,30 +634,32 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
 
-      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(expect.stringContaining("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out"));
+      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(expect.stringContaining("Agent (step 1): Reasoning timed out or failed: Simulated Agent reasoning timed out by test"));
       expect(executeToolCallSpy).toHaveBeenCalledWith(
           expect.objectContaining({ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }),
           mockQdrantClient, repoPath, true
       );
       expect(result).toContain("Final response after fallback.");
       expect(addSuggestion).toHaveBeenCalledWith('session5', 'reasoning timeout query', expect.stringContaining('Final response after fallback.'));
-    });
+    }, configForTimeout.AGENT_QUERY_TIMEOUT + 5000); // Vitest test timeout
 
     it('should handle tool execution timeout by adding error to prompt', async () => {
+      const agentModule = await import('../lib/agent'); // Ensure agentModule is in scope for spyOn
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
           .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') // Reasoning 1
           .mockResolvedValueOnce('Final response after tool timeout.'); // Reasoning 2 (after error)
 
-      const agentModule = await import('../lib/agent');
       vi.spyOn(agentModule, 'parseToolCalls')
           .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }]) // For first reasoning
           .mockReturnValueOnce([]); // For second reasoning (final response)
       
       // Simulate tool execution timeout (agent.ts uses 90000ms for tool timeout)
       const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockImplementationOnce(() => {
-        return new Promise((_, reject) => setTimeout(() => reject(new Error("Tool execution timed out: search_code")), 90000 + 100));
+        return new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Simulated Tool execution timed out: search_code")), 90000 + 200)
+        );
       });
       
       mockedLoggerFromAgentPerspective.error.mockClear();
@@ -660,16 +669,16 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
 
-      expect(mockedLoggerFromAgentPerspective.error).toHaveBeenCalledWith("Error executing tool search_code", { error: "Tool execution timed out: search_code" });
+      expect(mockedLoggerFromAgentPerspective.error).toHaveBeenCalledWith("Error executing tool search_code", { error: "Simulated Tool execution timed out: search_code" });
       
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // verify, reasoning1, reasoning2(after error)
       const llmCalls = mockLLMProviderInstance.generateText.mock.calls;
       // The last call to generateText (index 2) should contain the error message in its prompt.
       const finalPromptArg = llmCalls[2][0]; 
-      expect(finalPromptArg).toContain("Error executing tool search_code: Tool execution timed out: search_code");
+      expect(finalPromptArg).toContain("Error executing tool search_code: Simulated Tool execution timed out: search_code");
       expect(result).toContain("Final response after tool timeout.");
       expect(addSuggestion).toHaveBeenCalledWith('session6', 'tool timeout query', expect.stringContaining('Final response after tool timeout.'));
-    });
+    }, 90000 + 5000); // Vitest test timeout
 
   });
 

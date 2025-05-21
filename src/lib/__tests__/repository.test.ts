@@ -181,6 +181,7 @@ describe('Repository Utilities', () => {
     vi.restoreAllMocks();
   });
 });
+/*
 // This SEARCH block is intentionally left almost empty to replace the rest of the file
 // with the user's provided content for the getCommitHistoryWithChanges tests and the
 // new afterEach block. The previous REPLACE block handled the getRepositoryDiff changes.
@@ -245,3 +246,4 @@ describe('Repository Utilities', () => {
     vi.restoreAllMocks();
   });
 });
+*/

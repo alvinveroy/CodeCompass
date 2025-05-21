@@ -164,7 +164,8 @@ describe('Query Refinement Utilities', () => {
     it('should remove specific terms and file extensions', () => {
       const query = "exact specific search for login.ts only";
       const result = broadenQuery(query); // Calls imported original
-      expect(result).toBeDefined();
+      expect(result).toBeDefined(); 
+      expect(typeof result).toBe('string'); 
       expect(result).not.toContain('exact');
       expect(result).not.toContain('specific');
       expect(result).not.toContain('only');
@@ -189,6 +190,8 @@ describe('Query Refinement Utilities', () => {
       // preprocessText is mocked in beforeEach
       // extractKeywords (the original one) will be called internally
       const focused = focusQueryBasedOnResults(originalQuery, results); // Calls imported original
+      expect(focused).toBeDefined();
+      expect(typeof focused).toBe('string');
       // Based on the simple preprocessText mock and extractKeywords logic:
       // "function processUser(user: UserType)" -> keywords: ["function", "processuser", "user", "usertype"] (approx)
       // "class UserProfile extends BaseProfile" -> keywords: ["class", "userprofile", "extends", "baseprofile"] (approx)
@@ -202,6 +205,8 @@ describe('Query Refinement Utilities', () => {
       const query = "search login function";
       const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
       const tweaked = tweakQuery(query, results); // Calls imported original
+      expect(tweaked).toBeDefined();
+      expect(typeof tweaked).toBe('string');
       expect(tweaked).toBe("search login function ts");
     });
 
@@ -209,6 +214,8 @@ describe('Query Refinement Utilities', () => {
       const query = "search login.ts function";
       const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
       const tweaked = tweakQuery(query, results); // Calls imported original
+      expect(tweaked).toBeDefined();
+      expect(typeof tweaked).toBe('string');
       expect(tweaked).toBe("search login.ts function in src");
     });
     
@@ -216,10 +223,14 @@ describe('Query Refinement Utilities', () => {
         const query = "search login.ts function in src";
         const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
         let tweaked = tweakQuery(query, results); // Calls imported original
+        expect(tweaked).toBeDefined();
+        expect(typeof tweaked).toBe('string');
         expect(tweaked).toBe(query);
 
         const resultsNoPath = [{ payload: { content: "some content" } }] as DetailedQdrantSearchResult[];
         tweaked = tweakQuery("some query", resultsNoPath); // Calls imported original
+        expect(tweaked).toBeDefined();
+        expect(typeof tweaked).toBe('string');
         expect(tweaked).toBe("some query");
     });
   });
