@@ -15,24 +15,29 @@ vi.mock('../ollama'); // For generateEmbedding used by searchWithRefinement
 // vi.mock('../../utils/text-utils'); 
 
 // Mock the query-refinement module itself for spying on internal helpers
-const mockBroadenQueryFn = vi.fn();
-const mockFocusQueryFn = vi.fn();
-const mockTweakQueryFn = vi.fn();
-const mockRefineQueryFn = vi.fn(); // Mock for refineQuery
+// const mockBroadenQueryFn = vi.fn(); // Removed
+// const mockFocusQueryFn = vi.fn(); // Removed
+// const mockTweakQueryFn = vi.fn(); // Removed
+// const mockRefineQueryFn = vi.fn(); // Mock for refineQuery // Removed
 
 vi.mock('../query-refinement', async (importOriginal) => {
   const originalModule = await importOriginal<typeof import('../query-refinement')>();
+  // Create vi.fn() instances inside the factory
+  const internalMockBroadenQueryFn = vi.fn();
+  const internalMockFocusQueryFn = vi.fn();
+  const internalMockTweakQueryFn = vi.fn();
+  const internalMockRefineQueryFn = vi.fn();
   return {
     // Keep original searchWithRefinement for its describe block
     searchWithRefinement: originalModule.searchWithRefinement,
     // Mock refineQuery for testing searchWithRefinement
-    refineQuery: mockRefineQueryFn,
+    refineQuery: internalMockRefineQueryFn, // Export the internally created mock
     // Keep original extractKeywords (or mock if needed for refineQuery tests)
     extractKeywords: originalModule.extractKeywords,
     // Provide mocks for helpers, to be used when testing refineQuery directly
-    broadenQuery: mockBroadenQueryFn,
-    focusQueryBasedOnResults: mockFocusQueryFn,
-    tweakQuery: mockTweakQueryFn,
+    broadenQuery: internalMockBroadenQueryFn, // Export the internally created mock
+    focusQueryBasedOnResults: internalMockFocusQueryFn, // Export the internally created mock
+    tweakQuery: internalMockTweakQueryFn, // Export the internally created mock
   };
 });
 
@@ -65,12 +70,13 @@ describe('Query Refinement Dispatchers and Search', () => {
     
     // Reset spies for refineQuery's internal calls
     // broadenQuery, focusQueryBasedOnResults, and tweakQuery are now vi.fn() from the mock factory
-    mockBroadenQueryFn.mockReturnValue('spy_broadened_return_val');
-    mockFocusQueryFn.mockReturnValue('spy_focused_return_val');
-    mockTweakQueryFn.mockReturnValue('spy_tweaked_return_val');
+    // Use vi.mocked() to set their behavior.
+    vi.mocked(broadenQuery).mockReturnValue('spy_broadened_return_val');
+    vi.mocked(focusQueryBasedOnResults).mockReturnValue('spy_focused_return_val');
+    vi.mocked(tweakQuery).mockReturnValue('spy_tweaked_return_val');
     
-    // Setup mock for refineQuery (which is mockRefineQueryFn)
-    mockRefineQueryFn.mockImplementation((currentQuery, _results, relevance) => {
+    // Setup mock for refineQuery (which is mockRefineQueryFn from the factory)
+    vi.mocked(refineQuery).mockImplementation((currentQuery, _results, relevance) => {
       if (relevance < 0.3) return 'mock_refined_broadened_query';
       if (relevance < 0.7) return 'mock_refined_focused_query';
       return 'mock_refined_tweaked_query';

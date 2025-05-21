@@ -135,8 +135,14 @@ describe('Repository Utilities', () => {
       // Ensure mocks from setupValidRepoAndCommitsMocks are active
       vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
         const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
+        if (typeof cb !== 'function') {
+          // This case should ideally not be hit if promisify(exec) is working as expected
+          // and execAsync is awaited.
+          console.error('[EXEC MOCK STDOUT TEST] Callback is not a function in exec mock.');
+          return { on: vi.fn(), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
+        }
         if (command === 'git diff commit1_oid commit2_oid') {
-          cb(null, 'diff_content_stdout', '');
+          cb(null, 'diff_content_stdout', ''); // Ensure stdout is a string
         } else {
           cb(new Error(`Test mock (stdout): Unexpected exec command: ${command}`), '', '');
         }
@@ -157,8 +163,12 @@ describe('Repository Utilities', () => {
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
       vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
         const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
+        if (typeof cb !== 'function') {
+          console.error('[EXEC MOCK TRUNCATE TEST] Callback is not a function in exec mock.');
+          return { on: vi.fn(), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
+        }
         if (command === 'git diff commit1_oid commit2_oid') {
-          cb(null, longDiff, '');
+          cb(null, longDiff, ''); // Ensure stdout is a string
         } else {
           cb(new Error(`Test mock (truncate): Unexpected exec command: ${command}`), '', '');
         }

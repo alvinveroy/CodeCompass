@@ -443,8 +443,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       // If executeToolCall and parseToolCalls are directly imported and then spied, this is fine.
       // Based on the problem description, they should be mocked via the factory.
       // So, vi.mocked(executeToolCall) and vi.mocked(parseToolCalls) will refer to the factory's mocks.
-      vi.mocked(executeToolCall).mockReset();
-      vi.mocked(parseToolCalls).mockReset();
+      (executeToolCall as vi.Mock).mockReset();
+      (parseToolCalls as vi.Mock).mockReset();
     });
 
     it('should complete and return final response if agent does not call tools', async () => {
@@ -453,7 +453,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce("Test response from verifyLLMProvider")
         .mockResolvedValueOnce('Final agent response, no tools needed.');
       
-      vi.mocked(parseToolCalls).mockReturnValueOnce([]);
+      (parseToolCalls as vi.Mock).mockReturnValueOnce([]);
 
       // Clear logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -475,7 +475,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}')
         .mockResolvedValueOnce('Final response after tool.');
       
-      vi.mocked(parseToolCalls)
+      (parseToolCalls as vi.Mock)
         .mockImplementationOnce((output: string) => {
           if (output === 'TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') {
             return [{ tool: 'search_code', parameters: { query: 'tool query' } }];
@@ -484,7 +484,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         })
         .mockReturnValueOnce([]); // For the second reasoning step (final response)
 
-      const execSpy = vi.mocked(executeToolCall).mockResolvedValue({ status: 'search_code executed', results: [] });
+      const execSpy = (executeToolCall as vi.Mock).mockResolvedValue({ status: 'search_code executed', results: [] });
       
       // Clear all logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -513,12 +513,12 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "second step query"}}')       // Step 2 (extended)
         .mockResolvedValueOnce('Final response in extended step.');                                                       // Step 3 (extended, final)
 
-      vi.mocked(parseToolCalls)
+      (parseToolCalls as vi.Mock)
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'need more' } }])
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'second step query' } }])
         .mockReturnValueOnce([]); // For final response
 
-      vi.mocked(executeToolCall).mockImplementation(async (toolCall) => {
+      (executeToolCall as vi.Mock).mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
         if (toolCall.tool === 'search_code') return { status: 'search executed', results: []};
         return { status: 'unknown tool executed' };
@@ -548,13 +548,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "try to extend again from step 3"}}') // Step 2
         .mockResolvedValueOnce('Final response after hitting absolute max.'); // Final response generation
 
-      vi.mocked(parseToolCalls)
+      (parseToolCalls as vi.Mock)
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'step 1 query' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'extend from step 2' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'try to extend again from step 3' } }])
         .mockReturnValueOnce([]); // For final response generation
 
-      vi.mocked(executeToolCall).mockImplementation(async (toolCall) => {
+      (executeToolCall as vi.Mock).mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'search_code') return { status: 'search executed', results: []};
         if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
         return { status: 'unknown tool executed' };
@@ -597,7 +597,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           })
           .mockResolvedValueOnce("Final response after fallback.");
       
-      vi.mocked(parseToolCalls)
+      (parseToolCalls as vi.Mock)
           .mockImplementationOnce((outputFromLLM) => {
               if (outputFromLLM === `TOOL_CALL: ${JSON.stringify({tool: "search_code",parameters: { query: "reasoning timeout query", sessionId: "session5" }})}`) {
                   return [{ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }];
@@ -606,7 +606,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           })
           .mockReturnValueOnce([]);
 
-      const executeToolCallSpy = vi.mocked(executeToolCall).mockResolvedValue({ status: 'fallback search_code executed', results: [] });
+      const executeToolCallSpy = (executeToolCall as vi.Mock).mockResolvedValue({ status: 'fallback search_code executed', results: [] });
       
       mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.info.mockClear();
