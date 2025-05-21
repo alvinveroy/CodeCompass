@@ -4,6 +4,7 @@ import { type ExecException } from 'child_process'; // For type annotation
 // 1. Mock 'child_process' and replace 'exec' with a vi.fn() created IN THE FACTORY.
 vi.mock('child_process', async (importOriginal) => {
   const actualCp = await importOriginal<typeof import('child_process')>();
+  const actualCp = await importOriginal<typeof import('child_process')>();
   return {
     ...actualCp,
     exec: vi.fn(), // This vi.fn() is created when the factory runs.
@@ -32,17 +33,19 @@ vi.mock('fs/promises', () => {
 
 // Mock 'isomorphic-git'
 // isomorphic-git exports named functions. We mock them directly.
-vi.mock('isomorphic-git', () => ({
-  resolveRef: vi.fn(),
-  listFiles: vi.fn(), // SUT uses gitListFiles, this mock will be for that.
-  log: vi.fn(),       // SUT uses gitLog
-  readCommit: vi.fn(),
-  diffTrees: vi.fn(),
-  walk: vi.fn(),      // SUT uses gitWalk
-  TREE: vi.fn((args: any) => ({ _id: args?.oid || 'mock_tree_id_default', ...args })), // SUT uses GIT_TREE
-  // Ensure all functions used by the SUT from isomorphic-git are mocked here
-  // If any are missing, add them. E.g., if SUT uses `commit`, add `commit: vi.fn(),`
-}));
+vi.mock('isomorphic-git', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('isomorphic-git')>();
+  return {
+    ...actual, // Spread actual to keep other exports, then override
+    resolveRef: vi.fn(),
+    listFiles: vi.fn(),
+    log: vi.fn(),
+    readCommit: vi.fn(),
+    default: vi.fn(),   // Mock the default export, assuming it's diffTrees
+    walk: vi.fn(),
+    TREE: vi.fn((args: any) => ({ _id: args?.oid || 'mock_tree_id_default', ...args })),
+  };
+});
 
 // No top-level const mockExecAsyncFn = vi.fn(); anymore
 
@@ -101,10 +104,11 @@ import {
   listFiles as mockedGitListFiles, // Corresponds to gitListFiles in SUT
   log as mockedGitLog,             // Corresponds to gitLog in SUT
   readCommit as mockedReadCommit,
-  diffTrees as mockedDiffTrees,
+  // diffTrees as mockedDiffTrees, // Remove named import for diffTrees
   walk as mockedGitWalk,           // Corresponds to gitWalk in SUT
   TREE as MockedGIT_TREE_Func      // Corresponds to GIT_TREE in SUT
 } from 'isomorphic-git';
+import mockedDiffTrees from 'isomorphic-git'; // Import default for diffTrees
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
@@ -145,7 +149,7 @@ describe('Repository Utilities', () => {
     vi.mocked(mockedGitListFiles).mockReset();
     vi.mocked(mockedGitLog).mockReset();
     vi.mocked(mockedReadCommit).mockReset();
-    vi.mocked(mockedDiffTrees).mockReset();
+    (mockedDiffTrees as Mock).mockReset(); // Reset the default import mock
     vi.mocked(mockedGitWalk).mockReset();
     if (MockedGIT_TREE_Func && typeof (MockedGIT_TREE_Func as Mock).mockClear === 'function') {
         (MockedGIT_TREE_Func as Mock).mockClear();
@@ -279,7 +283,7 @@ describe('Repository Utilities', () => {
             return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as any;
         });
 
-        vi.mocked(mockedDiffTrees).mockImplementation(async (args: { fs: any, dir: string, gitdir: string, ref1: string, ref2: string }) => { // Use mockedDiffTrees
+        (mockedDiffTrees as Mock).mockImplementation(async (args: { fs: any, dir: string, gitdir: string, ref1: string, ref2: string }) => {
             if (args.ref1 === 'tree1_oid' && args.ref2 === 'tree2_oid') {
                  return [['file.ts', 'modify', 'blob_before', 'blob_after', 'mode_before', 'mode_after']] as any;
             }

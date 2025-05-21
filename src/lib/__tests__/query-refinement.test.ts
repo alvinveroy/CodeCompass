@@ -54,7 +54,7 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('searchWithRefinement', () => {
-    let refineQuerySpy: Mock<(...args: any[]) => any>;
+    let refineQuerySpy; // Let TypeScript infer
     beforeEach(() => { 
         refineQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'refineQuery').mockImplementation((query, _results, relevance) => {
             if (relevance < 0.3) return `${query} broadened by mock`;
@@ -151,9 +151,9 @@ describe('Query Refinement Tests', () => {
     // In this block, we are testing the *original* refineQuery function,
     // so we call it via ActualQueryRefinementModule.refineQuery.
     // Its internal calls (broadenQuery, etc.) should be spied upon directly on ActualQueryRefinementModule.
-    let broadenQuerySpy: Mock<(...args: any[]) => any>;
-    let focusQueryBasedOnResultsSpy: Mock<(...args: any[]) => any>;
-    let tweakQuerySpy: Mock<(...args: any[]) => any>;
+    let broadenQuerySpy; // Let TypeScript infer
+    let focusQueryBasedOnResultsSpy; // Let TypeScript infer
+    let tweakQuerySpy; // Let TypeScript infer
 
     beforeEach(() => { 
         broadenQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'broadenQuery').mockReturnValue('mock_broadened_return_val');

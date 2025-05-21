@@ -3,10 +3,11 @@ import {
   listFiles as gitListFiles,
   log as gitLog,
   readCommit,
-  diffTrees,
+  // diffTrees, // Remove from named imports
   walk as gitWalk,
   TREE as GIT_TREE
 } from "isomorphic-git";
+import diffTrees from "isomorphic-git"; // Try importing as default
 import fs from "fs/promises";
 import path from "path";
 import { exec } from "child_process"; // Import exec
