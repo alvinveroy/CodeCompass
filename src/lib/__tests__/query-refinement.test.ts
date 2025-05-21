@@ -23,7 +23,7 @@ import {
   searchWithRefinement,
   // Import other functions if they are tested directly or needed for setup
   // refineQuery, broadenQuery, focusQueryBasedOnResults, tweakQuery, extractKeywords 
-} from '../lib/query-refinement';
+} from '../query-refinement'; // Corrected path
 // Import mocked dependencies
 import { generateEmbedding } from '../ollama';
 import { configService, logger } from '../config-service';
@@ -36,7 +36,7 @@ const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
 let ActualQueryRefinementModule: typeof import('../lib/query-refinement');
 
 beforeAll(async () => {
-  ActualQueryRefinementModule = await vi.importActual('../lib/query-refinement');
+  ActualQueryRefinementModule = await vi.importActual('../query-refinement'); // Corrected path
 });
 
 describe('Query Refinement Tests', () => {
