@@ -125,20 +125,20 @@ describe('Repository Utilities', () => {
       const result = await getRepositoryDiff(repoPath);
       expect(result).toBe("No previous commits to compare");
       // This is the specific log message from getRepositoryDiff when there are not enough commits.
-      expect(logger.info).toHaveBeenCalledWith(`Not enough commits to generate a diff for ${repoPath}. Found 1 commits.`);
+      expect(logger.info).toHaveBeenCalledWith("Not enough commits to generate a diff.");
     });
 
     it('should call git diff command and return stdout', async () => {
       // Ensure mocks from setupValidRepoAndCommitsMocks are active
-      vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
-        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        // Check command and ensure callback is defined
-        if (command === 'git diff commit1_oid commit2_oid' && callback) {
+      vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
+        // This mock is for the specific call in this test.
+        // Assumes options are always passed by promisify.
+        if (command === 'git diff commit1_oid commit2_oid') {
           process.nextTick(() => callback(null, 'diff_content_stdout', ''));
-        } else if (callback) {
-          process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
+        } else {
+          process.nextTick(() => callback(new Error(`Test mock: Unexpected exec command: ${command}`), '', ''));
         }
-        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any; 
+        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any; 
       });
 
       const result = await getRepositoryDiff(repoPath);
@@ -153,14 +153,13 @@ describe('Repository Utilities', () => {
 
     it('should truncate long diff output', async () => {
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
-        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        if (command === 'git diff commit1_oid commit2_oid' && callback) {
-          process.nextTick(() => callback(null, longDiff, ''));
-        } else if (callback) {
-          process.nextTick(() => callback(new Error(`Unexpected exec command: ${command}`) as ExecException, '', ''));
+      vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
+        if (command === 'git diff commit1_oid commit2_oid') {
+            process.nextTick(() => callback(null, longDiff, ''));
+        } else {
+            process.nextTick(() => callback(new Error(`Test mock: Unexpected exec command for truncate: ${command}`), '', ''));
         }
-        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }) } as any;
+        return { on: vi.fn((event, cb) => { if (event === 'close') cb(0); }), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
       });
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -173,27 +172,22 @@ describe('Repository Utilities', () => {
       // stderr is not explicitly set on mockError here, but execAsync passes it if callback provides it.
       // The important part is that the callback receives an error object.
 
-      vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
-        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
-        if (command === 'git diff commit1_oid commit2_oid' && callback) {
-          // For promisify(exec), the callback signature is (error, stdout, stderr)
-          // Pass the mockError as the first argument to simulate failure.
-          // stdout can be an empty string, stderr can be provided.
-          process.nextTick(() => callback(mockError, '', 'error_stderr_content_from_callback'));
-        } else if (callback) {
-          process.nextTick(() => callback(new Error(`Unexpected exec command in error test: ${command}`) as ExecException, '', ''));
+      vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
+        if (command === 'git diff commit1_oid commit2_oid') {
+            process.nextTick(() => callback(mockError, '', 'error_stderr_content_from_callback'));
+        } else {
+            process.nextTick(() => callback(new Error(`Test mock: Unexpected exec command for error handling: ${command}`), '', ''));
         }
-        // Simulate ChildProcess behavior for promisify(exec) which might check 'exit' or 'close' with error code
         return { 
             on: vi.fn((event, cb) => { 
                 if (event === 'close' && mockError.code) cb(mockError.code); 
-                else if (event === 'close') cb(1); // Default error code if not on mockError
+                else if (event === 'close') cb(1);
             }),
-            stdout: { on: vi.fn() }, // Mock stdout stream
-            stderr: { on: vi.fn() }, // Mock stderr stream
+            stdout: { on: vi.fn() }, 
+            stderr: { on: vi.fn() }, 
         } as any;
       });
-
+      
       // Clear logger before the call, as validateGitRepository might log
       logger.error.mockClear();
       logger.warn.mockClear(); // Also clear warn as validateGitRepository might warn

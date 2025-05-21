@@ -124,9 +124,12 @@ function focusQueryBasedOnResults(query: string, results: DetailedQdrantSearchRe
 
 // Make minor tweaks to a query
 function tweakQuery(query: string, results: DetailedQdrantSearchResult[]): string {
+  if (!results || results.length === 0) {
+    return query;
+  }
   // Get the most relevant result
-  const topResult = results[0];
-  const filepath = topResult.payload?.filepath || '';
+  const topResult = results[0]; // This is now safe due to the check above
+  const filepath = topResult?.payload?.filepath || ''; // Added optional chaining on topResult itself
 
   // Extract file type or directory
   const fileType = filepath.split('.').pop() || '';

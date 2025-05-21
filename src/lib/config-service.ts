@@ -423,9 +423,24 @@ class ConfigService {
   }
 
   public setSuggestionModel(model: string): void {
+    const oldSuggestionModel = this._suggestionModel; // Store the old value
     this._suggestionModel = model;
     process.env.SUGGESTION_MODEL = model;
     global.CURRENT_SUGGESTION_MODEL = model;
+
+    // If summarization/refinement models were previously derived from suggestionModel or were empty, update them.
+    if (this._summarizationModel === oldSuggestionModel || !this._summarizationModel) {
+      this._summarizationModel = model;
+      process.env.SUMMARIZATION_MODEL = model; 
+    }
+    if (this._refinementModel === oldSuggestionModel || !this._refinementModel) {
+      this._refinementModel = model;
+      process.env.REFINEMENT_MODEL = model;
+    }
+    
+    // Ensure global state is fully updated before persisting.
+    // initializeGlobalState updates all global.* variables based on current service state.
+    this.initializeGlobalState(); 
     this.persistModelConfiguration();
   }
 
