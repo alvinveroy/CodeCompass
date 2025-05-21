@@ -74,6 +74,7 @@ ${feedback}
 
 Please provide an improved response addressing the user's feedback.`;
       
+      // The call to the Ollama API for generating an improved response is wrapped with `withRetry`.
       const improvedResponse = await withRetry(async () => {
         const res = await axios.post<OllamaGenerateResponse>(
           `${configService.OLLAMA_HOST}/api/generate`,
@@ -116,6 +117,7 @@ class DeepSeekProvider implements LLMProvider {
 
     logger.debug(`DeepSeekProvider: Cache miss. Generating text for prompt (length: ${prompt.length})`);
     deepseek.checkDeepSeekApiKey();
+    // The underlying deepseek.generateWithDeepSeek function uses `withRetry` for robustness.
     const response = await deepseek.generateWithDeepSeek(prompt);
     llmCache.set(cacheKey, response);
     return response;
