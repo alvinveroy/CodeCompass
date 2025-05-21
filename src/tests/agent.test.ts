@@ -631,12 +631,12 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}')
           .mockResolvedValueOnce('Final response after tool timeout.');
 
-      vi.mocked(parseToolCalls)
+      (parseToolCalls as vi.Mock)
           .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }])
           .mockReturnValueOnce([]);
       
       const toolExecutionTimeoutError = new Error("Simulated Tool execution timed out: search_code");
-      vi.mocked(executeToolCall).mockImplementationOnce(async () => {
+      (executeToolCall as vi.Mock).mockImplementationOnce(async () => {
         // Simulate the timeout behavior of Promise.race in agent.ts
         return new Promise((_, reject) => {
             setTimeout(() => reject(toolExecutionTimeoutError), 10); // Short delay, actual timeout is in agent.ts
