@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockedFunction } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { QdrantClient, type Schemas } from '@qdrant/js-client-rest';
 import type { DetailedQdrantSearchResult } from '../types';
+import type { RefineQueryFunc } from '../query-refinement'; // Import the type
 
 // Mock external dependencies (these are fine as they are)
 vi.mock('../config-service', () => ({
@@ -21,16 +22,12 @@ vi.mock('../../utils/text-utils', () => ({
 // Import SUT and its helpers (now exported)
 import {
   searchWithRefinement,
-  refineQuery as actualRefineQuery, // This is the actualRefineQuery from the module
-  // broadenQuery, // Actual helper - not needed for these tests as we inject mocks for actualRefineQuery
-  // focusQueryBasedOnResults, // Actual helper
-  // tweakQuery, // Actual helper
-  // extractKeywords // Actual helper
+  refineQuery as actualRefineQuery,
 } from '../query-refinement';
 
 // Import mocked dependencies
 import { generateEmbedding } from '../ollama';
-import { configService, logger } from '../config-service';
+import { logger } from '../config-service'; // configService itself is not used directly in tests
 
 const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
 
@@ -43,10 +40,9 @@ describe('Query Refinement Tests', () => {
     vi.mocked(logger.debug).mockClear();
   });
 
-  // No afterEach needed for vi.resetModules() with this DI approach for the SUT itself.
-
   describe('searchWithRefinement', () => {
-    let mockRefineQuery_Injected: Mock<[string, DetailedQdrantSearchResult[], number], string>;
+    // Type the mock function variable correctly
+    let mockRefineQuery_Injected: Mock<Parameters<RefineQueryFunc>, ReturnType<RefineQueryFunc>>;
 
     beforeEach(() => {
       mockRefineQuery_Injected = vi.fn((query, _results, relevance) => {
@@ -56,21 +52,23 @@ describe('Query Refinement Tests', () => {
       });
     });
 
-    const dummySearchResults = (score: number, count = 1): Schemas.ScoredPoint[] =>
+    // Use Schemas['ScoredPoint']
+    const dummySearchResults = (score: number, count = 1): Schemas['ScoredPoint'][] =>
       Array(count).fill(null).map((_, i) => ({
         id: `id-${score}-${i}`, version: 1, score,
-        payload: { content: `content ${score}`, filepath: `file${i}.ts` },
+        payload: { content: `content ${score}`, filepath: `file${i}.ts` }, // This payload is simpler than DetailedQdrantSearchResult
         vector: [0.1 * i, 0.2 * i, 0.3 * i],
       }));
 
     it('should return results without refinement if threshold met (using injected mock)', async () => {
-      vi.mocked(mockQdrantClientInstance.search).mockResolvedValue(dummySearchResults(0.8) as any);
+      vi.mocked(mockQdrantClientInstance.search).mockResolvedValue(dummySearchResults(0.8) as any); // Cast to any for simplicity if payload differs from DetailedQdrantSearchResult
       const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
         mockQdrantClientInstance, 'initial query', [], undefined, 2, 0.75,
-        mockRefineQuery_Injected // Pass the mock
+        mockRefineQuery_Injected
       );
       expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(1);
-      expect(results[0].score).toBe(0.8);
+      // Ensure results are cast or match DetailedQdrantSearchResult for this assertion
+      expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(refinedQuery).toBe('initial query');
       expect(relevanceScore).toBe(0.8);
       expect(mockRefineQuery_Injected).not.toHaveBeenCalled();
@@ -84,16 +82,17 @@ describe('Query Refinement Tests', () => {
 
       const { results, relevanceScore, refinedQuery } = await searchWithRefinement(
         mockQdrantClientInstance, 'original query', [], undefined, 2, 0.75,
-        mockRefineQuery_Injected // Pass the mock
+        mockRefineQuery_Injected
       );
 
       expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3);
-      expect(results[0].score).toBe(0.8);
+      expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(relevanceScore).toBe(0.8);
       expect(refinedQuery).toBe('original query broadened by INJECTED mockRefineQuery focused by INJECTED mockRefineQuery');
       expect(mockRefineQuery_Injected).toHaveBeenCalledTimes(2);
-      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(1, 'original query', expect.any(Array), 0.2);
-      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(2, 'original query broadened by INJECTED mockRefineQuery', expect.any(Array), 0.5);
+      // Cast the results in the assertion to DetailedQdrantSearchResult[] if needed by mockRefineQuery_Injected's signature
+      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(1, 'original query', expect.any(Array) as DetailedQdrantSearchResult[], 0.2);
+      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(2, 'original query broadened by INJECTED mockRefineQuery', expect.any(Array) as DetailedQdrantSearchResult[], 0.5);
     });
     
     it('should handle empty search results gracefully (using injected mock)', async () => {
@@ -116,9 +115,11 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('refineQuery (original logic with injected helpers)', () => {
+    // Type the mock function variables correctly
     let mockBroaden_Injected: Mock<[string], string>;
     let mockFocus_Injected: Mock<[string, DetailedQdrantSearchResult[]], string>;
     let mockTweak_Injected: Mock<[string, DetailedQdrantSearchResult[]], string>;
+
 
     beforeEach(() => {
       mockBroaden_Injected = vi.fn().mockReturnValue('mock_broadened_by_INJECTED_helper');
@@ -127,7 +128,7 @@ describe('Query Refinement Tests', () => {
     });
 
     const dummyResultsArray = (score: number): DetailedQdrantSearchResult[] => ([
-        { id: 'res1', score, payload: { content: 'some content', filepath: 'file.ts' }, vector: [], version: 0 }
+        { id: 'res1', score, payload: { content: 'some content', filepath: 'file.ts', last_modified: '2023-01-01' }, vector: [], version: 0 } // Added last_modified
     ]);
 
     it('should call broadenQuery (injected) for very low relevance (<0.3)', () => {

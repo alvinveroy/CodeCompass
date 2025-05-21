@@ -37,12 +37,6 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
   logger.info(`Checking Ollama model: ${model}`);
   
   try {
-    // if (isEmbeddingModel) { // This block is effectively the same as the else block's start
-    //   const response = await axios.post<OllamaEmbeddingResponse>(
-    // This can be simplified as the initial check for response.status and response.data.embedding/response
-    // is the main differentiator, not the type of POST.
-    // However, the request body *is* different. Let's keep the structure but fix the error handling.
-
     if (isEmbeddingModel) {
       const response = await axios.post<OllamaEmbeddingResponse>(
         `${host}/api/embeddings`,
@@ -53,6 +47,9 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
         logger.info(`Ollama model ${model} is available`);
         return true;
       }
+      // If not returned true, it means it's not functional for this path
+      logger.warn(`Ollama embedding model ${model} did not return expected data structure.`);
+      return false; // Explicitly return false
     } else {
       const response = await axios.post<OllamaGenerateResponse>(
         `${host}/api/generate`,
@@ -63,11 +60,13 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
         logger.info(`Ollama model ${model} is available`);
         return true;
       }
+      // If not returned true, it means it's not functional for this path
+      logger.warn(`Ollama generation model ${model} did not return expected data structure.`);
+      return false; // Explicitly return false
     }
-    // throw new Error(`Model ${model} not functional`); // This was a bit too aggressive. The error below is better.
-    logger.warn(`Ollama model ${model} did not return expected data structure in response.`); // More specific log
-    // Fall through to throw the more general error below if this path is taken.
-    // This ensures an error is always thrown if the positive checks don't pass.
+    // The logic above now ensures a boolean is always returned from the try block's success paths.
+    // The original fall-through to throw an error is no longer needed here,
+    // as we explicitly return false if the checks fail.
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     const errorDetails: { message: string, response?: { status: number; data: unknown } } = { message: err.message };
@@ -83,9 +82,9 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
     }
     
     logger.error(`Ollama model check error for ${model}`, errorDetails);
-    throw new Error(
-      `Ollama model ${model} is not available. Pull it with: ollama pull ${model}`
-    );
+    // Instead of throwing, we should return false as per the function's Promise<boolean> signature
+    // The caller can decide if this constitutes a critical failure.
+    return false;
   }
 }
 

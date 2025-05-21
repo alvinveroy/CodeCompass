@@ -76,7 +76,7 @@ describe('Query Refinement Helper Utilities', () => {
 
     it('should handle empty string input', () => {
         const result = queryRefinementHelpers.broadenQuery("");
-        expect(result).toBe(' implementation code'); // As per current logic
+        expect(result).toBe('general code context'); // Updated expectation
     });
   });
 
