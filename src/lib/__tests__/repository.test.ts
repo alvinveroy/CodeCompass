@@ -10,30 +10,25 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
-// Explicit mock functions for fs/promises methods
-const mockFsAccess = vi.fn();
-const mockFsReadFile = vi.fn();
-const mockFsReadDir = vi.fn();
-const mockFsStat = vi.fn();
-// Mock util.promisify to control execAsync
-const mockExecAsyncFn = vi.fn();
-
-vi.mock('fs/promises', () => ({
-  __esModule: true, // Indicate that this is an ES module mock
-  // This is what `import fs from 'fs/promises'` in the SUT will receive
-  default: { 
-    access: mockFsAccess,
-    readFile: mockFsReadFile,
-    readdir: mockFsReadDir,
-    stat: mockFsStat,
-    // Add any other functions from fs/promises if they are used directly via fs.XXX in SUT
-  },
-  // These are for `import { access } from 'fs/promises'` in tests or SUT
-  access: mockFsAccess,
-  readFile: mockFsReadFile,
-  readdir: mockFsReadDir,
-  stat: mockFsStat,
-}));
+vi.mock('fs/promises', () => {
+  const accessMock = vi.fn();
+  const readFileMock = vi.fn();
+  const readdirMock = vi.fn();
+  const statMock = vi.fn();
+  return {
+    __esModule: true,
+    default: { 
+      access: accessMock,
+      readFile: readFileMock,
+      readdir: readdirMock,
+      stat: statMock
+    },
+    access: accessMock,
+    readFile: readFileMock,
+    readdir: readdirMock,
+    stat: statMock,
+  };
+});
 
 // Mock 'isomorphic-git'
 // isomorphic-git exports named functions. We mock them directly.
@@ -48,6 +43,9 @@ vi.mock('isomorphic-git', () => ({
   // Ensure all functions used by the SUT from isomorphic-git are mocked here
   // If any are missing, add them. E.g., if SUT uses `commit`, add `commit: vi.fn(),`
 }));
+
+// This mock needs to be defined before util.promisify mock if it's referenced there.
+const mockExecAsyncFn = vi.fn();
 
 vi.mock('util', async (importOriginal) => {
   const actualUtil = await importOriginal<typeof import('util')>();
@@ -88,10 +86,11 @@ import { exec as actualChildProcessExecMockInstance } from 'child_process';
 
 // Import SUT and other necessary modules AFTER all vi.mock calls
 import * as repositoryFunctions from '../repository'; // Import all exports as a namespace
-import { logger, configService } from '../config-service';
+import { logger } from '../config-service'; // configService is mocked, only logger needed here
 // Import specific fs/promises methods directly
-// This fsAccess should now correctly point to mockFsAccess
-import { access as fsAccess } from 'fs/promises';
+// We will import the mocked versions of these functions
+import { access as mockedFsAccessImported, readFile as mockedFsReadFileImported, readdir as mockedFsReadDirImported, stat as mockedFsStatImported } from 'fs/promises';
+
 import * as git from 'isomorphic-git'; // Import as namespace
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -121,12 +120,11 @@ describe('Repository Utilities', () => {
     vi.clearAllMocks();
     // execMock is vi.fn() from factory, clearAllMocks resets its state (calls, impls)
     
-    // Reset all fs/promises mocks to basic spies
-    // No longer need vi.mocked(fsAccess).mockReset() as we control mockFsAccess directly
-    mockFsAccess.mockReset();
-    mockFsReadFile.mockReset();
-    mockFsReadDir.mockReset();
-    mockFsStat.mockReset();
+    // Reset the imported mock functions
+    vi.mocked(mockedFsAccessImported).mockReset();
+    vi.mocked(mockedFsReadFileImported).mockReset();
+    vi.mocked(mockedFsReadDirImported).mockReset();
+    vi.mocked(mockedFsStatImported).mockReset();
     
 
     // Reset all isomorphic-git mocks
@@ -153,20 +151,20 @@ describe('Repository Utilities', () => {
     // These tests use the original implementation of validateGitRepository
     it('should return true for a valid repository', async () => {
       // Configure the specific mock function directly
-      mockFsAccess.mockResolvedValue(undefined as unknown as void);
+      vi.mocked(mockedFsAccessImported).mockResolvedValue(undefined as unknown as void);
       vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
       const result = await repositoryFunctions.validateGitRepository(repoPath);
       expect(result).toBe(true);
     });
     it('should return false if .git access is denied', async () => {
       // Configure the specific mock function directly
-      mockFsAccess.mockRejectedValueOnce(new Error('Permission denied'));
+      vi.mocked(mockedFsAccessImported).mockRejectedValueOnce(new Error('Permission denied'));
       const result = await repositoryFunctions.validateGitRepository(repoPath);
       expect(result).toBe(false);
     });
     it('should return false if HEAD cannot be resolved', async () => {
       // Configure the specific mock function directly
-      mockFsAccess.mockResolvedValue(undefined as unknown as void); // fs.access passes
+      vi.mocked(mockedFsAccessImported).mockResolvedValue(undefined as unknown as void); // fs.access passes
       vi.mocked(git.resolveRef).mockRejectedValueOnce(new Error('No HEAD')); // git.resolveRef fails
       const result = await repositoryFunctions.validateGitRepository(repoPath);
       expect(result).toBe(false);
