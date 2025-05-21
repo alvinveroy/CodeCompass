@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-// Import ONLY the functions to be tested directly and their dependencies
-import { 
-  extractKeywords,
-  broadenQuery,
-  focusQueryBasedOnResults,
-  tweakQuery
-} from '../query-refinement'; // Direct import of originals
+// Import the functions to be tested directly from the module
+import * as queryRefinementHelpers from '../query-refinement';
 import { preprocessText } from '../../utils/text-utils';
 import { DetailedQdrantSearchResult } from '../types'; 
 
@@ -38,7 +33,7 @@ describe('Query Refinement Helper Utilities', () => {
       // preprocessText is mocked in beforeEach to return a simplified version
       // For this specific test, let's ensure it does what we expect for keyword extraction
       vi.mocked(preprocessText).mockReturnValueOnce(text.toLowerCase().replace(/[.,;:!?(){}[\]"']/g, " "));
-      const keywords = extractKeywords(text); 
+      const keywords = queryRefinementHelpers.extractKeywords(text); 
       expect(keywords).toEqual(expect.arrayContaining(['sample', 'function', 'user', 'authentication', 'class']));
       expect(keywords).not.toContain('this');
       expect(keywords).not.toContain('for');
@@ -47,23 +42,23 @@ describe('Query Refinement Helper Utilities', () => {
     it('should return unique keywords', () => {
       const text = "test test keyword keyword";
       vi.mocked(preprocessText).mockReturnValueOnce(text.toLowerCase().replace(/[.,;:!?(){}[\]"']/g, " "));
-      const keywords = extractKeywords(text);
+      const keywords = queryRefinementHelpers.extractKeywords(text);
       // Using toHaveSameMembers because Set iteration order is not guaranteed for toEqual
       expect(keywords).toEqual(expect.arrayContaining(['test', 'keyword']));
       expect(keywords.length).toBe(2); // Ensure uniqueness
     });
 
     it('should handle empty or common-word-only strings', () => {
-        expect(extractKeywords("the is of and")).toEqual([]);
-        expect(extractKeywords("")).toEqual([]);
-        expect(extractKeywords("   ")).toEqual([]);
+        expect(queryRefinementHelpers.extractKeywords("the is of and")).toEqual([]);
+        expect(queryRefinementHelpers.extractKeywords("")).toEqual([]);
+        expect(queryRefinementHelpers.extractKeywords("   ")).toEqual([]);
     });
   });
 
   describe('broadenQuery (direct test)', () => {
     it('should remove specific terms and file extensions', () => {
       const query = "exact specific search for login.ts only";
-      const result = broadenQuery(query); 
+      const result = queryRefinementHelpers.broadenQuery(query); 
       expect(result).toBeDefined();
       expect(typeof result).toBe('string');
       expect(result).not.toContain('exact');
@@ -75,12 +70,12 @@ describe('Query Refinement Helper Utilities', () => {
 
     it('should add generic terms if query becomes too short', () => {
       const query = "fix.ts";
-      const result = broadenQuery(query);
+      const result = queryRefinementHelpers.broadenQuery(query);
       expect(result).toBe('fix implementation code');
     });
 
     it('should handle empty string input', () => {
-        const result = broadenQuery("");
+        const result = queryRefinementHelpers.broadenQuery("");
         expect(result).toBe(' implementation code'); // As per current logic
     });
   });
@@ -94,7 +89,7 @@ describe('Query Refinement Helper Utilities', () => {
       ] as DetailedQdrantSearchResult[];
       // preprocessText is mocked in beforeEach
       // extractKeywords will be called internally by focusQueryBasedOnResults
-      const focused = focusQueryBasedOnResults(originalQuery, results);
+      const focused = queryRefinementHelpers.focusQueryBasedOnResults(originalQuery, results);
       expect(focused).toBeDefined();
       expect(typeof focused).toBe('string');
       // Based on the simple preprocessText mock and extractKeywords logic:
@@ -113,14 +108,14 @@ describe('Query Refinement Helper Utilities', () => {
             { payload: { content: "" } },
             { payload: {} } // No content property
         ] as DetailedQdrantSearchResult[];
-        const focused = focusQueryBasedOnResults(originalQuery, results);
+        const focused = queryRefinementHelpers.focusQueryBasedOnResults(originalQuery, results);
         expect(focused).toBe(originalQuery);
     });
 
     it('should handle empty results array', () => {
         const originalQuery = "find user";
         const results: DetailedQdrantSearchResult[] = [];
-        const focused = focusQueryBasedOnResults(originalQuery, results);
+        const focused = queryRefinementHelpers.focusQueryBasedOnResults(originalQuery, results);
         expect(focused).toBe(originalQuery); // Should return original query if no results
     });
   });
@@ -129,7 +124,7 @@ describe('Query Refinement Helper Utilities', () => {
     it('should add file type if not present in query', () => {
       const query = "search login function";
       const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
-      const tweaked = tweakQuery(query, results);
+      const tweaked = queryRefinementHelpers.tweakQuery(query, results);
       expect(tweaked).toBeDefined();
       expect(typeof tweaked).toBe('string');
       expect(tweaked).toBe("search login function ts");
@@ -138,7 +133,7 @@ describe('Query Refinement Helper Utilities', () => {
     it('should add directory if file type present but directory not', () => {
       const query = "search login.ts function";
       const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
-      const tweaked = tweakQuery(query, results);
+      const tweaked = queryRefinementHelpers.tweakQuery(query, results);
       expect(tweaked).toBeDefined();
       expect(typeof tweaked).toBe('string');
       expect(tweaked).toBe("search login.ts function in src");
@@ -147,13 +142,13 @@ describe('Query Refinement Helper Utilities', () => {
     it('should not change query if context already present or no context to add', () => {
         const query = "search login.ts function in src";
         const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
-        let tweaked = tweakQuery(query, results);
+        let tweaked = queryRefinementHelpers.tweakQuery(query, results);
         expect(tweaked).toBeDefined();
         expect(typeof tweaked).toBe('string');
         expect(tweaked).toBe(query);
 
         const resultsNoPath = [{ payload: { content: "some content" } }] as DetailedQdrantSearchResult[];
-        tweaked = tweakQuery("some query", resultsNoPath);
+        tweaked = queryRefinementHelpers.tweakQuery("some query", resultsNoPath);
         expect(tweaked).toBeDefined();
         expect(typeof tweaked).toBe('string');
         expect(tweaked).toBe("some query");
@@ -162,14 +157,14 @@ describe('Query Refinement Helper Utilities', () => {
     it('should handle empty results array', () => {
         const query = "some query";
         const results: DetailedQdrantSearchResult[] = [];
-        const tweaked = tweakQuery(query, results);
+        const tweaked = queryRefinementHelpers.tweakQuery(query, results);
         expect(tweaked).toBe(query);
     });
 
     it('should handle result with no filepath', () => {
         const query = "some query";
         const results = [{ payload: { content: "content without filepath" } }] as DetailedQdrantSearchResult[];
-        const tweaked = tweakQuery(query, results);
+        const tweaked = queryRefinementHelpers.tweakQuery(query, results);
         expect(tweaked).toBe(query);
     });
   });
