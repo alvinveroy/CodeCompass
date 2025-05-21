@@ -6,6 +6,7 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 import { AgentState, AgentStep } from "./types";
 import { searchWithRefinement } from "./query-refinement"; // Changed import path
 import { validateGitRepository, getRepositoryDiff } from "./repository";
+import { AgentState, AgentStep, ParsedToolCall } from "./types"; // Added ParsedToolCall
 import git from "isomorphic-git";
 import fs from "fs/promises";
 import path from "path";
@@ -277,17 +278,22 @@ export function parseToolCalls(output: string): { tool: string; parameters: Reco
         const jsonPart = line.substring('TOOL_CALL:'.length).trim();
         logger.debug("Found potential tool call", { jsonPart });
         
-        const parsed = JSON.parse(jsonPart); // Keep as unknown initially
+        const parsed = JSON.parse(jsonPart); // parsed is initially 'any'
         logger.debug("Successfully parsed JSON", { parsed });
         
-        // More robust check for the structure
-        if (parsed && typeof parsed === 'object' && parsed !== null && 'tool' in parsed && 'parameters' in parsed &&
-            typeof parsed.tool === 'string' && 
-            typeof parsed.parameters === 'object' && parsed.parameters !== null) {
+        // Type guard for ParsedToolCall
+        const isParsedToolCall = (p: any): p is ParsedToolCall => 
+          p && typeof p === 'object' && p !== null &&
+          'tool' in p && typeof p.tool === 'string' &&
+          'parameters' in p && typeof p.parameters === 'object' && p.parameters !== null;
+
+        if (isParsedToolCall(parsed)) {
           results.push({
-            tool: parsed.tool,
-            parameters: parsed.parameters as Record<string, unknown> // Assert parameters as Record
+            tool: parsed.tool, // Now type-safe
+            parameters: parsed.parameters // Still Record<string, unknown>, which is fine
           });
+        } else {
+          logger.warn("Parsed JSON part does not match expected tool call structure", { jsonPart });
         }
       } catch (error: unknown) {
         const _err = error instanceof Error ? error : new Error(String(error));
@@ -420,7 +426,7 @@ export async function executeToolCall(
         : [];
       
       // Use the new helper function to get the processed diff
-      const processedDiff = await exports.getProcessedDiff(repoPath, suggestionModelAvailable);
+      const processedDiff = await getProcessedDiff(repoPath, suggestionModelAvailable);
       
       // Update context in session
       updateContext(session.id, repoPath, files);
@@ -443,7 +449,7 @@ export async function executeToolCall(
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
         
-        const processedSnippet = await exports.processSnippet(
+        const processedSnippet = await processSnippet(
           payload.content,
           query, // Pass the current tool's query
           filepathDisplay,
@@ -546,7 +552,7 @@ export async function executeToolCall(
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
 
-        const processedSnippet = await exports.processSnippet(
+        const processedSnippet = await processSnippet(
           payload.content,
           query, // Pass the current tool's query
           filepathDisplay,
@@ -570,7 +576,7 @@ export async function executeToolCall(
 **Context**:
 Repository: ${repoPath}
 Files: ${filesContextString}
-Recent Changes: ${processedDiff ? String(processedDiff).substring(0, 1000) : "Not available"}${processedDiff && String(processedDiff).length > 1000 ? "..." : ""} 
+Recent Changes: ${processedDiff ? (processedDiff || "").substring(0, 1000) : "Not available"}${(processedDiff || "").length > 1000 ? "..." : ""} 
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
@@ -594,7 +600,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
       
       return {
         sessionId: session.id,
-        suggestion: String(suggestion), // Assuming 'suggestion' is defined after llmProvider.generateText(prompt)
+        suggestion: suggestion || "No suggestion generated.", // Assuming 'suggestion' is defined after llmProvider.generateText(prompt)
         context: context.slice(0, 3) // Return only top 3 context items to avoid overwhelming the agent
       };
     }
@@ -755,7 +761,7 @@ Structure your analysis with these sections:
       // Get or create session (consistent with other tools)
       const session = getOrCreateSession(sessionId, repoPath);
 
-      logger.info(`Executing request_additional_context: type='${contextTypeParam}', query_or_path='${queryOrPathParam}', reasoning='${reasoningParamStr || 'N/A'}'`);
+      logger.info(`Executing request_additional_context: type='${contextTypeParam}', query_or_path='${String(queryOrPathParam)}', reasoning='${reasoningParamStr || 'N/A'}'`);
 
       switch (contextTypeParam) {
         case 'MORE_SEARCH_RESULTS': {
@@ -778,7 +784,7 @@ Structure your analysis with these sections:
             if (payload.is_chunked) {
               filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
             }
-            const processedSnippet = await exports.processSnippet(
+            const processedSnippet = await processSnippet(
               payload.content,
               queryOrPathParam,
               filepathDisplay,

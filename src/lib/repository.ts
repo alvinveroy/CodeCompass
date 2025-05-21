@@ -30,7 +30,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
     // logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
   } catch (error: unknown) {
-    logger.warn(`Git repository validation failed for ${repoPath}: ${error instanceof Error ? error.message : String(error)}`);
+    logger.warn(`Git repository validation failed for ${repoPath}`, { error: error instanceof Error ? error.message : String(error) });
     return false;
   }
 }
@@ -260,15 +260,18 @@ export async function getRepositoryDiff(
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     // Add stderr to the logged error object if it's an ExecException from execAsync
-    const errorDetails: { message: string; stack?: string; stderr?: string; code?: number } = { 
+    const errorDetails: { message: string; stack?: string; stderr?: string; code?: number | string } = { // code can be string
       message: err.message, 
       stack: err.stack 
     };
-    if ('stderr' in err && typeof (err as any).stderr === 'string') {
-        errorDetails.stderr = (err as any).stderr;
-    }
-    if ('code' in err && typeof (err as any).code === 'number') {
-        errorDetails.code = (err as any).code;
+    // Type guard for ExecException like errors
+    if (typeof error === 'object' && error !== null) {
+      if ('stderr' in error && typeof (error as { stderr?: unknown }).stderr === 'string') {
+        errorDetails.stderr = (error as { stderr: string }).stderr;
+      }
+      if ('code' in error && (typeof (error as { code?: unknown }).code === 'number' || typeof (error as { code?: unknown }).code === 'string')) {
+        errorDetails.code = (error as { code: number | string }).code;
+      }
     }
     logger.error(`Error retrieving git diff for ${repoPath}: ${err.message}`, errorDetails);
     const errorMessage = err && typeof err.message === 'string' ? err.message : String(err);
