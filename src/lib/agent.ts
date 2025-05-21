@@ -1189,8 +1189,13 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
           agentState.steps.map((s: AgentStep) => {
-            const outputStr = typeof s.output === 'string' ? s.output : JSON.stringify(s.output);
-            return `Used ${s.tool} and found: ${(outputStr || String(s.output) || '').substring(0, 200)}...`;
+            let outputPreview: string;
+            if (typeof s.output === 'string') {
+              outputPreview = s.output;
+            } else {
+              outputPreview = JSON.stringify(s.output) || String(s.output) || '';
+            }
+            return `Used ${s.tool} and found: ${outputPreview.substring(0, 200)}...`;
           }).join("\n\n");
       }
     }

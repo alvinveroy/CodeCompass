@@ -162,8 +162,8 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    let mockParseToolCallsInDoMock: Mock;
-    let mockExecuteToolCallInDoMock: Mock<any[], Promise<unknown>>; // Typed spy
+    // We will not spy on parseToolCalls or executeToolCall directly for runAgentLoop tests.
+    // We will control their behavior by mocking their dependencies or the LLM responses.
     let runAgentLoopSUT_local: typeof ActualAgentModule.runAgentLoop; // SUT for this block
 
     beforeEach(async () => {
@@ -172,11 +172,8 @@ describe('Agent', () => {
 
         // General setup for LLM provider mock for this describe block. Tests can override.
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
-
-        // Spy on functions within ActualAgentModule that runAgentLoopSUT_local will call
-        mockParseToolCallsInDoMock = vi.spyOn(ActualAgentModule, 'parseToolCalls');
-        mockExecuteToolCallInDoMock = vi.spyOn(ActualAgentModule, 'executeToolCall')
-          .mockResolvedValue({ status: 'default executeToolCall success' });
+        // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
+        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any], refinedQuery: 'refined', relevanceScore: 0.8 });
     });
 
     afterEach(() => {
@@ -193,32 +190,25 @@ describe('Agent', () => {
       mockLLMProviderInstance.generateText
         .mockReset() // Clear any beforeEach general setup for this specific test sequence
         .mockResolvedValueOnce("LLM Verification OK") // For currentProvider.generateText("Test message")
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') // For agent reasoning
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query", "sessionId": "session2"}}') // For agent reasoning
         .mockResolvedValueOnce('Final response after tool.'); // For final response generation
 
-      // mockParseToolCallsInDoMock setup:
-      // Called with the output of the 2nd generateText call
-      mockParseToolCallsInDoMock
-        .mockImplementationOnce((output: string) => {
-          // Basic check to see if it's getting the expected string
-          if (output.startsWith('TOOL_CALL:')) {
-            return [{ tool: 'search_code', parameters: { query: 'tool query' } }];
-          }
-          return [];
-        })
-        .mockReturnValueOnce([]); // For any subsequent calls if the loop were to continue differently
-
-      mockExecuteToolCallInDoMock.mockResolvedValueOnce({ status: 'search_code executed by mock', results: [] });
+      // The actual parseToolCalls will be used.
+      // The actual executeToolCall will be used. We need to ensure its dependencies are mocked.
+      // searchWithRefinement is already mocked in beforeEach.
+      // getRepositoryDiff is mocked in global beforeEach.
+      // validateGitRepository is mocked in global beforeEach.
 
       await runAgentLoopSUT_local('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      expect(mockParseToolCallsInDoMock).toHaveBeenCalledTimes(1);
-      expect(mockParseToolCallsInDoMock).toHaveBeenCalledWith('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}');
-      expect(mockExecuteToolCallInDoMock).toHaveBeenCalledTimes(1);
-      expect(mockExecuteToolCallInDoMock).toHaveBeenCalledWith(
-        expect.objectContaining({ tool: 'search_code' }),
-        mockQdrantClient, repoPath, true
-      );
+      // Verify that the LLM was called for reasoning and final response
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // Verification, Reasoning, Final Response
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool'));
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code'));
+
+      // Verify that searchWithRefinement (a dependency of executeToolCall for "search_code") was called
+      expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']);
+      
       expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.'));
     });
   });
