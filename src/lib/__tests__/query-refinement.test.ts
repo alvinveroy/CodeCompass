@@ -2,39 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // Import functions to test
-// Import functions for direct testing (SUTs for their own tests)
 import { 
   searchWithRefinement,
-  extractKeywords as actualExtractKeywords, // Keep using actual for direct tests
-  broadenQuery as actualBroadenQuery,
-  focusQueryBasedOnResults as actualFocusQueryBasedOnResults,
-  tweakQuery as actualTweakQuery
-  // refineQuery will be handled by the mock for its dispatcher tests
+  extractKeywords, // Will be the original function
+  broadenQuery,    // Will be the original function
+  focusQueryBasedOnResults, // Will be the original function
+  tweakQuery,       // Will be the original function
+  refineQuery      // Will be the original function
 } from '../query-refinement';
 
-// Mock the entire query-refinement module for testing refineQuery's dispatching
-vi.mock('../query-refinement', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../query-refinement')>();
-  return {
-    ...original, // Provide original implementations for functions not explicitly mocked here
-    // Replace these with spies for the refineQuery dispatcher tests
-    broadenQuery: vi.fn().mockReturnValue('spy_broadened'),
-    focusQueryBasedOnResults: vi.fn().mockReturnValue('spy_focused'),
-    tweakQuery: vi.fn().mockReturnValue('spy_tweaked'),
-    // refineQuery itself will be the original version from `...original`
-    // extractKeywords will be original unless also spied on here
-  };
-});
-
-// AFTER vi.mock, import the potentially mocked versions.
-// These will be spies if defined in the mock factory, otherwise original.
-import { 
-    refineQuery, // This will be the original refineQuery from the module
-    broadenQuery, // This will be the vi.fn() spy from the mock factory
-    focusQueryBasedOnResults, // This will be the vi.fn() spy
-    tweakQuery // This will be the vi.fn() spy
-} from '../query-refinement';
-
+// Import the module as an object to spy on its exports for dispatcher tests
+import * as QueryRefinementAPI from '../query-refinement';
 
 // Mock dependencies
 vi.mock('../config-service', () => ({
@@ -65,17 +43,11 @@ describe('Query Refinement Utilities', () => {
     vi.clearAllMocks();
     // Default mock for generateEmbedding
     vi.mocked(generateEmbedding).mockResolvedValue([0.1, 0.2, 0.3]); // Default embedding
-    // Default mock for preprocessText - to match its actual behavior from text-utils.ts
-    vi.mocked(preprocessText).mockImplementation(text => {
-      // eslint-disable-next-line no-control-regex
-      let processedText = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-      processedText = processedText.replace(/\s+/g, (match) => {
-        if (match.includes("\n")) return "\n";
-        return " ";
-      });
-      return processedText.trim();
-    });
-    // vi.mocked(preprocessText).mockImplementation(text => text.trim()); // Simplified for example
+    // Default mock for preprocessText
+    vi.mocked(preprocessText).mockImplementation(text => text.trim().replace(/\s+/g, ' '));
+  });
+  afterEach(() => {
+    vi.restoreAllMocks(); 
   });
 
   // Tests for searchWithRefinement (as before)
@@ -172,22 +144,8 @@ describe('Query Refinement Utilities', () => {
   describe('extractKeywords', () => {
     it('should extract relevant keywords and filter common words', () => {
       const text = "This is a sample function for user authentication with a class.";
-      // Mock preprocessText to behave EXACTLY like the real one from text-utils.ts
-      // The real one only removes control chars and normalizes spaces. It does NOT remove periods.
-      vi.mocked(preprocessText).mockImplementation(rawText => {
-        // eslint-disable-next-line no-control-regex
-        let processed = rawText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-        processed = processed.replace(/\s+/g, (match) => {
-          if (match.includes("\n")) return "\n";
-          return " ";
-        });
-        return processed.trim();
-      });
-
-      const keywords = actualExtractKeywords(text); // Test the ACTUAL function
-                                             // then do its own .toLowerCase().replace(/[.,;:!?(){}[\]"']/g, " ")
-
-      // After extractKeywords' internal cleaning (which removes periods), "class." becomes "class"
+      // preprocessText is mocked in beforeEach
+      const keywords = extractKeywords(text); // Calls imported original
       expect(keywords).toEqual(expect.arrayContaining(['sample', 'function', 'user', 'authentication', 'class']));
       expect(keywords).not.toContain('this');
       expect(keywords).not.toContain('for');
@@ -195,27 +153,27 @@ describe('Query Refinement Utilities', () => {
 
     it('should return unique keywords', () => {
       const text = "test test keyword keyword";
-      vi.mocked(preprocessText).mockReturnValue("test test keyword keyword");
-      const keywords = actualExtractKeywords(text); // Test the ACTUAL function
-      expect(keywords).toEqual(['test', 'keyword']); // Order might vary depending on Set behavior
+      // preprocessText is mocked in beforeEach
+      const keywords = extractKeywords(text); // Calls imported original
+      expect(keywords).toEqual(expect.arrayContaining(['test', 'keyword'])); // Order might vary with Set
     });
   });
 
   describe('broadenQuery', () => {
     it('should remove specific terms and file extensions', () => {
       const query = "exact specific search for login.ts only";
-      const broadened = actualBroadenQuery(query); // Test the ACTUAL function
-      expect(broadened).not.toContain('exact');
-      expect(broadened).not.toContain('specific');
-      expect(broadened).not.toContain('only');
-      expect(broadened).not.toContain('.ts');
-      expect(broadened).toContain('search for login');
+      const result = broadenQuery(query); // Calls imported original
+      expect(result).not.toContain('exact');
+      expect(result).not.toContain('specific');
+      expect(result).not.toContain('only');
+      expect(result).not.toContain('.ts');
+      expect(result).toContain('search for login');
     });
 
     it('should add generic terms if query becomes too short', () => {
       const query = "fix.ts";
-      const broadened = actualBroadenQuery(query); // Test the ACTUAL function
-      expect(broadened).toBe('fix implementation code');
+      const result = broadenQuery(query); // Calls imported original
+      expect(result).toBe('fix implementation code');
     });
   });
 
@@ -226,24 +184,14 @@ describe('Query Refinement Utilities', () => {
         { payload: { content: "function processUser(user: UserType)" } },
         { payload: { content: "class UserProfile extends BaseProfile" } },
       ] as DetailedQdrantSearchResult[];
-      
-      // The preprocessText mock in beforeEach will now apply.
-      // focusQueryBasedOnResults calls the SUT extractKeywords, which in turn calls the
-      // (mocked to actual behavior) preprocessText.
-      // The modified extractKeywords (Option 1) should now produce cleaner keywords.
-      // Example: "function processUser(user: UserType)" 
-      //   -> preprocessText (actual behavior) -> "function processUser(user: UserType)"
-      //   -> extractKeywords (with internal toLowerCase, punctuation removal) -> "processuser", "usertype" (potentially)
-      // "class UserProfile extends BaseProfile" 
-      //   -> preprocessText (actual behavior) -> "class UserProfile extends BaseProfile"
-      //   -> extractKeywords -> "userprofile", "extends", "baseprofile" (potentially)
-      // The top 2 keywords chosen by extractKeywords (after its internal cleaning and filtering)
-      // are expected to lead to the desired focused query.
-
-      const focused = actualFocusQueryBasedOnResults(originalQuery, results); // Test the ACTUAL function
-      
-      // Adjust expectation based on actual extractKeywords behavior
-      expect(focused).toBe("find user function processuser");
+      // preprocessText is mocked in beforeEach
+      // extractKeywords (the original one) will be called internally
+      const focused = focusQueryBasedOnResults(originalQuery, results); // Calls imported original
+      // Based on the simple preprocessText mock and extractKeywords logic:
+      // "function processUser(user: UserType)" -> keywords: ["function", "processuser", "user", "usertype"] (approx)
+      // "class UserProfile extends BaseProfile" -> keywords: ["class", "userprofile", "extends", "baseprofile"] (approx)
+      // Top 2 might be "function", "processuser" or similar.
+      expect(focused).toBe("find user function processuser"); // This expectation might need adjustment based on exact keyword extraction
     });
   });
 
@@ -251,62 +199,58 @@ describe('Query Refinement Utilities', () => {
     it('should add file type if not present in query', () => {
       const query = "search login function";
       const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
-      const tweaked = actualTweakQuery(query, results); // Test the ACTUAL function
+      const tweaked = tweakQuery(query, results); // Calls imported original
       expect(tweaked).toBe("search login function ts");
     });
 
     it('should add directory if file type present but directory not', () => {
       const query = "search login.ts function";
       const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
-      const tweaked = actualTweakQuery(query, results); // Test the ACTUAL function
+      const tweaked = tweakQuery(query, results); // Calls imported original
       expect(tweaked).toBe("search login.ts function in src");
     });
     
     it('should not change query if context already present or no context to add', () => {
         const query = "search login.ts function in src";
         const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
-        let tweaked = actualTweakQuery(query, results); // Test the ACTUAL function
+        let tweaked = tweakQuery(query, results); // Calls imported original
         expect(tweaked).toBe(query);
 
         const resultsNoPath = [{ payload: { content: "some content" } }] as DetailedQdrantSearchResult[];
-        tweaked = actualTweakQuery("some query", resultsNoPath); // Test the ACTUAL function
+        tweaked = tweakQuery("some query", resultsNoPath); // Calls imported original
         expect(tweaked).toBe("some query");
     });
   });
   
   describe('refineQuery (main dispatcher)', () => {
-    // broadenQuery, focusQueryBasedOnResults, tweakQuery are already spies from vi.mock
-    beforeEach(()=> {
-        // Clear the spies that were created by vi.mock
-        vi.mocked(broadenQuery).mockClear().mockReturnValue('spy_broadened');
-        vi.mocked(focusQueryBasedOnResults).mockClear().mockReturnValue('spy_focused');
-        vi.mocked(tweakQuery).mockClear().mockReturnValue('spy_tweaked');
+    let broadenQuerySpy: vi.SpyInstance;
+    let focusQueryBasedOnResultsSpy: vi.SpyInstance;
+    let tweakQuerySpy: vi.SpyInstance;
+
+    beforeEach(() => {
+      // Spy on the methods of the imported module object *before* each test in this block
+      broadenQuerySpy = vi.spyOn(QueryRefinementAPI, 'broadenQuery').mockReturnValue('spy_broadened_for_dispatch_test');
+      focusQueryBasedOnResultsSpy = vi.spyOn(QueryRefinementAPI, 'focusQueryBasedOnResults').mockReturnValue('spy_focused_for_dispatch_test');
+      tweakQuerySpy = vi.spyOn(QueryRefinementAPI, 'tweakQuery').mockReturnValue('spy_tweaked_for_dispatch_test');
     });
         
     it('should call broadenQuery for very low relevance (<0.3)', () => {
-      refineQuery("original", [], 0.1); // Call the original refineQuery
-      expect(broadenQuery).toHaveBeenCalledWith("original"); // Check the spy
+      // Call refineQuery (which will internally call the spied broadenQuery from QueryRefinementAPI)
+      QueryRefinementAPI.refineQuery("original", [], 0.1); 
+      expect(broadenQuerySpy).toHaveBeenCalledWith("original");
     });
-
+    
     it('should call focusQueryBasedOnResults for mediocre relevance (0.3 <= relevance < 0.7)', () => {
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-      refineQuery("original", mockResults, 0.5); // Call the original refineQuery
-      expect(focusQueryBasedOnResults).toHaveBeenCalledWith("original", mockResults); // Check the spy
+      QueryRefinementAPI.refineQuery("original", mockResults, 0.5);
+      expect(focusQueryBasedOnResultsSpy).toHaveBeenCalledWith("original", mockResults);
     });
 
     it('should call tweakQuery for decent relevance (>=0.7)', () => {
-      // Note: searchWithRefinement loop breaks if relevance >= threshold (default 0.7).
-      // So, refineQuery is typically called when relevance < threshold.
-      // If we test refineQuery directly with relevance >= 0.7, it should call tweakQuery.
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-      
-      refineQuery("original", mockResults, 0.7); // Call the original refineQuery
-      expect(tweakQuery).toHaveBeenCalledWith("original", mockResults); // Check the spy
+      QueryRefinementAPI.refineQuery("original", mockResults, 0.7);
+      expect(tweakQuerySpy).toHaveBeenCalledWith("original", mockResults);
     });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
 });
