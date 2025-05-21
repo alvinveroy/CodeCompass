@@ -60,34 +60,33 @@ vi.mock('fs/promises', () => {
 });
 
 // These will hold the mock functions created by the factory for '../lib/agent'
-let AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS: vi.Mock;
-let AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL: vi.Mock;
+let AGENT_TEST_MOCK_PARSE_TOOL_CALLS: vi.Mock;
+let AGENT_TEST_MOCK_EXECUTE_TOOL_CALL: vi.Mock;
 
 vi.mock('../lib/agent', async (importOriginal) => {
   const originalModule = await importOriginal<typeof import('../lib/agent')>();
-  const parseMock = vi.fn();
-  const execMock = vi.fn();
-  AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS = parseMock;
-  AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL = execMock;
+  const parseMockInFactory = vi.fn();
+  const execMockInFactory = vi.fn();
+  AGENT_TEST_MOCK_PARSE_TOOL_CALLS = parseMockInFactory;
+  AGENT_TEST_MOCK_EXECUTE_TOOL_CALL = execMockInFactory;
   return {
     ...originalModule,
-    parseToolCalls: parseMock,
-    executeToolCall: execMock,
+    parseToolCalls: parseMockInFactory,
+    executeToolCall: execMockInFactory,
   };
 });
 
 // Import functions AFTER the vi.mock factory.
-// runAgentLoop is original. parseToolCalls and executeToolCall are the factory-created mocks.
 import { 
   runAgentLoop, 
-  // parseToolCalls, // We will use AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS
-  // executeToolCall, // We will use AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL
+  // parseToolCalls, // Not needed as we use AGENT_TEST_MOCK_PARSE_TOOL_CALLS
+  // executeToolCall, // Not needed as we use AGENT_TEST_MOCK_EXECUTE_TOOL_CALL
   createAgentState, 
   generateAgentSystemPrompt,
   toolRegistry 
 } from '../lib/agent'; 
 // Import the actual functions for direct testing
-import * as actualAgentFunctions from '../lib/agent';
+import * as actualAgentFunctions from '../lib/agent'; // For testing original implementations
 // Import mocked versions for easier access in tests
 // For fs/promises, we import the mocked named exports directly
 import { getLLMProvider } from '../lib/llm-provider';
@@ -119,8 +118,8 @@ describe('Agent', () => {
     vi.clearAllMocks(); // Clears call counts and mock implementations
 
     // Reset the top-level mocks (which are the ones imported as parseToolCalls, etc.)
-    if (AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS) AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS.mockReset().mockReturnValue([]);
-    if (AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockReset().mockResolvedValue({ status: 'default mock success' });
+    if (AGENT_TEST_MOCK_PARSE_TOOL_CALLS) AGENT_TEST_MOCK_PARSE_TOOL_CALLS.mockReset().mockReturnValue([]);
+    if (AGENT_TEST_MOCK_EXECUTE_TOOL_CALL) AGENT_TEST_MOCK_EXECUTE_TOOL_CALL.mockReset().mockResolvedValue({ status: 'default mock success' });
 
     // Reset the methods of the logger that agent.ts will use
     // This logger is now imported as mockedLoggerFromAgentPerspective
@@ -475,8 +474,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce("LLM Verification OK") // Re-affirm for clarity if beforeEach is complex
         .mockResolvedValueOnce('Final agent response, no tools needed.'); // Agent reasoning
       
-      if (!AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS) throw new Error("Agent mock not initialized");
-      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS.mockReturnValueOnce([]);
+      if (!AGENT_TEST_MOCK_PARSE_TOOL_CALLS) throw new Error("Agent mock not initialized");
+      AGENT_TEST_MOCK_PARSE_TOOL_CALLS.mockReturnValueOnce([]);
 
       // Clear logger mocks for this specific test run
       // Note: mockLLMProviderInstance.generateText was reset in beforeEach,
@@ -505,10 +504,10 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') // Agent reasoning step 1
         .mockResolvedValueOnce('Final response after tool.'); // Agent reasoning step 2
       
-      if (!AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS || !AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) {
+      if (!AGENT_TEST_MOCK_PARSE_TOOL_CALLS || !AGENT_TEST_MOCK_EXECUTE_TOOL_CALL) {
         throw new Error("Agent mocks not initialized");
       }
-      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS
+      AGENT_TEST_MOCK_PARSE_TOOL_CALLS
         .mockImplementationOnce((output: string) => {
           if (output === 'TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') {
             return [{ tool: 'search_code', parameters: { query: 'tool query' } }];
@@ -517,7 +516,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         })
         .mockReturnValueOnce([]); // For the second reasoning step (final response)
 
-      AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      AGENT_TEST_MOCK_EXECUTE_TOOL_CALL.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
       
       // Clear all logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -529,9 +528,9 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       // Expected calls: 1 for verification, 2 for reasoning steps
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3);
-      if (!AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) throw new Error("Agent mock not initialized");
-      expect(AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledTimes(1);
-      expect(AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledWith(
+      if (!AGENT_TEST_MOCK_EXECUTE_TOOL_CALL) throw new Error("Agent mock not initialized");
+      expect(AGENT_TEST_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledTimes(1);
+      expect(AGENT_TEST_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
@@ -550,15 +549,15 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "second step query"}}')       // Step 2 reasoning (extended)
         .mockResolvedValueOnce('Final response in extended step.');                                                       // Step 3 reasoning (extended, final)
 
-      if (!AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS || !AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) {
+      if (!AGENT_TEST_MOCK_PARSE_TOOL_CALLS || !AGENT_TEST_MOCK_EXECUTE_TOOL_CALL) {
         throw new Error("Agent mocks not initialized");
       }
-      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS
+      AGENT_TEST_MOCK_PARSE_TOOL_CALLS
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'need more' } }])
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'second step query' } }])
         .mockReturnValueOnce([]); // For final response
 
-      AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockImplementation(async (toolCall) => {
+      AGENT_TEST_MOCK_EXECUTE_TOOL_CALL.mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
         if (toolCall.tool === 'search_code') return { status: 'search executed', results: []};
         return { status: 'unknown tool executed' };
@@ -590,16 +589,16 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "try to extend again from step 3"}}') // Step 2 reasoning
         .mockResolvedValueOnce('Final response after hitting absolute max.'); // Final response generation
 
-      if (!AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS || !AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) {
+      if (!AGENT_TEST_MOCK_PARSE_TOOL_CALLS || !AGENT_TEST_MOCK_EXECUTE_TOOL_CALL) {
         throw new Error("Agent mocks not initialized");
       }
-      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS
+      AGENT_TEST_MOCK_PARSE_TOOL_CALLS
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'step 1 query' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'extend from step 2' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'try to extend again from step 3' } }])
         .mockReturnValueOnce([]); // For final response generation
 
-      AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockImplementation(async (toolCall) => {
+      AGENT_TEST_MOCK_EXECUTE_TOOL_CALL.mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'search_code') return { status: 'search executed', results: []};
         if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
         return { status: 'unknown tool executed' };
@@ -644,10 +643,10 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           })
           .mockResolvedValueOnce("Final response after fallback."); // Agent reasoning step 2 (after fallback tool call)
       
-      if (!AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS || !AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) {
+      if (!AGENT_TEST_MOCK_PARSE_TOOL_CALLS || !AGENT_TEST_MOCK_EXECUTE_TOOL_CALL) {
         throw new Error("Agent mocks not initialized");
       }
-      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS
+      AGENT_TEST_MOCK_PARSE_TOOL_CALLS
           .mockImplementationOnce((outputFromLLM) => {
               if (outputFromLLM === `TOOL_CALL: ${JSON.stringify({tool: "search_code",parameters: { query: "reasoning timeout query", sessionId: "session5" }})}`) {
                   return [{ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }];
@@ -656,7 +655,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           })
           .mockReturnValueOnce([]);
 
-      AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockResolvedValueOnce({ status: 'fallback search_code executed', results: [] });
+      AGENT_TEST_MOCK_EXECUTE_TOOL_CALL.mockResolvedValueOnce({ status: 'fallback search_code executed', results: [] });
       
       mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -666,8 +665,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       const result = await runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
 
       expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out");
-      if (!AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) throw new Error("Agent mock not initialized");
-      expect(AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledWith(
+      if (!AGENT_TEST_MOCK_EXECUTE_TOOL_CALL) throw new Error("Agent mock not initialized");
+      expect(AGENT_TEST_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledWith(
           expect.objectContaining({ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }),
           mockQdrantClient, repoPath, true
       );
@@ -684,15 +683,15 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') // Agent reasoning step 1
           .mockResolvedValueOnce('Final response after tool timeout.'); // Agent reasoning step 2 (after tool error)
 
-      if (!AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS || !AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) {
+      if (!AGENT_TEST_MOCK_PARSE_TOOL_CALLS || !AGENT_TEST_MOCK_EXECUTE_TOOL_CALL) {
         throw new Error("Agent mocks not initialized");
       }
-      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS
+      AGENT_TEST_MOCK_PARSE_TOOL_CALLS
           .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }])
           .mockReturnValueOnce([]);
       
       const toolExecutionTimeoutError = new Error("Simulated Tool execution timed out: search_code");
-      AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockImplementationOnce(async () => {
+      AGENT_TEST_MOCK_EXECUTE_TOOL_CALL.mockImplementationOnce(async () => {
         // Simulate the timeout behavior of Promise.race in agent.ts
         return new Promise((_, reject) => {
             setTimeout(() => reject(toolExecutionTimeoutError), 10); // Short delay, actual timeout is in agent.ts

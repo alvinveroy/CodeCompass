@@ -8,18 +8,21 @@ import nodeFs from 'fs';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // --- Mock for promisify(exec) ---
-// This variable will hold the mock function instance created by the 'util' mock factory.
-let MOCK_EXEC_ASYNC_FN_INSTANCE: vi.Mock;
+// This variable will hold the mock function instance. It MUST be `let`.
+let MOCK_EXEC_ASYNC_FN_FOR_TESTS: vi.Mock;
 
 vi.mock('util', async (importOriginal) => {
   const actualUtilModule = await importOriginal<typeof import('util')>();
-  const factoryCreatedMock = vi.fn(); 
-  MOCK_EXEC_ASYNC_FN_INSTANCE = factoryCreatedMock; // Assign to the outer scope variable
+  // Create the mock function INSIDE the factory.
+  const factoryScopedMockFn = vi.fn();
+  // Assign the factory-scoped mock to the module-scoped variable.
+  // This assignment happens when the factory is executed (due to hoisting).
+  MOCK_EXEC_ASYNC_FN_FOR_TESTS = factoryScopedMockFn;
   return {
     ...actualUtilModule,
     promisify: (fnToPromisify: any) => {
       if (fnToPromisify === actualChildProcessExec) { 
-        return factoryCreatedMock; 
+        return factoryScopedMockFn; // Return the mock created in this factory scope
       }
       return actualUtilModule.promisify(fnToPromisify);
     },
@@ -27,6 +30,7 @@ vi.mock('util', async (importOriginal) => {
 });
 
 // Import functions to test
+// Import SUT and other dependencies AFTER vi.mock
 import {
     validateGitRepository,
     indexRepository,
@@ -84,9 +88,9 @@ const mockQdrantClientInstance = {
 describe('Repository Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    if (MOCK_EXEC_ASYNC_FN_INSTANCE) { // Check if initialized
-        MOCK_EXEC_ASYNC_FN_INSTANCE.mockReset();
-    }
+    // MOCK_EXEC_ASYNC_FN_FOR_TESTS is now guaranteed to be initialized
+    // because the 'util' module (imported by repository.ts) would have been processed.
+    if (MOCK_EXEC_ASYNC_FN_FOR_TESTS) MOCK_EXEC_ASYNC_FN_FOR_TESTS.mockReset();
     // Reset other mocks like logger, fsPromises, git functions
     vi.mocked(fsPromises.access).mockReset();
     vi.mocked(fsPromises.stat).mockReset(); // Ensure stat is reset if used by SUT
@@ -160,13 +164,12 @@ describe('Repository Utilities', () => {
 
     it('should call git diff command and return stdout', async () => {
       setupValidRepoAndCommitsMocks();
-      // Ensure MOCK_EXEC_ASYNC_FN_INSTANCE is used
-      if (!MOCK_EXEC_ASYNC_FN_INSTANCE) throw new Error("MOCK_EXEC_ASYNC_FN_INSTANCE not initialized");
-      MOCK_EXEC_ASYNC_FN_INSTANCE.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
+      if (!MOCK_EXEC_ASYNC_FN_FOR_TESTS) throw new Error("MOCK_EXEC_ASYNC_FN_FOR_TESTS not initialized");
+      MOCK_EXEC_ASYNC_FN_FOR_TESTS.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(MOCK_EXEC_ASYNC_FN_INSTANCE).toHaveBeenCalledWith(
+      expect(MOCK_EXEC_ASYNC_FN_FOR_TESTS).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
       );
@@ -176,8 +179,8 @@ describe('Repository Utilities', () => {
     it('should truncate long diff output', async () => {
       setupValidRepoAndCommitsMocks();
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      if (!MOCK_EXEC_ASYNC_FN_INSTANCE) throw new Error("MOCK_EXEC_ASYNC_FN_INSTANCE not initialized");
-      MOCK_EXEC_ASYNC_FN_INSTANCE.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
+      if (!MOCK_EXEC_ASYNC_FN_FOR_TESTS) throw new Error("MOCK_EXEC_ASYNC_FN_FOR_TESTS not initialized");
+      MOCK_EXEC_ASYNC_FN_FOR_TESTS.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -189,8 +192,8 @@ describe('Repository Utilities', () => {
       const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
       (mockError as any).code = 128;
       mockError.stderr = 'stderr from execAsync rejection'; 
-      if (!MOCK_EXEC_ASYNC_FN_INSTANCE) throw new Error("MOCK_EXEC_ASYNC_FN_INSTANCE not initialized");
-      MOCK_EXEC_ASYNC_FN_INSTANCE.mockRejectedValueOnce(mockError);
+      if (!MOCK_EXEC_ASYNC_FN_FOR_TESTS) throw new Error("MOCK_EXEC_ASYNC_FN_FOR_TESTS not initialized");
+      MOCK_EXEC_ASYNC_FN_FOR_TESTS.mockRejectedValueOnce(mockError);
       
       // Clear logger before the call, as validateGitRepository might log
       logger.error.mockClear(); 
