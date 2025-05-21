@@ -67,8 +67,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 describe('Repository Utilities', () => {
   const repoPath = '/test/diff/repo';
   // exec is already the mock from the factory. Cast it for type safety.
-  const execMock = exec as vi.Mock<[string, any, (err: ExecException | null, stdout: string, stderr: string) => void], void>;
-  let validateGitRepositorySpy: vi.SpyInstance<[string], Promise<boolean>>;
+  const execMock = exec as vi.MockedFunction<typeof exec>; // More precise type
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
@@ -95,7 +94,9 @@ describe('Repository Utilities', () => {
     vi.mocked(readdir).mockReset();
     vi.mocked(stat).mockReset();
 
-    validateGitRepositorySpy = vi.spyOn(repositoryFunctions, 'validateGitRepository');
+    // No longer using spyOn for validateGitRepository here.
+    // It will be mocked specifically for the getRepositoryDiff suite.
+
     // Reset all isomorphic-git mocks
     vi.mocked(git.resolveRef).mockReset();
     vi.mocked(git.listFiles).mockReset();
@@ -138,10 +139,23 @@ describe('Repository Utilities', () => {
   });
 
   describe('getRepositoryDiff', () => {
+    let mockedValidateGitRepository: vi.Mock<[string], Promise<boolean>>;
+
     // Setup mocks specifically for tests that expect validateGitRepository to pass
     // This beforeEach establishes the common "happy path" for validateGitRepository and git.log
-    beforeEach(() => {
-        validateGitRepositorySpy.mockResolvedValue(true); // Control the spy's behavior
+    beforeEach(async () => {
+        // Dynamically mock validateGitRepository for this suite
+        mockedValidateGitRepository = vi.fn();
+        vi.doMock('../repository', async (importOriginal) => {
+            const originalModule = await importOriginal<typeof repositoryFunctions>();
+            return {
+                ...originalModule,
+                validateGitRepository: mockedValidateGitRepository,
+            };
+        });
+        // Re-import SUT to get the mocked version within this scope if needed, or ensure it's picked up.
+        // For getRepositoryDiff, it should pick up the mocked validateGitRepository from its own module.
+        mockedValidateGitRepository.mockResolvedValue(true);
         setupGitLogWithTwoCommits();
     });
 
@@ -193,19 +207,19 @@ describe('Repository Utilities', () => {
     });
     
     it('should return "No Git repository found" if validateGitRepository returns false', async () => {
-        validateGitRepositorySpy.mockResolvedValue(false); // Override spy for this test
+        mockedValidateGitRepository.mockResolvedValue(false); // Control our specific mock
         const result = await repositoryFunctions.getRepositoryDiff(repoPath);
-        expect(validateGitRepositorySpy).toHaveBeenCalledWith(repoPath);
+        expect(mockedValidateGitRepository).toHaveBeenCalledWith(repoPath);
         expect(result).toBe("No Git repository found");
         expect(execMock).not.toHaveBeenCalled();
         expect(vi.mocked(git.log)).not.toHaveBeenCalled();
     });
 
     it('should return "No previous commits to compare" if less than 2 commits (single commit)', async () => {
-      // validateGitRepositorySpy is already mocked to true in the suite's beforeEach
+      // mockedValidateGitRepository is already set to resolve true in the suite's beforeEach
       setupGitLogWithSingleCommit();
       const result = await repositoryFunctions.getRepositoryDiff(repoPath);
-      expect(validateGitRepositorySpy).toHaveBeenCalledWith(repoPath);
+      expect(mockedValidateGitRepository).toHaveBeenCalledWith(repoPath);
       expect(result).toBe("No previous commits to compare");
       expect(execMock).not.toHaveBeenCalled();
     });
@@ -213,8 +227,7 @@ describe('Repository Utilities', () => {
 
   describe('getCommitHistoryWithChanges', () => {
     it('should retrieve commit history with changed files', async () => {
-        // validateGitRepository is not called by getCommitHistoryWithChanges,
-        // so the spy on it doesn't need specific setup here.
+        // No need to mock validateGitRepository here as it's not called by getCommitHistoryWithChanges
 
         const mockCommits = [
             { oid: 'commit2', commit: { message: 'Feat: new feature', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, tree: 'tree2_oid', parent: ['commit1_oid'] } },
