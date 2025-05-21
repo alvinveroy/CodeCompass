@@ -136,7 +136,7 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
         const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-          if (cb) cb(null, 'diff_content_stdout', ''); // Explicitly null for error
+          if (cb) cb(null, 'diff_content_stdout_explicit', ''); // Ensure error is null, stdout is string
           else console.error("STDOUT TEST: CB UNDEFINED");
         } else {
           if (cb) cb(new Error(`Test mock (stdout): Unexpected exec command: ${command}`), '', '');
@@ -152,7 +152,7 @@ describe('Repository Utilities', () => {
         expect.objectContaining({ cwd: repoPath }),
         expect.any(Function) 
       );
-      expect(result).toBe('diff_content_stdout');
+      expect(result).toBe('diff_content_stdout_explicit');
     });
 
     it('should truncate long diff output', async () => {
@@ -160,7 +160,7 @@ describe('Repository Utilities', () => {
       vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
         const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-          if (cb) cb(null, longDiff, ''); // Explicitly null for error
+          if (cb) cb(null, longDiff, ''); // Ensure error is null, stdout is string
           else console.error("TRUNCATE TEST: CB UNDEFINED");
         } else {
           if (cb) cb(new Error(`Test mock (truncate): Unexpected exec command: ${command}`), '', '');
