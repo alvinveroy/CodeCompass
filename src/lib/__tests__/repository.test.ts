@@ -39,6 +39,27 @@ vi.mock('isomorphic-git', () => ({
   // If any are missing, add them. E.g., if SUT uses `commit`, add `commit: vi.fn(),`
 }));
 
+// Mock util.promisify to control execAsync
+const mockExecAsyncFn = vi.fn();
+vi.mock('util', async (importOriginal) => {
+  const actualUtil = await importOriginal<typeof import('util')>();
+  // We need to get a reference to the original exec to compare.
+  // Since child_process is mocked, we can't directly import original exec here easily.
+  // We'll rely on the function name or a more specific check if needed.
+  // For now, if the function being promisified is named 'exec', assume it's our target.
+  return {
+    ...actualUtil,
+    promisify: (fnToPromisify: any) => {
+      // Check if fnToPromisify is the exec function from child_process
+      // This check might need to be more robust depending on the actual function reference.
+      if (fnToPromisify && fnToPromisify.name === 'exec') { // Check name of function being promisified
+        return mockExecAsyncFn;
+      }
+      return actualUtil.promisify(fnToPromisify); // Promisify others normally
+    },
+  };
+});
+
 // Mock other external dependencies
 vi.mock('../config-service', () => {
     const loggerInstance = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
@@ -144,6 +165,7 @@ describe('Repository Utilities', () => {
     beforeEach(async () => {
         // This mock will be passed directly to getRepositoryDiff
         mockInjectedValidator = vi.fn();
+        mockExecAsyncFn.mockReset(); // Reset our new async mock for execAsync
         mockInjectedValidator.mockResolvedValue(true); // Default to valid
         setupGitLogWithTwoCommits();
     });
@@ -152,13 +174,12 @@ describe('Repository Utilities', () => {
       execMock.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(null, 'diff_content_stdout_explicit', '');
       });
+      // Now we mock the behavior of the promisified function directly
+      mockExecAsyncFn.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
+
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
-      expect(execMock).toHaveBeenCalledWith(
-        'git diff commit1_oid commit2_oid', 
-        expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 }), // SUT uses 5MB buffer
-        expect.any(Function)
-      );
+      expect(mockExecAsyncFn).toHaveBeenCalledWith('git diff commit1_oid commit2_oid', { cwd: repoPath, maxBuffer: 1024 * 1024 * 5 });
       expect(result).toBe('diff_content_stdout_explicit');
     });
 
@@ -168,7 +189,7 @@ describe('Repository Utilities', () => {
       execMock.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(null, longDiff, '');
       });
-
+      mockExecAsyncFn.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       expect(result).toBe('a'.repeat(MAX_DIFF_LENGTH_FROM_SUT) + "\n... (diff truncated)");
@@ -184,7 +205,7 @@ describe('Repository Utilities', () => {
       execMock.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(mockError, '', stderrText);
       });
-
+      mockExecAsyncFn.mockRejectedValueOnce(mockError); // Simulate execAsync throwing an error
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
@@ -203,7 +224,7 @@ describe('Repository Utilities', () => {
         const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
         expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
         expect(result).toBe("No Git repository found");
-        expect(execMock).not.toHaveBeenCalled();
+        expect(mockExecAsyncFn).not.toHaveBeenCalled(); // Check the async mock
         expect(vi.mocked(git.log)).not.toHaveBeenCalled();
     });
 
@@ -213,7 +234,7 @@ describe('Repository Utilities', () => {
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       expect(result).toBe("No previous commits to compare");
-      expect(execMock).not.toHaveBeenCalled();
+      expect(mockExecAsyncFn).not.toHaveBeenCalled(); // Check the async mock
     });
   });
 

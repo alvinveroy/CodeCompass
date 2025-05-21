@@ -30,6 +30,8 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
     // logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
   } catch (error: unknown) {
+    // TEMPORARY DEBUGGING LINE:
+    console.error("DEBUG: validateGitRepository caught error:", error);
     return false;
   }
 }
