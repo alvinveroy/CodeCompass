@@ -68,11 +68,6 @@ vi.mock('fs/promises', () => {
 // Import functions from the SUT module directly
 import {
   runAgentLoop, createAgentState, generateAgentSystemPrompt, toolRegistry,
-  // Ensure parseToolCalls and executeToolCall are imported if they are to be spied on
-  // or tested directly. If they are not exported, vi.spyOn will work on the module object.
-  // Assuming they are exported for clarity or if direct testing of originals is also done.
-  // If not exported, vi.spyOn(ActualAgentModule, 'name') still works for non-exported functions.
-  // For this refactor, we are spying on them via ActualAgentModule.
 } from '../lib/agent';
 
 // Import mocked dependencies
