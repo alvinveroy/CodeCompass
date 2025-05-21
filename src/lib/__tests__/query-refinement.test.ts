@@ -16,23 +16,13 @@ vi.mock('../../utils/text-utils', () => ({
   preprocessText: vi.fn((text: string) => text), // Default mock returns the input text
 }));
 
-// Create stand-alone mock functions for internal query-refinement functions
-// This needs to be defined BEFORE vi.mock('../lib/query-refinement', ...) if used inside the factory
-const mockInternalRefineQuery = vi.fn();
+// REMOVE: vi.mock('../lib/query-refinement', ...)
 
-// Mock the SUT module ('../lib/query-refinement')
-vi.mock('../lib/query-refinement', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/query-refinement')>();
-  return {
-    ...actual, // Provide actual implementations for functions we want to test directly
-    refineQuery: mockInternalRefineQuery, // Use the hoisted mock
-    // searchWithRefinement itself is NOT mocked here, we want its original implementation from 'actual'
-  };
-});
-
-// Import functions from the SUT module (will be from the mock factory)
+// Import functions from the SUT module directly
 import {
   searchWithRefinement,
+  // Import other functions if they are tested directly or needed for setup
+  // refineQuery, broadenQuery, focusQueryBasedOnResults, tweakQuery, extractKeywords 
 } from '../lib/query-refinement';
 // Import mocked dependencies
 import { generateEmbedding } from '../ollama';
