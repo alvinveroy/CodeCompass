@@ -3,7 +3,7 @@ import git from 'isomorphic-git';
 import fs from 'fs/promises'; // For mocking fs.readFile, fs.stat
 import nodeFs from 'fs'; // For isomorphic-git's fs parameter
 import path from 'path';
-import { exec } from 'child_process'; // For mocking exec
+import { exec, type ExecException } from 'child_process'; // For mocking exec
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // Import functions to test

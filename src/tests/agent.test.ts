@@ -15,16 +15,15 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { promises as fsPromises } from 'fs'; // For mocking fs.readFile etc.
 import path from 'path';
 
-// Define a logger mock that agent.ts will receive
-const mockAgentLoggerInstance = {
+// Mock for configService that agent.ts will use
+vi.mock('../lib/config-service', () => {
+  // Define the logger mock INSIDE the factory
+  const loggerInstance = {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
-};
-
-// Mock for configService that agent.ts will use
-vi.mock('../lib/config-service', () => {
+  };
   return {
     __esModule: true,
     configService: { // Simplified config values for agent tests
@@ -41,7 +40,7 @@ vi.mock('../lib/config-service', () => {
       AGENT_QUERY_TIMEOUT: 60000,
       // Add other necessary config values used by agent.ts
     },
-    logger: mockAgentLoggerInstance, // agent.ts will use this self-contained mock logger
+    logger: loggerInstance, // Use the instance defined within the factory
   };
 });
 
@@ -77,6 +76,9 @@ vi.mock('fs/promises', () => {
 import { getLLMProvider } from '../lib/llm-provider';
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries } from '../lib/state';
 import { searchWithRefinement } from '../lib/query-refinement';
+// AFTER importing agent.ts (implicitly via other SUT imports), import the logger from the mocked module
+// This logger will be the one created by the vi.mock factory.
+import { logger as mockedLoggerFromAgentPerspective } from '../lib/config-service';
 import { validateGitRepository, getRepositoryDiff } from '../lib/repository';
 import git from 'isomorphic-git';
 import { readFile, readdir } from 'fs/promises'; // Import mocked versions
@@ -99,12 +101,13 @@ describe('Agent', () => {
   beforeEach(() => {
     vi.clearAllMocks(); // Clears call counts and mock implementations
 
-    // Reset the mock logger instance's methods
-    mockAgentLoggerInstance.info.mockReset();
-    mockAgentLoggerInstance.warn.mockReset();
-    mockAgentLoggerInstance.error.mockReset();
-    mockAgentLoggerInstance.debug.mockReset();
-
+    // Reset the methods of the logger that agent.ts will use
+    // This logger is now imported as mockedLoggerFromAgentPerspective
+    mockedLoggerFromAgentPerspective.info.mockReset();
+    mockedLoggerFromAgentPerspective.warn.mockReset();
+    mockedLoggerFromAgentPerspective.error.mockReset();
+    mockedLoggerFromAgentPerspective.debug.mockReset();
+    
     // Setup default mock implementations
     (getLLMProvider as jest.Mock).mockResolvedValue(mockLLMProviderInstance);
     mockLLMProviderInstance.generateText.mockResolvedValue('Default LLM response'); // Default for reasoning
@@ -483,7 +486,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('extend loop query', 'session3', mockQdrantClient, repoPath, true);
 
-      expect(mockAgentLoggerInstance.info).toHaveBeenCalledWith(expect.stringContaining('Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.'));
+      expect(mockedLoggerFromAgentPerspective.info).toHaveBeenCalledWith(expect.stringContaining('Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.'));
       expect(result).toContain('Final response in extended step.');
       // Initial reasoning, reasoning for step 2, reasoning for final response
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3);
@@ -548,8 +551,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('absolute max query', 'session4', mockQdrantClient, repoPath, true);
 
-      expect(mockAgentLoggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining('Agent requested more processing steps, but already at or beyond absoluteMaxSteps.'));
-      expect(mockAgentLoggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining('Agent loop reached absolute maximum steps (3) and will terminate.'));
+      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(expect.stringContaining('Agent requested more processing steps, but already at or beyond absoluteMaxSteps.'));
+      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(expect.stringContaining('Agent loop reached absolute maximum steps (3) and will terminate.'));
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(4); // 3 reasoning steps + 1 final response
       expect(result).toContain('Final response after hitting absolute max.');
       expect(result).toContain('[Note: The agent utilized the maximum allowed processing steps.]');
@@ -577,7 +580,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
 
-      expect(mockAgentLoggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out"));
+      expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith(expect.stringContaining("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out"));
       expect(executeToolCallSpy).toHaveBeenCalledWith(
           expect.objectContaining({ tool: 'search_code', parameters: { query: 'reasoning timeout query' } }),
           mockQdrantClient, repoPath, true
@@ -601,7 +604,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
 
-      expect(mockAgentLoggerInstance.error).toHaveBeenCalledWith("Error executing tool search_code", { error: "Tool execution timed out: search_code" });
+      expect(mockedLoggerFromAgentPerspective.error).toHaveBeenCalledWith("Error executing tool search_code", { error: "Tool execution timed out: search_code" });
       const lastLLMCallArgs = mockLLMProviderInstance.generateText.mock.calls;
       const finalPromptArg = lastLLMCallArgs[lastLLMCallArgs.length -1][0]; // Second call to generateText
       expect(finalPromptArg).toContain("Error executing tool search_code: Tool execution timed out: search_code");

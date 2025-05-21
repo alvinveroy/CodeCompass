@@ -282,4 +282,8 @@ describe('Query Refinement Utilities', () => {
     });
   });
 
+  afterEach(() => { // Add this
+    vi.restoreAllMocks();
+  });
+
 });

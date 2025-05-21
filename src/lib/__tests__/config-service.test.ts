@@ -7,6 +7,15 @@ import winston from 'winston';
 import { ConfigService as ActualConfigService } from '../config-service';
 // import fsActual from 'fs'; // Not strictly needed if we define the mock structure directly
 
+// Define a clearable mock logger instance for Winston that can be controlled in tests
+const clearableMockWinstonLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+  // Add other logger methods if used by ConfigService directly
+};
+
 // Mock the entire fs module
 vi.mock('fs', () => {
   const mockFs = {
@@ -23,18 +32,11 @@ vi.mock('fs', () => {
 });
 
 // Mock winston logger creation and transports
-const mockWinstonLogger = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
-  // Add other logger methods if used by ConfigService directly
-};
 vi.mock('winston', async (importOriginal) => {
   const originalWinston = await importOriginal<typeof winston>();
   return {
     ...originalWinston,
-    createLogger: vi.fn().mockReturnValue(mockWinstonLogger),
+    createLogger: vi.fn().mockReturnValue(clearableMockWinstonLogger), // Use the clearable instance
     transports: {
       File: vi.fn().mockImplementation(() => ({ // Mock the File transport constructor
         // Mock any methods on the transport instance if ConfigService calls them
@@ -130,11 +132,13 @@ describe('ConfigService', () => {
     });
     vi.mocked(fsMock.readFileSync).mockReturnValue('{}');
 
-    // Reset winston transport mocks if necessary (though createLogger is the main one)
+    // Reset winston transport mocks if necessary
     vi.mocked(winston.transports.File).mockClear();
     vi.mocked(winston.transports.Stream).mockClear();
-    vi.mocked(winston.createLogger).mockClear().mockReturnValue(mockWinstonLogger);
-    Object.values(mockWinstonLogger).forEach(mockFn => mockFn.mockClear());
+    // Clear the createLogger mock itself and ensure it returns the clearableMockWinstonLogger
+    vi.mocked(winston.createLogger).mockClear().mockReturnValue(clearableMockWinstonLogger);
+    // Clear methods of the clearableMockWinstonLogger
+    Object.values(clearableMockWinstonLogger).forEach(mockFn => mockFn.mockClear());
 
   });
 
