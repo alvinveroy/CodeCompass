@@ -151,9 +151,9 @@ describe('Query Refinement Tests', () => {
     // In this block, we are testing the *original* refineQuery function,
     // so we call it via ActualQueryRefinementModule.refineQuery.
     // Its internal calls (broadenQuery, etc.) should be spied upon directly on ActualQueryRefinementModule.
-    let broadenQuerySpy: Mock<any[], any>;
-    let focusQueryBasedOnResultsSpy: Mock<any[], any>;
-    let tweakQuerySpy: Mock<any[], any>;
+    let broadenQuerySpy: Mock<(...args: any[]) => any>;
+    let focusQueryBasedOnResultsSpy: Mock<(...args: any[]) => any>;
+    let tweakQuerySpy: Mock<(...args: any[]) => any>;
 
     beforeEach(() => { 
         broadenQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'broadenQuery').mockReturnValue('mock_broadened_return_val');

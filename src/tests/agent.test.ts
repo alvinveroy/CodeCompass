@@ -133,7 +133,7 @@ describe('Agent', () => {
         path: basePath,
         parentPath: path.dirname(basePath),
     });
-    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as Dirent[]);
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as any); // Use 'as any' to bypass stubborn type error
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -161,8 +161,8 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    let parseToolCallsSpy: Mock<any[], any>;
-    let executeToolCallSpy: Mock<any[], any>;
+    let parseToolCallsSpy: Mock<(...args: any[]) => any>;
+    let executeToolCallSpy: Mock<(...args: any[]) => any>;
 
     beforeEach(() => {
         mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
