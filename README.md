@@ -207,6 +207,10 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
 # MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY: Maximum number of files to list directly in the generate_suggestion tool's context
 # before attempting to summarize the file list using an LLM. Default: 15
 # MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY=15
+
+# MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY: Maximum length of a code snippet to include in context without summarization.
+# Snippets longer than this will be summarized by an LLM if available. Default: 1500
+# MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY=1500
 ```
 
 **Note**: When setting environment variables directly or via MCP client configurations, you do not need to create a `.env` file. The list above serves as a reference for the variable names and their purposes. For a local setup with Ollama, the default settings often work without needing to set many environment variables, unless you want to customize models or providers. If using cloud providers like DeepSeek, setting the respective `API_KEY` and adjusting `LLM_PROVIDER` and `SUGGESTION_MODEL` is necessary.

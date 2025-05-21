@@ -109,6 +109,36 @@ async function getProcessedDiff(
   return diffContent;
 }
 
+// Helper function to process (summarize if needed) a single snippet
+async function processSnippet(
+  snippet: string,
+  query: string, // The user's query for context-aware summarization
+  filepath: string, // Filepath for context
+  suggestionModelAvailable: boolean
+): Promise<string> {
+  const MAX_LENGTH = configService.MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY;
+
+  if (snippet.length > MAX_LENGTH) {
+    if (suggestionModelAvailable) {
+      try {
+        const llmProvider = await getLLMProvider();
+        const summaryPrompt = `The user's query is: "${query}". Concisely summarize the following code snippet from file "${filepath}", focusing on its relevance to the query. Aim for 2-4 key points or a short paragraph. Retain important identifiers or logic if possible. Snippet:\n\n\`\`\`\n${snippet}\n\`\`\``;
+        const summarizedSnippet = await llmProvider.generateText(summaryPrompt);
+        logger.info(`Summarized long snippet from ${filepath} for query "${query}". Original length: ${snippet.length}, Summary length: ${summarizedSnippet.length}`);
+        return summarizedSnippet;
+      } catch (summaryError) {
+        const sErr = summaryError instanceof Error ? summaryError : new Error(String(summaryError));
+        logger.warn(`Failed to summarize snippet from ${filepath} for query "${query}". Using truncated snippet. Error: ${sErr.message}`);
+        return `${snippet.substring(0, MAX_LENGTH)}... (summary failed, snippet truncated)`;
+      }
+    } else {
+      logger.warn(`Suggestion model not available to summarize long snippet from ${filepath}. Using truncated snippet.`);
+      return `${snippet.substring(0, MAX_LENGTH)}... (snippet truncated, summary unavailable)`;
+    }
+  }
+  return snippet; // Return original snippet if not too long
+}
+
 // Create a new agent state
 export function createAgentState(sessionId: string, query: string): AgentState {
   return {
@@ -280,8 +310,8 @@ export async function executeToolCall(
       // Add query to session
       addQuery(session.id, query, results, relevanceScore);
       
-      // Format results for the agent
-      const formattedResults = results.map(r => {
+      // Format results for the agent - map becomes async
+      const formattedResultsPromises = results.map(async r => {
         const payload = r.payload;
         let filepathDisplay = payload.filepath;
 
@@ -289,14 +319,23 @@ export async function executeToolCall(
         if (payload.is_chunked) {
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
+
+        const processedSnippet = await processSnippet(
+          payload.content, 
+          query, // Pass the current tool's query
+          filepathDisplay, 
+          suggestionModelAvailable
+        );
+
         return {
           filepath: filepathDisplay,
-          snippet: payload.content.slice(0, 2000),
+          snippet: processedSnippet, // Use processed snippet
           last_modified: payload.last_modified,
           relevance: r.score,
           is_chunked: !!payload.is_chunked,
         };
       });
+      const formattedResults = await Promise.all(formattedResultsPromises);
       
       return {
         sessionId: session.id,
@@ -343,16 +382,24 @@ export async function executeToolCall(
       // Get recent queries from session to provide context
       const recentQueries = getRecentQueries(session.id);
       
-      const context = results.map(r => {
+      const contextPromises = results.map(async r => {
         const payload = r.payload;
         let filepathDisplay = payload.filepath;
 
         if (payload.is_chunked) {
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
+        
+        const processedSnippet = await processSnippet(
+          payload.content,
+          query, // Pass the current tool's query
+          filepathDisplay,
+          suggestionModelAvailable
+        );
+
         return {
           filepath: filepathDisplay,
-          snippet: payload.content.slice(0, 2000),
+          snippet: processedSnippet, // Use processed snippet
           last_modified: payload.last_modified,
           relevance: r.score,
           is_chunked: !!payload.is_chunked,
@@ -362,6 +409,7 @@ export async function executeToolCall(
           total_chunks: payload.total_chunks,
         };
       });
+      const context = await Promise.all(contextPromises);
       
       // Add query to session
       addQuery(session.id, query, results);
@@ -371,7 +419,7 @@ export async function executeToolCall(
         refinedQuery,
         recentQueries,
         diff: processedDiff, // Use the processed (potentially summarized or truncated) diff
-        results: context
+        results: context // This now contains processed snippets
       };
     }
     
@@ -436,18 +484,26 @@ export async function executeToolCall(
         filesContextString = "No files found in repository for context.";
       }
       
-      // Map search results to context
-      const context = results.map(r => {
+      // Map search results to context - map becomes async
+      const contextPromises = results.map(async r => {
         const payload = r.payload;
         let filepathDisplay = payload.filepath;
 
         if (payload.is_chunked) {
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
+
+        const processedSnippet = await processSnippet(
+          payload.content,
+          query, // Pass the current tool's query
+          filepathDisplay,
+          suggestionModelAvailable
+        );
+
         return {
           filepath: filepathDisplay, // This will be the display path including chunk info
           original_filepath: payload.filepath,
-          snippet: payload.content.slice(0, 2000),
+          snippet: processedSnippet, // Use processed snippet
           last_modified: payload.last_modified,
           relevance: r.score,
           is_chunked: !!payload.is_chunked,
@@ -455,6 +511,7 @@ export async function executeToolCall(
           total_chunks: payload.total_chunks,
         };
       });
+      const context = await Promise.all(contextPromises);
       
       const prompt = `
 **Context**:
@@ -484,7 +541,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
       
       return {
         sessionId: session.id,
-        suggestion: suggestion,
+        suggestion: suggestion, // Assuming 'suggestion' is defined after llmProvider.generateText(prompt)
         context: context.slice(0, 3) // Return only top 3 context items to avoid overwhelming the agent
       };
     }
@@ -542,17 +599,25 @@ Based on the provided context and snippets, generate a detailed code suggestion 
         files
       );
       
-      const context = contextResults.map(r => {
+      const contextPromises = contextResults.map(async r => { // contextResults from searchWithRefinement
         const payload = r.payload;
         let filepathDisplay = payload.filepath;
 
         if (payload.is_chunked) {
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
+
+        const processedSnippet = await processSnippet(
+          payload.content,
+          query, // Pass the current tool's query
+          filepathDisplay,
+          suggestionModelAvailable
+        );
+
         return {
           filepath: filepathDisplay,
           original_filepath: payload.filepath,
-          snippet: payload.content.slice(0, 2000),
+          snippet: processedSnippet, // Use processed snippet
           last_modified: payload.last_modified,
           relevance: r.score,
           is_chunked: !!payload.is_chunked,
@@ -560,6 +625,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
           total_chunks: payload.total_chunks,
         };
       });
+      const context = await Promise.all(contextPromises);
       
       // Step 2: Analyze the problem
       const analysisPrompt = `
@@ -595,7 +661,7 @@ Structure your analysis with these sections:
       
       return {
         sessionId: session.id,
-        analysis,
+        analysis, // Assuming 'analysis' is defined after llmProvider.generateText(analysisPrompt)
         context: context.slice(0, 3) // Return only top 3 context items
       };
     }

@@ -51,10 +51,10 @@ The following prioritization aims to tackle foundational improvements first, bui
 
 *   [x] **Task 3.1 (Formerly Task 2.1):** Modify `src/lib/repository.ts` (`getRepositoryDiff` function):
     *   [x] Change the implementation to fetch actual `git diff` content between the last two commits (e.g., using `isomorphic-git`'s diff capabilities or by shelling out to a `git diff` command). Ensure it returns the textual diff.
-*   [ ] **Task 3.2 (Formerly Task 2.2):** Modify `src/lib/agent.ts` (where `getRepositoryDiff` is called, likely within tool execution like `get_repository_context` or `generate_suggestion`):
-    *   [ ] If the fetched diff content is large, implement LLM-based summarization to create a concise overview of key changes.
-    *   [ ] Pass either the full diff (if manageable) or the summary to the agent's main prompt.
-    *   [ ] Update prompt assembly logic to correctly incorporate this richer diff information.
+*   [x] **Task 3.2 (Formerly Task 2.2):** Modify `src/lib/agent.ts` (where `getRepositoryDiff` is called, likely within tool execution like `get_repository_context` or `generate_suggestion`):
+    *   [x] If the fetched diff content is large, implement LLM-based summarization to create a concise overview of key changes.
+    *   [x] Pass either the full diff (if manageable) or the summary to the agent's main prompt.
+    *   [x] Update prompt assembly logic to correctly incorporate this richer diff information.
 
 ---
 
