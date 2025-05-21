@@ -246,11 +246,12 @@ describe('Repository Utilities', () => {
         vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
         
         // Mock Qdrant scroll to prevent errors during stale check for this specific test
-        vi.mocked(mockQdrantClientInstance.scroll).mockResolvedValueOnce({ points: [], next_page_offset: undefined });
+        // Ensure it's reset or consistently mocked if multiple scrolls are expected in other tests.
+        vi.mocked(mockQdrantClientInstance.scroll).mockResolvedValue({ points: [], next_page_offset: undefined });
 
 
         await indexRepository(mockQdrantClientInstance, repoPath);
-        expect(logger.error).toHaveBeenCalledWith('Failed to index /test/repo/bad.ts', { message: 'Read failed for bad.ts' });
+        expect(logger.error).toHaveBeenCalledWith('Failed to index bad.ts', { message: 'Read failed for bad.ts' }); // Path is relative in logger message
         expect(mockQdrantClientInstance.upsert).toHaveBeenCalledTimes(1); // Only for good.ts
     });
   });
@@ -301,21 +302,24 @@ describe('Repository Utilities', () => {
     it('should call git diff command and return stdout', async () => {
       setupValidRepoMocks(); // Ensure validateGitRepository returns true
       vi.mocked(git.log).mockResolvedValue([
-        { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } }, 
+        { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
         { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
       ]);
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
-        let cb = callbackOrUndefined;
-        if (typeof optionsOrCallback === 'function') {
-          cb = optionsOrCallback;
+        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
+        if (callback) {
+          // Simulate async behavior of exec for promisify
+          process.nextTick(() => callback(null, 'diff_content_stdout', ''));
         }
-        if (cb) {
-          cb(null, 'diff_content_stdout', '');
-        }
-        return {} as any; // Return a dummy child process
+        // Return a mock ChildProcess object
+        return {
+          stdout: { on: vi.fn(), pipe: vi.fn() },
+          stderr: { on: vi.fn(), pipe: vi.fn() },
+          on: vi.fn((event, cbListener) => { if (event === 'close') cbListener(0); }), // Simulate successful exit
+        } as any;
       });
       const result = await getRepositoryDiff(repoPath);
-      expect(exec).toHaveBeenCalledWith(
+      expect(vi.mocked(exec)).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath }),
         expect.any(Function)
@@ -330,14 +334,15 @@ describe('Repository Utilities', () => {
       ]);
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
-        let cb = callbackOrUndefined;
-        if (typeof optionsOrCallback === 'function') {
-          cb = optionsOrCallback;
+        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
+        if (callback) {
+          process.nextTick(() => callback(null, longDiff, ''));
         }
-        if (cb) {
-          cb(null, longDiff, '');
-        }
-        return {} as any;
+        return {
+          stdout: { on: vi.fn(), pipe: vi.fn() },
+          stderr: { on: vi.fn(), pipe: vi.fn() },
+          on: vi.fn((event, cbListener) => { if (event === 'close') cbListener(0); }),
+        } as any;
       });
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -349,15 +354,19 @@ describe('Repository Utilities', () => {
       vi.mocked(git.log).mockResolvedValue([
         { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
       ]);
+      const mockError = new Error('Git command failed');
+      (mockError as any).stderr = 'error_stderr'; // Attach stderr to the error object if needed by promisify
+
       vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
-        let cb = callbackOrUndefined;
-        if (typeof optionsOrCallback === 'function') {
-          cb = optionsOrCallback;
+        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
+        if (callback) {
+          process.nextTick(() => callback(mockError, '', 'error_stderr'));
         }
-        if (cb) {
-          cb(new Error('Git command failed'), '', 'error_stderr');
-        }
-        return {} as any;
+        return {
+          stdout: { on: vi.fn(), pipe: vi.fn() },
+          stderr: { on: vi.fn(), pipe: vi.fn() },
+          on: vi.fn((event, cbListener) => { if (event === 'close') cbListener(1); }), // Simulate error exit code
+        } as any;
       });
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('Failed to retrieve diff: Git command failed');

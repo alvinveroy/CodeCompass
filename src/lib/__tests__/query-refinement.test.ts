@@ -221,7 +221,7 @@ describe('Query Refinement Utilities', () => {
     // We need to mock the helpers or ensure their behavior is predictable.
     // For simplicity, let's test the branching based on currentRelevance.
 
-    it('should call broadenQuery for very low relevance (<0.3)', () => {
+    it('should call broadenQuery for very low relevance (<0.3)', async () => {
         // To test this, we need to spy on broadenQuery.
         const actualQueryRefinementModule = await import('../query-refinement');
         const broadenSpy = vi.spyOn(actualQueryRefinementModule, 'broadenQuery').mockReturnValue('broadened');

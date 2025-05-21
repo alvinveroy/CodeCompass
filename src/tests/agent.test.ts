@@ -15,10 +15,35 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { promises as fsPromises } from 'fs'; // For mocking fs.readFile etc.
 import path from 'path';
 
+// Import the actual logger and configService to spy on/use in mock factory
+import { logger as actualLogger, configService as actualConfigServiceModule } from '../lib/config-service';
+
 // Keep existing mocks for configService and logger
-vi.mock('../lib/config-service', () => ({
-  configService: {
-    MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL: 3000,
+vi.mock('../lib/config-service', () => {
+  // The SUT (agent.ts) will get this mocked module.
+  // We want its logger to be the actualLogger instance (so we can spy on its methods via actualLogger).
+  // And its configService to be a simplified mock for testing.
+  return {
+    __esModule: true, // Important for ES modules
+    configService: { // Simplified config values for agent tests
+      MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL: 3000,
+      MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY: 1500,
+      MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY: 15,
+      AGENT_DEFAULT_MAX_STEPS: 2,
+      AGENT_ABSOLUTE_MAX_STEPS: 3,
+      REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS: 10,
+      COLLECTION_NAME: 'test-collection',
+      SUGGESTION_PROVIDER: 'ollama',
+      SUGGESTION_MODEL: 'test-model',
+      OLLAMA_HOST: 'http://localhost:11434',
+      AGENT_QUERY_TIMEOUT: 60000,
+      // Add other necessary config values used by agent.ts
+    },
+    logger: actualLogger, // agent.ts will use actualLogger, which we can spy on
+  };
+});
+
+// Mock other dependencies
     MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY: 1500,
     MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY: 15,
     AGENT_DEFAULT_MAX_STEPS: 2, // Lower for easier testing of loop limits
@@ -44,12 +69,20 @@ vi.mock('../lib/llm-provider');
 vi.mock('../lib/state');
 vi.mock('../lib/query-refinement');
 vi.mock('../lib/repository');
-vi.mock('isomorphic-git'); 
-vi.mock('fs/promises', () => ({
-  readFile: vi.fn(),
-  readdir: vi.fn(),
-  // Add other fs/promises functions if agent.ts starts using them
-}));
+vi.mock('isomorphic-git');
+vi.mock('fs/promises', () => {
+  const readFileMock = vi.fn();
+  const readdirMock = vi.fn();
+  const mockFsPromises = {
+    readFile: readFileMock,
+    readdir: readdirMock,
+    // Add other fs/promises functions if agent.ts starts using them
+  };
+  return {
+    ...mockFsPromises, // Spread for named imports
+    default: mockFsPromises, // Provide a default export
+  };
+});
 
 
 // Import mocked versions for easier access in tests
@@ -78,6 +111,13 @@ const mockQdrantClientInstance = {
 describe('Agent', () => {
   beforeEach(() => {
     vi.clearAllMocks(); // Clears call counts and mock implementations
+
+    // Spy on actualLogger methods for each test. clearAllMocks should reset them.
+    // Provide a mock implementation to prevent actual logging during tests.
+    vi.spyOn(actualLogger, 'info').mockImplementation(() => {});
+    vi.spyOn(actualLogger, 'warn').mockImplementation(() => {});
+    vi.spyOn(actualLogger, 'error').mockImplementation(() => {});
+    vi.spyOn(actualLogger, 'debug').mockImplementation(() => {});
 
     // Setup default mock implementations
     (getLLMProvider as jest.Mock).mockResolvedValue(mockLLMProviderInstance);
@@ -397,11 +437,11 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final agent response, no tools needed.');
       
       const agentModule = await import('../lib/agent');
-      const parseToolCallsSpy = vi.spyOn(agentModule, 'parseToolCalls').mockReturnValueOnce([]); // No tool calls
+      const parseToolCallsSpy = vi.spyOn(agentModule, 'parseToolCalls').mockReturnValueOnce([]);
 
       const result = await runAgentLoop('simple query', 'session1', mockQdrantClient, repoPath, true);
 
-      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(1); // For initial reasoning
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(1); // Initial reasoning + test message from provider verification
       expect(result).toContain('Final agent response, no tools needed.');
       expect(addSuggestion).toHaveBeenCalledWith('session1', 'simple query', 'Final agent response, no tools needed.');
     });
@@ -414,10 +454,10 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       const agentModule = await import('../lib/agent');
       const parseToolCallsSpy = vi.spyOn(agentModule, 'parseToolCalls')
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }])
-        .mockReturnValueOnce([]); // No more tool calls
+        .mockReturnValueOnce([]); 
 
-      const mockExecuteToolCall = vi.spyOn(agentModule, 'executeToolCall'); 
-      mockExecuteToolCall.mockImplementation(async (toolCall) => {
+      // Spy on executeToolCall from the imported module
+      const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'search_code') {
           return { status: 'search_code executed', results: [] };
         }
@@ -426,33 +466,31 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       
       const result = await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2);
-      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2); // Reasoning + Final response
+      expect(executeToolCallSpy).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
       expect(result).toContain('Final response after tool.');
-      mockExecuteToolCall.mockRestore(); 
+      executeToolCallSpy.mockRestore(); 
       parseToolCallsSpy.mockRestore();
     });
 
     it('should extend loop if request_more_processing_steps is called and within absolute max', async () => {
-      const { configService: actualConfigService, logger } = await vi.importActual('../lib/config-service') as any;
-      // Spy on getters and mock their return values for this test
-      const defaultStepsSpy = vi.spyOn(actualConfigService, 'AGENT_DEFAULT_MAX_STEPS', 'get').mockReturnValue(1);
-      const absoluteStepsSpy = vi.spyOn(actualConfigService, 'AGENT_ABSOLUTE_MAX_STEPS', 'get').mockReturnValue(2);
+      // actualConfigServiceModule is imported at the top of the file and spied upon in beforeEach
+      const defaultStepsSpy = vi.spyOn(actualConfigServiceModule, 'AGENT_DEFAULT_MAX_STEPS', 'get').mockReturnValue(1);
+      const absoluteStepsSpy = vi.spyOn(actualConfigServiceModule, 'AGENT_ABSOLUTE_MAX_STEPS', 'get').mockReturnValue(2);
 
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "need more"}}') // Step 1
-        .mockResolvedValueOnce('Final response in extended step.'); // Step 2 (extended)
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "need more"}}') 
+        .mockResolvedValueOnce('Final response in extended step.'); 
       
       const agentModule = await import('../lib/agent');
       const parseToolCallsSpy = vi.spyOn(agentModule, 'parseToolCalls')
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'need more' } }])
-        .mockReturnValueOnce([]); // No tool calls in extended step
+        .mockReturnValueOnce([]); 
 
-      const mockExecuteToolCall = vi.spyOn(agentModule, 'executeToolCall');
-      mockExecuteToolCall.mockImplementation(async (toolCall) => {
+      const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'request_more_processing_steps') {
           return { status: 'acknowledged' };
         }
@@ -461,32 +499,29 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('extend loop query', 'session3', mockQdrantClient, repoPath, true);
 
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.'));
+      expect(actualLogger.info).toHaveBeenCalledWith(expect.stringContaining('Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.'));
       expect(result).toContain('Final response in extended step.');
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2); 
 
-      mockExecuteToolCall.mockRestore();
+      executeToolCallSpy.mockRestore();
       parseToolCallsSpy.mockRestore();
       defaultStepsSpy.mockRestore();
       absoluteStepsSpy.mockRestore();
     });
 
     it('should terminate if absoluteMaxSteps is reached, even with extension request', async () => {
-      const { configService: actualConfigService, logger } = await vi.importActual('../lib/config-service') as any;
-      vi.spyOn(actualConfigService, 'AGENT_DEFAULT_MAX_STEPS', 'get').mockReturnValue(1);
-      vi.spyOn(actualConfigService, 'AGENT_ABSOLUTE_MAX_STEPS', 'get').mockReturnValue(1);
-
+      vi.spyOn(actualConfigServiceModule, 'AGENT_DEFAULT_MAX_STEPS', 'get').mockReturnValue(1);
+      vi.spyOn(actualConfigServiceModule, 'AGENT_ABSOLUTE_MAX_STEPS', 'get').mockReturnValue(1);
 
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "try to extend"}}') 
-        .mockResolvedValueOnce('Final response after hitting absolute max.'); // Mock for the final response generation
+        .mockResolvedValueOnce('Final response after hitting absolute max.'); 
       
       const agentModule = await import('../lib/agent');
       const parseToolCallsSpy = vi.spyOn(agentModule, 'parseToolCalls')
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'try to extend' } }]);
         
-      const mockExecuteToolCall = vi.spyOn(agentModule, 'executeToolCall');
-      mockExecuteToolCall.mockImplementation(async (toolCall) => {
+      const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'request_more_processing_steps') {
           return { status: 'acknowledged' };
         }
@@ -495,18 +530,17 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       
       const result = await runAgentLoop('absolute max query', 'session4', mockQdrantClient, repoPath, true);
       
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Agent loop reached absolute maximum steps (1) and will terminate.'));
+      expect(actualLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Agent loop reached absolute maximum steps (1) and will terminate.'));
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2); 
       expect(result).toContain('Final response after hitting absolute max.');
       expect(result).toContain('[Note: The agent utilized the maximum allowed processing steps.]');
 
-      mockExecuteToolCall.mockRestore();
+      executeToolCallSpy.mockRestore();
       parseToolCallsSpy.mockRestore();
-      vi.restoreAllMocks(); // Restore spies on configService getters
+      vi.restoreAllMocks(); // Restore spies on configService getters and actualLogger
     });
     
     it('should handle agent reasoning timeout by using fallback tool call', async () => {
-      const { logger } = await vi.importActual('../lib/config-service') as any;
       mockLLMProviderInstance.generateText
           .mockRejectedValueOnce(new Error("Agent reasoning timed out")) 
           .mockResolvedValueOnce("Final response after fallback."); 
@@ -521,23 +555,21 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           })
           .mockReturnValueOnce([]); 
 
-      const mockExecuteToolCall = vi.spyOn(agentModule, 'executeToolCall');
-      mockExecuteToolCall.mockResolvedValue({ status: 'fallback search_code executed', results: [] });
+      const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockResolvedValue({ status: 'fallback search_code executed', results: [] });
 
       const result = await runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
 
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out"));
-      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+      expect(actualLogger.warn).toHaveBeenCalledWith(expect.stringContaining("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out"));
+      expect(executeToolCallSpy).toHaveBeenCalledWith(
           expect.objectContaining({ tool: 'search_code' }), 
           mockQdrantClient, repoPath, true
       );
       expect(result).toContain("Final response after fallback.");
-      mockExecuteToolCall.mockRestore();
+      executeToolCallSpy.mockRestore();
       parseToolCallsSpy.mockRestore();
     });
 
     it('should handle tool execution timeout by adding error to prompt', async () => {
-      const { logger } = await vi.importActual('../lib/config-service') as any;
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') 
           .mockResolvedValueOnce('Final response after tool timeout.'); 
@@ -547,12 +579,11 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }])
           .mockReturnValueOnce([]); 
 
-      const mockExecuteToolCall = vi.spyOn(agentModule, 'executeToolCall');
-      mockExecuteToolCall.mockRejectedValue(new Error("Tool execution timed out: search_code")); 
+      const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockRejectedValue(new Error("Tool execution timed out: search_code")); 
 
       const result = await runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
 
-      expect(logger.error).toHaveBeenCalledWith("Error executing tool search_code", { error: "Tool execution timed out: search_code" });
+      expect(actualLogger.error).toHaveBeenCalledWith("Error executing tool search_code", { error: "Tool execution timed out: search_code" });
       // Check that the prompt for the LLM (for final response) contains the error message
       const lastLLMCallArgs = mockLLMProviderInstance.generateText.mock.calls;
       const finalPromptArg = lastLLMCallArgs[lastLLMCallArgs.length -1][0];
