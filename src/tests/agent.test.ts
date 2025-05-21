@@ -1,8 +1,8 @@
 // DEFINE MOCK FUNCTIONS FOR FACTORY FIRST
-const mockInternalParseToolCalls = vi.fn();
-const mockInternalExecuteToolCall = vi.fn();
+const mockInternalParseToolCalls = vi.hoisted(() => vi.fn());
+const mockInternalExecuteToolCall = vi.hoisted(() => vi.fn());
 
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert } from 'vitest';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -31,18 +31,6 @@ vi.mock('../lib/config-service', () => {
   };
 });
 
-vi.mock('../lib/agent', async (importOriginal) => {
-  // These mocks (mockInternalParseToolCalls, mockInternalExecuteToolCall) must be defined above this factory.
-  const actual = await importOriginal<typeof import('../lib/agent')>();
-  return {
-    ...actual, // Spread actual implementations
-    parseToolCalls: mockInternalParseToolCalls, // Override with our mock
-    executeToolCall: mockInternalExecuteToolCall, // Override with our mock
-    // runAgentLoop will be the original from 'actual'
-    // createAgentState, generateAgentSystemPrompt will also be original
-  };
-});
-
 // Mock external dependencies (these are fine)
 vi.mock('../lib/llm-provider');
 vi.mock('../lib/state');
@@ -65,6 +53,19 @@ vi.mock('fs/promises', () => {
     default: mockFsPromises,
   };
 });
+
+// Mock the SUT module using the hoisted mocks
+vi.mock('../lib/agent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/agent')>();
+  return {
+    ...actual,
+    parseToolCalls: mockInternalParseToolCalls(), // Call the hoisted function to get the vi.fn()
+    executeToolCall: mockInternalExecuteToolCall(), // Call the hoisted function to get the vi.fn()
+  };
+});
+
+
+
 
 // Import functions from the SUT module directly
 import {
@@ -109,8 +110,8 @@ describe('Agent', () => {
     mockedLoggerFromAgentPerspective.error.mockReset();
     mockedLoggerFromAgentPerspective.debug.mockReset();
     
-    mockInternalParseToolCalls.mockReset().mockReturnValue([]);
-    mockInternalExecuteToolCall.mockReset().mockResolvedValue({ status: 'default mock success from factory mock' });
+    mockInternalParseToolCalls().mockReset().mockReturnValue([]); // Call to get the mock
+    mockInternalExecuteToolCall().mockReset().mockResolvedValue({ status: 'default mock success from factory mock' }); // Call to get the mock
 
     (validateGitRepository as vi.Mock).mockReset().mockResolvedValue(true);
     (getRepositoryDiff as vi.Mock).mockReset().mockResolvedValue('Default diff content');
@@ -166,12 +167,12 @@ describe('Agent', () => {
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // LLM output for tool selection
 
       // Configure the factory mock mockInternalParseToolCalls
-      mockInternalParseToolCalls
+      mockInternalParseToolCalls() // Call to get the mock
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
         .mockReturnValueOnce([]); // Subsequent calls return empty
 
-      // Configure the factory mock mockInternalExecuteToolCall
-      mockInternalExecuteToolCall.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      // Configure the factory mock mockInternalExecuteToolCall 
+      mockInternalExecuteToolCall().mockResolvedValueOnce({ status: 'search_code executed', results: [] }); // Call to get the mock
 
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.'); 
 
@@ -180,8 +181,8 @@ describe('Agent', () => {
       await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
       // Assert on the factory mocks
-      expect(mockInternalExecuteToolCall).toHaveBeenCalledTimes(1);
-      expect(mockInternalExecuteToolCall).toHaveBeenCalledWith(
+      expect(mockInternalExecuteToolCall()).toHaveBeenCalledTimes(1);
+      expect(mockInternalExecuteToolCall()).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
