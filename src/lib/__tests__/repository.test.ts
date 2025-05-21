@@ -279,8 +279,13 @@ describe('Repository Utilities', () => {
         });
 
         vi.mocked(git.walk).mockImplementation(async ({ fs: nodeFsAlias, dir, gitdir, trees, map }) => {
-            const treeOidToWalk = (trees[0] as any)._id; // Cast to any to access mock's property
-            if (treeOidToWalk === 'tree1_oid') {
+            const treeOidFromMockWalker = (trees[0] as any)._id; // Cast to any to access mock's property
+            // For the initial commit, the SUT calls git.TREE() which our mock returns as { _id: 'mock_tree_id_default' }
+            // The SUT's logic for initial commit uses git.walk with git.TREE()
+            // We need to identify if this 'walk' call is for the initial commit.
+            // The `trees` arg to walk will be `[{ _id: 'mock_tree_id_default' }]` if SUT calls `git.TREE()`.
+            // Let's assume if map is present and treeOid is the default mock one, it's the initial commit walk.
+            if (map && treeOidFromMockWalker === 'mock_tree_id_default') { // Check against the mock's default _id
                  if (map) { // Guard the call to map
                      await map('initial.ts', [{ type: async () => 'blob', oid: async () => 'blob_oid_initial' }] as any);
                  }

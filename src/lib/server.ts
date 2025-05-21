@@ -1,9 +1,11 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"; // Added ResourceTemplate
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-// Attempt to import from likely 'dist' locations with .js extension
-import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/dist/types.js";
-import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/dist/shared/protocol.js";
-import { Variables } from "@modelcontextprotocol/sdk/dist/shared/uriTemplate.js";
+// Assuming these are correctly exported by the SDK, either from root or via defined subpaths.
+// If the SDK's "exports" map points these subpaths to .js files, add .js here.
+// If they are re-exported from the main SDK entry, use that.
+import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types";
+import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol";
+import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate";
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";

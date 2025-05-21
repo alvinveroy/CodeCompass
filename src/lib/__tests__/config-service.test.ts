@@ -31,6 +31,8 @@ vi.mock('winston', () => {
         warn: vi.fn(),
         error: vi.fn(),
         debug: vi.fn(),
+        add: vi.fn(), // Ensure this is present
+        remove: vi.fn(), // And any other methods like remove if used
       };
 
       // Define mocks for winston.format properties that ConfigService uses
@@ -80,7 +82,7 @@ describe('ConfigService', () => {
     vi.resetModules(); // This is key
     // fs mocks are set per test *before* this is called.
     // Import the ConfigService class directly for instance manipulation
-    const { ConfigService: ImportedConfigServiceClass } = await import('../config-service');
+    const { ConfigService: ImportedConfigServiceClass } = await import('../config-service.js');
     // Reset the private static instance variable
     (ImportedConfigServiceClass as any).instance = undefined;
     // Call the public static getter to create/get the new instance

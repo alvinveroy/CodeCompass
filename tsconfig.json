@@ -20,7 +20,7 @@
     "paths": {
       "*": ["src/types/*"]
     },
-    "types": ["node", "vitest/globals"],
+    "types": ["node"],
     "lib": ["ESNext"]
   },
   "include": ["src/**/*"],
