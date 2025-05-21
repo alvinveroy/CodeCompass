@@ -19,6 +19,7 @@ import { generateEmbedding } from '../ollama';
 // import { preprocessText } from '../../utils/text-utils'; // Not needed here
 import { configService, logger } from '../config-service';
 import { DetailedQdrantSearchResult } from '../types';
+import * as queryRefinementModule from '../query-refinement';
 
 // Define a reusable mock Qdrant client
 const mockQdrantClientInstance = {
