@@ -176,7 +176,7 @@ describe('Agent', () => {
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.'); 
 
       // Call the original runAgentLoop. It will use the spied versions of parseToolCalls and executeToolCall.
-      await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
+      await ActualAgentModule.runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
       // Assert on the spies
       expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
