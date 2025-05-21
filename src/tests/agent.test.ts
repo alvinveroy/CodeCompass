@@ -3,38 +3,28 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest'; // Ensure QdrantClient is imported
 
-// These will hold the mock functions created by the factory for '../lib/agent'
-let AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS: vi.Mock;
-let AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL: vi.Mock;
-
 vi.mock('../lib/agent', async (importOriginal) => {
   const originalModule = await importOriginal<typeof import('../lib/agent')>();
-  const parseMockInFactory = vi.fn();
-  const execMockInFactory = vi.fn();
-  AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS = parseMockInFactory;
-  AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL = execMockInFactory;
   return {
     ...originalModule, // Spread original module to keep non-mocked exports
-    // Overwrite specific functions with mocks created in the factory
-    parseToolCalls: parseMockInFactory,
-    executeToolCall: execMockInFactory,
+    // Overwrite specific functions with mocks created directly in the factory
+    parseToolCalls: vi.fn(),
+    executeToolCall: vi.fn(),
     // Keep other exports like createAgentState, generateAgentSystemPrompt, toolRegistry as original
-    // unless they also need this specific mocking pattern.
-    // For now, assuming they are fine as direct imports or can be spied upon if needed.
   };
 });
 
 // Import functions AFTER the vi.mock factory.
-// Functions we want to test directly (originals) or use as SUT that call mocked parts.
+// runAgentLoop, createAgentState, etc. are original. parseToolCalls and executeToolCall are mocks.
 import { 
   runAgentLoop, 
   createAgentState, 
   generateAgentSystemPrompt,
-  toolRegistry 
+  toolRegistry,
+  parseToolCalls, // This is now the mock from the factory
+  executeToolCall // This is now the mock from the factory
 } from '../lib/agent'; 
 // Import the actual functions for direct testing using a namespace import
-// This is useful if the functions being mocked (parseToolCalls, executeToolCall) are also
-// exported and need to be tested in their original form.
 import * as actualAgentFunctions from '../lib/agent'; 
     
 // Mock dependencies used by agent.ts
@@ -99,9 +89,9 @@ const mockQdrantClientInstance = {
 describe('Agent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset the factory-created mocks
-    if (AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS) AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS.mockReset().mockReturnValue([]);
-    if (AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockReset().mockResolvedValue({ status: 'default mock success' });
+    // Reset the imported mocks (which are from the factory)
+    (parseToolCalls as vi.Mock).mockReset().mockReturnValue([]);
+    (executeToolCall as vi.Mock).mockReset().mockResolvedValue({ status: 'default mock success' });
     
     (getLLMProvider as vi.Mock).mockResolvedValue(mockLLMProviderInstance);
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
@@ -154,34 +144,33 @@ describe('Agent', () => {
 
     beforeEach(() => {
         // Ensure LLM verification passes by default for runAgentLoop tests
-        mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK");
+        // The first call to generateText in runAgentLoop is for verification.
+        mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
     });
 
     it('should execute a tool call and then provide final response', async () => {
-      if (!AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS || !AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) {
-        throw new Error("Agent mocks not initialized for runAgentLoop test");
-      }
-      // Setup AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS and AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL
       // LLM generates reasoning with a tool call
+      // After the initial "LLM Verification OK", the next call is for step 1 reasoning.
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce("LLM Verification OK") // For initial verification
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // Step 1 reasoning
       
-      // Factory mock for parseToolCalls will be used for the above LLM output
-      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS
+      // The imported parseToolCalls (which is a mock) will be used for the above LLM output
+      (parseToolCalls as vi.Mock)
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }]);
       
-      // Factory mock for executeToolCall will be used
-      AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      // The imported executeToolCall (mock) will be used
+      (executeToolCall as vi.Mock).mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 
       // After tool execution, LLM generates final response (no more tool calls)
+      // This is the third call to generateText in this test's flow.
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.');
-      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS.mockReturnValueOnce([]); // For the second reasoning step
+      // parseToolCalls (mock) for the second reasoning step (should return no tools)
+      (parseToolCalls as vi.Mock).mockReturnValueOnce([]); 
       
       await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true); 
       
-      expect(AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledTimes(1);
-      expect(AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledWith(
+      expect(executeToolCall).toHaveBeenCalledTimes(1);
+      expect(executeToolCall).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
