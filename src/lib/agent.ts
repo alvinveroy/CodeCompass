@@ -1144,7 +1144,7 @@ export async function runAgentLoop(
     }
     
     // If we somehow don't have a final response, generate one
-    // After the loop, `step` holds the number of iterations completed.
+    // After the loop
     if (!agentState.finalResponse) {
       const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nPlease provide your final response to the user based on the information collected so far.`;
       const llmProvider = await getLLMProvider();
@@ -1162,16 +1162,13 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " + 
           agentState.steps.map(s => `Used ${s.tool} and found: ${JSON.stringify(s.output).substring(0, 200)}...`).join("\n\n");
-        if (step === absoluteMaxSteps) {
-            agentState.finalResponse = (agentState.finalResponse || "") +
-            "\n[Note: The agent reached the absolute maximum number of processing steps.]";
-        }
       }
-    } else {
-        if (step === absoluteMaxSteps) {
-            agentState.finalResponse = (agentState.finalResponse || "") +
-            "\n[Note: The agent utilized the maximum allowed processing steps.]";
-        }
+    }
+    
+    // Append note if terminated due to absolute max steps, regardless of how finalResponse was set
+    if (terminatedDueToAbsoluteMax) {
+        agentState.finalResponse = (agentState.finalResponse || "Processing was terminated.") +
+        "\n[Note: The agent utilized the maximum allowed processing steps.]";
     }
     
     // Add the final response as a suggestion in the session
