@@ -3,16 +3,25 @@ import git from 'isomorphic-git';
 import fsPromises from 'fs/promises'; // Explicitly use fsPromises for clarity
 import nodeFs from 'fs'; // For isomorphic-git's fs parameter
 import path from 'path';
-import { exec as actualChildProcessExec, type ExecException } from 'child_process'; // Keep for type, but we'll mock exec
+import { exec as actualChildProcessExec, type ExecException } from 'child_process'; // Keep for type
 import { QdrantClient } from '@qdrant/js-client-rest';
 
-// Mock child_process.exec directly
-const MOCKED_EXEC_FN = vi.fn();
-vi.mock('child_process', async (importOriginal) => {
-  const actualCp = await importOriginal<typeof import('child_process')>();
+// This variable will hold the mock function created by the 'util' mock factory.
+// It needs to be `let` and will be assigned when the factory runs.
+let MOCK_EXEC_ASYNC_INSTANCE: vi.Mock;
+
+vi.mock('util', async (importOriginal) => {
+  const actualUtil = await importOriginal<typeof import('util')>();
+  const factoryCreatedMock = vi.fn(); // Create the mock fn inside the factory
+  MOCK_EXEC_ASYNC_INSTANCE = factoryCreatedMock; // Assign to the outer scope variable
   return {
-    ...actualCp, // Keep other child_process exports if any are used
-    exec: MOCKED_EXEC_FN, // Our mock for exec
+    ...actualUtil,
+    promisify: (fnToPromisify: any) => {
+      if (fnToPromisify === actualChildProcessExec) { 
+        return factoryCreatedMock; // Return the mock created in this factory scope
+      }
+      return actualUtil.promisify(fnToPromisify);
+    },
   };
 });
 
@@ -52,9 +61,6 @@ vi.mock('fs', async (importOriginal) => { // Mock standard 'fs' for isomorphic-g
 //   // Add other exports like spawn if they were used and need mocking
 // }));
 
-// Remove the vi.mock('util', ...) as we're no longer trying to intercept promisify that way.
-// The SUT will now call util.promisify(MOCKED_EXEC_FN).
-
 vi.mock('../config-service', () => ({
   configService: {
     COLLECTION_NAME: 'test_collection',
@@ -81,7 +87,15 @@ const mockQdrantClientInstance = {
 describe('Repository Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    MOCKED_EXEC_FN.mockReset(); // Reset our exec mock
+    // MOCK_EXEC_ASYNC_INSTANCE might not be initialized if the mock factory for 'util'
+    // hasn't run yet for some reason (e.g. if 'util' is not imported by the SUT).
+    // However, getRepositoryDiff *does* import and use promisify from 'util'.
+    if (MOCK_EXEC_ASYNC_INSTANCE) {
+        MOCK_EXEC_ASYNC_INSTANCE.mockReset();
+    } else {
+        // This case indicates a problem with the test setup or mock execution order.
+        console.warn("MOCK_EXEC_ASYNC_INSTANCE was not initialized in repository.test.ts beforeEach");
+    }
   });
 
   // ... validateGitRepository tests ...
@@ -148,33 +162,24 @@ describe('Repository Utilities', () => {
     });
 
     it('should call git diff command and return stdout', async () => {
-      // Ensure mocks from setupValidRepoAndCommitsMocks are active
-      setupValidRepoAndCommitsMocks(); // Ensure this sets up git.log etc.
-      // Configure MOCKED_EXEC_FN to call its callback for success
-      MOCKED_EXEC_FN.mockImplementationOnce((command, options, callback) => {
-        if (command === 'git diff commit1_oid commit2_oid') {
-          callback(null, 'diff_content_stdout_explicit', '');
-        } else {
-          callback(new Error('Unexpected command in mockExec'), '', '');
-        }
-      });
+      setupValidRepoAndCommitsMocks();
+      if (!MOCK_EXEC_ASYNC_INSTANCE) throw new Error("mockExecAsyncInstance not initialized for stdout test");
+      MOCK_EXEC_ASYNC_INSTANCE.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(MOCKED_EXEC_FN).toHaveBeenCalledWith(
+      expect(MOCK_EXEC_ASYNC_INSTANCE).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
-        expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 }),
-        expect.any(Function) // promisify adds a callback
+        expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
       );
       expect(result).toBe('diff_content_stdout_explicit');
     });
 
     it('should truncate long diff output', async () => {
       setupValidRepoAndCommitsMocks();
+      if (!MOCK_EXEC_ASYNC_INSTANCE) throw new Error("mockExecAsyncInstance not initialized for truncate test");
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      MOCKED_EXEC_FN.mockImplementationOnce((command, options, callback) => {
-        callback(null, longDiff, '');
-      });
+      MOCK_EXEC_ASYNC_INSTANCE.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -183,14 +188,11 @@ describe('Repository Utilities', () => {
 
     it('should handle errors from git diff command', async () => {
       setupValidRepoAndCommitsMocks();
-      const mockError = new Error('Git command failed') as ExecException;
+      if (!MOCK_EXEC_ASYNC_INSTANCE) throw new Error("mockExecAsyncInstance not initialized for error test");
+      const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
       (mockError as any).code = 128;
-      // mockError.stderr = 'stderr from exec callback'; // promisify will add this to the error
-
-      MOCKED_EXEC_FN.mockImplementationOnce((command, options, callback) => {
-        // The callback provided by promisify expects (error, stdout, stderr)
-        callback(mockError, '', 'stderr_from_exec_callback_arg'); 
-      });
+      mockError.stderr = 'stderr from rejected execAsync'; 
+      MOCK_EXEC_ASYNC_INSTANCE.mockRejectedValueOnce(mockError);
       
       // Clear logger before the call, as validateGitRepository might log
       logger.error.mockClear(); 
@@ -204,7 +206,7 @@ describe('Repository Utilities', () => {
         expect.objectContaining({ // The error object itself
           message: 'Git command failed',
           code: 128,
-          stderr: 'stderr_from_exec_callback_arg', // Check if promisify adds this
+          stderr: 'stderr from rejected execAsync', 
         })
       );
     });
