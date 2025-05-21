@@ -716,25 +716,113 @@ Structure your analysis with these sections:
 
       logger.info(`Executing request_additional_context: type='${contextTypeParam}', query_or_path='${queryOrPathParam}', reasoning='${reasoningParam || 'N/A'}'`);
 
-      // Placeholder implementation for sub-task 2 of P2.4
-      // Actual logic for fetching more search results, full file content, or directory listing
-      // will be implemented in the next step.
       switch (contextTypeParam) {
-        case 'MORE_SEARCH_RESULTS':
-          // Placeholder:
-          logger.info(`Placeholder: MORE_SEARCH_RESULTS for query: "${queryOrPathParam}"`);
-          // In the future, this will re-run searchWithRefinement, possibly with adjusted parameters.
-          return { sessionId: session.id, status: `Placeholder: MORE_SEARCH_RESULTS for query "${queryOrPathParam}". Implementation pending.` };
-        case 'FULL_FILE_CONTENT':
-          // Placeholder:
-          logger.info(`Placeholder: FULL_FILE_CONTENT for path: "${queryOrPathParam}"`);
-          // In the future, this will read file content.
-          return { sessionId: session.id, status: `Placeholder: FULL_FILE_CONTENT for path "${queryOrPathParam}". Implementation pending.` };
-        case 'DIRECTORY_LISTING':
-          // Placeholder:
-          logger.info(`Placeholder: DIRECTORY_LISTING for path: "${queryOrPathParam}"`);
-          // In the future, this will list directory contents.
-          return { sessionId: session.id, status: `Placeholder: DIRECTORY_LISTING for path "${queryOrPathParam}". Implementation pending.` };
+        case 'MORE_SEARCH_RESULTS': {
+          logger.info(`Executing MORE_SEARCH_RESULTS for query: "${queryOrPathParam}"`);
+          const files = await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
+          // Use a higher limit for "more" results, e.g., 2x the default or a configured "more_results_limit"
+          const moreResultsLimit = configService.QDRANT_SEARCH_LIMIT_DEFAULT * 2; 
+          const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
+            qdrantClient,
+            queryOrPathParam, // This is the original query
+            files,
+            moreResultsLimit // Pass the increased limit
+          );
+          addQuery(session.id, queryOrPathParam, results, relevanceScore); // Log this specific request
+
+          const formattedResultsPromises = results.map(async r => {
+            const payload = r.payload;
+            let filepathDisplay = payload.filepath;
+            if (payload.is_chunked) {
+              filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
+            }
+            const processedSnippet = await processSnippet(
+              payload.content,
+              queryOrPathParam,
+              filepathDisplay,
+              suggestionModelAvailable
+            );
+            return {
+              filepath: filepathDisplay,
+              snippet: processedSnippet,
+              last_modified: payload.last_modified,
+              relevance: r.score,
+              is_chunked: !!payload.is_chunked,
+            };
+          });
+          const formattedResults = await Promise.all(formattedResultsPromises);
+          return { 
+            sessionId: session.id, 
+            status: `Retrieved more search results for query "${queryOrPathParam}".`,
+            refinedQuery,
+            relevanceScore,
+            results: formattedResults 
+          };
+        }
+        case 'FULL_FILE_CONTENT': {
+          logger.info(`Executing FULL_FILE_CONTENT for path: "${queryOrPathParam}"`);
+          const targetFilePath = path.resolve(repoPath, queryOrPathParam); // Ensure path is absolute and within repo
+          if (!targetFilePath.startsWith(path.resolve(repoPath))) {
+            throw new Error(`Access denied: Path "${queryOrPathParam}" is outside the repository.`);
+          }
+          try {
+            let fileContent = await fs.readFile(targetFilePath, 'utf8');
+            const MAX_CONTENT_LENGTH = configService.MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY * 5; // Example: 5x snippet length for "full"
+
+            if (fileContent.length > MAX_CONTENT_LENGTH) {
+              if (suggestionModelAvailable) {
+                try {
+                  const llmProvider = await getLLMProvider();
+                  const summaryPrompt = `The user requested the full content of "${queryOrPathParam}". The content is too long (${fileContent.length} characters). Summarize it concisely, focusing on its main purpose, key functions/classes, and overall structure. Keep the summary informative yet brief.\n\nFile Content (partial):\n${fileContent.substring(0, MAX_CONTENT_LENGTH * 2)}`; // Provide more for summary
+                  fileContent = `Summary of ${queryOrPathParam}:\n${await llmProvider.generateText(summaryPrompt)}`;
+                  logger.info(`Summarized large file content for ${queryOrPathParam}`);
+                } catch (summaryError) {
+                  const sErr = summaryError instanceof Error ? summaryError : new Error(String(summaryError));
+                  logger.warn(`Failed to summarize full file content for ${queryOrPathParam}. Using truncated content. Error: ${sErr.message}`);
+                  fileContent = `Content of ${queryOrPathParam} is too large. Summary attempt failed. Truncated content:\n${fileContent.substring(0, MAX_CONTENT_LENGTH)}...`;
+                }
+              } else {
+                logger.warn(`Suggestion model not available to summarize large file ${queryOrPathParam}. Using truncated content.`);
+                fileContent = `Content of ${queryOrPathParam} is too large. Full content omitted as suggestion model is offline. Truncated content:\n${fileContent.substring(0, MAX_CONTENT_LENGTH)}...`;
+              }
+            }
+            return { sessionId: session.id, status: `Retrieved content for path "${queryOrPathParam}".`, filepath: queryOrPathParam, content: fileContent };
+          } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            logger.error(`Failed to read file "${queryOrPathParam}": ${err.message}`);
+            throw new Error(`Failed to read file "${queryOrPathParam}": ${err.message}`);
+          }
+        }
+        case 'DIRECTORY_LISTING': {
+          logger.info(`Executing DIRECTORY_LISTING for path: "${queryOrPathParam}"`);
+          const targetDirPath = path.resolve(repoPath, queryOrPathParam); // Ensure path is absolute and within repo
+          if (!targetDirPath.startsWith(path.resolve(repoPath))) {
+            throw new Error(`Access denied: Path "${queryOrPathParam}" is outside the repository.`);
+          }
+          try {
+            const entries = await fs.readdir(targetDirPath, { withFileTypes: true });
+            const listing = entries.map(entry => ({
+              name: entry.name,
+              type: entry.isDirectory() ? 'directory' : 'file'
+            }));
+            // Limit the number of entries returned to avoid overwhelming the context
+            const MAX_DIR_ENTRIES = 50; 
+            if (listing.length > MAX_DIR_ENTRIES) {
+                return { 
+                    sessionId: session.id, 
+                    status: `Retrieved directory listing for path "${queryOrPathParam}". Listing truncated.`, 
+                    path: queryOrPathParam, 
+                    listing: listing.slice(0, MAX_DIR_ENTRIES),
+                    note: `Listing truncated. Showing first ${MAX_DIR_ENTRIES} of ${listing.length} entries.`
+                };
+            }
+            return { sessionId: session.id, status: `Retrieved directory listing for path "${queryOrPathParam}".`, path: queryOrPathParam, listing };
+          } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            logger.error(`Failed to list directory "${queryOrPathParam}": ${err.message}`);
+            throw new Error(`Failed to list directory "${queryOrPathParam}": ${err.message}`);
+          }
+        }
         default: // Should not happen due to earlier check
           throw new Error(`Unsupported context_type: ${contextTypeParam}`);
       }
