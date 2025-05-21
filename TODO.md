@@ -26,7 +26,7 @@ The following prioritization aims to tackle foundational improvements first, bui
 
 *   [x] **Task 1.1:** Modify `src/lib/query-refinement.ts`:
     *   [x] Make the `limit` parameter in `qdrantClient.search()` calls configurable (e.g., read from `configService`).
-    *   [~] **Consider (Advanced):** Explore logic for the agent or refinement process to dynamically request a higher search limit if initial results are insufficient. (Partially addressed by `request_additional_context` tool with `MORE_SEARCH_RESULTS`)
+    *   [x] **Consider (Advanced):** Explore logic for the agent or refinement process to dynamically request a higher search limit if initial results are insufficient. (Addressed by `request_additional_context` tool with `MORE_SEARCH_RESULTS`)
 *   [x] **Task 1.2:** Update `src/lib/config-service.ts` (and potentially `src/lib/config.ts` or `.env` examples):
     *   [x] Add a new configuration variable for the default Qdrant search result limit (e.g., `QDRANT_SEARCH_LIMIT_DEFAULT`).
 
@@ -106,10 +106,10 @@ The following prioritization aims to tackle foundational improvements first, bui
         *   [x] If this instruction is received, and a global maximum hasn't been hit, allow the loop to continue for a few more iterations. (Implemented in `runAgentLoop` logic)
 
 3.  **Task P3.3 (Formerly Task 10.1-10.3): Testing and Validation:**
-    *   [x] Develop test cases specifically for large repositories with diverse query types. *(Unit tests for agent.ts significantly improved.)*
-    *   [ ] Evaluate the impact of each implemented improvement on context quality and agent performance. *(To be executed after unit tests)*
-    *   [ ] Profile performance, especially for indexing large files and LLM-heavy operations (summarization, LLM-based refinement). *(To be executed after unit tests)*
-    *   [x] **Implement comprehensive unit tests with positive and negative cases, aiming for high coverage and adhering to best practices.** *(agent.test.ts complete. config-service.test.ts, repository.test.ts, query-refinement.test.ts implemented.)*
+    *   [x] Develop test cases specifically for large repositories with diverse query types. *(Unit tests for agent.ts, config-service.ts, repository.ts, query-refinement.ts implemented.)*
+    *   [~] Evaluate the impact of each implemented improvement on context quality and agent performance. *(Guidance below, to be executed by user/developer)*
+    *   [~] Profile performance, especially for indexing large files and LLM-heavy operations (summarization, LLM-based refinement). *(Guidance below, to be executed by user/developer)*
+    *   [x] **Implement comprehensive unit tests with positive and negative cases, aiming for high coverage and adhering to best practices.** *(Core unit tests implemented for key modules.)*
 
 ---
 
