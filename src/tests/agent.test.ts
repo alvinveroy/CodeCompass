@@ -166,10 +166,10 @@ describe('Agent', () => {
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // LLM output for tool selection
 
-      // Let the original ActualAgentModule.parseToolCalls run for the first call.
-      // It should parse the TOOL_CALL from mockLLMProviderInstance.generateText.
-      // Ensure subsequent calls to parseToolCalls (if any within the loop for one tool) return empty.
-      parseToolCallsSpy.mockReturnValueOnce([]); // If called again, stop tool processing.
+      // Configure parseToolCallsSpy to return a tool call for the first invocation
+      parseToolCallsSpy
+        .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
+        .mockReturnValueOnce([]); // Subsequent calls return empty
 
       executeToolCallSpy.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 

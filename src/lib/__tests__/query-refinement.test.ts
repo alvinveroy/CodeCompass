@@ -74,8 +74,8 @@ describe('Query Refinement Tests', () => {
       const mockResults = [{ id: '1', score: 0.8, payload: { content: 'highly relevant' } }];
       vi.mocked(mockQdrantClientInstance.search).mockResolvedValue(mockResults as any);
 
-      // Use the imported searchWithRefinement (which is the original, but calls the spied refineQuery)
-      const { results, refinedQuery: actualRefinedQuery, relevanceScore } = await searchWithRefinement(
+      // Call searchWithRefinement from ActualQueryRefinementModule
+      const { results, refinedQuery: actualRefinedQuery, relevanceScore } = await ActualQueryRefinementModule.searchWithRefinement(
         mockQdrantClientInstance, 'initial query', [], undefined, undefined, 0.75
       );
       
@@ -95,7 +95,7 @@ describe('Query Refinement Tests', () => {
 
       // searchWithRefinement will use configService.MAX_REFINEMENT_ITERATIONS (mocked to 2)
       // if its maxRefinements parameter is undefined.
-      const { results, relevanceScore, refinedQuery: actualRefinedQueryOutput } = await searchWithRefinement(
+      const { results, relevanceScore, refinedQuery: actualRefinedQueryOutput } = await ActualQueryRefinementModule.searchWithRefinement(
         mockQdrantClientInstance, 'original query', [], undefined, undefined, 0.75 
       );
       
@@ -117,7 +117,7 @@ describe('Query Refinement Tests', () => {
     
     it('should use customLimit if provided', async () => {
       vi.mocked(mockQdrantClientInstance.search).mockResolvedValue([{ id: '1', score: 0.9, payload: {} }] as any);
-      await searchWithRefinement(mockQdrantClientInstance, 'query', [], 15); 
+      await ActualQueryRefinementModule.searchWithRefinement(mockQdrantClientInstance, 'query', [], 15); 
       expect(mockQdrantClientInstance.search).toHaveBeenCalledWith(
         configService.COLLECTION_NAME,
         expect.objectContaining({ limit: 15 })
@@ -127,7 +127,7 @@ describe('Query Refinement Tests', () => {
     it('should apply file filter if files array is provided', async () => {
         vi.mocked(mockQdrantClientInstance.search).mockResolvedValue([{ id: '1', score: 0.9, payload: {} }] as any);
         const filesToFilter = ['src/file1.ts', 'src/file2.ts'];
-        await searchWithRefinement(mockQdrantClientInstance, 'query', filesToFilter); 
+        await ActualQueryRefinementModule.searchWithRefinement(mockQdrantClientInstance, 'query', filesToFilter); 
         expect(mockQdrantClientInstance.search).toHaveBeenCalledWith(
             configService.COLLECTION_NAME,
             expect.objectContaining({
@@ -142,7 +142,7 @@ describe('Query Refinement Tests', () => {
             .mockResolvedValueOnce([]) 
             .mockResolvedValueOnce([]); 
 
-        const { results, relevanceScore } = await searchWithRefinement( 
+        const { results, relevanceScore } = await ActualQueryRefinementModule.searchWithRefinement( 
             mockQdrantClientInstance, 'query for no results', [], undefined, undefined, 0.7
         );
         expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(configService.MAX_REFINEMENT_ITERATIONS + 1); 
