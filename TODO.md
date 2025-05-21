@@ -105,9 +105,10 @@ The following prioritization aims to tackle foundational improvements first, bui
         *   [ ] If this instruction is received, and a global maximum hasn't been hit, allow the loop to continue for a few more iterations.
 
 3.  **Task P3.3 (Formerly Task 10.1-10.3): Testing and Validation:**
-    *   [ ] Develop test cases specifically for large repositories with diverse query types.
-    *   [ ] Evaluate the impact of each implemented improvement on context quality and agent performance.
-    *   [ ] Profile performance, especially for indexing large files and LLM-heavy operations (summarization, LLM-based refinement).
+    *   [~] Develop test cases specifically for large repositories with diverse query types. *(Guidance provided, unit test plan below)*
+    *   [ ] Evaluate the impact of each implemented improvement on context quality and agent performance. *(To be executed after unit tests)*
+    *   [ ] Profile performance, especially for indexing large files and LLM-heavy operations (summarization, LLM-based refinement). *(To be executed after unit tests)*
+    *   [~] **Implement comprehensive unit tests with positive and negative cases, aiming for high coverage and adhering to best practices.** *(Actively working on this, expanding agent.test.ts)*
 
 ---
 
