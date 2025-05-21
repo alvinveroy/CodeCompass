@@ -79,13 +79,13 @@ The following prioritization aims to tackle foundational improvements first, bui
         *   [x] Add necessary configuration for this LLM call (e.g., specific model, prompt template via `configService`).
 
 4.  **Task P2.4 (Advanced - Formerly Task 7.1-7.3): Explicit "Request More Context" Agent Tool:**
-    *   [>] Define a new tool in `src/lib/agent.ts` (in `toolRegistry` and `executeToolCall`):
-        *   [>] Name: e.g., `request_additional_context`.
-        *   [>] Parameters: e.g., `context_type: enum("MORE_SEARCH_RESULTS", "FULL_FILE_CONTENT", "DIRECTORY_LISTING")`, `query_or_path: string`, `reasoning: string`.
+    *   [x] Define a new tool in `src/lib/agent.ts` (in `toolRegistry` and `executeToolCall`):
+        *   Name: `request_additional_context`.
+        *   Parameters: `context_type: enum("MORE_SEARCH_RESULTS", "FULL_FILE_CONTENT", "DIRECTORY_LISTING")`, `query_or_path: string`, `reasoning: string`.
     *   [>] Implement the logic for `executeToolCall` for this new tool. This might involve:
-        *   [>] Re-running `searchWithRefinement` with an adjusted original query or increased search limit for "MORE_SEARCH_RESULTS".
-        *   [>] Using file system operations to list files in a directory for "DIRECTORY_LISTING".
-        *   [>] Reading full file content for "FULL_FILE_CONTENT", potentially with summarization for very large files.
+        *   [ ] Re-running `searchWithRefinement` with an adjusted original query or increased search limit for "MORE_SEARCH_RESULTS".
+        *   [ ] Using file system operations to list files in a directory for "DIRECTORY_LISTING".
+        *   [ ] Reading full file content for "FULL_FILE_CONTENT", potentially with summarization for very large files.
     *   [>] Update `generateAgentSystemPrompt` to inform the agent about this new tool and when to use it.
 
 ---

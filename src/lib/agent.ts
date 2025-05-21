@@ -68,7 +68,7 @@ export const toolRegistry: Tool[] = [
     parameters: {
       context_type: "string - Type of context needed. Enum: ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING']",
       query_or_path: "string - The original search query (for MORE_SEARCH_RESULTS), the full file path (for FULL_FILE_CONTENT), or the directory path (for DIRECTORY_LISTING)",
-      reasoning: "string - Brief explanation of why this additional context is needed and how it will help answer the user's query.",
+      reasoning: "string (optional) - Brief explanation of why this additional context is needed and how it will help answer the user's query.",
       sessionId: "string (optional) - Session ID to maintain context across requests"
     },
     requiresModel: false // The tool itself doesn't require an LLM, though its sub-operations might (e.g., summarization)
@@ -694,7 +694,7 @@ Structure your analysis with these sections:
     case "request_additional_context": {
       const contextTypeParam = typedParams.context_type;
       const queryOrPathParam = typedParams.query_or_path;
-      const reasoningParam = typedParams.reasoning; // Optional, but good for logging
+      const reasoningParam = typedParams.reasoning; // Optional
       const sessionIdParam = typedParams.sessionId;
 
       if (typeof contextTypeParam !== 'string' || !['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING'].includes(contextTypeParam)) {
@@ -704,78 +704,37 @@ Structure your analysis with these sections:
         throw new Error(`Parameter 'query_or_path' for tool '${tool}' must be a string. Received: ${typeof queryOrPathParam}`);
       }
       if (reasoningParam !== undefined && typeof reasoningParam !== 'string') {
+         // Log a warning if reasoning is provided but not a string, but don't throw an error as it's optional.
          logger.warn(`Optional parameter 'reasoning' for tool '${tool}' was provided but not as a string. Received: ${typeof reasoningParam}. Ignoring.`);
       }
       if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
         throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
       }
       const sessionId: string | undefined = sessionIdParam;
+      // Get or create session (consistent with other tools)
       const session = getOrCreateSession(sessionId, repoPath);
 
       logger.info(`Executing request_additional_context: type='${contextTypeParam}', query_or_path='${queryOrPathParam}', reasoning='${reasoningParam || 'N/A'}'`);
 
+      // Placeholder implementation for sub-task 2 of P2.4
+      // Actual logic for fetching more search results, full file content, or directory listing
+      // will be implemented in the next step.
       switch (contextTypeParam) {
-        case 'MORE_SEARCH_RESULTS': {
-          const currentSearchLimit = configService.QDRANT_SEARCH_LIMIT_DEFAULT;
-          const increasedLimit = Math.min(currentSearchLimit + 10, 50); // Increase limit, cap at 50 for now
-          logger.info(`Requesting more search results for query: "${queryOrPathParam}". Original limit: ${currentSearchLimit}, New limit: ${increasedLimit}`);
-          
-          // For simplicity, we'll use the existing searchWithRefinement but override the limit.
-          // A more sophisticated approach might involve a dedicated Qdrant call here.
-          // We need to pass the files list if available from the session context.
-          const isGitRepo = await validateGitRepository(repoPath);
-          const files = isGitRepo
-            ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
-            : [];
-
-          // Temporarily override QDRANT_SEARCH_LIMIT_DEFAULT for this call if possible, or pass it.
-          // searchWithRefinement doesn't currently take limit as a direct param, it uses configService.
-          // For now, we'll just re-run with the same logic, relying on refinement to potentially find more.
-          // TODO: Enhance searchWithRefinement to accept a limit override.
-          // For now, let's just log that we would increase the limit.
-          logger.warn(`Limitation: searchWithRefinement currently uses default limit. Request for MORE_SEARCH_RESULTS will re-run search with existing logic. Query: ${queryOrPathParam}`);
-          const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
-            qdrantClient,
-            queryOrPathParam, // Use the provided query
-            files
-          );
-           const formattedResultsPromises = results.map(async r => { /* ... (same formatting as in search_code) ... */
-            const payload = r.payload;
-            let filepathDisplay = payload.filepath;
-            if (payload.is_chunked) {
-              filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
-            }
-            const processedSnippetContent = await processSnippet(payload.content, queryOrPathParam, filepathDisplay, suggestionModelAvailable);
-            return { filepath: filepathDisplay, snippet: processedSnippetContent, relevance: r.score };
-          });
-          const formattedResults = await Promise.all(formattedResultsPromises);
-          return { sessionId: session.id, status: `Retrieved potentially more search results for query "${queryOrPathParam}" (refined to "${refinedQuery}"). Found ${results.length} items.`, results: formattedResults, relevanceScore };
-        }
-        case 'FULL_FILE_CONTENT': {
-          const targetFile = path.resolve(repoPath, queryOrPathParam);
-          logger.info(`Requesting full content for file: "${targetFile}"`);
-          try {
-            const content = await fs.readFile(targetFile, 'utf8');
-            // Use processSnippet to potentially summarize if very large
-            const processedContent = await processSnippet(content, "Full file content request", queryOrPathParam, suggestionModelAvailable);
-            return { sessionId: session.id, filepath: queryOrPathParam, content: processedContent };
-          } catch (error) {
-            logger.error(`Failed to read file "${targetFile}": ${error instanceof Error ? error.message : String(error)}`);
-            return { sessionId: session.id, error: `Failed to read file: ${queryOrPathParam}. Ensure the path is correct relative to the repository root.` };
-          }
-        }
-        case 'DIRECTORY_LISTING': {
-          const targetDir = path.resolve(repoPath, queryOrPathParam);
-          logger.info(`Requesting directory listing for: "${targetDir}"`);
-          try {
-            const entries = await fs.readdir(targetDir, { withFileTypes: true });
-            const listing = entries.map(entry => `${entry.name}${entry.isDirectory() ? '/' : ''}`);
-            return { sessionId: session.id, directory: queryOrPathParam, listing: listing.slice(0, 100) }; // Limit listing size
-          } catch (error) {
-            logger.error(`Failed to list directory "${targetDir}": ${error instanceof Error ? error.message : String(error)}`);
-            return { sessionId: session.id, error: `Failed to list directory: ${queryOrPathParam}. Ensure the path is correct relative to the repository root.` };
-          }
-        }
+        case 'MORE_SEARCH_RESULTS':
+          // Placeholder:
+          logger.info(`Placeholder: MORE_SEARCH_RESULTS for query: "${queryOrPathParam}"`);
+          // In the future, this will re-run searchWithRefinement, possibly with adjusted parameters.
+          return { sessionId: session.id, status: `Placeholder: MORE_SEARCH_RESULTS for query "${queryOrPathParam}". Implementation pending.` };
+        case 'FULL_FILE_CONTENT':
+          // Placeholder:
+          logger.info(`Placeholder: FULL_FILE_CONTENT for path: "${queryOrPathParam}"`);
+          // In the future, this will read file content.
+          return { sessionId: session.id, status: `Placeholder: FULL_FILE_CONTENT for path "${queryOrPathParam}". Implementation pending.` };
+        case 'DIRECTORY_LISTING':
+          // Placeholder:
+          logger.info(`Placeholder: DIRECTORY_LISTING for path: "${queryOrPathParam}"`);
+          // In the future, this will list directory contents.
+          return { sessionId: session.id, status: `Placeholder: DIRECTORY_LISTING for path "${queryOrPathParam}". Implementation pending.` };
         default: // Should not happen due to earlier check
           throw new Error(`Unsupported context_type: ${contextTypeParam}`);
       }
