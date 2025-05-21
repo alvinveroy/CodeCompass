@@ -251,8 +251,8 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
 
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger.error("Error retrieving git diff", { message: err.message, stack: err.stack });
-    return `Failed to retrieve diff: ${err.message}`;
+    logger.error(`Error retrieving git diff for ${repoPath}: ${err.message}`, err); // Log the full error object
+    return `Failed to retrieve diff for ${repoPath}: ${err.message}`;
   }
 }
 
