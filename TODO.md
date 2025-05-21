@@ -62,8 +62,8 @@ The following prioritization aims to tackle foundational improvements first, bui
 *(Formerly Section II - Tasks renumbered for clarity within this phase)*
 
 1.  **Task P2.1 (Formerly Task 4.1): Dynamic Context Presentation in Prompts:**
-    *   [ ] Modify `src/lib/agent.ts` (prompt generation logic for tools like `generate_suggestion` and the main agent loop):
-        *   [ ] For file lists: If the list of relevant files is long, use an LLM to summarize the list or select the N most relevant based on the query, instead of simple truncation (`files.slice(0, 10)`).
+    *   [x] Modify `src/lib/agent.ts` (prompt generation logic for tools like `generate_suggestion` and the main agent loop):
+        *   [x] For file lists: If the list of relevant files is long, use an LLM to summarize the list or select the N most relevant based on the query, instead of simple truncation (`files.slice(0, 10)`).
         *   [ ] For code snippets: If a retrieved snippet is very long (even after Qdrant retrieval, before being passed to the agent's reasoning LLM), consider an LLM call to summarize its essence in relation to the query.
         *   [ ] **Consider:** Allow the agent to explicitly request "more detail" or "full content" for a summarized item if it deems it necessary.
 

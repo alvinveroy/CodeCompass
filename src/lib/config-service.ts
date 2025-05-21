@@ -38,6 +38,7 @@ class ConfigService {
 
   private _qdrantSearchLimitDefault: number; // Added for Qdrant search limit
   private _maxDiffLengthForContextTool: number;
+  private _maxFilesForSuggestionContextNoSummary: number;
 
   private _useMixedProviders: boolean;
   private _suggestionProvider: string;
@@ -50,6 +51,7 @@ class ConfigService {
   public readonly RETRY_DELAY: number;
   public readonly AGENT_QUERY_TIMEOUT_DEFAULT = 180000; // Default 3 minutes for agent queries
   public readonly DEFAULT_QDRANT_SEARCH_LIMIT = 10; // Default Qdrant search limit
+  public readonly DEFAULT_MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY = 15; // Default max files before summarizing
 
   public readonly DEEPSEEK_RPM_LIMIT_DEFAULT = 60; // Default RPM for DeepSeek
 
@@ -156,6 +158,7 @@ class ConfigService {
     this._agentQueryTimeout = parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this.AGENT_QUERY_TIMEOUT_DEFAULT;
     this._qdrantSearchLimitDefault = parseInt(process.env.QDRANT_SEARCH_LIMIT_DEFAULT || '', 10) || this.DEFAULT_QDRANT_SEARCH_LIMIT; // Initialize Qdrant search limit
     this._maxDiffLengthForContextTool = parseInt(process.env.MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL || '', 10) || 3000; // Default 3000 chars
+    this._maxFilesForSuggestionContextNoSummary = parseInt(process.env.MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY || '', 10) || this.DEFAULT_MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY;
     this._openAIApiKey = process.env.OPENAI_API_KEY || "";
     this._geminiApiKey = process.env.GEMINI_API_KEY || "";
     this._claudeApiKey = process.env.CLAUDE_API_KEY || "";
@@ -263,6 +266,7 @@ class ConfigService {
     process.env.QDRANT_HOST = this.QDRANT_HOST; // Ensure QDRANT_HOST from env/default is in process.env
     process.env.QDRANT_SEARCH_LIMIT_DEFAULT = String(this._qdrantSearchLimitDefault); // Ensure QDRANT_SEARCH_LIMIT_DEFAULT is in process.env
     process.env.MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL = String(this._maxDiffLengthForContextTool);
+    process.env.MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY = String(this._maxFilesForSuggestionContextNoSummary);
     process.env.OPENAI_API_KEY = this._openAIApiKey;
     process.env.GEMINI_API_KEY = this._geminiApiKey;
     process.env.CLAUDE_API_KEY = this._claudeApiKey;
@@ -280,6 +284,7 @@ class ConfigService {
     this._agentQueryTimeout = parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this.AGENT_QUERY_TIMEOUT_DEFAULT;
     this._qdrantSearchLimitDefault = parseInt(process.env.QDRANT_SEARCH_LIMIT_DEFAULT || '', 10) || this.DEFAULT_QDRANT_SEARCH_LIMIT; // Re-initialize Qdrant search limit
     this._maxDiffLengthForContextTool = parseInt(process.env.MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL || '', 10) || 3000;
+    this._maxFilesForSuggestionContextNoSummary = parseInt(process.env.MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY || '', 10) || this.DEFAULT_MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY;
     this._openAIApiKey = process.env.OPENAI_API_KEY || "";
     this._geminiApiKey = process.env.GEMINI_API_KEY || "";
     this._claudeApiKey = process.env.CLAUDE_API_KEY || "";
@@ -310,6 +315,7 @@ class ConfigService {
   get AGENT_QUERY_TIMEOUT(): number { return parseInt(process.env.AGENT_QUERY_TIMEOUT || '', 10) || this._agentQueryTimeout; }
   get QDRANT_SEARCH_LIMIT_DEFAULT(): number { return parseInt(process.env.QDRANT_SEARCH_LIMIT_DEFAULT || '', 10) || this._qdrantSearchLimitDefault; } // Getter for Qdrant search limit
   get MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL(): number { return this._maxDiffLengthForContextTool; }
+  get MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY(): number { return parseInt(process.env.MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY || '', 10) || this._maxFilesForSuggestionContextNoSummary; }
   get OPENAI_API_KEY(): string { return process.env.OPENAI_API_KEY || this._openAIApiKey; }
   get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || this._geminiApiKey; }
   get CLAUDE_API_KEY(): string { return process.env.CLAUDE_API_KEY || this._claudeApiKey; }

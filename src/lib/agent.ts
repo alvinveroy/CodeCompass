@@ -437,7 +437,7 @@ export async function executeToolCall(
       const prompt = `
 **Context**:
 Repository: ${repoPath}
-Files: ${files.slice(0, 10).join(", ")}${files.length > 10 ? "..." : ""}
+Files: ${filesContextString}
 Recent Changes: ${processedDiff ? processedDiff.substring(0, 1000) : "Not available"}${processedDiff && processedDiff.length > 1000 ? "..." : ""} 
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 

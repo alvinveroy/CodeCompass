@@ -202,6 +202,11 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
 # DEEPSEEK_API_URL=https://api.deepseek.com
 # DEEPSEEK_RPM_LIMIT: Requests per minute limit for DeepSeek. Default: 20
 # DEEPSEEK_RPM_LIMIT=20
+
+# --- Agent Configuration ---
+# MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY: Maximum number of files to list directly in the generate_suggestion tool's context
+# before attempting to summarize the file list using an LLM. Default: 15
+# MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY=15
 ```
 
 **Note**: When setting environment variables directly or via MCP client configurations, you do not need to create a `.env` file. The list above serves as a reference for the variable names and their purposes. For a local setup with Ollama, the default settings often work without needing to set many environment variables, unless you want to customize models or providers. If using cloud providers like DeepSeek, setting the respective `API_KEY` and adjusting `LLM_PROVIDER` and `SUGGESTION_MODEL` is necessary.
