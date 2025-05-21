@@ -67,23 +67,24 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 describe('Repository Utilities', () => {
   const repoPath = '/test/diff/repo';
   // exec is already the mock from the factory. Cast it for type safety.
-  const execMock = exec as vi.Mock;
+  const execMock = exec as vi.Mock<any[], [Error | null, string, string] | void>;
 
   // This function sets up mocks for a valid repository scenario
   const setupValidRepositoryMocks = () => {
     vi.mocked(access).mockResolvedValue(undefined as unknown as void); // For fs.promises.access
     vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main'); // For isomorphic-git
   };
-
-  // This function sets up mocks for git.log returning two commits
-  const setupTwoCommitsLogMock = () => {
+  
+  // Renamed for clarity, used in the inner beforeEach
+  const setupGitLogWithTwoCommits = () => {
     vi.mocked(git.log).mockResolvedValue([
       { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
       { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
     ] as any);
   };
   
-  const setupSingleCommitLogMock = () => {
+  // Renamed for clarity
+  const setupGitLogWithSingleCommit = () => {
     vi.mocked(git.log).mockResolvedValue([
       { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
     ] as any);
@@ -91,15 +92,15 @@ describe('Repository Utilities', () => {
 
   const setupInvalidRepoNoHeadMocks = () => {
     vi.mocked(access).mockResolvedValue(undefined as unknown as void); // fs.access passes
-    vi.mocked(git.resolveRef).mockRejectedValue(new Error('No HEAD')); // git.resolveRef fails
+    vi.mocked(git.resolveRef).mockRejectedValueOnce(new Error('No HEAD')); // git.resolveRef fails
   };
 
 
   beforeEach(() => {
     vi.clearAllMocks();
-    execMock.mockReset();
+    // execMock is vi.fn() from factory, clearAllMocks resets its state (calls, impls)
     
-    // Reset all fs/promises mocks
+    // Reset all fs/promises mocks to basic spies
     vi.mocked(access).mockReset();
     vi.mocked(readFile).mockReset();
     vi.mocked(readdir).mockReset();
@@ -127,25 +128,21 @@ describe('Repository Utilities', () => {
 
   describe('getRepositoryDiff', () => {
     // Setup mocks specifically for tests that expect validateGitRepository to pass
-    // and git.log to return two commits, allowing exec to be called.
+    // This beforeEach establishes the common "happy path" for validateGitRepository and git.log
     beforeEach(() => {
-        vi.mocked(access).mockResolvedValue(undefined as unknown as void);
-        vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
-        vi.mocked(git.log).mockResolvedValue([
-            { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
-            { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
-        ] as any);
+        setupValidRepositoryMocks();
+        setupGitLogWithTwoCommits();
     });
 
     it('should call git diff command and return stdout', async () => {
-      // Mocks for validateGitRepository to pass and git.log to return 2 commits are set in beforeEach
+      // Preconditions: validateGitRepository passes, git.log returns 2 commits (from inner beforeEach)
       execMock.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(null, 'diff_content_stdout_explicit', '');
       });
       const result = await getRepositoryDiff(repoPath);
       expect(execMock).toHaveBeenCalledWith(
-        'git diff commit1_oid commit2_oid', // Make sure these oids match what setupTwoCommitsLogMock provides
-        expect.objectContaining({ cwd: repoPath }),
+        'git diff commit1_oid commit2_oid', 
+        expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 }), // SUT uses 5MB buffer
         expect.any(Function)
       );
       expect(result).toBe('diff_content_stdout_explicit');
@@ -153,56 +150,61 @@ describe('Repository Utilities', () => {
 
     it('should truncate long diff output', async () => {
       // Mocks for validateGitRepository to pass and git.log to return 2 commits are set in beforeEach
-      const longDiff = 'a'.repeat(10001);
+      const MAX_DIFF_LENGTH_FROM_SUT = 10000;
+      const longDiff = 'a'.repeat(MAX_DIFF_LENGTH_FROM_SUT + 1);
       execMock.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(null, longDiff, '');
       });
 
       const result = await getRepositoryDiff(repoPath);
+      expect(result).toBe('a'.repeat(MAX_DIFF_LENGTH_FROM_SUT) + "\n... (diff truncated)");
       expect(result).toContain('... (diff truncated)');
     });
 
     it('should handle errors from git diff command', async () => {
       // Mocks for validateGitRepository to pass and git.log to return 2 commits are set in beforeEach
       const mockError = new Error('Git command failed') as ExecException;
-      (mockError as any).code = 128;
       const stderrText = 'stderr from exec callback';
+      mockError.code = 128;
+      mockError.stderr = stderrText; // Ensure the error object has stderr for the assertion
+
       execMock.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(mockError, '', stderrText);
       });
 
       const result = await getRepositoryDiff(repoPath);
-
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
       expect(logger.error).toHaveBeenCalledWith(
         `Error retrieving git diff for ${repoPath}: Git command failed`,
         expect.objectContaining({
           message: 'Git command failed',
           code: 128,
-          stderr: stderrText,
+          stderr: stderrText, // Now this should match
         })
       );
     });
     
     // Tests for validateGitRepository failing scenarios
     it('should return "No Git repository found" if .git access is denied', async () => {
-        vi.mocked(access).mockRejectedValue(new Error('Permission denied')); // Override fs.access mock
-        // git.resolveRef and git.log mocks don't matter here as it should fail earlier
+        // Override the successful mock from inner beforeEach
+        vi.mocked(access).mockReset(); // Clear previous mockResolvedValue
+        vi.mocked(access).mockRejectedValueOnce(new Error('Permission denied'));
         const result = await getRepositoryDiff(repoPath);
         expect(result).toBe("No Git repository found");
     });
 
     it('should return "No Git repository found" if HEAD cannot be resolved', async () => {
-        vi.mocked(access).mockResolvedValue(undefined as unknown as void); // fs.access passes
-        vi.mocked(git.resolveRef).mockRejectedValue(new Error('No HEAD')); // git.resolveRef fails
-        // git.log mock doesn't matter
+        // access mock from inner beforeEach makes fs.access pass.
+        // Override git.resolveRef mock from inner beforeEach
+        vi.mocked(git.resolveRef).mockReset(); // Clear previous mockResolvedValue
+        vi.mocked(git.resolveRef).mockRejectedValueOnce(new Error('No HEAD'));
         const result = await getRepositoryDiff(repoPath);
         expect(result).toBe("No Git repository found");
     });
 
-    it('should return "No previous commits to compare" if less than 2 commits', async () => {
-      setupValidRepositoryMocks(); // Ensures validateGitRepository passes
-      setupSingleCommitLogMock();  // Override git.log to return only one commit
+    it('should return "No previous commits to compare" if less than 2 commits (single commit)', async () => {
+      // Inner beforeEach sets valid repo & 2 commits. Override git.log for single commit.
+      setupGitLogWithSingleCommit();
       const result = await getRepositoryDiff(repoPath);
       expect(result).toBe("No previous commits to compare");
     });
@@ -210,7 +212,8 @@ describe('Repository Utilities', () => {
 
   describe('getCommitHistoryWithChanges', () => {
     it('should retrieve commit history with changed files', async () => {
-        setupValidRepositoryMocks(); // Use the helper for fs.access and git.resolveRef
+        // Explicitly set up valid repo for this test suite if not covered by an outer describe's beforeEach
+        setupValidRepositoryMocks(); 
 
         const mockCommits = [
             { oid: 'commit2', commit: { message: 'Feat: new feature', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, tree: 'tree2_oid', parent: ['commit1_oid'] } },
@@ -249,69 +252,11 @@ describe('Repository Utilities', () => {
     });
 
     it('should handle errors from git.log', async () => {
-        // This test was for getRepositoryDiff, but seems to be misplaced under getCommitHistoryWithChanges
-        // Let's assume it's meant to test getCommitHistoryWithChanges error handling for git.log
-        setupValidRepositoryMocks(); // Ensure validateGitRepository passes for getCommitHistoryWithChanges
+        // Ensure validateGitRepository conditions are met if it's called by SUT,
+        // though getCommitHistoryWithChanges doesn't call validateGitRepository directly.
+        // However, it does use git.log, which is what we're testing for failure here.
         vi.mocked(git.log).mockRejectedValue(new Error('Log failed'));
         await expect(getCommitHistoryWithChanges(repoPath)).rejects.toThrow('Log failed');
     });
-
-    // This test seems to be a duplicate or misplaced from getRepositoryDiff.
-    // It's testing getRepositoryDiff behavior but is under getCommitHistoryWithChanges.
-    // For now, I will remove it to avoid confusion and ensure the primary getCommitHistoryWithChanges tests are correct.
-    // it('should return "No previous commits to compare" if less than 2 commits', async () => {
-    //   vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }] as any);
-    //   const result = await getRepositoryDiff(repoPath);
-    //   expect(result).toBe("No previous commits to compare");
-    // });
   });
-
-  // The following describe block for getCommitHistoryWithChanges seems to be a duplicate.
-  // I will remove the duplicated one and keep the first one.
-  // describe('getCommitHistoryWithChanges', () => {
-  //   it('should retrieve commit history with changed files', async () => {
-  //       vi.mocked(access).mockResolvedValue(undefined as unknown as void); // Use imported 'access'
-  //       vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
-  //
-  //       const mockCommits = [
-  //           { oid: 'commit2', commit: { message: 'Feat: new feature', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, tree: 'tree2_oid', parent: ['commit1_oid'] } },
-  //           { oid: 'commit1', commit: { message: 'Initial commit', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, tree: 'tree1_oid', parent: [] } },
-  //       ];
-  //       vi.mocked(git.log).mockResolvedValue(mockCommits as any);
-  //
-  //       vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => {
-  //           if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as any;
-  //           if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any;
-  //           if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any;
-  //           return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as any;
-  //       });
-  //
-  //       vi.mocked(git.diffTrees).mockImplementation(async (args: { fs: any, dir: string, gitdir: string, ref1: string, ref2: string }) => {
-  //           if (args.ref1 === 'tree1_oid' && args.ref2 === 'tree2_oid') {
-  //                return [['file.ts', 'modify', 'blob_before', 'blob_after', 'mode_before', 'mode_after']] as any;
-  //           }
-  //           return [] as any;
-  //       });
-  //
-  //       vi.mocked(git.walk).mockImplementation(async ({ fs: nodeFsAlias, dir, gitdir, trees, map }) => {
-  //           const treeOidToWalk = trees[0]._id;
-  //           if (treeOidToWalk === 'tree1_oid') {
-  //                await map('initial.ts', [{ type: async () => 'blob', oid: async () => 'blob_oid_initial' }] as any);
-  //           }
-  //           return [];
-  //       });
-  //
-  //       const history = await getCommitHistoryWithChanges(repoPath, { count: 2 });
-  //       expect(history).toHaveLength(2);
-  //       expect(history[0].oid).toBe('commit2');
-  //       expect(history[0].changedFiles).toEqual([{ path: 'file.ts', type: 'modify' }]);
-  //       expect(history[1].oid).toBe('commit1');
-  //       expect(history[1].changedFiles).toEqual([{ path: 'initial.ts', type: 'add' }]);
-  //   });
-  //
-  //   it('should handle errors from git.log', async () => {
-  //       vi.mocked(git.log).mockRejectedValue(new Error('Log failed'));
-  //       await expect(getCommitHistoryWithChanges(repoPath)).rejects.toThrow('Log failed');
-  //   });
-  // });
 });
