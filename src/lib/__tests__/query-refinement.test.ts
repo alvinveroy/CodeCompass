@@ -176,16 +176,27 @@ describe('Query Refinement Utilities', () => {
         { payload: { content: "function processUser(user: UserType)" } },
         { payload: { content: "class UserProfile extends BaseProfile" } },
       ] as DetailedQdrantSearchResult[];
-      vi.mocked(preprocessText).mockImplementation(t => t); // Simple pass-through for this test
       
-      // Dynamically import the module to spy on its exports
-      const actualQueryRefinementModule = await import('../query-refinement');
-      const extractKeywordsSpy = vi.spyOn(actualQueryRefinementModule, 'extractKeywords')
-                                   .mockReturnValue(['processuser', 'userprofile', 'usertype']);
+      // Mock preprocessText to behave closer to actual for keyword extraction
+      // This mock will be used by the actual extractKeywords function.
+      vi.mocked(preprocessText).mockImplementation(text => 
+        text.toLowerCase().replace(/[^\w\s.:-]/gi, '').replace(/\s+/g, ' ').trim() // Allow common code chars
+      );
+      
+      // We are testing the actual focusQueryBasedOnResults, which calls the actual extractKeywords.
+      // No need to spy on extractKeywords here if we want to test their integration.
+      // If extractKeywords itself is complex and tested elsewhere, then spying is an option.
+      // For this test, let's assume we want to see focusQueryBasedOnResults work with the actual (but pre-mocked preprocessText) extractKeywords.
 
+      // The `focusQueryBasedOnResults` function is imported at the top.
       const focused = focusQueryBasedOnResults(originalQuery, results);
-      expect(focused).toBe("find user processuser userprofile");
-      extractKeywordsSpy.mockRestore();
+      
+      // Expected keywords from "function processUser(user: UserType) class UserProfile extends BaseProfile"
+      // after preprocessText: "function processuseruser type class userprofile extends baseprofile"
+      // extractKeywords would pick: ['function', 'processuseruser', 'type', 'class', 'userprofile', 'extends', 'baseprofile'] (example)
+      // Then it takes top 2. Let's adjust expectation based on how extractKeywords and focusQueryBasedOnResults work.
+      // The expected output "find user processuser userprofile" implies "processuser" and "userprofile" are the chosen keywords.
+      expect(focused).toBe("find user processuser userprofile"); 
     });
   });
 
@@ -220,39 +231,43 @@ describe('Query Refinement Utilities', () => {
     // This tests the logic within refineQuery itself, assuming its helper functions work as tested above.
     // We need to mock the helpers or ensure their behavior is predictable.
     // For simplicity, let's test the branching based on currentRelevance.
-
-    it('should call broadenQuery for very low relevance (<0.3)', async () => {
-        // To test this, we need to spy on broadenQuery.
-        const actualQueryRefinementModule = await import('../query-refinement');
-        const broadenSpy = vi.spyOn(actualQueryRefinementModule, 'broadenQuery').mockReturnValue('broadened');
-
-        refineQuery("original", [], 0.1); // relevance 0.1
+    // We will spy on the functions imported at the top level of this test file, grouped in queryRefinementFunctions.
+    
+    it('should call broadenQuery for very low relevance (<0.3)', () => {
+        const broadenSpy = vi.spyOn(queryRefinementFunctions, 'broadenQuery').mockReturnValue('broadened');
+        queryRefinementFunctions.refineQuery("original", [], 0.1); // relevance 0.1
         expect(broadenSpy).toHaveBeenCalledWith("original");
         broadenSpy.mockRestore();
     });
 
-    it('should call focusQueryBasedOnResults for mediocre relevance (0.3 <= relevance < 0.7)', async () => {
-        const actualQueryRefinementModule = await import('../query-refinement');
-        const focusSpy = vi.spyOn(actualQueryRefinementModule, 'focusQueryBasedOnResults').mockReturnValue('focused');
+    it('should call focusQueryBasedOnResults for mediocre relevance (0.3 <= relevance < 0.7)', () => {
+        const focusSpy = vi.spyOn(queryRefinementFunctions, 'focusQueryBasedOnResults').mockReturnValue('focused');
         const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-
-        refineQuery("original", mockResults, 0.5); // relevance 0.5
+        queryRefinementFunctions.refineQuery("original", mockResults, 0.5); // relevance 0.5
         expect(focusSpy).toHaveBeenCalledWith("original", mockResults);
         focusSpy.mockRestore();
     });
 
-    it('should call tweakQuery for decent relevance (>=0.7)', async () => {
+    it('should call tweakQuery for decent relevance (>=0.7)', () => {
         // Note: searchWithRefinement loop breaks if relevance >= threshold (default 0.7).
         // So, refineQuery is typically called when relevance < threshold.
         // If we test refineQuery directly with relevance >= 0.7, it should call tweakQuery.
-        const actualQueryRefinementModule = await import('../query-refinement');
-        const tweakSpy = vi.spyOn(actualQueryRefinementModule, 'tweakQuery').mockReturnValue('tweaked');
+        const tweakSpy = vi.spyOn(queryRefinementFunctions, 'tweakQuery').mockReturnValue('tweaked');
         const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
         
-        refineQuery("original", mockResults, 0.7); // relevance 0.7
+        queryRefinementFunctions.refineQuery("original", mockResults, 0.7); // relevance 0.7
         expect(tweakSpy).toHaveBeenCalledWith("original", mockResults);
         tweakSpy.mockRestore();
     });
   });
 
 });
+
+// Helper to group imported functions for spying, ensuring spies are on the top-level imported module's functions.
+const queryRefinementFunctions = {
+    refineQuery,
+    broadenQuery,
+    focusQueryBasedOnResults,
+    tweakQuery,
+    extractKeywords // Include if it might be spied upon directly, though not in these specific tests
+};

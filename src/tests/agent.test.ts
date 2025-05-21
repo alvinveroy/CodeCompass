@@ -44,27 +44,6 @@ vi.mock('../lib/config-service', () => {
 });
 
 // Mock other dependencies
-    MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY: 1500,
-    MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY: 15,
-    AGENT_DEFAULT_MAX_STEPS: 2, // Lower for easier testing of loop limits
-    AGENT_ABSOLUTE_MAX_STEPS: 3, // Lower for easier testing
-    REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS: 10,
-    COLLECTION_NAME: 'test-collection',
-    SUGGESTION_PROVIDER: 'ollama',
-    SUGGESTION_MODEL: 'test-model',
-    OLLAMA_HOST: 'http://localhost:11434', // Add any other configs used by agent.ts
-    AGENT_QUERY_TIMEOUT: 60000, // Add if used directly, though timeouts are often hardcoded in tests
-    // Add other necessary config values used by agent.ts
-  },
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
-
-// Mock other dependencies
 vi.mock('../lib/llm-provider');
 vi.mock('../lib/state');
 vi.mock('../lib/query-refinement');

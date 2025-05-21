@@ -64,39 +64,46 @@ describe('ConfigService', () => {
     // After vi.resetModules(), fs is unmocked. We need to re-apply the mock behavior
     // for the new ConfigService instance. The top-level vi.mock('fs', factory)
     // defines the structure. Here, we ensure the functions within that structure are set up.
-    // We need to re-import 'fs' to get the mocked version after resetModules.
-    const fsMock = await import('fs');
+    const fsMockModule = await import('fs'); 
+    const fsMock = fsMockModule.default; // Access the default export which holds the mock functions
 
-    vi.mocked(fsMock.existsSync).mockImplementation((p) => {
-      if (p === MOCK_CONFIG_DIR) return true;
-      if (p === MOCK_LOG_DIR) return false;
-      return false;
-    });
-    // If ConfigService uses `import fs from 'fs'`, it gets the default export.
-    vi.mocked(fsMock.default.existsSync).mockImplementation((p) => {
-      if (p === MOCK_CONFIG_DIR) return true;
-      if (p === MOCK_LOG_DIR) return false;
-      return false;
+    // This mock setup is critical for Winston's File transport initialization.
+    // When `new winston.transports.File({ filename: path.join(this.LOG_DIR, "codecompass.log") })` is called:
+    // 1. Winston checks if this.LOG_DIR exists.
+    // 2. If not, it tries to create it using mkdirSync with { recursive: true }.
+    vi.mocked(fsMock.existsSync).mockImplementation((pathArg) => {
+      // console.log(`[createServiceInstance] fsMock.existsSync called with: ${pathArg}`);
+      if (pathArg === MOCK_CONFIG_DIR) return true; // Assume .codecompass dir exists
+      if (pathArg === MOCK_LOG_DIR) return false;  // Log dir does not exist, Winston will try to create it
+      return false; // Default for other paths
     });
 
-    vi.mocked(fsMock.mkdirSync).mockImplementation((p) => {
-      if (p === MOCK_LOG_DIR || p === MOCK_CONFIG_DIR || (typeof p === 'string' && p.startsWith(MOCK_CONFIG_DIR))) {
+    vi.mocked(fsMock.mkdirSync).mockImplementation((pathArg, options) => {
+      // console.log(`[createServiceInstance] fsMock.mkdirSync called with: ${pathArg}, options: ${JSON.stringify(options)}`);
+      // This must successfully "create" MOCK_LOG_DIR when Winston calls it.
+      if (pathArg === MOCK_LOG_DIR) {
+        // Simulate successful creation of the log directory
+        // To make it more robust, we can also update our existsSync mock to reflect this "creation"
+        // for subsequent calls within the same ConfigService instantiation, though Winston might not re-check.
+        vi.mocked(fsMock.existsSync).mockImplementation((p) => {
+            if (p === MOCK_CONFIG_DIR) return true;
+            if (p === MOCK_LOG_DIR) return true; // Now it "exists"
+            return false;
+        });
+        return undefined; 
+      }
+      // Handle creation of MOCK_CONFIG_DIR if it's part of a recursive call, though less likely to be the direct issue here.
+      if (pathArg === MOCK_CONFIG_DIR && options && (options as { recursive?: boolean }).recursive) {
         return undefined;
       }
-      // console.warn(`fsMock.mkdirSync called with unhandled path: ${p}`);
-      return undefined;
-    });
-    vi.mocked(fsMock.default.mkdirSync).mockImplementation((p) => {
-       if (p === MOCK_LOG_DIR || p === MOCK_CONFIG_DIR || (typeof p === 'string' && p.startsWith(MOCK_CONFIG_DIR))) {
-        return undefined;
-      }
-      // console.warn(`fsMock.default.mkdirSync called with unhandled path: ${p}`);
+      // If any other path is attempted, it might indicate an unexpected call.
+      // For the ENOENT error, the primary concern is MOCK_LOG_DIR.
+      // console.warn(`[createServiceInstance] fsMock.mkdirSync called with unhandled path: ${pathArg}`);
+      // To prevent unexpected errors, simulate success for other paths too, or make it stricter.
       return undefined;
     });
 
-    vi.mocked(fsMock.readFileSync).mockReturnValue('{}');
-    vi.mocked(fsMock.default.readFileSync).mockReturnValue('{}');
-
+    vi.mocked(fsMock.readFileSync).mockReturnValue('{}'); // Default for config files
 
     // Re-mock winston for the new ConfigService instance
     vi.mock('winston', async (importOriginal) => {
@@ -119,7 +126,7 @@ describe('ConfigService', () => {
     process.env.HOME = MOCK_HOME_DIR; // Mock HOME directory
 
     // fs is already mocked at the top level. Get the mocked instance.
-    const fsMock = fs; // fs here refers to the imported mock from 'fs'
+    const fsMock = fs; // fs here refers to the default export of the mocked 'fs' module.
 
     // Reset fs mocks before each test
     vi.mocked(fsMock.existsSync).mockReset();
@@ -127,23 +134,20 @@ describe('ConfigService', () => {
     vi.mocked(fsMock.writeFileSync).mockReset();
     vi.mocked(fsMock.mkdirSync).mockReset();
     
-    // Also reset for the default export if ConfigService uses `import fs from 'fs'`
-    // and accesses methods like fs.default.existsSync (which it would if 'fs' is the module namespace object)
-    // Given our mock structure `default: mockFs`, `import fs from 'fs'` makes `fs` be `mockFs`.
-    // So, `fs.existsSync` is the correct way to access the mocked function.
-
     // Default behavior for existsSync and mkdirSync for each test
-    vi.mocked(fsMock.existsSync).mockImplementation((p) => {
-        if (p === MOCK_CONFIG_DIR) return true;
-        if (p === MOCK_LOG_DIR) return false;
+    // This setup is for the general test case, createServiceInstance will override for its specific needs.
+    vi.mocked(fsMock.existsSync).mockImplementation((pathArg) => {
+        // console.log(`[beforeEach] fsMock.existsSync called with: ${pathArg}`);
+        if (pathArg === MOCK_CONFIG_DIR) return true;
+        if (pathArg === MOCK_LOG_DIR) return false; 
         return false;
     });
-     vi.mocked(fsMock.mkdirSync).mockImplementation((p) => {
-      if (p === MOCK_LOG_DIR || p === MOCK_CONFIG_DIR || (typeof p === 'string' && p.startsWith(MOCK_CONFIG_DIR))) {
-        return undefined;
+     vi.mocked(fsMock.mkdirSync).mockImplementation((pathArg, options) => {
+      // console.log(`[beforeEach] fsMock.mkdirSync called with: ${pathArg}, options: ${JSON.stringify(options)}`);
+      if (pathArg === MOCK_LOG_DIR || pathArg === MOCK_CONFIG_DIR || (typeof pathArg === 'string' && pathArg.startsWith(MOCK_CONFIG_DIR))) {
+        return undefined; 
       }
-      // console.warn(` beforeEach fsMock.mkdirSync called with unhandled path: ${p}`);
-      return undefined;
+      return undefined; 
     });
     vi.mocked(fsMock.readFileSync).mockReturnValue('{}'); // Default for config files
   });
