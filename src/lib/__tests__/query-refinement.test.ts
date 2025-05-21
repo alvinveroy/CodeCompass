@@ -14,12 +14,37 @@ vi.mock('../ollama'); // For generateEmbedding used by searchWithRefinement
 // preprocessText is not directly used by refineQuery or searchWithRefinement, but by extractKeywords (tested elsewhere)
 // vi.mock('../../utils/text-utils'); 
 
+// Mock the query-refinement module itself for spying on internal helpers
+vi.mock('../query-refinement', async (importOriginal) => {
+  const originalModule = await importOriginal<typeof import('../query-refinement')>();
+  return {
+    ...originalModule, // Keep all original exports by default
+    // Explicitly mock the internal helpers we want to spy on/control
+    broadenQuery: vi.fn(),
+    focusQueryBasedOnResults: vi.fn(),
+    tweakQuery: vi.fn(),
+    // extractKeywords is also exported; if it's not a direct dependency to control for these tests,
+    // it can be left as originalModule.extractKeywords.
+    // If refineQuery or its helpers call extractKeywords and you need to control that, mock it too.
+    // For now, assuming it's not critical for these dispatcher tests.
+  };
+});
+
 // Import mocked versions of dependencies
 import { generateEmbedding } from '../ollama';
 // import { preprocessText } from '../../utils/text-utils'; // Not needed here
 import { configService, logger } from '../config-service';
 import { DetailedQdrantSearchResult } from '../types';
-// Removed: import * as queryRefinementModule from '../query-refinement';
+// Import functions from query-refinement; some will be original, some will be mocks from the factory
+import { 
+  searchWithRefinement, 
+  refineQuery,
+  broadenQuery, // This will now be the vi.fn() from the mock factory
+  focusQueryBasedOnResults, // This will also be vi.fn()
+  tweakQuery // And this will be vi.fn()
+  // extractKeywords // This would be original unless also mocked in the factory
+} from '../query-refinement';
+
 
 // Define a reusable mock Qdrant client
 const mockQdrantClientInstance = {
