@@ -51,16 +51,6 @@ vi.mock('../lib/repository', () => ({
   getRepositoryDiff: vi.fn().mockResolvedValue('+ test\n- test2')
 }));
 
-// vi.mock('../lib/metrics', () => ({ // Metrics removed
-//   getMetrics: vi.fn().mockReturnValue({
-//     counters: {},
-//     timings: {},
-//     uptime: 1000
-//   }),
-//   resetMetrics: vi.fn(),
-//   startMetricsLogging: vi.fn().mockReturnValue(123)
-// }));
-
 vi.mock('isomorphic-git', () => ({
   default: {
     listFiles: vi.fn().mockResolvedValue(['file1.ts', 'file2.ts'])
@@ -122,27 +112,6 @@ Test summary
       expect(response).toContain('```');
       expect(response).toContain('### Summary');
     });
-
-    // it('should verify reset_metrics tool returns markdown formatted response', async () => { // reset_metrics tool removed
-    //   const response = `
-    // # Metrics Reset
-
-    // Metrics have been reset successfully.
-
-    // ## Current Metrics
-    // \`\`\`
-    // Uptime: 1000ms
-    // Counters: 0 (all reset to 0)
-    // Timings: 0 (all reset)
-    // \`\`\`
-    // `;
-      
-    //   // Verify the response contains markdown formatting elements
-    //   expect(response).toContain('# Metrics Reset');
-    //   expect(response).toContain('## Current Metrics');
-    //   expect(response).toContain('```');
-    //   expect(response).toContain('Uptime:');
-    // });
 
     it('should verify generate_suggestion tool returns markdown formatted response', async () => {
       const response = `

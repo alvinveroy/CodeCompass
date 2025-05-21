@@ -2,7 +2,6 @@ import axios, { AxiosError } from "axios"; // axios will be used by OllamaProvid
 import { configService, logger } from "./config-service";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types"; // OllamaGenerateResponse might be used by OllamaProvider
 import { preprocessText } from "../utils/text-utils";
-// import { incrementCounter, timeExecution } from "./metrics"; // Metrics removed
 import { withRetry } from "../utils/retry-utils";
 
 /**
@@ -94,13 +93,10 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
  * @returns Promise<number[]> - The embedding vector
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  // incrementCounter('embedding_requests'); // Metrics removed
-  
   const processedText = preprocessText(text);
   const truncatedText = processedText.length > configService.MAX_INPUT_LENGTH ? processedText.slice(0, configService.MAX_INPUT_LENGTH) : processedText;
   
   try {
-    // return await timeExecution('embedding_generation', async () => { // Metrics removed
       const host = configService.OLLAMA_HOST;
       const model = configService.EMBEDDING_MODEL; // Use configured embedding model
       
@@ -119,11 +115,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         return res.data;
       });
       
-      // incrementCounter('embedding_success'); // Metrics removed
       return response.embedding;
-    // }); // Metrics removed
   } catch (error: unknown) {
-    // incrementCounter('embedding_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
     
     const errorLogDetails: { // Changed let to const

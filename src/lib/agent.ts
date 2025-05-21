@@ -1,6 +1,5 @@
 import { logger, configService } from "./config-service";
 import { getLLMProvider } from "./llm-provider";
-// import { incrementCounter, timeExecution } from "./metrics"; // Metrics removed
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { searchWithRefinement } from "./query-refinement"; // Changed import path
