@@ -7,8 +7,8 @@ import { searchWithRefinement } from '../query-refinement';
 // e.g., export { refineQuery, extractKeywords, ... };
 // If not exported, they are tested indirectly via searchWithRefinement.
 // Let's assume they are exported for more granular testing:
-import { refineQuery, extractKeywords, broadenQuery, focusQueryBasedOnResults, tweakQuery } from '../query-refinement';
-import * as queryRefinementModule from '../query-refinement'; // ADD THIS
+// import { refineQuery, extractKeywords, broadenQuery, focusQueryBasedOnResults, tweakQuery } from '../query-refinement';
+import * as queryRefinementModuleOriginal from '../query-refinement'; // Import the original module
 
 
 // Mock dependencies
@@ -247,42 +247,42 @@ describe('Query Refinement Utilities', () => {
   });
   
   describe('refineQuery (main dispatcher)', () => {
-    // This tests the logic within refineQuery itself, assuming its helper functions work as tested above.
-    // We need to mock the helpers or ensure their behavior is predictable.
-    // For simplicity, let's test the branching based on currentRelevance.
-    // We will spy on the functions imported at the top level of this test file.
-    
+    let broadenSpy: vi.SpyInstance;
+    let focusSpy: vi.SpyInstance;
+    let tweakSpy: vi.SpyInstance;
+
+    beforeEach(() => {
+      // Spy on the functions within the original module object
+      broadenSpy = vi.spyOn(queryRefinementModuleOriginal, 'broadenQuery').mockReturnValue('broadened');
+      focusSpy = vi.spyOn(queryRefinementModuleOriginal, 'focusQueryBasedOnResults').mockReturnValue('focused');
+      tweakSpy = vi.spyOn(queryRefinementModuleOriginal, 'tweakQuery').mockReturnValue('tweaked');
+    });
+
+    // afterEach for these spies will be handled by the top-level vi.restoreAllMocks()
+        
     it('should call broadenQuery for very low relevance (<0.3)', () => {
-        // Spy on the actual exported broadenQuery function from the module
-        const broadenSpy = vi.spyOn(queryRefinementModule, 'broadenQuery').mockReturnValue('broadened');
-        // Call refineQuery from the module (or the direct import, as it's the same reference)
-        queryRefinementModule.refineQuery("original", [], 0.1); // relevance 0.1
-        expect(broadenSpy).toHaveBeenCalledWith("original");
-        broadenSpy.mockRestore(); // Or use vi.restoreAllMocks() in afterEach
+      queryRefinementModuleOriginal.refineQuery("original", [], 0.1); // Call refineQuery from the original module
+      expect(broadenSpy).toHaveBeenCalledWith("original");
     });
 
     it('should call focusQueryBasedOnResults for mediocre relevance (0.3 <= relevance < 0.7)', () => {
-        const focusSpy = vi.spyOn(queryRefinementModule, 'focusQueryBasedOnResults').mockReturnValue('focused');
-        const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-        queryRefinementModule.refineQuery("original", mockResults, 0.5); // relevance 0.5
-        expect(focusSpy).toHaveBeenCalledWith("original", mockResults);
-        focusSpy.mockRestore();
+      const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
+      queryRefinementModuleOriginal.refineQuery("original", mockResults, 0.5);
+      expect(focusSpy).toHaveBeenCalledWith("original", mockResults);
     });
 
     it('should call tweakQuery for decent relevance (>=0.7)', () => {
-        // Note: searchWithRefinement loop breaks if relevance >= threshold (default 0.7).
-        // So, refineQuery is typically called when relevance < threshold.
-        // If we test refineQuery directly with relevance >= 0.7, it should call tweakQuery.
-        const tweakSpy = vi.spyOn(queryRefinementModule, 'tweakQuery').mockReturnValue('tweaked');
-        const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-        
-        queryRefinementModule.refineQuery("original", mockResults, 0.7); // relevance 0.7
-        expect(tweakSpy).toHaveBeenCalledWith("original", mockResults);
-        tweakSpy.mockRestore();
+      // Note: searchWithRefinement loop breaks if relevance >= threshold (default 0.7).
+      // So, refineQuery is typically called when relevance < threshold.
+      // If we test refineQuery directly with relevance >= 0.7, it should call tweakQuery.
+      const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
+      
+      queryRefinementModuleOriginal.refineQuery("original", mockResults, 0.7); // relevance 0.7
+      expect(tweakSpy).toHaveBeenCalledWith("original", mockResults);
     });
   });
 
-  afterEach(() => { // Add this
+  afterEach(() => {
     vi.restoreAllMocks();
   });
 

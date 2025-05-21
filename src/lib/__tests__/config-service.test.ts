@@ -7,15 +7,6 @@ import winston from 'winston';
 import { ConfigService as ActualConfigService } from '../config-service';
 // import fsActual from 'fs'; // Not strictly needed if we define the mock structure directly
 
-// Define a clearable mock logger instance for Winston that can be controlled in tests
-const clearableMockWinstonLogger = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
-  // Add other logger methods if used by ConfigService directly
-};
-
 // Mock the entire fs module
 vi.mock('fs', () => {
   const mockFs = {
@@ -32,8 +23,14 @@ vi.mock('fs', () => {
 });
 
 // Mock winston logger creation and transports
-vi.mock('winston', () => { // REMOVE async (importOriginal)
-      // const originalWinston = await importOriginal<typeof winston>(); // REMOVE this line
+vi.mock('winston', () => {
+      // Define the logger instance that createLogger will return INSIDE the factory
+      const MOCK_LOGGER_INSTANCE = { // Changed name to avoid confusion
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
 
       // Define mocks for winston.format properties that ConfigService uses
       // ConfigService uses: combine, timestamp, printf, colorize, splat, simple, json
@@ -42,8 +39,8 @@ vi.mock('winston', () => { // REMOVE async (importOriginal)
           // Simulate a basic format object structure.
           // The actual transformation logic isn't critical for most ConfigService tests,
           // just that createLogger receives a valid format object.
-          _isFormat: true, 
-          transform: vi.fn(info => info) 
+          _isFormat: true,
+          transform: vi.fn(info => info)
         })),
         timestamp: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => ({...info, timestamp: new Date().toISOString()})) })),
         printf: vi.fn(template => ({ _isFormat: true, transform: vi.fn(info => template(info)) })),
@@ -55,8 +52,7 @@ vi.mock('winston', () => { // REMOVE async (importOriginal)
       };
 
       return {
-        // ...originalWinston, // REMOVE spreading originalWinston
-        createLogger: vi.fn().mockReturnValue(clearableMockWinstonLogger),
+        createLogger: vi.fn().mockReturnValue(MOCK_LOGGER_INSTANCE), // Use the instance defined in this factory
         transports: {
           File: vi.fn().mockImplementation(() => ({
             on: vi.fn(),
@@ -154,11 +150,28 @@ describe('ConfigService', () => {
     // Reset winston transport mocks if necessary
     vi.mocked(winston.transports.File).mockClear();
     vi.mocked(winston.transports.Stream).mockClear();
-    // Clear the createLogger mock itself and ensure it returns the clearableMockWinstonLogger
-    vi.mocked(winston.createLogger).mockClear().mockReturnValue(clearableMockWinstonLogger);
-    // Clear methods of the clearableMockWinstonLogger
-    Object.values(clearableMockWinstonLogger).forEach(mockFn => mockFn.mockClear());
+    
+    // To clear/reset the logger for each test:
+    // 1. Import the mocked winston.
+    // 2. Get the instance that createLogger returns.
+    // 3. Clear the methods on that instance.
+    const winstonMocked = await import('winston'); // This gets the mocked module
+    const loggerInstanceFromMock = vi.mocked(winstonMocked.createLogger).getMockImplementation()?.(); // Execute the mock fn to get the returned MOCK_LOGGER_INSTANCE
 
+    if (loggerInstanceFromMock) {
+      Object.values(loggerInstanceFromMock).forEach(mockFn => {
+        if (typeof mockFn === 'function' && 'mockClear' in mockFn) {
+          mockFn.mockClear();
+        }
+      });
+    }
+    // Also clear calls to createLogger itself
+    vi.mocked(winstonMocked.createLogger).mockClear();
+    // Ensure it's still set to return the (now internally cleared) MOCK_LOGGER_INSTANCE
+    // This is important if createServiceInstance() is called multiple times or if state leaks.
+    if (loggerInstanceFromMock) {
+        vi.mocked(winstonMocked.createLogger).mockReturnValue(loggerInstanceFromMock);
+    }
   });
 
   afterEach(() => {
