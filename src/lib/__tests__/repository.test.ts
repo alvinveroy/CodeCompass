@@ -40,10 +40,16 @@ vi.mock('isomorphic-git', async (importOriginal) => {
     listFiles: vi.fn(),
     log: vi.fn(),
     readCommit: vi.fn(),
-    diffTrees: vi.fn(), // Mock diffTrees as a property of the namespace
+    // diffTrees: vi.fn(), // No longer directly called by SUT's getCommitHistoryWithChanges
     walk: vi.fn(),
-    TREE: vi.fn((args: any) => ({ _id: args?.oid || 'mock_tree_id_default', ...args })),
-    // Remove 'default: vi.fn()' if it was added for default import attempt
+    TREE: vi.fn((args: any) => ({ 
+      // Simulate Walker object structure expected by SUT's git.TREE({ ref: treeOid })
+      // The mock TREE needs to return something that walk's `trees` parameter can use.
+      // The important part for the mock is that `trees[0]._id` or similar can be accessed if the test relies on it.
+      // If `args.ref` is passed (as in the new SUT code), use it for identification.
+      _id: args?.ref || args?.oid || 'mock_tree_id_default', 
+      ...args 
+    })),
   };
 });
 
@@ -140,7 +146,7 @@ describe('Repository Utilities', () => {
     vi.mocked(git.listFiles).mockReset();
     vi.mocked(git.log).mockReset();
     vi.mocked(git.readCommit).mockReset();
-    vi.mocked(git.diffTrees).mockReset();
+    // vi.mocked(git.diffTrees)?.mockReset(); // diffTrees is no longer directly called by the SUT function being tested here
     vi.mocked(git.walk).mockReset();
     if (git.TREE && typeof (git.TREE as Mock).mockClear === 'function') {
         (git.TREE as Mock).mockClear();
@@ -274,32 +280,54 @@ describe('Repository Utilities', () => {
             return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as any;
         });
 
-        vi.mocked(git.diffTrees).mockImplementation(async (args: { fs: any, dir: string, gitdir: string, ref1: string, ref2: string }) => {
-            if (args.ref1 === 'tree1_oid' && args.ref2 === 'tree2_oid') {
-                 return [['file.ts', 'modify', 'blob_before', 'blob_after', 'mode_before', 'mode_after']] as any;
-            }
-            return [] as any;
-        });
+        // vi.mocked(git.diffTrees) no longer needed here as SUT uses git.walk for diffing.
 
-        vi.mocked(git.walk).mockImplementation(async ({ fs: nodeFsAlias, dir, gitdir, trees, map }) => { // Use mockedGitWalk
-            const treeOidFromMockWalker = (trees[0] as any)._id; // Cast to any to access mock's property
-            // For the initial commit, the SUT calls GIT_TREE() which our mock (MockedGIT_TREE_Func) returns as { _id: 'mock_tree_id_default' }
-            // The SUT's logic for initial commit uses gitWalk with GIT_TREE()
-            // We need to identify if this 'walk' call is for the initial commit.
-            // The `trees` arg to walk will be `[{ _id: 'mock_tree_id_default' }]` if SUT calls `GIT_TREE()`.
-            // Let's assume if map is present and treeOid is the default mock one, it's the initial commit walk.
-            if (map && treeOidFromMockWalker === 'mock_tree_id_default') { // Check against the mock's default _id
-                 if (map) { // Guard the call to map
-                     await map('initial.ts', [{ type: async () => 'blob', oid: async () => 'blob_oid_initial' }] as any);
-                 }
+        vi.mocked(git.walk).mockImplementation(async ({ fs: nodeFsAlias, dir, gitdir, trees, map }) => {
+            // The `trees` argument will be an array of mocked Walker-like objects from our `git.TREE` mock.
+            // We can inspect `trees[0]._id` and `trees[1]._id` if needed to simulate specific diffs.
+            // trees[0] corresponds to parentCommitData.commit.tree
+            // trees[1] corresponds to commitData.commit.tree
+
+            if (map && trees.length === 1 && (trees[0] as any)._id === 'mock_tree_id_default') {
+                // Simulate initial commit walk: one file added
+                // The SUT's initial commit logic uses `trees: [git.TREE()]`. Our `git.TREE` mock without args gives `_id: 'mock_tree_id_default'`.
+                await map('initial.ts', [{ type: async () => 'blob', oid: async () => 'blob_oid_initial', mode: async () => 0o100644 }] as any);
+            } else if (map && trees.length === 2) {
+                // Simulate two-tree walk for diffing (e.g., between tree1_oid and tree2_oid)
+                // This part needs to align with how the SUT calls git.TREE({ ref: treeOid })
+                // Our TREE mock sets _id to args.ref. So trees[0]._id will be 'tree1_oid', trees[1]._id will be 'tree2_oid'.
+                if ((trees[0] as any)._id === 'tree1_oid' && (trees[1] as any)._id === 'tree2_oid') {
+                    // Simulate one modified file
+                    const mockEntryBefore = { type: async () => 'blob', oid: async () => 'blob_before_oid', mode: async () => 0o100644 };
+                    const mockEntryAfter = { type: async () => 'blob', oid: async () => 'blob_after_oid', mode: async () => 0o100644 };
+                    await map('file.ts', [mockEntryBefore as any, mockEntryAfter as any]);
+                    
+                    // Simulate one added file
+                    const mockEntryAdded = { type: async () => 'blob', oid: async () => 'blob_added_oid', mode: async () => 0o100644 };
+                    await map('added_file.ts', [null, mockEntryAdded as any]);
+
+                    // Simulate one deleted file
+                    const mockEntryDeleted = { type: async () => 'blob', oid: async () => 'blob_deleted_oid', mode: async () => 0o100644 };
+                    await map('deleted_file.ts', [mockEntryDeleted as any, null]);
+                }
             }
-            return [];
+            return []; // Default return for walk
         });
 
         const history = await repositoryFunctions.getCommitHistoryWithChanges(repoPath, { count: 2 });
         expect(history).toHaveLength(2);
+        // Check commit2 (non-initial commit, uses two-tree walk)
         expect(history[0].oid).toBe('commit2');
-        expect(history[0].changedFiles).toEqual([{ path: 'file.ts', type: 'modify' }]);
+        expect(history[0].changedFiles).toEqual(
+          expect.arrayContaining([
+            { path: 'file.ts', type: 'modify' },
+            { path: 'added_file.ts', type: 'add' },
+            { path: 'deleted_file.ts', type: 'delete' },
+          ])
+        );
+        expect(history[0].changedFiles.length).toBe(3); // Ensure no extra files
+
+        // Check commit1 (initial commit, uses single-tree walk)
         expect(history[1].oid).toBe('commit1');
         expect(history[1].changedFiles).toEqual([{ path: 'initial.ts', type: 'add' }]);
     });
