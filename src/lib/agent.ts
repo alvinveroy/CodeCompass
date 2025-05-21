@@ -277,8 +277,8 @@ export function parseToolCalls(output: string): ParsedToolCall[] {
         const jsonPart = line.substring('TOOL_CALL:'.length).trim();
         logger.debug("Found potential tool call", { jsonPart });
         
-        const parsed = JSON.parse(jsonPart); // parsed is initially 'any'
-        logger.debug("Successfully parsed JSON", { parsed });
+        const parsedJson = JSON.parse(jsonPart); 
+        logger.debug("Successfully parsed JSON", { parsedJson });
         
         // Type guard for ParsedToolCall
         const isParsedToolCall = (p: any): p is ParsedToolCall => 
@@ -286,13 +286,15 @@ export function parseToolCalls(output: string): ParsedToolCall[] {
           'tool' in p && typeof p.tool === 'string' &&
           'parameters' in p && typeof p.parameters === 'object' && p.parameters !== null;
 
-        if (isParsedToolCall(parsed)) {
+        if (isParsedToolCall(parsedJson)) {
+          // Explicitly type after guard to satisfy linter for member access
+          const toolCallData: ParsedToolCall = parsedJson;
           results.push({
-            tool: parsed.tool, // Now type-safe
-            parameters: parsed.parameters // Still Record<string, unknown>, which is fine
+            tool: toolCallData.tool,
+            parameters: toolCallData.parameters
           });
         } else {
-          logger.warn("Parsed JSON part does not match expected tool call structure", { jsonPart });
+          logger.warn("Parsed JSON part does not match expected tool call structure", { parsedJsonPart: jsonPart });
         }
       } catch (error: unknown) {
         const _err = error instanceof Error ? error : new Error(String(error));
@@ -504,7 +506,7 @@ export async function executeToolCall(
         : [];
       
       // Use the new helper function to get the processed diff
-      const processedDiff = await exports.getProcessedDiff(repoPath, suggestionModelAvailable);
+      const processedDiff = await getProcessedDiff(repoPath, suggestionModelAvailable);
       
       // Update context in session
       updateContext(session.id, repoPath, files);
@@ -665,7 +667,7 @@ Based on the provided context and snippets, generate a detailed code suggestion 
           filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
         }
 
-        const processedSnippet = await exports.processSnippet(
+        const processedSnippet = await processSnippet(
           payload.content,
           query, // Pass the current tool's query
           filepathDisplay,
@@ -1023,7 +1025,7 @@ export async function runAgentLoop(
     );
     
     // Generate system prompt
-    const systemPrompt = exports.generateAgentSystemPrompt(availableTools);
+    const systemPrompt = generateAgentSystemPrompt(availableTools);
     
     // Initial user prompt
     let userPrompt = `User query: ${query}\n\nAnalyze this query and determine which tools to use to provide the best response.`;
@@ -1177,7 +1179,7 @@ export async function runAgentLoop(
         // Provide a fallback response
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " + 
-          agentState.steps.map(s => `Used ${s.tool} and found: ${JSON.stringify(s.output).substring(0, 200)}...`).join("\n\n");
+          agentState.steps.map(s => `Used ${s.tool} and found: ${(JSON.stringify(s.output) || '').substring(0, 200)}...`).join("\n\n");
       }
     }
     
