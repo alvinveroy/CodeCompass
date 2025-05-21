@@ -54,7 +54,7 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('searchWithRefinement', () => {
-    let refineQuerySpy: Mock<any[], any>; // Or let TypeScript infer: let refineQuerySpy;
+    let refineQuerySpy: Mock<(...args: any[]) => any>;
     beforeEach(() => { 
         refineQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'refineQuery').mockImplementation((query, _results, relevance) => {
             if (relevance < 0.3) return `${query} broadened by mock`;
