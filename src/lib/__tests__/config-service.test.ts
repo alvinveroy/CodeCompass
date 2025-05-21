@@ -106,25 +106,22 @@ describe('ConfigService', () => {
     vi.mocked(winstonTransports.Stream).mockClear();
     
     // To clear/reset the logger for each test:
-    // 1. Import the mocked winston.
-    // 2. Get the instance that createLogger returns.
-    // 3. Clear the methods on that instance.
-    // const winstonMocked = await import('winston'); // This gets the mocked module - no longer needed with named import
-    const loggerInstanceFromMock = vi.mocked(winstonCreateLogger).getMockImplementation()?.(); // Execute the mock fn to get the returned MOCK_LOGGER_INSTANCE
+    const winstonMockedModule = await import('winston'); // Import the mocked module
+    const loggerInstanceFromMock = vi.mocked(winstonMockedModule.createLogger).mock.results[0]?.value; // Get instance from mock results
 
     if (loggerInstanceFromMock) {
       Object.values(loggerInstanceFromMock).forEach(mockFn => {
         if (typeof mockFn === 'function' && 'mockClear' in mockFn) {
-          mockFn.mockClear();
+          (mockFn as vi.Mock).mockClear();
         }
       });
     }
     // Also clear calls to createLogger itself
-    vi.mocked(winstonCreateLogger).mockClear();
+    vi.mocked(winstonMockedModule.createLogger).mockClear();
     // Ensure it's still set to return the (now internally cleared) MOCK_LOGGER_INSTANCE
     // This is important if createServiceInstance() is called multiple times or if state leaks.
-    if (loggerInstanceFromMock) {
-        vi.mocked(winstonCreateLogger).mockReturnValue(loggerInstanceFromMock);
+    if (loggerInstanceFromMock) { // Re-set the mock return value if an instance was found
+        vi.mocked(winstonMockedModule.createLogger).mockReturnValue(loggerInstanceFromMock);
     }
   });
 
@@ -157,12 +154,10 @@ describe('ConfigService', () => {
   
   it('should load SUGGESTION_MODEL from model-config.json if present', async () => {
     // Setup fs mocks specifically for THIS test's scenario
-    vi.mocked(fs.existsSync).mockImplementation((p) => 
-      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE
-    );
+    vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE);
     vi.mocked(fs.readFileSync).mockImplementation((p) => {
       if (p === MOCK_MODEL_CONFIG_FILE) return JSON.stringify({ SUGGESTION_MODEL: 'file_model_from_json' });
-      return '{}'; // Should not be called for other paths in this test if existsSync is correct
+      return '{}';
     });
     
     const service = await createServiceInstance();
@@ -171,7 +166,7 @@ describe('ConfigService', () => {
 
   it('should prioritize model-config.json over environment variables for SUGGESTION_MODEL', async () => {
     process.env.SUGGESTION_MODEL = 'env_model';
-    vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_MODEL_CONFIG_FILE || p === MOCK_CONFIG_DIR);
+    vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE);
     vi.mocked(fs.readFileSync).mockImplementation((p) => {
         if (p === MOCK_MODEL_CONFIG_FILE) return JSON.stringify({ SUGGESTION_MODEL: 'file_model_override' });
         return '{}';
@@ -208,72 +203,64 @@ describe('ConfigService', () => {
   });
 
   it('should persist model configuration when setSuggestionModel is called', async () => {
-    // Assume .codecompass dir exists, but model-config.json might not initially.
-    vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR);
-    // If ConfigService reads before writing, provide what it would read (or empty if new file)
-    vi.mocked(fs.readFileSync).mockImplementation((p) => {
-      if (p === MOCK_MODEL_CONFIG_FILE) return JSON.stringify({ EXISTING_KEY: "value" }); // Simulate pre-existing content
-      return '{}';
-    });
+    vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR); // Only .codecompass dir exists
+    vi.mocked(fs.readFileSync).mockReturnValue('{}'); // No pre-existing model-config
 
-    const service = await createServiceInstance();
-    // Simulate some existing state that would be persisted along with the new model
-    service.SUGGESTION_PROVIDER = "ollama_test_provider"; 
-    service.EMBEDDING_PROVIDER = "ollama_test_embedding";
-    // ... set other relevant properties if they are part of the persisted object
+    const service = await createServiceInstance(); // Gets default values
+    // The service's SUMMARIZATION_MODEL and REFINEMENT_MODEL will be based on the *initial* SUGGESTION_MODEL.
+    // We need to capture these before calling setSuggestionModel if we want to predict them accurately.
+    const initialSummarizationModel = service.SUMMARIZATION_MODEL;
+    const initialRefinementModel = service.REFINEMENT_MODEL;
 
     service.setSuggestionModel('new_persisted_model');
 
     const expectedJsonContent = {
         SUGGESTION_MODEL: 'new_persisted_model',
-        SUGGESTION_PROVIDER: "ollama_test_provider", // Reflects current state of service
-        EMBEDDING_PROVIDER: "ollama_test_embedding",
-        OPENAI_API_KEY: service.OPENAI_API_KEY, // Use actual current values
-        GEMINI_API_KEY: service.GEMINI_API_KEY,
-        CLAUDE_API_KEY: service.CLAUDE_API_KEY,
-        SUMMARIZATION_MODEL: service.SUMMARIZATION_MODEL,
-        REFINEMENT_MODEL: service.REFINEMENT_MODEL
+        SUGGESTION_PROVIDER: service.SUGGESTION_PROVIDER, 
+        EMBEDDING_PROVIDER: service.EMBEDDING_PROVIDER,   
+        OPENAI_API_KEY: service.OPENAI_API_KEY,         
+        GEMINI_API_KEY: service.GEMINI_API_KEY,         
+        CLAUDE_API_KEY: service.CLAUDE_API_KEY,         
+        SUMMARIZATION_MODEL: initialSummarizationModel, // Uses value before SUGGESTION_MODEL changed
+        REFINEMENT_MODEL: initialRefinementModel        // Uses value before SUGGESTION_MODEL changed
     };
     
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
       MOCK_MODEL_CONFIG_FILE,
-      JSON.stringify(expect.objectContaining(expectedJsonContent), null, 2)
+      JSON.stringify(expectedJsonContent, null, 2)
     );
   });
   
   it('should persist DeepSeek API key when setDeepSeekApiKey is called', async () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR);
-    vi.mocked(fs.readFileSync).mockImplementation((p) => {
-        if (p === MOCK_DEEPSEEK_CONFIG_FILE) return JSON.stringify({ EXISTING_KEY_DS: "value_ds" });
-        return '{}';
-    });
+    vi.mocked(fs.readFileSync).mockReturnValue('{}'); // No pre-existing deepseek config
 
     const service = await createServiceInstance();
     const newApiKey = 'new_deepseek_key';
     service.setDeepSeekApiKey(newApiKey);
 
-    // ConfigService.setDeepSeekApiKey only writes DEEPSEEK_API_KEY and DEEPSEEK_BASE_URL
-    const expectedDeepSeekJson = {
-        DEEPSEEK_API_KEY: newApiKey,
-        DEEPSEEK_BASE_URL: service.DEEPSEEK_BASE_URL // ensure this reflects current state
-    };
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fs.writeFileSync).mock.calls[0][0]).toBe(MOCK_DEEPSEEK_CONFIG_FILE);
+
+    const writtenData = JSON.parse(vi.mocked(fs.writeFileSync).mock.calls[0][1] as string);
     
-    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-      MOCK_DEEPSEEK_CONFIG_FILE,
-      JSON.stringify(expect.objectContaining(expectedDeepSeekJson), null, 2)
-    );
+    expect(writtenData.DEEPSEEK_API_KEY).toBe(newApiKey);
+    expect(writtenData.DEEPSEEK_API_URL).toBe(service.DEEPSEEK_BASE_URL);
+    expect(writtenData).toHaveProperty('timestamp');
+    // Ensure timestamp is a recent ISO string (optional, but good check)
+    expect(new Date().getTime() - new Date(writtenData.timestamp).getTime()).toBeLessThan(5000); // Within 5 seconds
   });
 
   it('should handle malformed model-config.json gracefully', async () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_MODEL_CONFIG_FILE || p === MOCK_CONFIG_DIR);
-    vi.mocked(fs.readFileSync).mockReturnValue('{"SUGGESTION_MODEL": "bad_json_no_closing_brace');
+    vi.mocked(fs.readFileSync).mockReturnValue('{"SUGGESTION_MODEL": MALFORMED'); // Malformed JSON
     
     const service = await createServiceInstance();
     
     const winstonMockedModule = await import('winston');
-    const loggerInstanceUsedByService = vi.mocked(winstonMockedModule.createLogger).mock.results[0]?.value;
+    const loggerInstance = vi.mocked(winstonMockedModule.createLogger).mock.results[0]?.value;
 
-    expect(loggerInstanceUsedByService.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load model config'));
+    expect(loggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load model config'));
     expect(service.SUGGESTION_MODEL).toBe('llama3.1:8b');
   });
 
@@ -289,24 +276,25 @@ describe('ConfigService', () => {
 
   it('reloadConfigsFromFile should re-read environment and file configs', async () => {
     // Initial setup: no env var, no file
+    delete process.env.SUGGESTION_MODEL;
     vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR); // Only .codecompass dir
     vi.mocked(fs.readFileSync).mockReturnValue('{}');
-    delete process.env.SUGGESTION_MODEL;
 
     const service = await createServiceInstance();
     expect(service.SUGGESTION_MODEL).toBe('llama3.1:8b'); // Default
 
     // Simulate change in env and file for the reload
     process.env.SUGGESTION_MODEL = 'env_reloaded_model';
-    vi.mocked(fs.existsSync).mockReset().mockImplementation((p) => p === MOCK_MODEL_CONFIG_FILE || p === MOCK_CONFIG_DIR);
-    vi.mocked(fs.readFileSync).mockReset().mockImplementation((p) => {
+    // Ensure mocks are set *before* reloadConfigsFromFile is called
+    vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE);
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
       if (p === MOCK_MODEL_CONFIG_FILE) return JSON.stringify({ SUGGESTION_MODEL: 'file_reloaded_model' });
       return '{}';
     });
     
     service.reloadConfigsFromFile();
     
-    expect(service.SUGGESTION_MODEL).toBe('file_reloaded_model');
+    expect(service.SUGGESTION_MODEL).toBe('file_reloaded_model'); // File should take precedence
     expect(global.CURRENT_SUGGESTION_MODEL).toBe('file_reloaded_model');
   });
 
@@ -323,27 +311,23 @@ describe('ConfigService', () => {
 
   // Test log directory creation fallback
   it('should fallback to local logs directory if user-specific one fails', async () => {
-    vi.mocked(fs.existsSync).mockImplementation((p) => {
-      if (p === MOCK_CONFIG_DIR) return true;
-      // MOCK_LOG_DIR and fallback path initially don't exist
-      return false;
-    });
+    vi.mocked(fs.existsSync).mockImplementation((p) => p === MOCK_CONFIG_DIR); // Config dir exists, log dir does not
     vi.mocked(fs.mkdirSync).mockImplementation((p) => {
       if (p === MOCK_LOG_DIR) {
         throw new Error('Permission denied for user log dir');
       }
-      // Simulate successful creation of fallback
-      if (p === path.join(process.cwd(), 'logs')) return undefined;
-      return undefined; // Allow MOCK_CONFIG_DIR creation
+      if (p === path.join(process.cwd(), 'logs')) return undefined; // Success for fallback
+      return undefined; // Allow MOCK_CONFIG_DIR creation if it were called for that
     });
 
-    const service = await createServiceInstance();
-    expect(service.LOG_DIR).toBe(path.join(process.cwd(), 'logs'));
-    // Check if the logger was informed about the fallback.
+    const service = await createServiceInstance(); // This will trigger logger setup and dir creation
+    
     const winstonMockedModule = await import('winston');
-    const loggerInstanceUsedByService = vi.mocked(winstonMockedModule.createLogger).mock.results[0]?.value;
-    expect(loggerInstanceUsedByService.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to create user-specific log directory'));
-    expect(loggerInstanceUsedByService.info).toHaveBeenCalledWith(expect.stringContaining('Falling back to local logs directory'));
+    const loggerInstance = vi.mocked(winstonMockedModule.createLogger).mock.results[0]?.value;
+
+    expect(service.LOG_DIR).toBe(path.join(process.cwd(), 'logs'));
+    expect(loggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to create user-specific log directory'));
+    expect(loggerInstance.info).toHaveBeenCalledWith(expect.stringContaining('Falling back to local logs directory'));
     expect(vi.mocked(fs.mkdirSync)).toHaveBeenCalledWith(path.join(process.cwd(), 'logs'), { recursive: true });
   });
 

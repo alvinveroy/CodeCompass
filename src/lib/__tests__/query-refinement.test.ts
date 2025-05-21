@@ -144,7 +144,8 @@ describe('Query Refinement Utilities', () => {
   describe('extractKeywords', () => {
     it('should extract relevant keywords and filter common words', () => {
       const text = "This is a sample function for user authentication with a class.";
-      // preprocessText is mocked in beforeEach
+      // Mock preprocessText specifically for this test if its general mock isn't suitable
+      vi.mocked(preprocessText).mockReturnValueOnce(text.toLowerCase().replace(/[.,;:!?(){}[\]"']/g, " "));
       const keywords = extractKeywords(text); // Calls imported original
       expect(keywords).toEqual(expect.arrayContaining(['sample', 'function', 'user', 'authentication', 'class']));
       expect(keywords).not.toContain('this');
@@ -153,7 +154,7 @@ describe('Query Refinement Utilities', () => {
 
     it('should return unique keywords', () => {
       const text = "test test keyword keyword";
-      // preprocessText is mocked in beforeEach
+      vi.mocked(preprocessText).mockReturnValueOnce(text.toLowerCase().replace(/[.,;:!?(){}[\]"']/g, " "));
       const keywords = extractKeywords(text); // Calls imported original
       expect(keywords).toEqual(expect.arrayContaining(['test', 'keyword'])); // Order might vary with Set
     });
@@ -163,6 +164,7 @@ describe('Query Refinement Utilities', () => {
     it('should remove specific terms and file extensions', () => {
       const query = "exact specific search for login.ts only";
       const result = broadenQuery(query); // Calls imported original
+      expect(result).toBeDefined();
       expect(result).not.toContain('exact');
       expect(result).not.toContain('specific');
       expect(result).not.toContain('only');
@@ -229,13 +231,12 @@ describe('Query Refinement Utilities', () => {
 
     beforeEach(() => {
       // Spy on the methods of the imported module object *before* each test in this block
-      broadenQuerySpy = vi.spyOn(QueryRefinementAPI, 'broadenQuery').mockReturnValue('spy_broadened_for_dispatch_test');
-      focusQueryBasedOnResultsSpy = vi.spyOn(QueryRefinementAPI, 'focusQueryBasedOnResults').mockReturnValue('spy_focused_for_dispatch_test');
-      tweakQuerySpy = vi.spyOn(QueryRefinementAPI, 'tweakQuery').mockReturnValue('spy_tweaked_for_dispatch_test');
+      broadenQuerySpy = vi.spyOn(QueryRefinementAPI, 'broadenQuery').mockReturnValue('spy_broadened');
+      focusQueryBasedOnResultsSpy = vi.spyOn(QueryRefinementAPI, 'focusQueryBasedOnResults').mockReturnValue('spy_focused');
+      tweakQuerySpy = vi.spyOn(QueryRefinementAPI, 'tweakQuery').mockReturnValue('spy_tweaked');
     });
         
     it('should call broadenQuery for very low relevance (<0.3)', () => {
-      // Call refineQuery (which will internally call the spied broadenQuery from QueryRefinementAPI)
       QueryRefinementAPI.refineQuery("original", [], 0.1); 
       expect(broadenQuerySpy).toHaveBeenCalledWith("original");
     });
