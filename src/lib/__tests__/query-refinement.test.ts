@@ -13,47 +13,32 @@ vi.mock('../config-service', () => ({
 vi.mock('../ollama'); // For generateEmbedding
 
 // No need for QR_TEST_MOCK_EXTRACT_KEYWORDS if extractKeywords is tested via query-refinement.helpers.test.ts
-
-let QR_TEST_MOCK_REFINE_QUERY: vi.Mock;
-let QR_TEST_MOCK_BROADEN_QUERY: vi.Mock;
-let QR_TEST_MOCK_FOCUS_QUERY: vi.Mock;
-let QR_TEST_MOCK_TWEAK_QUERY: vi.Mock;
 // extractKeywords is tested directly via query-refinement.helpers.test.ts, so no mock needed here for it.
 
+// Mock the query-refinement module itself
 vi.mock('../query-refinement', async (importOriginal) => {
   const originalModule = await importOriginal<typeof import('../query-refinement')>();
-  const refineMock = vi.fn();
-  const broadenMock = vi.fn();
-  const focusMock = vi.fn();
-  const tweakMock = vi.fn();
-
-  QR_TEST_MOCK_REFINE_QUERY = refineMock;
-  QR_TEST_MOCK_BROADEN_QUERY = broadenMock;
-  QR_TEST_MOCK_FOCUS_QUERY = focusMock;
-  QR_TEST_MOCK_TWEAK_QUERY = tweakMock;
-      
   return {
-    ...originalModule, // Spread original module to keep non-mocked exports (like searchWithRefinement, extractKeywords)
-    // Overwrite specific functions with mocks created in this factory
-    refineQuery: refineMock,
-    broadenQuery: broadenMock,
-    focusQueryBasedOnResults: focusMock,
-    tweakQuery: tweakMock,
+    ...originalModule, // Keep searchWithRefinement, extractKeywords as original
+    refineQuery: vi.fn(),
+    broadenQuery: vi.fn(),
+    focusQueryBasedOnResults: vi.fn(),
+    tweakQuery: vi.fn(),
     // extractKeywords will remain the original implementation from originalModule
   };
 });
 
-// Import SUT (searchWithRefinement) and the namespace for actual functions.
-// The individual functions like refineQuery, broadenQuery are mocked by the factory above.
-// We will use the module-scoped let variables (QR_TEST_MOCK_...) to interact with these mocks.
-import { 
+// Import functions. searchWithRefinement is original. Others are mocks from factory.
+import {
     searchWithRefinement,
-    // refineQuery, // Mocked, access via QR_TEST_MOCK_REFINE_QUERY
-    // broadenQuery, // Mocked, access via QR_TEST_MOCK_BROADEN_QUERY
-    // focusQueryBasedOnResults, // Mocked, access via QR_TEST_MOCK_FOCUS_QUERY
-    // tweakQuery // Mocked, access via QR_TEST_MOCK_TWEAK_QUERY
+    refineQuery, // This IS the mock from the factory
+    broadenQuery, // This IS the mock from the factory
+    focusQueryBasedOnResults, // This IS the mock from the factory
+    tweakQuery // This IS the mock from the factory
+    // extractKeywords is original, imported via actualQueryRefinementFunctions if needed directly,
+    // or used internally by the original functions being tested.
 } from '../query-refinement';
-import * as actualQueryRefinementFunctions from '../query-refinement'; 
+import * as actualQueryRefinementFunctions from '../query-refinement';
 
 // Import mocked dependencies
 import { generateEmbedding } from '../ollama';
@@ -68,17 +53,17 @@ describe('Query Refinement Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // Reset and setup default behaviors for the factory-created mocks via module-scoped variables
-    if (QR_TEST_MOCK_REFINE_QUERY) QR_TEST_MOCK_REFINE_QUERY.mockReset().mockImplementation(
+    // Reset and setup default behaviors for the imported mocks
+    (refineQuery as vi.Mock).mockReset().mockImplementation(
       (_currentQuery, _results, relevance) => {
         if (relevance < 0.3) return 'mock_refined_broadened_for_search';
         if (relevance < 0.7) return 'mock_refined_focused_for_search';
         return 'mock_refined_tweaked_for_search';
       }
     );
-    if (QR_TEST_MOCK_BROADEN_QUERY) QR_TEST_MOCK_BROADEN_QUERY.mockReset().mockReturnValue('spy_broadened_return_val');
-    if (QR_TEST_MOCK_FOCUS_QUERY) QR_TEST_MOCK_FOCUS_QUERY.mockReset().mockReturnValue('spy_focused_return_val');
-    if (QR_TEST_MOCK_TWEAK_QUERY) QR_TEST_MOCK_TWEAK_QUERY.mockReset().mockReturnValue('spy_tweaked_return_val');
+    (broadenQuery as vi.Mock).mockReset().mockReturnValue('spy_broadened_return_val');
+    (focusQueryBasedOnResults as vi.Mock).mockReset().mockReturnValue('spy_focused_return_val');
+    (tweakQuery as vi.Mock).mockReset().mockReturnValue('spy_tweaked_return_val');
     
     vi.mocked(generateEmbedding).mockResolvedValue([0.1,0.2,0.3]);
     vi.mocked(mockQdrantClientInstance.search).mockClear();
@@ -102,11 +87,11 @@ describe('Query Refinement Tests', () => {
       expect(actualRefinedQuery).toBe('initial query');
       expect(relevanceScore).toBe(0.8);
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Completed search with 0 refinements'));
-      expect(QR_TEST_MOCK_REFINE_QUERY).not.toHaveBeenCalled(); 
+      expect(refineQuery).not.toHaveBeenCalled();
     });
 
     it('should refine query up to maxRefinements if threshold not met, calling mocked refineQuery', async () => {
-      if (!QR_TEST_MOCK_REFINE_QUERY) throw new Error("Refine query mock not initialized for test");
+      // refineQuery is the imported mock
       vi.mocked(mockQdrantClientInstance.search)
         .mockResolvedValueOnce([{ id: 'r1', score: 0.2, payload: { content: 'low relevance' } }] as any)
         .mockResolvedValueOnce([{ id: 'r2', score: 0.5, payload: { content: 'medium relevance' } }] as any)
@@ -120,12 +105,12 @@ describe('Query Refinement Tests', () => {
       expect(results[0].id).toBe('r3');
       expect(relevanceScore).toBe(0.8);
       // actualRefinedQueryOutput is the result of the last call to the refineQuery mock
-      expect(actualRefinedQueryOutput).toBe('mock_refined_focused_for_search'); 
+      expect(actualRefinedQueryOutput).toBe('mock_refined_focused_for_search');
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Completed search with 2 refinements'));
-      expect(QR_TEST_MOCK_REFINE_QUERY).toHaveBeenCalledTimes(2); 
-      expect(QR_TEST_MOCK_REFINE_QUERY).toHaveBeenNthCalledWith(1, 'original query', 
+      expect(refineQuery).toHaveBeenCalledTimes(2);
+      expect(refineQuery).toHaveBeenNthCalledWith(1, 'original query',
         [{ id: 'r1', score: 0.2, payload: { content: 'low relevance' } }], 0.2);
-      expect(QR_TEST_MOCK_REFINE_QUERY).toHaveBeenNthCalledWith(2, 'mock_refined_broadened_for_search', 
+      expect(refineQuery).toHaveBeenNthCalledWith(2, 'mock_refined_broadened_for_search',
         [{ id: 'r2', score: 0.5, payload: { content: 'medium relevance' } }], 0.5);
     });
 
@@ -163,41 +148,42 @@ describe('Query Refinement Tests', () => {
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
         expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Completed search with ${configService.MAX_REFINEMENT_ITERATIONS} refinements`));
-        expect(QR_TEST_MOCK_REFINE_QUERY).toHaveBeenCalledTimes(configService.MAX_REFINEMENT_ITERATIONS); 
+        expect(refineQuery).toHaveBeenCalledTimes(configService.MAX_REFINEMENT_ITERATIONS);
     });
   });
   
   describe('refineQuery (main dispatcher - testing original logic)', () => {
     // Testing actualQueryRefinementFunctions.refineQuery (original)
-    // Its internal calls to broadenQuery, focusQueryBasedOnResults, tweakQuery are the factory-created mocks.
+    // Its internal calls to broadenQuery, focusQueryBasedOnResults, tweakQuery are the factory-created mocks
+    // (which are imported directly as broadenQuery, focusQueryBasedOnResults, tweakQuery).
         
     it('should call broadenQuery (mocked) and return its result for very low relevance (<0.3)', () => {
-      if (!QR_TEST_MOCK_BROADEN_QUERY || !QR_TEST_MOCK_FOCUS_QUERY || !QR_TEST_MOCK_TWEAK_QUERY) throw new Error("Mocks not init");
+      // broadenQuery, focusQueryBasedOnResults, tweakQuery are the imported mocks
       const result = actualQueryRefinementFunctions.refineQuery("original", [], 0.1);
-      expect(QR_TEST_MOCK_BROADEN_QUERY).toHaveBeenCalledWith("original"); 
-      expect(result).toBe('spy_broadened_return_val'); // This comes from QR_TEST_MOCK_BROADEN_QUERY's mockReturnValue
-      expect(QR_TEST_MOCK_FOCUS_QUERY).not.toHaveBeenCalled(); 
-      expect(QR_TEST_MOCK_TWEAK_QUERY).not.toHaveBeenCalled(); 
+      expect(broadenQuery).toHaveBeenCalledWith("original");
+      expect(result).toBe('spy_broadened_return_val'); // This comes from (broadenQuery as vi.Mock).mockReturnValue
+      expect(focusQueryBasedOnResults).not.toHaveBeenCalled();
+      expect(tweakQuery).not.toHaveBeenCalled();
     });
     
     it('should call focusQueryBasedOnResults (mocked) for mediocre relevance (0.3 <= relevance < 0.7)', () => {
-      if (!QR_TEST_MOCK_BROADEN_QUERY || !QR_TEST_MOCK_FOCUS_QUERY || !QR_TEST_MOCK_TWEAK_QUERY) throw new Error("Mocks not init");
+      // broadenQuery, focusQueryBasedOnResults, tweakQuery are the imported mocks
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
       const result = actualQueryRefinementFunctions.refineQuery("original", mockResults, 0.5);
-      expect(QR_TEST_MOCK_FOCUS_QUERY).toHaveBeenCalledWith("original", mockResults); 
-      expect(result).toBe('spy_focused_return_val'); // This comes from QR_TEST_MOCK_FOCUS_QUERY's mockReturnValue
-      expect(QR_TEST_MOCK_BROADEN_QUERY).not.toHaveBeenCalled(); 
-      expect(QR_TEST_MOCK_TWEAK_QUERY).not.toHaveBeenCalled(); 
+      expect(focusQueryBasedOnResults).toHaveBeenCalledWith("original", mockResults);
+      expect(result).toBe('spy_focused_return_val'); // This comes from (focusQueryBasedOnResults as vi.Mock).mockReturnValue
+      expect(broadenQuery).not.toHaveBeenCalled();
+      expect(tweakQuery).not.toHaveBeenCalled();
     });
 
     it('should call tweakQuery (mocked) for decent relevance (>=0.7)', () => {
-      if (!QR_TEST_MOCK_BROADEN_QUERY || !QR_TEST_MOCK_FOCUS_QUERY || !QR_TEST_MOCK_TWEAK_QUERY) throw new Error("Mocks not init");
+      // broadenQuery, focusQueryBasedOnResults, tweakQuery are the imported mocks
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
       const result = actualQueryRefinementFunctions.refineQuery("original", mockResults, 0.7);
-      expect(QR_TEST_MOCK_TWEAK_QUERY).toHaveBeenCalledWith("original", mockResults); 
-      expect(result).toBe('spy_tweaked_return_val'); // This comes from QR_TEST_MOCK_TWEAK_QUERY's mockReturnValue
-      expect(QR_TEST_MOCK_BROADEN_QUERY).not.toHaveBeenCalled(); 
-      expect(QR_TEST_MOCK_FOCUS_QUERY).not.toHaveBeenCalled(); 
+      expect(tweakQuery).toHaveBeenCalledWith("original", mockResults);
+      expect(result).toBe('spy_tweaked_return_val'); // This comes from (tweakQuery as vi.Mock).mockReturnValue
+      expect(broadenQuery).not.toHaveBeenCalled();
+      expect(focusQueryBasedOnResults).not.toHaveBeenCalled();
     });
   });
 });

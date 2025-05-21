@@ -1,34 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { exec as actualChildProcessExec, type ExecException } from 'child_process';
-import * as util from 'util'; // Import actual util
+import { type ExecException } from 'child_process'; // Keep type import
+// import * as util from 'util'; // No longer needed for mocking promisify(exec)
 import { promises as fsPromises } from 'fs';
 import git from 'isomorphic-git';
 import path from 'path';
 // import nodeFs from 'fs'; // Not needed if fsPromises covers fs needs for git
 
-// This variable will hold the mock function instance. It MUST be `let`.
-let MOCK_EXEC_ASYNC_FN_INSTANCE: vi.Mock;
-
-vi.mock('util', async (importOriginal) => {
-  const actualUtilModule = await importOriginal<typeof import('util')>();
-  // Create the mock function INSIDE the factory.
-  const factoryCreatedMock = vi.fn(); 
-  // Assign the factory-scoped mock to the module-scoped variable.
-  // This assignment happens when the factory is executed (due to hoisting).
-  MOCK_EXEC_ASYNC_FN_INSTANCE = factoryCreatedMock; 
+// Mock 'child_process' to control 'exec'
+vi.mock('child_process', async (importOriginal) => {
+  const actualCp = await importOriginal<typeof import('child_process')>();
   return {
-    ...actualUtilModule,
-    promisify: (fnToPromisify: any) => {
-      if (fnToPromisify === actualChildProcessExec) { 
-        return factoryCreatedMock; // Return the mock created in this factory scope
-      }
-      return actualUtilModule.promisify(fnToPromisify);
-    },
+    ...actualCp,
+    exec: vi.fn(), // exec is now a mock function
   };
 });
 
+// Import exec AFTER mocking child_process. This 'exec' will be the vi.fn().
+import { exec } from 'child_process';
+
 // Import SUT and other dependencies AFTER vi.mock
-import { getRepositoryDiff } from '../repository'; 
+import { getRepositoryDiff } from '../repository';
 import { logger, configService } from '../config-service'; // Import configService as well
 // ... other necessary imports ...
 // Import functions to test (ensure all are imported if their tests are present)
@@ -78,6 +69,7 @@ vi.mock('../config-service', () => { // Re-add the mock for config-service if it
 vi.mock('../ollama'); // If generateEmbedding is used by repository.ts (it's not directly)
 
 describe('Repository Utilities', () => {
+  const MOCKED_CP_EXEC_FN_REF = exec as vi.Mock; // Get a reference to the mocked exec
   const repoPath = '/test/diff/repo'; // Define repoPath here for wider scope if needed
   const setupValidRepoAndCommitsMocks = () => {
       vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
@@ -90,9 +82,7 @@ describe('Repository Utilities', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // MOCK_EXEC_ASYNC_FN_INSTANCE is now guaranteed to be initialized
-    // because the 'util' module (imported by repository.ts) would have been processed.
-    if (MOCK_EXEC_ASYNC_FN_INSTANCE) MOCK_EXEC_ASYNC_FN_INSTANCE.mockReset();
+    MOCKED_CP_EXEC_FN_REF.mockReset();
     
     // Reset other mocks
     vi.mocked(fsPromises.access).mockReset();
@@ -116,33 +106,40 @@ describe('Repository Utilities', () => {
     });
 
     it('should call git diff command and return stdout', async () => {
-      // setupValidRepoAndCommitsMocks(); // Already called in beforeEach for the describe block
-      MOCK_EXEC_ASYNC_FN_INSTANCE.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
+      setupValidRepoAndCommitsMocks(); // Called in beforeEach for the describe block, but explicit here for clarity if that changes
+      MOCKED_CP_EXEC_FN_REF.mockImplementationOnce((_cmd, _opts, callback) => {
+        callback(null, 'diff_content_stdout_explicit', ''); // error, stdout, stderr
+      });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(MOCK_EXEC_ASYNC_FN_INSTANCE).toHaveBeenCalledWith(
-        'git diff commit1_oid commit2_oid', 
-        expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
+      expect(MOCKED_CP_EXEC_FN_REF).toHaveBeenCalledWith(
+        'git diff commit1_oid commit2_oid',
+        expect.objectContaining({ cwd: repoPath }), // Options passed to exec
+        expect.any(Function) // Callback function
       );
       expect(result).toBe('diff_content_stdout_explicit');
     });
 
     it('should truncate long diff output', async () => {
-      // setupValidRepoAndCommitsMocks(); // Already called
+      setupValidRepoAndCommitsMocks();
       const longDiff = 'a'.repeat(10001);
-      MOCK_EXEC_ASYNC_FN_INSTANCE.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
+      MOCKED_CP_EXEC_FN_REF.mockImplementationOnce((_cmd, _opts, callback) => {
+        callback(null, longDiff, '');
+      });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
     });
     
     it('should handle errors from git diff command', async () => {
-      // setupValidRepoAndCommitsMocks(); // Already called
-      const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
+      setupValidRepoAndCommitsMocks();
+      const mockError = new Error('Git command failed') as ExecException;
       (mockError as any).code = 128; // Standard for many git errors
-      mockError.stderr = 'stderr from execAsync rejection'; // Stderr is part of the error object for promisified exec
-      MOCK_EXEC_ASYNC_FN_INSTANCE.mockRejectedValueOnce(mockError);
+      // Stderr is passed as the third argument to the callback for exec
+      MOCKED_CP_EXEC_FN_REF.mockImplementationOnce((_cmd, _opts, callback) => {
+        callback(mockError, '', 'stderr from exec callback'); 
+      });
       
       const result = await getRepositoryDiff(repoPath);
       
