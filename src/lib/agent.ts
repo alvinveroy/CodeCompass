@@ -262,13 +262,13 @@ Based on both searches, I can provide a comprehensive explanation of error handl
 }
 
 // Parse tool calls from LLM output
-export function parseToolCalls(output: string): { tool: string; parameters: Record<string, unknown> }[] {
+export function parseToolCalls(output: string): ParsedToolCall[] {
   // Log the output for debugging
   logger.debug("Parsing tool calls from output", { outputLength: output.length });
   
   // Split the output by lines and look for lines starting with TOOL_CALL:
   const lines = output.split('\n');
-  const results: { tool: string; parameters: Record<string, unknown> }[] = [];
+  const results: ParsedToolCall[] = [];
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();

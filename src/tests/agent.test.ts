@@ -161,39 +161,47 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    let parseToolCallsSpy;
-    let executeToolCallSpy;
+    let mockParseToolCallsInDoMock: Mock; // Renamed to avoid confusion
+    let mockExecuteToolCallInDoMock: Mock;
 
-    beforeEach(() => {
-        mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
-        // Spy on the methods of ActualAgentModule
-        parseToolCallsSpy = vi.spyOn(ActualAgentModule, 'parseToolCalls').mockReturnValue([]);
-        executeToolCallSpy = vi.spyOn(ActualAgentModule, 'executeToolCall').mockResolvedValue({ status: 'default spy success' });
+    beforeEach(async () => {
+        mockLLMProviderInstance.generateText.mockReset().mockResolvedValueOnce("LLM Verification OK").mockResolvedValue('Default LLM response for agent loop');
+        
+        mockParseToolCallsInDoMock = vi.fn().mockReturnValue([]);
+        mockExecuteToolCallInDoMock = vi.fn().mockResolvedValue({ status: 'default spy success' });
+
+        vi.doMock('../lib/agent', async (importOriginal) => {
+          const originalModule = await importOriginal<typeof import('../lib/agent')>();
+          return {
+            ...originalModule,
+            parseToolCalls: mockParseToolCallsInDoMock, // runAgentLoop will use this
+            executeToolCall: mockExecuteToolCallInDoMock, // runAgentLoop will use this
+          };
+        });
     });
 
     afterEach(() => {
-        parseToolCallsSpy.mockRestore();
-        executeToolCallSpy.mockRestore();
+        vi.doUnmock('../lib/agent');
     });
 
     it('should execute a tool call and then provide final response', async () => {
+      const { runAgentLoop: runAgentLoopSUT } = await import('../lib/agent'); // Import SUT after doMock
+
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // LLM output for tool selection
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); 
 
-      // Configure spies on ActualAgentModule
-      parseToolCallsSpy
+      mockParseToolCallsInDoMock
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
-        .mockReturnValueOnce([]); // Subsequent calls return empty
+        .mockReturnValueOnce([]); 
 
-      executeToolCallSpy.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
-
+      mockExecuteToolCallInDoMock.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.'); 
 
-      await ActualAgentModule.runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
+      await runAgentLoopSUT('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      expect(parseToolCallsSpy).toHaveBeenCalled();
-      expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
-      expect(executeToolCallSpy).toHaveBeenCalledWith(
+      expect(mockParseToolCallsInDoMock).toHaveBeenCalled();
+      expect(mockExecuteToolCallInDoMock).toHaveBeenCalledTimes(1);
+      expect(mockExecuteToolCallInDoMock).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );

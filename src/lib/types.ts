@@ -128,3 +128,8 @@ export interface DetailedQdrantSearchResult {
   shard_key?: string;
   order_value?: number;
 }
+
+export interface ParsedToolCall {
+  tool: string;
+  parameters: Record<string, unknown>;
+}
