@@ -295,7 +295,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       describe('type: FULL_FILE_CONTENT', () => {
         it('should read file if path is valid', async () => {
-          (readFile as jest.Mock).mockResolvedValueOnce('Full file data');
+          vi.mocked(readFile).mockResolvedValueOnce('Full file data');
           const result = await executeToolCall(
             { tool: 'request_additional_context', parameters: { context_type: 'FULL_FILE_CONTENT', query_or_path: 'src/valid.ts' } },
             mockQdrantClient, repoPath, suggestionModelAvailable
