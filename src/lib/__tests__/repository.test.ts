@@ -1,24 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { type ExecException } from 'child_process'; // Keep type import
-// import * as util from 'util'; // No longer needed for mocking promisify(exec)
+import * as cp from 'child_process'; // Import namespace to spy on exec
 import { promises as fsPromises } from 'fs';
 import git from 'isomorphic-git';
 import path from 'path';
 // import nodeFs from 'fs'; // Not needed if fsPromises covers fs needs for git
 
-// Mock 'child_process' to control 'exec'
-vi.mock('child_process', async (importOriginal) => {
-  const actualCp = await importOriginal<typeof import('child_process')>();
-  return {
-    ...actualCp,
-    exec: vi.fn(), // exec is now a mock function
-  };
-});
-
-// Import exec AFTER mocking child_process. This 'exec' will be the vi.fn().
-import { exec } from 'child_process';
-
-// Import SUT and other dependencies AFTER vi.mock
+// Import SUT and other dependencies
 import { getRepositoryDiff } from '../repository';
 import { logger, configService } from '../config-service'; // Import configService as well
 // ... other necessary imports ...
@@ -69,7 +57,7 @@ vi.mock('../config-service', () => { // Re-add the mock for config-service if it
 vi.mock('../ollama'); // If generateEmbedding is used by repository.ts (it's not directly)
 
 describe('Repository Utilities', () => {
-  const MOCKED_CP_EXEC_FN_REF = exec as vi.Mock; // Get a reference to the mocked exec
+  let execSpy: vi.SpyInstance;
   const repoPath = '/test/diff/repo'; // Define repoPath here for wider scope if needed
   const setupValidRepoAndCommitsMocks = () => {
       vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
@@ -82,7 +70,8 @@ describe('Repository Utilities', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    MOCKED_CP_EXEC_FN_REF.mockReset();
+    // Spy on child_process.exec for each test
+    execSpy = vi.spyOn(cp, 'exec');
     
     // Reset other mocks
     vi.mocked(fsPromises.access).mockReset();
@@ -107,13 +96,13 @@ describe('Repository Utilities', () => {
 
     it('should call git diff command and return stdout', async () => {
       setupValidRepoAndCommitsMocks(); // Called in beforeEach for the describe block, but explicit here for clarity if that changes
-      MOCKED_CP_EXEC_FN_REF.mockImplementationOnce((_cmd, _opts, callback) => {
+      execSpy.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(null, 'diff_content_stdout_explicit', ''); // error, stdout, stderr
       });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(MOCKED_CP_EXEC_FN_REF).toHaveBeenCalledWith(
+      expect(execSpy).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid',
         expect.objectContaining({ cwd: repoPath }), // Options passed to exec
         expect.any(Function) // Callback function
@@ -124,7 +113,7 @@ describe('Repository Utilities', () => {
     it('should truncate long diff output', async () => {
       setupValidRepoAndCommitsMocks();
       const longDiff = 'a'.repeat(10001);
-      MOCKED_CP_EXEC_FN_REF.mockImplementationOnce((_cmd, _opts, callback) => {
+      execSpy.mockImplementationOnce((_cmd, _opts, callback) => {
         callback(null, longDiff, '');
       });
 
@@ -136,9 +125,10 @@ describe('Repository Utilities', () => {
       setupValidRepoAndCommitsMocks();
       const mockError = new Error('Git command failed') as ExecException;
       (mockError as any).code = 128; // Standard for many git errors
+      const stderrText = 'stderr from exec callback';
       // Stderr is passed as the third argument to the callback for exec
-      MOCKED_CP_EXEC_FN_REF.mockImplementationOnce((_cmd, _opts, callback) => {
-        callback(mockError, '', 'stderr from exec callback'); 
+      execSpy.mockImplementationOnce((_cmd, _opts, callback) => {
+        callback(mockError, '', stderrText);
       });
       
       const result = await getRepositoryDiff(repoPath);
@@ -149,7 +139,7 @@ describe('Repository Utilities', () => {
         expect.objectContaining({ // The error object itself is passed as the second arg to logger.error
           message: 'Git command failed',
           code: 128,
-          stderr: 'stderr from execAsync rejection',
+          stderr: stderrText,
         })
       );
     });
