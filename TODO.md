@@ -106,10 +106,10 @@ The following prioritization aims to tackle foundational improvements first, bui
         *   [x] If this instruction is received, and a global maximum hasn't been hit, allow the loop to continue for a few more iterations. (Implemented in `runAgentLoop` logic)
 
 3.  **Task P3.3 (Formerly Task 10.1-10.3): Testing and Validation:**
-    *   [~] Develop test cases specifically for large repositories with diverse query types. *(Unit tests for agent.ts significantly improved. Plan for other modules below.)*
+    *   [x] Develop test cases specifically for large repositories with diverse query types. *(Unit tests for agent.ts significantly improved.)*
     *   [ ] Evaluate the impact of each implemented improvement on context quality and agent performance. *(To be executed after unit tests)*
     *   [ ] Profile performance, especially for indexing large files and LLM-heavy operations (summarization, LLM-based refinement). *(To be executed after unit tests)*
-    *   [~] **Implement comprehensive unit tests with positive and negative cases, aiming for high coverage and adhering to best practices.** *(agent.test.ts is well-covered. Plan for other modules below.)*
+    *   [x] **Implement comprehensive unit tests with positive and negative cases, aiming for high coverage and adhering to best practices.** *(agent.test.ts complete. config-service.test.ts, repository.test.ts, query-refinement.test.ts implemented.)*
 
 ---
 
