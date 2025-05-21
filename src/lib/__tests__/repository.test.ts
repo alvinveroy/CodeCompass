@@ -10,14 +10,13 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
-// Import exec AFTER mocking child_process. This 'exec' will be the vi.fn() from the factory.
-import { exec as actualChildProcessExecMock } from 'child_process'; // Rename to avoid conflict if 'exec' is used elsewhere
-
 // Explicit mock functions for fs/promises methods
 const mockFsAccess = vi.fn();
 const mockFsReadFile = vi.fn();
 const mockFsReadDir = vi.fn();
 const mockFsStat = vi.fn();
+// Mock util.promisify to control execAsync
+const mockExecAsyncFn = vi.fn();
 
 vi.mock('fs/promises', () => ({
   __esModule: true, // Indicate that this is an ES module mock
@@ -50,8 +49,6 @@ vi.mock('isomorphic-git', () => ({
   // If any are missing, add them. E.g., if SUT uses `commit`, add `commit: vi.fn(),`
 }));
 
-// Mock util.promisify to control execAsync
-const mockExecAsyncFn = vi.fn();
 vi.mock('util', async (importOriginal) => {
   const actualUtil = await importOriginal<typeof import('util')>();
   // We need to get a reference to the original exec to compare.
@@ -62,7 +59,7 @@ vi.mock('util', async (importOriginal) => {
     ...actualUtil,
     promisify: (fnToPromisify: any) => {
       // More robust check: compare with the actual mocked exec function
-      if (fnToPromisify === actualChildProcessExecMock) { 
+      if (fnToPromisify && (fnToPromisify.name === 'exec' || fnToPromisify === actualChildProcessExecMockInstance)) { 
         return mockExecAsyncFn;
       }
       return actualUtil.promisify(fnToPromisify); // Promisify others normally
@@ -85,6 +82,10 @@ vi.mock('../config-service', () => {
 });
 vi.mock('../ollama'); 
 
+// Import exec AFTER mocking child_process. This 'exec' will be the vi.fn() from the factory.
+// We need a reference to this instance for the util.promisify mock.
+import { exec as actualChildProcessExecMockInstance } from 'child_process';
+
 // Import SUT and other necessary modules AFTER all vi.mock calls
 import * as repositoryFunctions from '../repository'; // Import all exports as a namespace
 import { logger, configService } from '../config-service';
@@ -99,7 +100,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 describe('Repository Utilities', () => {
   const repoPath = '/test/diff/repo';
   // Use the imported actualChildProcessExecMock as the execMock reference
-  const execMock = actualChildProcessExecMock as vi.MockedFunction<typeof actualChildProcessExecMock>; 
+  const execMock = actualChildProcessExecMockInstance as vi.MockedFunction<typeof actualChildProcessExecMockInstance>; 
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
