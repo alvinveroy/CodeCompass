@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert } from 'vitest';
 
+// Define a holder for mocks that will be used by the factory
+const agentInternalMocks = {
+  parseToolCalls: vi.fn(),
+  executeToolCall: vi.fn(),
+};
+
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -51,14 +57,18 @@ vi.mock('fs/promises', () => {
   };
 });
 
-// SUT functions will be called via ActualAgentModule
+vi.mock('../lib/agent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/agent')>();
+  return {
+    ...actual, // Export all actual functions by default
+    // Override specific internal functions with mocks from our holder
+    parseToolCalls: agentInternalMocks.parseToolCalls,
+    executeToolCall: agentInternalMocks.executeToolCall,
+  };
+});
 
 
-// Import functions from the SUT module directly
-// These are no longer needed as we use ActualAgentModule
-// import {
-// runAgentLoop, createAgentState, generateAgentSystemPrompt, toolRegistry,
-// } from '../lib/agent';
+import { runAgentLoop, createAgentState, generateAgentSystemPrompt, toolRegistry } from '../lib/agent'; // Import SUT
 
 // Import mocked dependencies
 import { getLLMProvider } from '../lib/llm-provider';
@@ -93,6 +103,9 @@ describe('Agent', () => {
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
+    // Reset mocks from the holder
+    agentInternalMocks.parseToolCalls.mockReset();
+    agentInternalMocks.executeToolCall.mockReset();
     // Clear logger mocks (assuming logger is imported from config-service which is mocked)
     const { logger: agentLogger } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service');
     if (agentLogger && typeof (agentLogger.info as vi.Mock).mockClear === 'function') { // Check if logger and its methods are mocks
@@ -137,39 +150,36 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    let parseToolCallsSpy: vi.SpyInstance;
-    let executeToolCallSpy: vi.SpyInstance;
 
     beforeEach(() => {
         mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
-        parseToolCallsSpy = vi.spyOn(ActualAgentModule, 'parseToolCalls');
-        executeToolCallSpy = vi.spyOn(ActualAgentModule, 'executeToolCall');
+        // Configure mocks from agentInternalMocks for these tests
+        agentInternalMocks.parseToolCalls.mockReturnValue([]); // Default to no tool calls
+        agentInternalMocks.executeToolCall.mockResolvedValue({ status: 'default mock success' });
     });
 
     afterEach(() => {
-        parseToolCallsSpy.mockRestore();
-        executeToolCallSpy.mockRestore();
+        // Mocks are reset in the main beforeEach
     });
 
     it('should execute a tool call and then provide final response', async () => {
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // LLM output for tool selection
 
-      // Configure spies on ActualAgentModule
-      parseToolCallsSpy
+      // Configure mocks from agentInternalMocks
+      agentInternalMocks.parseToolCalls
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
         .mockReturnValueOnce([]); // Subsequent calls return empty
 
-      executeToolCallSpy.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      agentInternalMocks.executeToolCall.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.'); 
 
-      await ActualAgentModule.runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
+      await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      // Assert on spies
-      expect(parseToolCallsSpy).toHaveBeenCalled();
-      expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
-      expect(executeToolCallSpy).toHaveBeenCalledWith(
+      expect(agentInternalMocks.parseToolCalls).toHaveBeenCalled();
+      expect(agentInternalMocks.executeToolCall).toHaveBeenCalledTimes(1);
+      expect(agentInternalMocks.executeToolCall).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
@@ -179,15 +189,15 @@ describe('Agent', () => {
   
   describe('createAgentState (original)', () => {
     it('should create a new agent state with the correct structure', () => {
-      const result = ActualAgentModule.createAgentState('test_session', 'Find auth code'); 
+      const result = createAgentState('test_session', 'Find auth code'); // Using imported original
       expect(result).toEqual({ sessionId: 'test_session', query: 'Find auth code', steps: [], context: [], isComplete: false });
     });
   });
 
   describe('generateAgentSystemPrompt (original)', () => {
     it('should include descriptions of all available tools', () => { 
-      const prompt = ActualAgentModule.generateAgentSystemPrompt(ActualAgentModule.toolRegistry); 
-      for (const tool of ActualAgentModule.toolRegistry) { 
+      const prompt = generateAgentSystemPrompt(toolRegistry); // Using imported original
+      for (const tool of toolRegistry) { 
         expect(prompt).toContain(`Tool: ${tool.name}`);
       }
     });
