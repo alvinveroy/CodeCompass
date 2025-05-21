@@ -615,14 +615,14 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
     it('should handle agent reasoning timeout by using fallback tool call', async () => {
       const agentModule = await import('../lib/agent'); 
-      const agentConfigForTest = (await import('../lib/config-service')).configService; // Get the mocked config
+      // const agentConfigForTest = (await import('../lib/config-service')).configService; // Use agentTestConfig instead
 
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
           .mockImplementationOnce(() => { 
             return new Promise((_, reject) => 
-                setTimeout(() => reject(new Error("Simulated Agent reasoning timed out by test")), agentConfigForTest.AGENT_QUERY_TIMEOUT + 200)
+                setTimeout(() => reject(new Error("Simulated Agent reasoning timed out by test")), agentTestConfig.AGENT_QUERY_TIMEOUT + 200)
             );
           })
           .mockResolvedValueOnce("Final response after fallback."); 
@@ -653,7 +653,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       );
       expect(result).toContain("Final response after fallback.");
       expect(addSuggestion).toHaveBeenCalledWith('session5', 'reasoning timeout query', expect.stringContaining('Final response after fallback.'));
-    }, agentConfigForTest.AGENT_QUERY_TIMEOUT + 10000); 
+    }, agentTestConfig.AGENT_QUERY_TIMEOUT + 10000); 
 
     it('should handle tool execution timeout by adding error to prompt', async () => {
       const agentModule = await import('../lib/agent'); 
