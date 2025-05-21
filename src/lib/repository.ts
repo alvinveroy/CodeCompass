@@ -389,7 +389,7 @@ export async function getCommitHistoryWithChanges(
           },
           // We need to tell `walk` which tree to process.
           // Since `commitData.commit.tree` is the OID of the tree for this initial commit:
-          trees: [GIT_TREE()], // This refers to the tree of the current ref (HEAD)
+          trees: [git.TREE()], // This refers to the tree of the current ref (HEAD)
                                // which is what we want for the initial commit's files.
                                // If commitData.commit.tree is different from HEAD's tree (it shouldn't be for initial commit processing)
                                // then a different approach is needed.
