@@ -1,27 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'; // Added afterEach
+import { exec as actualChildProcessExec, type ExecException } from 'child_process';
+import * as util from 'util'; // Import actual util
+import { promises as fsPromises } from 'fs';
 import git from 'isomorphic-git';
-import fsPromises from 'fs/promises'; // Explicitly use fsPromises for clarity
-import nodeFs from 'fs'; // For isomorphic-git's fs parameter
 import path from 'path';
-import { exec as actualChildProcessExec, type ExecException } from 'child_process'; // Keep for type
+import nodeFs from 'fs';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import * as util from 'util'; // Import actual util to get original promisify
 
-// This will be our mock for execAsync. We'll retrieve it after mocking.
-let mockExecAsync: vi.Mock; 
+// --- Mock for promisify(exec) ---
+// 1. Define the mock function that promisify(exec) will return.
+//    This needs to be accessible by tests.
+const MOCK_EXEC_ASYNC_IMPLEMENTATION = vi.fn();
 
+// 2. Mock the 'util' module.
 vi.mock('util', async (importOriginal) => {
-  const actualUtilModule = await importOriginal<typeof import('util')>();
-  const factoryMockFn = vi.fn();
-  // Assign to the outer variable *after* it's created.
-  // This assignment happens when the factory runs.
-  mockExecAsync = factoryMockFn; 
+  const actualUtilModule = await importOriginal<typeof util>(); // Use the imported util
   return {
-    ...actualUtilModule,
+    ...actualUtilModule, // Spread all exports from the actual 'util' module
     promisify: (fnToPromisify: any) => {
+      // If the function being promisified is the actual exec from child_process,
+      // return our predefined mock function.
       if (fnToPromisify === actualChildProcessExec) {
-        return factoryMockFn; 
+        return MOCK_EXEC_ASYNC_IMPLEMENTATION;
       }
+      // Otherwise, call the original promisify.
       return actualUtilModule.promisify(fnToPromisify);
     },
   };
@@ -48,7 +50,7 @@ vi.mock('isomorphic-git', () => ({
     // Add any other functions from isomorphic-git that are used by repository.ts
   }
 }));
-vi.mock('fs/promises');
+vi.mock('fs/promises', () => ({ readFile: vi.fn(), readdir: vi.fn(), access: vi.fn(), stat: vi.fn() })); // Added access & stat
 vi.mock('fs', async (importOriginal) => { // Mock standard 'fs' for isomorphic-git
     const actualFs = await importOriginal<typeof nodeFs>();
     return {
@@ -58,10 +60,6 @@ vi.mock('fs', async (importOriginal) => { // Mock standard 'fs' for isomorphic-g
         },
     };
 });
-// vi.mock('child_process', () => ({ // REMOVED
-//   exec: vi.fn(),
-//   // Add other exports like spawn if they were used and need mocking
-// }));
 
 vi.mock('../config-service', () => ({
   configService: {
@@ -89,14 +87,13 @@ const mockQdrantClientInstance = {
 describe('Repository Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // mockExecAsync should be initialized by the time beforeEach runs,
-    // because the SUT (repository.ts) imports 'util' and thus triggers the mock factory.
-    if (mockExecAsync) {
-      mockExecAsync.mockReset();
-    } else {
-      // This would indicate a serious issue with mock setup or test execution order.
-      console.error("CRITICAL: mockExecAsync was not initialized by the 'util' mock factory!");
-    }
+    MOCK_EXEC_ASYNC_IMPLEMENTATION.mockReset(); // Reset the mock for execAsync
+    // Reset other mocks like logger, fsPromises, git functions
+    vi.mocked(fsPromises.access).mockReset();
+    vi.mocked(fsPromises.stat).mockReset(); // Ensure stat is reset if used by SUT
+    vi.mocked(git.resolveRef).mockReset();
+    vi.mocked(git.log).mockReset();
+    // ... etc.
   });
 
   // ... validateGitRepository tests ...
@@ -164,12 +161,11 @@ describe('Repository Utilities', () => {
 
     it('should call git diff command and return stdout', async () => {
       setupValidRepoAndCommitsMocks();
-      if (!mockExecAsync) throw new Error("mockExecAsync not initialized for stdout test");
-      mockExecAsync.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
+      MOCK_EXEC_ASYNC_IMPLEMENTATION.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(mockExecAsync).toHaveBeenCalledWith(
+      expect(MOCK_EXEC_ASYNC_IMPLEMENTATION).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
       );
@@ -178,9 +174,8 @@ describe('Repository Utilities', () => {
 
     it('should truncate long diff output', async () => {
       setupValidRepoAndCommitsMocks();
-      if (!mockExecAsync) throw new Error("mockExecAsync not initialized for truncate test");
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      mockExecAsync.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
+      MOCK_EXEC_ASYNC_IMPLEMENTATION.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -189,11 +184,10 @@ describe('Repository Utilities', () => {
 
     it('should handle errors from git diff command', async () => {
       setupValidRepoAndCommitsMocks();
-      if (!mockExecAsync) throw new Error("mockExecAsync not initialized for error test");
       const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
       (mockError as any).code = 128;
-      mockError.stderr = 'stderr from rejected execAsync'; 
-      mockExecAsync.mockRejectedValueOnce(mockError);
+      mockError.stderr = 'stderr from execAsync rejection'; 
+      MOCK_EXEC_ASYNC_IMPLEMENTATION.mockRejectedValueOnce(mockError);
       
       // Clear logger before the call, as validateGitRepository might log
       logger.error.mockClear(); 
@@ -207,7 +201,7 @@ describe('Repository Utilities', () => {
         expect.objectContaining({ // The error object itself
           message: 'Git command failed',
           code: 128,
-          // stderr: 'stderr from rejected execAsync', // stderr is not reliably present on the error from promisify(exec)
+          stderr: 'stderr from execAsync rejection',
         })
       );
     });
@@ -221,14 +215,14 @@ describe('Repository Utilities', () => {
 });
 
 // Helper function (ensure it's defined or inlined in tests)
-const setupValidRepoAndCommitsMocks = () => {
-    vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
-    vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
-    vi.mocked(git.log).mockResolvedValue([
-      { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
-      { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
-    ] as any);
-};
+// const setupValidRepoAndCommitsMocks = () => { // This is already defined within the describe block
+//     vi.mocked(fsPromises.access).mockResolvedValue(undefined as unknown as void);
+//     vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
+//     vi.mocked(git.log).mockResolvedValue([
+//       { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
+//       { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
+//     ] as any);
+// };
 /*
 // This SEARCH block is intentionally left almost empty to replace the rest of the file
 // with the user's provided content for the getCommitHistoryWithChanges tests and the
