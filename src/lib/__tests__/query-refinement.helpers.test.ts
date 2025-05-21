@@ -81,7 +81,7 @@ describe('Query Refinement Helper Utilities', () => {
   });
 
   describe('focusQueryBasedOnResults (direct test)', () => {
-    it('should add keywords from top results to the query', async () => {
+    it('should add keywords from top results to the query', () => {
       const originalQuery = "find user";
       const results = [
         { payload: { content: "function processUser(user: UserType)" } },

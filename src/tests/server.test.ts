@@ -86,7 +86,7 @@ describe('Server Tool Response Formatting', () => {
   });
 
   describe('Tool Response Formatting', () => {
-    it('should verify search_code tool returns markdown formatted response', async () => {
+    it('should verify search_code tool returns markdown formatted response', () => {
       // This is a structural test to ensure the response format is correct
       // The actual implementation would be tested with integration tests
       const response = `
@@ -113,7 +113,7 @@ Test summary
       expect(response).toContain('### Summary');
     });
 
-    it('should verify generate_suggestion tool returns markdown formatted response', async () => {
+    it('should verify generate_suggestion tool returns markdown formatted response', () => {
       const response = `
 # Code Suggestion for: "test query"
 
@@ -146,7 +146,7 @@ Test content
       expect(response).toContain('## Recent Changes');
     });
 
-    it('should verify get_repository_context tool returns markdown formatted response', async () => {
+    it('should verify get_repository_context tool returns markdown formatted response', () => {
       const response = `
 # Repository Context Summary
 

@@ -20,7 +20,7 @@ describe('Config Module', () => {
     // Explicitly reset global variables that ConfigService might use/set
     // These globals are set by ConfigService.initializeGlobalState()
     // Resetting them ensures a clean slate for each test's ConfigService instantiation.
-    const g = global as any;
+    const g = globalThis as NodeJS.Global & typeof globalThis & { [key: string]: unknown };
     g.CURRENT_LLM_PROVIDER = undefined;
     g.CURRENT_SUGGESTION_PROVIDER = undefined;
     g.CURRENT_EMBEDDING_PROVIDER = undefined;
@@ -39,7 +39,7 @@ describe('Config Module', () => {
   describe('Default Configuration', () => {
     // Use 'any' for type to avoid complex typeof import for the singleton instance
     // or define a proper type if preferred: typeof import('../lib/config-service').configService
-    let currentConfigService: any; 
+    let currentConfigService: InstanceType<typeof import('../lib/config-service').ConfigService>;
 
     beforeEach(async () => {
       // Dynamically import configService to ensure a fresh instance for each test
