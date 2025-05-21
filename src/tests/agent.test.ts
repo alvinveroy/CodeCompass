@@ -161,8 +161,8 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    let parseToolCallsSpy; // Let TypeScript infer
-    let executeToolCallSpy; // Let TypeScript infer
+    let parseToolCallsSpy;
+    let executeToolCallSpy;
 
     beforeEach(() => {
         mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 

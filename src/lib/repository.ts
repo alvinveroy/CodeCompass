@@ -1,13 +1,4 @@
-import {
-  resolveRef,
-  listFiles as gitListFiles,
-  log as gitLog,
-  readCommit,
-  // diffTrees, // Remove from named imports
-  walk as gitWalk,
-  TREE as GIT_TREE
-} from "isomorphic-git";
-import diffTrees from "isomorphic-git"; // Try importing as default
+import * as git from "isomorphic-git"; // Use namespace import
 import fs from "fs/promises";
 import path from "path";
 import { exec } from "child_process"; // Import exec
@@ -35,7 +26,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
   try {
     const gitdir = path.join(repoPath, ".git");
     await fs.access(gitdir);
-    await resolveRef({ fs: nodeFs, dir: repoPath, gitdir, ref: "HEAD" });
+    await git.resolveRef({ fs: nodeFs, dir: repoPath, gitdir, ref: "HEAD" });
     // logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
   } catch (error: unknown) {
@@ -52,7 +43,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     return;
   }
 
-  const files = await gitListFiles({ fs: nodeFs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
+  const files = await git.listFiles({ fs: nodeFs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
   logger.info(`Found ${files.length} files in repository`);
 
   if (!files.length) {
@@ -235,7 +226,7 @@ export async function getRepositoryDiff(
   }
 
   try {
-    const commits = await gitLog({ fs: nodeFs, dir: repoPath, depth: 2, gitdir: path.join(repoPath, ".git") });
+    const commits = await git.log({ fs: nodeFs, dir: repoPath, depth: 2, gitdir: path.join(repoPath, ".git") });
     if (commits.length < 2) {
       // logger.info("Not enough commits to generate a diff."); // Original SUT had this commented out
       logger.info(`Not enough commits in ${repoPath} to generate a diff (found ${commits.length}).`); // More informative
@@ -313,12 +304,12 @@ export async function getCommitHistoryWithChanges(
       logOptions.ref = options.ref;
     }
 
-    const commits = await gitLog(logOptions);
+    const commits = await git.log(logOptions);
 
     for (const commitEntry of commits) {
       // commitEntry from git.log already has oid, message, author, committer
       // We need to read the full commit to get tree and parent info reliably
-      const commitData = await readCommit({
+      const commitData = await git.readCommit({
         fs: nodeFs,
         dir: repoPath,
         gitdir,
@@ -330,14 +321,14 @@ export async function getCommitHistoryWithChanges(
       if (commitData.commit.parent && commitData.commit.parent.length > 0) {
         // Not an initial commit, compare with the first parent
         const parentOid = commitData.commit.parent[0];
-        const parentCommitData = await readCommit({
+        const parentCommitData = await git.readCommit({
           fs: nodeFs,
           dir: repoPath,
           gitdir,
           oid: parentOid,
         });
 
-        const diffResult = await diffTrees({
+        const diffResult = await git.diffTrees({
           fs: nodeFs,
           dir: repoPath,
           gitdir,

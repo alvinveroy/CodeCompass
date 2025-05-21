@@ -4,7 +4,6 @@ import { type ExecException } from 'child_process'; // For type annotation
 // 1. Mock 'child_process' and replace 'exec' with a vi.fn() created IN THE FACTORY.
 vi.mock('child_process', async (importOriginal) => {
   const actualCp = await importOriginal<typeof import('child_process')>();
-  const actualCp = await importOriginal<typeof import('child_process')>();
   return {
     ...actualCp,
     exec: vi.fn(), // This vi.fn() is created when the factory runs.
@@ -36,14 +35,15 @@ vi.mock('fs/promises', () => {
 vi.mock('isomorphic-git', async (importOriginal) => {
   const actual = await importOriginal<typeof import('isomorphic-git')>();
   return {
-    ...actual, // Spread actual to keep other exports, then override
+    ...actual, // Spread actual to keep other exports
     resolveRef: vi.fn(),
     listFiles: vi.fn(),
     log: vi.fn(),
     readCommit: vi.fn(),
-    default: vi.fn(),   // Mock the default export, assuming it's diffTrees
+    diffTrees: vi.fn(), // Mock diffTrees as a property of the namespace
     walk: vi.fn(),
     TREE: vi.fn((args: any) => ({ _id: args?.oid || 'mock_tree_id_default', ...args })),
+    // Remove 'default: vi.fn()' if it was added for default import attempt
   };
 });
 
@@ -99,16 +99,7 @@ import { access as mockedFsAccessImported, readFile as mockedFsReadFileImported,
 const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as Mock;
 
 // Import named mocks from isomorphic-git
-import {
-  resolveRef as mockedResolveRef,
-  listFiles as mockedGitListFiles, // Corresponds to gitListFiles in SUT
-  log as mockedGitLog,             // Corresponds to gitLog in SUT
-  readCommit as mockedReadCommit,
-  // diffTrees as mockedDiffTrees, // Remove named import for diffTrees
-  walk as mockedGitWalk,           // Corresponds to gitWalk in SUT
-  TREE as MockedGIT_TREE_Func      // Corresponds to GIT_TREE in SUT
-} from 'isomorphic-git';
-import mockedDiffTrees from 'isomorphic-git'; // Import default for diffTrees
+import * as git from 'isomorphic-git'; // Import as namespace
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
@@ -145,14 +136,14 @@ describe('Repository Utilities', () => {
     
 
     // Reset all isomorphic-git mocks using named imports
-    vi.mocked(mockedResolveRef).mockReset();
-    vi.mocked(mockedGitListFiles).mockReset();
-    vi.mocked(mockedGitLog).mockReset();
-    vi.mocked(mockedReadCommit).mockReset();
-    (mockedDiffTrees as Mock).mockReset(); // Reset the default import mock
-    vi.mocked(mockedGitWalk).mockReset();
-    if (MockedGIT_TREE_Func && typeof (MockedGIT_TREE_Func as Mock).mockClear === 'function') {
-        (MockedGIT_TREE_Func as Mock).mockClear();
+    vi.mocked(git.resolveRef).mockReset();
+    vi.mocked(git.listFiles).mockReset();
+    vi.mocked(git.log).mockReset();
+    vi.mocked(git.readCommit).mockReset();
+    vi.mocked(git.diffTrees).mockReset();
+    vi.mocked(git.walk).mockReset();
+    if (git.TREE && typeof (git.TREE as Mock).mockClear === 'function') {
+        (git.TREE as Mock).mockClear();
     }
 
 
@@ -169,7 +160,7 @@ describe('Repository Utilities', () => {
     it('should return true for a valid repository', async () => {
       // Configure the specific mock function directly
       vi.mocked(mockedFsAccessImported).mockResolvedValue(undefined as unknown as void);
-      vi.mocked(mockedResolveRef).mockResolvedValue('refs/heads/main'); // Use mockedResolveRef
+      vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main'); // Use mockedResolveRef
       const result = await repositoryFunctions.validateGitRepository(repoPath);
       expect(result).toBe(true);
     });
@@ -182,7 +173,7 @@ describe('Repository Utilities', () => {
     it('should return false if HEAD cannot be resolved', async () => {
       // Configure the specific mock function directly
       vi.mocked(mockedFsAccessImported).mockResolvedValue(undefined as unknown as void); // fs.access passes
-      vi.mocked(mockedResolveRef).mockRejectedValueOnce(new Error('No HEAD')); // mockedResolveRef fails
+      vi.mocked(git.resolveRef).mockRejectedValueOnce(new Error('No HEAD')); // mockedResolveRef fails
       const result = await repositoryFunctions.validateGitRepository(repoPath);
       expect(result).toBe(false);
     });
@@ -253,7 +244,7 @@ describe('Repository Utilities', () => {
         expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
         expect(result).toBe("No Git repository found");
         expect(importedMockExecAsyncFn).not.toHaveBeenCalled(); // Check the async mock
-        expect(vi.mocked(mockedGitLog)).not.toHaveBeenCalled(); // Use mockedGitLog
+        expect(vi.mocked(git.log)).not.toHaveBeenCalled(); // Use mockedGitLog
     });
 
     it('should return "No previous commits to compare" if less than 2 commits (single commit)', async () => {
@@ -274,23 +265,23 @@ describe('Repository Utilities', () => {
             { oid: 'commit2', commit: { message: 'Feat: new feature', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, tree: 'tree2_oid', parent: ['commit1_oid'] } },
             { oid: 'commit1', commit: { message: 'Initial commit', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, tree: 'tree1_oid', parent: [] } },
         ];
-        vi.mocked(mockedGitLog).mockResolvedValue(mockCommits as any); // Use mockedGitLog
+        vi.mocked(git.log).mockResolvedValue(mockCommits as any); // Use mockedGitLog
 
-        vi.mocked(mockedReadCommit).mockImplementation(async ({ oid }: { oid: string }) => { // Use mockedReadCommit
+        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => { // Use mockedReadCommit
             if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as any;
             if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any;
             if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any;
             return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as any;
         });
 
-        (mockedDiffTrees as Mock).mockImplementation(async (args: { fs: any, dir: string, gitdir: string, ref1: string, ref2: string }) => {
+        vi.mocked(git.diffTrees).mockImplementation(async (args: { fs: any, dir: string, gitdir: string, ref1: string, ref2: string }) => {
             if (args.ref1 === 'tree1_oid' && args.ref2 === 'tree2_oid') {
                  return [['file.ts', 'modify', 'blob_before', 'blob_after', 'mode_before', 'mode_after']] as any;
             }
             return [] as any;
         });
 
-        vi.mocked(mockedGitWalk).mockImplementation(async ({ fs: nodeFsAlias, dir, gitdir, trees, map }) => { // Use mockedGitWalk
+        vi.mocked(git.walk).mockImplementation(async ({ fs: nodeFsAlias, dir, gitdir, trees, map }) => { // Use mockedGitWalk
             const treeOidFromMockWalker = (trees[0] as any)._id; // Cast to any to access mock's property
             // For the initial commit, the SUT calls GIT_TREE() which our mock (MockedGIT_TREE_Func) returns as { _id: 'mock_tree_id_default' }
             // The SUT's logic for initial commit uses gitWalk with GIT_TREE()
@@ -317,7 +308,7 @@ describe('Repository Utilities', () => {
         // Ensure validateGitRepository conditions are met if it's called by SUT,
         // though getCommitHistoryWithChanges doesn't call validateGitRepository directly.
         // However, it does use gitLog, which is what we're testing for failure here.
-        vi.mocked(mockedGitLog).mockRejectedValue(new Error('Log failed')); // Use mockedGitLog
+        vi.mocked(git.log).mockRejectedValue(new Error('Log failed')); // Use mockedGitLog
         await expect(repositoryFunctions.getCommitHistoryWithChanges(repoPath)).rejects.toThrow('Log failed');
     });
   });
