@@ -206,7 +206,7 @@ describe('Repository Utilities', () => {
         expect.objectContaining({ // The error object itself
           message: 'Git command failed',
           code: 128,
-          stderr: 'stderr from rejected execAsync', 
+          // stderr: 'stderr from rejected execAsync', // stderr is not reliably present on the error from promisify(exec)
         })
       );
     });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // Mock dependencies of the functions being tested in THIS file
@@ -25,44 +25,71 @@ const mockQdrantClientInstance = {
   search: vi.fn(),
 } as unknown as QdrantClient;
 
+// --- Mocking query-refinement internal functions ---
+// These will be the functions that the original SUT functions call.
+const MOCK_INTERNAL_REFINE_QUERY = vi.fn();
+const MOCK_INTERNAL_BROADEN_QUERY = vi.fn();
+const MOCK_INTERNAL_FOCUS_QUERY = vi.fn();
+const MOCK_INTERNAL_TWEAK_QUERY = vi.fn();
+
+vi.mock('../query-refinement', async (importOriginal) => {
+  const originalModule = await importOriginal<typeof import('../query-refinement')>();
+  return {
+    // Export original SUTs we want to test directly
+    searchWithRefinement: originalModule.searchWithRefinement,
+    // When testing refineQuery directly, we'll use vi.importActual.
+    // For calls *from* searchWithRefinement to refineQuery, it will use this mock:
+    refineQuery: MOCK_INTERNAL_REFINE_QUERY,
+
+    // Original helpers that might be called by SUTs if not overridden for a specific test
+    extractKeywords: originalModule.extractKeywords,
+
+    // These are the versions that an *actual* refineQuery (from importActual) would call
+    broadenQuery: MOCK_INTERNAL_BROADEN_QUERY,
+    focusQueryBasedOnResults: MOCK_INTERNAL_FOCUS_QUERY,
+    tweakQuery: MOCK_INTERNAL_TWEAK_QUERY,
+  };
+});
+
+// Import functions. Some are original, some are the mocks defined above via the factory.
+import {
+  searchWithRefinement, // Original from factory's spread
+  // refineQuery,          // This is MOCK_INTERNAL_REFINE_QUERY - will be imported specifically for tests needing it
+  // broadenQuery,         // This is MOCK_INTERNAL_BROADEN_QUERY - will be imported specifically for tests needing it
+  // focusQueryBasedOnResults, // This is MOCK_INTERNAL_FOCUS_QUERY - will be imported specifically for tests needing it
+  // tweakQuery            // This is MOCK_INTERNAL_TWEAK_QUERY - will be imported specifically for tests needing it
+} from '../query-refinement';
+
+
 describe('Query Refinement Tests', () => {
-  beforeEach(() => { 
-    vi.clearAllMocks(); 
-    vi.resetModules(); // Reset modules to re-evaluate mocks for vi.doMock
-  }); 
-  afterEach(() => { 
-    vi.restoreAllMocks(); 
+  beforeEach(() => {
+    vi.clearAllMocks(); // Clears call history and mock implementations set by mockXyzOnce
+
+    // Reset and set default behavior for the mocks
+    MOCK_INTERNAL_REFINE_QUERY.mockReset().mockImplementation(
+      (_query, _results, relevance) => {
+        if (relevance < 0.3) return 'mock_refined_broadened_for_search';
+        if (relevance < 0.7) return 'mock_refined_focused_for_search';
+        return 'mock_refined_tweaked_for_search';
+      }
+    );
+    MOCK_INTERNAL_BROADEN_QUERY.mockReset().mockReturnValue('spy_broadened_return_val');
+    MOCK_INTERNAL_FOCUS_QUERY.mockReset().mockReturnValue('spy_focused_return_val');
+    MOCK_INTERNAL_TWEAK_QUERY.mockReset().mockReturnValue('spy_tweaked_return_val');
+
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1,0.2,0.3]);
+    vi.mocked(mockQdrantClientInstance.search).mockClear();
   });
+
+  afterEach(() => { vi.restoreAllMocks(); });
 
   // --- Test searchWithRefinement ---
   describe('searchWithRefinement', () => {
-    const MOCK_REFINE_QUERY_FOR_SEARCH = vi.fn();
-    
-    beforeAll(async () => {
-      vi.doMock('../query-refinement', async (importOriginal) => {
-        const originalModule = await importOriginal<typeof import('../query-refinement')>();
-        return { ...originalModule, refineQuery: MOCK_REFINE_QUERY_FOR_SEARCH };
-      });
-    });
-
-    afterAll(() => { 
-      vi.doUnmock('../query-refinement'); 
-    });
-
-    beforeEach(() => {
-      MOCK_REFINE_QUERY_FOR_SEARCH.mockReset().mockImplementation(
-        (_query, _results, relevance) => {
-          if (relevance < 0.3) return 'mock_refined_broadened_for_search';
-          if (relevance < 0.7) return 'mock_refined_focused_for_search';
-          return 'mock_refined_tweaked_for_search';
-        }
-      );
-      vi.mocked(generateEmbedding).mockResolvedValue([0.1,0.2,0.3]);
-      vi.mocked(mockQdrantClientInstance.search).mockClear();
-    });
+    // searchWithRefinement is the original implementation.
+    // It will call the MOCK_INTERNAL_REFINE_QUERY.
 
     it('should return results without refinement if relevance threshold is met initially', async () => {
-      const { searchWithRefinement } = await import('../query-refinement');
+      // const { searchWithRefinement } = await import('../query-refinement'); // Already imported
       const mockResults = [{ id: '1', score: 0.8, payload: { content: 'highly relevant' } }];
       vi.mocked(mockQdrantClientInstance.search).mockResolvedValue(mockResults as any);
 
@@ -80,11 +107,11 @@ describe('Query Refinement Tests', () => {
       expect(actualRefinedQuery).toBe('initial query'); // No refinement should occur
       expect(relevanceScore).toBe(0.8);
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Completed search with 0 refinements'));
-      expect(MOCK_REFINE_QUERY_FOR_SEARCH).not.toHaveBeenCalled();
+      expect(MOCK_INTERNAL_REFINE_QUERY).not.toHaveBeenCalled();
     });
 
     it('should refine query up to maxRefinements if threshold not met, calling mocked refineQuery', async () => {
-      const { searchWithRefinement } = await import('../query-refinement');
+      // const { searchWithRefinement } = await import('../query-refinement'); // Already imported
       vi.mocked(mockQdrantClientInstance.search)
         .mockResolvedValueOnce([{ id: 'r1', score: 0.2, payload: { content: 'low relevance' } }] as any)
         .mockResolvedValueOnce([{ id: 'r2', score: 0.5, payload: { content: 'medium relevance' } }] as any)
@@ -104,15 +131,15 @@ describe('Query Refinement Tests', () => {
       expect(relevanceScore).toBe(0.8);
       expect(actualRefinedQueryOutput).toBe('mock_refined_focused_for_search'); 
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Completed search with 2 refinements'));
-      expect(MOCK_REFINE_QUERY_FOR_SEARCH).toHaveBeenCalledTimes(2);
-      expect(MOCK_REFINE_QUERY_FOR_SEARCH).toHaveBeenNthCalledWith(1, 'original query', 
+      expect(MOCK_INTERNAL_REFINE_QUERY).toHaveBeenCalledTimes(2);
+      expect(MOCK_INTERNAL_REFINE_QUERY).toHaveBeenNthCalledWith(1, 'original query',
         [{ id: 'r1', score: 0.2, payload: { content: 'low relevance' } }], 0.2);
-      expect(MOCK_REFINE_QUERY_FOR_SEARCH).toHaveBeenNthCalledWith(2, 'mock_refined_broadened_for_search', 
+      expect(MOCK_INTERNAL_REFINE_QUERY).toHaveBeenNthCalledWith(2, 'mock_refined_broadened_for_search',
         [{ id: 'r2', score: 0.5, payload: { content: 'medium relevance' } }], 0.5);
     });
 
     it('should use customLimit if provided', async () => {
-      const { searchWithRefinement } = await import('../query-refinement');
+      // const { searchWithRefinement } = await import('../query-refinement'); // Already imported
       vi.mocked(mockQdrantClientInstance.search).mockResolvedValue([{ id: '1', score: 0.9, payload: {} }] as any);
       await searchWithRefinement(mockQdrantClientInstance, 'query', [], 15);
       expect(mockQdrantClientInstance.search).toHaveBeenCalledWith(
@@ -122,7 +149,7 @@ describe('Query Refinement Tests', () => {
     });
     
     it('should apply file filter if files array is provided', async () => {
-        const { searchWithRefinement } = await import('../query-refinement');
+        // const { searchWithRefinement } = await import('../query-refinement'); // Already imported
         vi.mocked(mockQdrantClientInstance.search).mockResolvedValue([{ id: '1', score: 0.9, payload: {} }] as any);
         const filesToFilter = ['src/file1.ts', 'src/file2.ts'];
         await searchWithRefinement(mockQdrantClientInstance, 'query', filesToFilter);
@@ -135,7 +162,7 @@ describe('Query Refinement Tests', () => {
     });
 
     it('should handle empty search results gracefully during refinement', async () => {
-        const { searchWithRefinement } = await import('../query-refinement');
+        // const { searchWithRefinement } = await import('../query-refinement'); // Already imported
         vi.mocked(mockQdrantClientInstance.search)
             .mockResolvedValueOnce([]) 
             .mockResolvedValueOnce([]) 
@@ -144,67 +171,51 @@ describe('Query Refinement Tests', () => {
         const { results, relevanceScore } = await searchWithRefinement(
             mockQdrantClientInstance, 'query for no results', [], undefined, undefined, 0.7
         );
-        expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3); 
+        expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(configService.MAX_REFINEMENT_ITERATIONS + 1);
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
-        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Completed search with 2 refinements'));
-        expect(MOCK_REFINE_QUERY_FOR_SEARCH).toHaveBeenCalledTimes(2);
+        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Completed search with ${configService.MAX_REFINEMENT_ITERATIONS} refinements`));
+        expect(MOCK_INTERNAL_REFINE_QUERY).toHaveBeenCalledTimes(configService.MAX_REFINEMENT_ITERATIONS);
     });
   });
   
   describe('refineQuery (main dispatcher)', () => {
-    const MOCK_BROADEN_FN = vi.fn();
-    const MOCK_FOCUS_FN = vi.fn();
-    const MOCK_TWEAK_FN = vi.fn();
-
+    let actualRefineQueryInstance: typeof import('../query-refinement').refineQuery;
+    
     beforeAll(async () => {
-      vi.doMock('../query-refinement', async (importOriginal) => {
-        const originalModule = await importOriginal<typeof import('../query-refinement')>();
-        return { 
-          ...originalModule, 
-          broadenQuery: MOCK_BROADEN_FN,
-          focusQueryBasedOnResults: MOCK_FOCUS_FN,
-          tweakQuery: MOCK_TWEAK_FN,
-        };
-      });
-    });
-    afterAll(() => { 
-      vi.doUnmock('../query-refinement'); 
+      const actualModule = await vi.importActual<typeof import('../query-refinement')>('../query-refinement');
+      actualRefineQueryInstance = actualModule.refineQuery; // This is the ORIGINAL refineQuery
     });
 
-    beforeEach(() => {
-      MOCK_BROADEN_FN.mockReset().mockReturnValue('spy_broadened_return_val');
-      MOCK_FOCUS_FN.mockReset().mockReturnValue('spy_focused_return_val');
-      MOCK_TWEAK_FN.mockReset().mockReturnValue('spy_tweaked_return_val');
-    });
+    // actualRefineQueryInstance will call broadenQuery, focusQueryBasedOnResults, tweakQuery.
+    // These names, when used inside actualRefineQueryInstance, should resolve to the
+    // MOCK_INTERNAL_BROADEN_QUERY, MOCK_INTERNAL_FOCUS_QUERY, MOCK_INTERNAL_TWEAK_QUERY
+    // provided by the vi.mock factory.
         
     it('should call broadenQuery and return its result for very low relevance (<0.3)', async () => {
-      const { refineQuery: actualRefineQuery } = await import('../query-refinement');
-      const result = actualRefineQuery("original", [], 0.1);
-      expect(MOCK_BROADEN_FN).toHaveBeenCalledWith("original");
+      const result = actualRefineQueryInstance("original", [], 0.1);
+      expect(MOCK_INTERNAL_BROADEN_QUERY).toHaveBeenCalledWith("original");
       expect(result).toBe('spy_broadened_return_val');
-      expect(MOCK_FOCUS_FN).not.toHaveBeenCalled(); 
-      expect(MOCK_TWEAK_FN).not.toHaveBeenCalled(); 
+      expect(MOCK_INTERNAL_FOCUS_QUERY).not.toHaveBeenCalled();
+      expect(MOCK_INTERNAL_TWEAK_QUERY).not.toHaveBeenCalled();
     });
     
     it('should call focusQueryBasedOnResults and return its result for mediocre relevance (0.3 <= relevance < 0.7)', async () => {
-      const { refineQuery: actualRefineQuery } = await import('../query-refinement');
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-      const result = actualRefineQuery("original", mockResults, 0.5);
-      expect(MOCK_FOCUS_FN).toHaveBeenCalledWith("original", mockResults);
+      const result = actualRefineQueryInstance("original", mockResults, 0.5);
+      expect(MOCK_INTERNAL_FOCUS_QUERY).toHaveBeenCalledWith("original", mockResults);
       expect(result).toBe('spy_focused_return_val');
-      expect(MOCK_BROADEN_FN).not.toHaveBeenCalled(); 
-      expect(MOCK_TWEAK_FN).not.toHaveBeenCalled(); 
+      expect(MOCK_INTERNAL_BROADEN_QUERY).not.toHaveBeenCalled();
+      expect(MOCK_INTERNAL_TWEAK_QUERY).not.toHaveBeenCalled();
     });
 
     it('should call tweakQuery and return its result for decent relevance (>=0.7)', async () => {
-      const { refineQuery: actualRefineQuery } = await import('../query-refinement');
       const mockResults = [{payload: {content: 'some'}} as DetailedQdrantSearchResult];
-      const result = actualRefineQuery("original", mockResults, 0.7);
-      expect(MOCK_TWEAK_FN).toHaveBeenCalledWith("original", mockResults);
+      const result = actualRefineQueryInstance("original", mockResults, 0.7);
+      expect(MOCK_INTERNAL_TWEAK_QUERY).toHaveBeenCalledWith("original", mockResults);
       expect(result).toBe('spy_tweaked_return_val');
-      expect(MOCK_BROADEN_FN).not.toHaveBeenCalled(); 
-      expect(MOCK_FOCUS_FN).not.toHaveBeenCalled(); 
+      expect(MOCK_INTERNAL_BROADEN_QUERY).not.toHaveBeenCalled();
+      expect(MOCK_INTERNAL_FOCUS_QUERY).not.toHaveBeenCalled();
     });
   });
 });
