@@ -1189,13 +1189,13 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
           agentState.steps.map((s: AgentStep) => {
-            let outputPreview: string;
-            if (typeof s.output === 'string') {
-              outputPreview = s.output;
-            } else {
-              outputPreview = JSON.stringify(s.output) || String(s.output) || '';
+            // Ensure outputPreview is always a string for substring
+            let outputPreview = String(s.output); // Start with basic string conversion
+            if (typeof s.output === 'object' && s.output !== null) {
+              outputPreview = JSON.stringify(s.output) || outputPreview; // Prefer JSON stringify for objects
             }
-            return `Used ${s.tool} and found: ${outputPreview.substring(0, 200)}...`;
+            // Ensure outputPreview is not undefined or null before substring
+            return `Used ${s.tool} and found: ${(outputPreview || '').substring(0, 200)}...`;
           }).join("\n\n");
       }
     }
