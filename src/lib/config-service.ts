@@ -123,6 +123,9 @@ class ConfigService {
       }
     }
     
+    // Add the file transport now that LOG_DIR is determined
+    this.logger.add(new winston.transports.File({ filename: path.join(this.LOG_DIR, "codecompass.log") }));
+
     // QDRANT_HOST and COLLECTION_NAME were previously initialized directly from process.env or defaults
     // Let's align QDRANT_HOST with the validation pattern used for OLLAMA_HOST
     const defaultQdrantHost = "http://127.0.0.1:6333";

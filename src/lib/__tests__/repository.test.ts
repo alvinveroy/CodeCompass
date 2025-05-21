@@ -279,9 +279,11 @@ describe('Repository Utilities', () => {
         });
 
         vi.mocked(git.walk).mockImplementation(async ({ fs: nodeFsAlias, dir, gitdir, trees, map }) => {
-            const treeOidToWalk = trees[0]._id;
+            const treeOidToWalk = (trees[0] as any)._id; // Cast to any to access mock's property
             if (treeOidToWalk === 'tree1_oid') {
-                 await map('initial.ts', [{ type: async () => 'blob', oid: async () => 'blob_oid_initial' }] as any);
+                 if (map) { // Guard the call to map
+                     await map('initial.ts', [{ type: async () => 'blob', oid: async () => 'blob_oid_initial' }] as any);
+                 }
             }
             return [];
         });
