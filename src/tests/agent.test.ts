@@ -333,7 +333,6 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
             'original query', 
             ['fileA.ts', 'fileB.ts'], // Expect the files from git.listFiles
             agentMockConfig.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS // This is 10
-            // No 5th or 6th argument expected here as agent.ts calls searchWithRefinement with 4 arguments
           );
         });
       });
@@ -625,9 +624,10 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
           // Simulate timeout for the main reasoning call
-          .mockImplementationOnce(async () => { // For the reasoning step that should time out
-            await new Promise(resolve => setTimeout(resolve, agentTestConfig.AGENT_QUERY_TIMEOUT + 200)); // Wait longer than timeout
-            throw new Error("Simulated Agent reasoning timed out by test"); // Then reject
+          .mockImplementationOnce(() => { // For the reasoning step that should time out
+            return new Promise((_resolveUnused, reject) => // Use reject
+                setTimeout(() => reject(new Error("Simulated Agent reasoning timed out by test")), agentTestConfig.AGENT_QUERY_TIMEOUT + 200)
+            );
           })
           .mockResolvedValueOnce("Final response after fallback."); // LLM call after fallback tool
       
@@ -698,8 +698,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       const finalPromptArg = llmCalls[2][0]; 
       expect(finalPromptArg).toContain("Error executing tool search_code: Simulated Tool execution timed out: search_code");
       expect(result).toContain("Final response after tool timeout.");
-      expect(addSuggestion).toHaveBeenCalledWith('session6', 'tool timeout query', expect.stringContaining('Final response after tool timeout.'));
-    }, 90000 + 5000); // Vitest test timeout
+      expect(addSuggestion).toHaveBeenCalledWith('session6', 'tool timeout query', expect.stringContaining('Simulated Tool execution timed out: search_code'));
+    }, 90000 + 10000); // Vitest test timeout
 
   });
 

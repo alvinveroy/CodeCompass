@@ -161,8 +161,8 @@ describe('ConfigService', () => {
   
   it('should load SUGGESTION_MODEL from model-config.json if present', async () => {
     // Setup fs mocks specifically for THIS test's scenario
-    vi.mocked(fs.existsSync).mockImplementation((p) => 
-      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE // Ensure both dir and file "exist"
+    vi.mocked(fs.existsSync).mockImplementation((p) =>
+      p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE // <<< THIS IS KEY
     );
     vi.mocked(fs.readFileSync).mockImplementation((p) => {
       if (p === MOCK_MODEL_CONFIG_FILE) return JSON.stringify({ SUGGESTION_MODEL: 'file_model_from_json' });
@@ -176,7 +176,7 @@ describe('ConfigService', () => {
   it('should prioritize model-config.json over environment variables for SUGGESTION_MODEL', async () => {
     process.env.SUGGESTION_MODEL = 'env_model_should_be_ignored';
     // Setup fs mocks specifically for THIS test's scenario
-    vi.mocked(fs.existsSync).mockImplementation((p) => 
+    vi.mocked(fs.existsSync).mockImplementation((p) =>
       p === MOCK_CONFIG_DIR || p === MOCK_MODEL_CONFIG_FILE
     );
     vi.mocked(fs.readFileSync).mockImplementation((p) => {
@@ -361,10 +361,9 @@ describe('ConfigService', () => {
       }
       if (p === path.join(process.cwd(), 'logs')) return undefined; // Success for fallback
       if (p === MOCK_CONFIG_DIR) return undefined; // Allow .codecompass creation if needed
-      // For any other path, you might want to throw or return undefined based on test needs
-      // Default behavior from beforeEach was: .mockReset().mockImplementation(() => undefined);
+      // For any other path, default behavior from beforeEach was: .mockReset().mockImplementation(() => undefined);
       // So, if not matched above, it will return undefined.
-      return undefined; 
+      return undefined;
     });
 
     const service = await createServiceInstance();

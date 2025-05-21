@@ -112,8 +112,8 @@ describe('Repository Utilities', () => {
     it('should return "No previous commits to compare" if less than 2 commits', async () => {
       // setupValidRepoAndCommitsMocks(); // Already called by beforeEach of describe('getRepositoryDiff')
       vi.mocked(git.log).mockResolvedValue([{ oid: 'commit1', commit: { message: 'Initial', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }] as any);
-      // Clear logger.info calls that might have occurred during validateGitRepository
-      logger.info.mockClear(); 
+      // Clear logger.info calls that might have occurred during validateGitRepository or other setup
+      logger.info.mockClear();
       const result = await getRepositoryDiff(repoPath);
       expect(result).toBe("No previous commits to compare");
       expect(logger.info).toHaveBeenCalledWith(`Not enough commits to generate a diff for ${repoPath}. Found 1 commits.`);
