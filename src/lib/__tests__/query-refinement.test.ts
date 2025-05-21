@@ -1,3 +1,5 @@
+/// <reference types="vitest/globals" /> 
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QdrantClient, type Schemas } from '@qdrant/js-client-rest';
 import type { DetailedQdrantSearchResult } from '../types';
