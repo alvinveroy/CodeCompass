@@ -471,23 +471,31 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     beforeEach(() => { 
       // Now parseToolCalls and executeToolCall (the imported ones) ARE the mocks.
       // Reset them directly.
-      (parseToolCalls as vi.Mock).mockReset();
-      (executeToolCall as vi.Mock).mockReset();
-
-      // Setup default behaviors
-      (parseToolCalls as vi.Mock).mockReturnValue([]); 
-      (executeToolCall as vi.Mock).mockResolvedValue({ status: 'default mock success' });
+      (parseToolCalls as vi.Mock).mockReset().mockReturnValue([]); 
+      (executeToolCall as vi.Mock).mockReset().mockResolvedValue({ status: 'default mock success from runAgentLoop.beforeEach' });
+      
+      // Reset other mocks used by runAgentLoop
+      mockLLMProviderInstance.generateText.mockReset();
+      // Default for LLM verification call at the start of runAgentLoop
+      mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
+      // ... other common mock setups for runAgentLoop tests
     });
 
     it('should complete and return final response if agent does not call tools', async () => {
       mockLLMProviderInstance.generateText.mockReset();
+      // The first call is for verification, already mocked in beforeEach.
+      // This mockResolvedValueOnce is for the agent's reasoning step.
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce("Test response from verifyLLMProvider")
-        .mockResolvedValueOnce('Final agent response, no tools needed.');
+        .mockResolvedValueOnce("LLM Verification OK") // Re-affirm for clarity if beforeEach is complex
+        .mockResolvedValueOnce('Final agent response, no tools needed.'); // Agent reasoning
       
       (parseToolCalls as vi.Mock).mockReturnValueOnce([]);
 
       // Clear logger mocks for this specific test run
+      // Note: mockLLMProviderInstance.generateText was reset in beforeEach, 
+      // then mockResolvedValueOnce("LLM Verification OK") was set.
+      // The test then sets another mockResolvedValueOnce for the reasoning.
+      // So, the call count expectation should be based on this.
       mockedLoggerFromAgentPerspective.info.mockClear();
       mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.error.mockClear();
@@ -495,17 +503,20 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('simple query', 'session1', mockQdrantClient, repoPath, true);
 
-      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2);
+      // Expected calls: 1 for verification (from beforeEach), 1 for reasoning (from test)
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2); 
       expect(result).toContain('Final agent response, no tools needed.');
       expect(addSuggestion).toHaveBeenCalledWith('session1', 'simple query', 'Final agent response, no tools needed.');
     });
 
     it('should execute a tool call and then provide final response', async () => {
       mockLLMProviderInstance.generateText.mockReset();
+      // beforeEach sets one .mockResolvedValueOnce("LLM Verification OK")
+      // Then test adds two more:
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce("Test response from verifyLLMProvider")
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}')
-        .mockResolvedValueOnce('Final response after tool.');
+        .mockResolvedValueOnce("LLM Verification OK") // Verification
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') // Agent reasoning step 1
+        .mockResolvedValueOnce('Final response after tool.'); // Agent reasoning step 2
       
       (parseToolCalls as vi.Mock) // Use imported mock
         .mockImplementationOnce((output: string) => {
@@ -526,7 +537,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
       const result = await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3);
+      // Expected calls: 1 for verification, 2 for reasoning steps
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); 
       expect(executeToolCall).toHaveBeenCalledTimes(1); // Assert on the imported mock
       expect(executeToolCall).toHaveBeenCalledWith( // Assert on the imported mock
         expect.objectContaining({ tool: 'search_code' }),
@@ -539,11 +551,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     it('should extend loop if request_more_processing_steps is called and within absolute max', async () => {
       // Agent will use AGENT_DEFAULT_MAX_STEPS: 2 and AGENT_ABSOLUTE_MAX_STEPS: 3 from the mock configService
       mockLLMProviderInstance.generateText.mockReset();
+      // beforeEach sets one .mockResolvedValueOnce("LLM Verification OK")
+      // Then test adds three more:
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "need more"}}') // Step 1
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "second step query"}}')       // Step 2 (extended)
-        .mockResolvedValueOnce('Final response in extended step.');                                                       // Step 3 (extended, final)
+        .mockResolvedValueOnce("LLM Verification OK") // Verification
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "need more"}}') // Step 1 reasoning
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "second step query"}}')       // Step 2 reasoning (extended)
+        .mockResolvedValueOnce('Final response in extended step.');                                                       // Step 3 reasoning (extended, final)
 
       (parseToolCalls as vi.Mock) // Use imported mock
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'need more' } }])
@@ -573,11 +587,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     it('should terminate if absoluteMaxSteps is reached, even with extension request', async () => {
       // The current mock has AGENT_DEFAULT_MAX_STEPS: 2, AGENT_ABSOLUTE_MAX_STEPS: 3.
       mockLLMProviderInstance.generateText.mockReset();
+      // beforeEach sets one .mockResolvedValueOnce("LLM Verification OK")
+      // Then test adds four more:
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "step 1 query"}}') // Step 0
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "extend from step 2"}}') // Step 1
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "try to extend again from step 3"}}') // Step 2
+        .mockResolvedValueOnce("LLM Verification OK") // Verification
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "step 1 query"}}') // Step 0 reasoning
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "extend from step 2"}}') // Step 1 reasoning
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "try to extend again from step 3"}}') // Step 2 reasoning
         .mockResolvedValueOnce('Final response after hitting absolute max.'); // Final response generation
 
       (parseToolCalls as vi.Mock) // Use imported mock
@@ -620,14 +636,16 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       // const agentConfigForTest = (await import('../lib/config-service')).configService; // Use agentTestConfig instead
 
       mockLLMProviderInstance.generateText.mockReset();
+      // beforeEach sets one .mockResolvedValueOnce("LLM Verification OK")
+      // Then test adds two more (one is an implementation):
       mockLLMProviderInstance.generateText
-          .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
-          .mockImplementationOnce(() => {
+          .mockResolvedValueOnce("LLM Verification OK") // Verification
+          .mockImplementationOnce(() => { // Agent reasoning step 1 (times out)
             return new Promise((_, reject) =>
                 setTimeout(() => reject(new Error("Simulated Agent reasoning timed out by test")), agentTestConfig.AGENT_QUERY_TIMEOUT + 200)
             );
           })
-          .mockResolvedValueOnce("Final response after fallback.");
+          .mockResolvedValueOnce("Final response after fallback."); // Agent reasoning step 2 (after fallback tool call)
       
       (parseToolCalls as vi.Mock) // Use imported mock
           .mockImplementationOnce((outputFromLLM) => {
@@ -658,10 +676,12 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
     it('should handle tool execution timeout by adding error to prompt', async () => {
       mockLLMProviderInstance.generateText.mockReset();
+      // beforeEach sets one .mockResolvedValueOnce("LLM Verification OK")
+      // Then test adds two more:
       mockLLMProviderInstance.generateText
-          .mockResolvedValueOnce("Test response from verifyLLMProvider")
-          .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}')
-          .mockResolvedValueOnce('Final response after tool timeout.');
+          .mockResolvedValueOnce("LLM Verification OK") // Verification
+          .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') // Agent reasoning step 1
+          .mockResolvedValueOnce('Final response after tool timeout.'); // Agent reasoning step 2 (after tool error)
 
       (parseToolCalls as vi.Mock) // Use imported mock
           .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }])

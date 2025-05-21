@@ -3,8 +3,7 @@ import git from 'isomorphic-git';
 import fsPromises from 'fs/promises'; // Explicitly use fsPromises for clarity
 import nodeFs from 'fs'; // For isomorphic-git's fs parameter
 import path from 'path';
-// import { exec, type ExecException } from 'child_process'; // For mocking exec - REMOVED
-import { type ExecException } from 'child_process'; // Keep type ExecException if needed elsewhere
+import { exec as actualChildProcessExec, type ExecException } from 'child_process'; // Keep type ExecException if needed elsewhere
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // Import functions to test
@@ -43,19 +42,19 @@ vi.mock('fs', async (importOriginal) => { // Mock standard 'fs' for isomorphic-g
 //   // Add other exports like spawn if they were used and need mocking
 // }));
 
-// Hoist the mock function definition itself.
-const mockExecAsyncFn = vi.fn();
+// THIS IS THE MOCK FUNCTION THAT promisify(exec) WILL RETURN
+const MOCK_EXEC_ASYNC_FN = vi.fn();
 
 vi.mock('util', async (importOriginal) => {
   const actualUtil = await importOriginal<typeof import('util')>();
   return {
     ...actualUtil,
     promisify: (fnToPromisify: any) => {
-      // Check if the function being promisified is 'exec'
-      if (fnToPromisify.name === 'exec') { 
-        return mockExecAsyncFn; // Return the hoisted vi.fn()
+      // Check if the function being promisified is the actual child_process.exec
+      if (fnToPromisify === actualChildProcessExec) { 
+        return MOCK_EXEC_ASYNC_FN; // Return our predefined mock
       }
-      return actualUtil.promisify(fnToPromisify);
+      return actualUtil.promisify(fnToPromisify); // Promisify others normally
     },
   };
 });
@@ -75,6 +74,7 @@ vi.mock('../ollama'); // For generateEmbedding
 import { generateEmbedding } from '../ollama';
 import { configService, logger } from '../config-service';
 
+
 // Define a reusable mock Qdrant client
 const mockQdrantClientInstance = {
   upsert: vi.fn(),
@@ -85,7 +85,7 @@ const mockQdrantClientInstance = {
 describe('Repository Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockExecAsyncFn.mockReset(); // Reset the hoisted mock
+    MOCK_EXEC_ASYNC_FN.mockReset(); // Reset our global mock
   });
 
   // ... validateGitRepository tests ...
@@ -154,11 +154,11 @@ describe('Repository Utilities', () => {
     it('should call git diff command and return stdout', async () => {
       // Ensure mocks from setupValidRepoAndCommitsMocks are active
       setupValidRepoAndCommitsMocks(); // Ensure this sets up git.log etc.
-      mockExecAsyncFn.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
+      MOCK_EXEC_ASYNC_FN.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(mockExecAsyncFn).toHaveBeenCalledWith(
+      expect(MOCK_EXEC_ASYNC_FN).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
       );
@@ -168,7 +168,7 @@ describe('Repository Utilities', () => {
     it('should truncate long diff output', async () => {
       setupValidRepoAndCommitsMocks();
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      mockExecAsyncFn.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
+      MOCK_EXEC_ASYNC_FN.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -178,8 +178,11 @@ describe('Repository Utilities', () => {
     it('should handle errors from git diff command', async () => {
       setupValidRepoAndCommitsMocks();
       const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
-      (mockError as any).code = 128; 
-      mockExecAsyncFn.mockRejectedValueOnce(mockError);
+      (mockError as any).code = 128;
+      // If execAsync rejects, the error object is what's given.
+      // If it had stderr from the command, it should be on this error object.
+      mockError.stderr = 'stderr from rejected execAsync'; 
+      MOCK_EXEC_ASYNC_FN.mockRejectedValueOnce(mockError);
       
       // Clear logger before the call, as validateGitRepository might log
       logger.error.mockClear(); 
@@ -193,7 +196,7 @@ describe('Repository Utilities', () => {
         expect.objectContaining({ // The error object itself
           message: 'Git command failed',
           code: 128,
-          // Do not assert stderr here unless you are sure promisify adds it from the mock in this scenario
+          stderr: 'stderr from rejected execAsync', 
         })
       );
     });
