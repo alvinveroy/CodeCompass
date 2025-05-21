@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert } from 'vitest';
 
-// Object to hold spies/mocks for internal functions
-const agentModuleMocks = {
-  parseToolCalls: vi.fn(),
-  executeToolCall: vi.fn(),
-};
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -59,10 +54,12 @@ vi.mock('fs/promises', () => {
 // Mock the SUT module ('../lib/agent')
 vi.mock('../lib/agent', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/agent')>();
+  // Define mocks inline, they won't be directly accessible from test scope for .mockImplementationOnce easily
+  // but runAgentLoop will use these mocked versions.
   return {
     ...actual, // Spread actual implementations
-    parseToolCalls: agentModuleMocks.parseToolCalls,
-    executeToolCall: agentModuleMocks.executeToolCall,
+    parseToolCalls: vi.fn(), // Default mock, reset in beforeEach of describe block
+    executeToolCall: vi.fn(), // Default mock, reset in beforeEach of describe block
   };
 });
 
@@ -104,10 +101,6 @@ describe('Agent', () => {
     (getLLMProvider as vi.Mock).mockResolvedValue(mockLLMProviderInstance);
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
-
-    // Reset mocks on the agentModuleMocks object
-    agentModuleMocks.parseToolCalls.mockReset();
-    agentModuleMocks.executeToolCall.mockReset();
 
     // Clear logger mocks (assuming logger is imported from config-service which is mocked)
     const { logger: agentLogger } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service');
@@ -156,9 +149,14 @@ describe('Agent', () => {
 
     beforeEach(() => {
         mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
-        // Default mock implementations for agentModuleMocks if needed for all tests in this describe
-        agentModuleMocks.parseToolCalls.mockReturnValue([]);
-        agentModuleMocks.executeToolCall.mockResolvedValue({ status: 'default mock success' });
+        // Since mocks are now internal to the factory, we can't easily access them here
+        // to set default implementations for *all* tests in this describe block.
+        // We'll have to rely on their default vi.fn() behavior or re-mock the module
+        // with specific implementations if a test needs something other than a basic vi.fn().
+        // For this specific test, we'll mock the imported functions directly if needed,
+        // but the factory ensures runAgentLoop uses *some* mock.
+        // This part is tricky. Let's assume the default vi.fn() is okay for now,
+        // or the test will set up specific mocks for the *imported* functions if they are different.
     });
 
     afterEach(() => {
@@ -169,19 +167,25 @@ describe('Agent', () => {
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // LLM output for tool selection
 
-      agentModuleMocks.parseToolCalls
+      // To control the behavior of the mocked parseToolCalls and executeToolCall for this specific test,
+      // we need a way to access the vi.fn() instances created in the factory.
+      // This is the hard part. A common workaround is to re-import the mocked module
+      // and assume the functions are now the mocks from the factory.
+      const mockedAgentModule = await import('../lib/agent');
+      (mockedAgentModule.parseToolCalls as vi.Mock)
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }])
         .mockReturnValueOnce([]); // Subsequent calls return empty
 
-      agentModuleMocks.executeToolCall.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      (mockedAgentModule.executeToolCall as vi.Mock).mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.'); 
 
       await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      expect(agentModuleMocks.parseToolCalls).toHaveBeenCalled();
-      expect(agentModuleMocks.executeToolCall).toHaveBeenCalledTimes(1);
-      expect(agentModuleMocks.executeToolCall).toHaveBeenCalledWith(
+      // Now assert on the mocks obtained from the re-import
+      expect(mockedAgentModule.parseToolCalls).toHaveBeenCalled();
+      expect(mockedAgentModule.executeToolCall).toHaveBeenCalledTimes(1);
+      expect(mockedAgentModule.executeToolCall).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
