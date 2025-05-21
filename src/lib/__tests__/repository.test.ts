@@ -44,9 +44,6 @@ vi.mock('isomorphic-git', () => ({
   // If any are missing, add them. E.g., if SUT uses `commit`, add `commit: vi.fn(),`
 }));
 
-// This mock needs to be defined before util.promisify mock if it's referenced there.
-const mockExecAsyncFn = vi.fn();
-
 vi.mock('util', async (importOriginal) => {
   const actualUtil = await importOriginal<typeof import('util')>();
   // We need to get a reference to the original exec to compare.
