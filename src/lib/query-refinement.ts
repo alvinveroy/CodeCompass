@@ -12,7 +12,9 @@ export async function searchWithRefinement(
   query: string,
   files: string[] = [],
   customLimit?: number,
-  maxRefinements = 2,
+  // Remove default for maxRefinements here:
+  // maxRefinements = 2, 
+  maxRefinements?: number, // Make it optional
   relevanceThreshold = 0.7
 ): Promise<{ results: DetailedQdrantSearchResult[], refinedQuery: string, relevanceScore: number }> {
   let currentQuery = query;
@@ -22,7 +24,9 @@ export async function searchWithRefinement(
 
   logger.info(`Starting iterative search with query: "${currentQuery}"`);
 
-  for (let i = 0; i <= maxRefinements; i++) {
+  const effectiveMaxRefinements = maxRefinements ?? configService.MAX_REFINEMENT_ITERATIONS;
+
+  for (let i = 0; i <= effectiveMaxRefinements; i++) {
     // Generate embedding for the current query
     const embedding = await generateEmbedding(currentQuery);
 
@@ -50,7 +54,7 @@ export async function searchWithRefinement(
     }
 
     // If we've reached the relevance threshold or max refinements, stop
-    if (avgRelevance >= relevanceThreshold || i === maxRefinements) {
+    if (avgRelevance >= relevanceThreshold || i === effectiveMaxRefinements) {
       break;
     }
 

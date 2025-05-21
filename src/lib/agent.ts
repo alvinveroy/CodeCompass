@@ -66,12 +66,22 @@ export const toolRegistry: Tool[] = [
     name: "request_additional_context",
     description: "Request additional or different types of context when current information is insufficient. Use this to get more search results, full file content, or list files in a directory.",
     parameters: {
-      context_type: "string - Type of context needed. Enum: ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING']",
-      query_or_path: "string - The original search query (for MORE_SEARCH_RESULTS), the full file path (for FULL_FILE_CONTENT), or the directory path (for DIRECTORY_LISTING)",
+      context_type: "string - Type of context needed. Enum: ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS']", // Added ADJACENT_FILE_CHUNKS
+      query_or_path: "string - The original search query (for MORE_SEARCH_RESULTS), the full file path (for FULL_FILE_CONTENT or ADJACENT_FILE_CHUNKS), or the directory path (for DIRECTORY_LISTING)",
+      // Add chunk_index as a new parameter description
+      chunk_index: "integer (optional) - The 0-indexed number of the current chunk, required if context_type is ADJACENT_FILE_CHUNKS.",
       reasoning: "string (optional) - Brief explanation of why this additional context is needed and how it will help answer the user's query.",
       sessionId: "string (optional) - Session ID to maintain context across requests"
     },
     requiresModel: false // The tool itself doesn't require an LLM, though its sub-operations might (e.g., summarization)
+  },
+  {
+    name: "request_more_processing_steps",
+    description: "Requests additional processing steps if the current task requires more iterations than initially allocated. Use this if you are making progress but need more turns to complete the objective. This does not guarantee more steps, but signals intent.",
+    parameters: {
+      reasoning: "string - A brief explanation of why more processing steps are needed."
+    },
+    requiresModel: false // This tool itself doesn't call an LLM directly
   }
 ];
 
@@ -192,6 +202,9 @@ Important guidelines:
 - Be concise in your reasoning
 - Only use tools that are relevant to the query
 - Format tool calls exactly as specified above
+- If you are making good progress on a complex task but require more turns to fully address the user's query, 
+  you can use the 'request_more_processing_steps' tool. Provide a brief 'reasoning'. 
+  This may allow you additional interactions, up to a system-defined absolute maximum. Use this judiciously.
 
 CRITICAL CONTEXT ASSESSMENT:
 1. Before formulating a response or deciding on next steps, meticulously review all provided context (search results, code snippets, repository information, diffs).
@@ -202,8 +215,13 @@ HANDLING INSUFFICIENT CONTEXT:
 - If initial search results for a broad or complex query are sparse, of low relevance, or clearly incomplete:
     - Consider re-using the 'search_code' or 'get_repository_context' tools with a refined, broadened, or more targeted query. Explain your reasoning for the new query.
 - If you believe specific information is missing that could be obtained (e.g., full file content, details about a specific module, wider search results):
-    - Use the 'request_additional_context' tool. Specify the 'context_type' (e.g., 'MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING'), provide the relevant 'query_or_path', and explain your 'reasoning'.
+    - Use the 'request_additional_context' tool. Specify the 'context_type' (e.g., 'MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS'), 
+      provide the relevant 'query_or_path' (which is the filepath for 'FULL_FILE_CONTENT' and 'ADJACENT_FILE_CHUNKS'), 
+      and for 'ADJACENT_FILE_CHUNKS' also provide 'chunk_index' (integer, the 0-indexed number of the chunk you currently have).
+      Explain your 'reasoning'.
     - Example: If you need the full content of 'src/utils/auth.ts', use TOOL_CALL: {"tool": "request_additional_context", "parameters": {"context_type": "FULL_FILE_CONTENT", "query_or_path": "src/utils/auth.ts", "reasoning": "Need to see the full implementation of authentication helpers."}}
+    - Example for ADJACENT_FILE_CHUNKS: If you have chunk 2 of 'src/utils/parser.ts' and need surrounding context:
+      TOOL_CALL: {"tool": "request_additional_context", "parameters": {"context_type": "ADJACENT_FILE_CHUNKS", "query_or_path": "src/utils/parser.ts", "chunk_index": 2, "reasoning": "The current chunk seems incomplete, need to see adjacent code."}}
     - If after using available tools (including 'request_additional_context') you still lack sufficient information, clearly state in your response that the answer is based on limited information and specify what was lacking.
 - Do not hallucinate or provide speculative answers beyond the available context. If you cannot answer confidently, explain what's missing.
 
@@ -696,12 +714,23 @@ Structure your analysis with these sections:
       const queryOrPathParam = typedParams.query_or_path;
       const reasoningParam = typedParams.reasoning; // Optional
       const sessionIdParam = typedParams.sessionId;
+      // Add chunkIndexParam
+      const chunkIndexParam = typedParams.chunk_index;
 
-      if (typeof contextTypeParam !== 'string' || !['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING'].includes(contextTypeParam)) {
-        throw new Error(`Parameter 'context_type' for tool '${tool}' must be one of ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING']. Received: ${contextTypeParam}`);
+      if (typeof contextTypeParam !== 'string' || !['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS'].includes(contextTypeParam)) {
+        throw new Error(`Parameter 'context_type' for tool '${tool}' must be one of ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS']. Received: ${contextTypeParam}`);
       }
       if (typeof queryOrPathParam !== 'string') {
         throw new Error(`Parameter 'query_or_path' for tool '${tool}' must be a string. Received: ${typeof queryOrPathParam}`);
+      }
+      // Add validation for chunk_index if context_type is ADJACENT_FILE_CHUNKS
+      if (contextTypeParam === 'ADJACENT_FILE_CHUNKS') {
+        if (typeof queryOrPathParam !== 'string' || !queryOrPathParam) { // queryOrPathParam is used as filepath here
+            throw new Error(`Parameter 'query_or_path' (as filepath) for tool '${tool}' with context_type 'ADJACENT_FILE_CHUNKS' must be a non-empty string. Received: ${typeof queryOrPathParam}`);
+        }
+        if (typeof chunkIndexParam !== 'number' || chunkIndexParam < 0) {
+            throw new Error(`Parameter 'chunk_index' for tool '${tool}' with context_type 'ADJACENT_FILE_CHUNKS' must be a non-negative integer. Received: ${typeof chunkIndexParam}`);
+        }
       }
       if (reasoningParam !== undefined && typeof reasoningParam !== 'string') {
          // Log a warning if reasoning is provided but not a string, but don't throw an error as it's optional.
@@ -721,7 +750,7 @@ Structure your analysis with these sections:
           logger.info(`Executing MORE_SEARCH_RESULTS for query: "${queryOrPathParam}"`);
           const files = await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
           // Use a higher limit for "more" results, e.g., 2x the default or a configured "more_results_limit"
-          const moreResultsLimit = configService.QDRANT_SEARCH_LIMIT_DEFAULT * 2; 
+          const moreResultsLimit = configService.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS; 
           const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
             qdrantClient,
             queryOrPathParam, // This is the original query
@@ -824,9 +853,100 @@ Structure your analysis with these sections:
             throw new Error(`Failed to list directory "${queryOrPathParam}": ${err.message}`);
           }
         }
+        case 'ADJACENT_FILE_CHUNKS': {
+          const filepath = queryOrPathParam; // query_or_path is the filepath for this type
+          const currentChunkIndex = chunkIndexParam as number;
+          logger.info(`Executing ADJACENT_FILE_CHUNKS for file: "${filepath}", current chunk: ${currentChunkIndex}`);
+
+          const adjacentChunksInfo: { chunk_index: number; content: string; note?: string }[] = [];
+          // Define how many adjacent chunks to fetch (e.g., 1 before, 1 after)
+          const chunksToFetchIndices = [currentChunkIndex - 1, currentChunkIndex + 1].filter(idx => idx >= 0);
+          
+          // Fetch total chunks for the file to avoid querying beyond the last chunk
+          // This might require a separate Qdrant query or an assumption.
+          // For simplicity, we'll try to fetch and handle if not found.
+          // A more robust way would be to get total_chunks if available from the initial search result.
+
+          for (const targetIndex of chunksToFetchIndices) {
+            try {
+              // We need to search Qdrant for a point with matching filepath and chunk_index
+              // This assumes Qdrant allows filtering effectively on these fields.
+              // A direct scroll/filter might be better than a vector search if no relevant vector is available.
+              const scrollResponse = await qdrantClient.scroll(configService.COLLECTION_NAME, {
+                filter: {
+                  must: [
+                    { key: "filepath", match: { value: filepath } },
+                    { key: "chunk_index", match: { value: targetIndex } }
+                  ]
+                },
+                limit: 1,
+                with_payload: true,
+                with_vector: false,
+              });
+
+              if (scrollResponse.points.length > 0 && scrollResponse.points[0].payload) {
+                const payload = scrollResponse.points[0].payload;
+                adjacentChunksInfo.push({
+                  chunk_index: payload.chunk_index as number,
+                  content: payload.content as string,
+                });
+              } else {
+                 adjacentChunksInfo.push({
+                  chunk_index: targetIndex,
+                  content: "", // Empty content
+                  note: `Chunk ${targetIndex} not found for file ${filepath}.`
+                 });
+              }
+            } catch (searchError) {
+              const sErr = searchError instanceof Error ? searchError : new Error(String(searchError));
+              logger.warn(`Failed to fetch chunk ${targetIndex} for ${filepath}: ${sErr.message}`);
+              adjacentChunksInfo.push({
+                chunk_index: targetIndex,
+                content: "",
+                note: `Error fetching chunk ${targetIndex} for file ${filepath}: ${sErr.message}`
+              });
+            }
+          }
+
+          if (adjacentChunksInfo.filter(c => c.content).length === 0) {
+            return { 
+              sessionId: session.id, 
+              status: `No adjacent chunks with content found for file "${filepath}", around chunk ${currentChunkIndex}.`,
+              filepath: filepath,
+              requested_chunk_index: currentChunkIndex,
+              retrieved_chunks: adjacentChunksInfo
+            };
+          }
+          
+          return {
+            sessionId: session.id,
+            status: `Retrieved adjacent chunk(s) for file "${filepath}", around chunk ${currentChunkIndex}.`,
+            filepath: filepath,
+            requested_chunk_index: currentChunkIndex,
+            retrieved_chunks: adjacentChunksInfo.map(c => ({
+                filepath: filepath, // Add filepath for clarity in results
+                chunk_index: c.chunk_index,
+                snippet: c.content, // Use 'snippet' to align with other search results
+                note: c.note
+            }))
+          };
+        }
         default: // Should not happen due to earlier check
           throw new Error(`Unsupported context_type: ${contextTypeParam}`);
       }
+    }
+    case "request_more_processing_steps": {
+      const reasoningParam = typedParams.reasoning;
+      if (typeof reasoningParam !== 'string') {
+        throw new Error(`Parameter 'reasoning' for tool '${tool}' must be a string. Received: ${typeof reasoningParam}`);
+      }
+      logger.info(`Agent requested more processing steps. Reasoning: ${reasoningParam}`);
+      // The actual logic for extending steps is in the main loop.
+      // This tool call itself just acknowledges the request.
+      return { 
+        status: "Request for more processing steps acknowledged.",
+        note: "The agent loop may continue if within absolute limits." 
+      };
     }
     default:
       throw new Error(`Tool execution not implemented: ${tool}`);
@@ -840,7 +960,7 @@ export async function runAgentLoop(
   qdrantClient: QdrantClient,
   repoPath: string,
   suggestionModelAvailable: boolean,
-  maxSteps = 5
+  // maxSteps parameter is removed
 ): Promise<string> {
   logger.info(`Agent loop started for query: "${query}" (Session: ${sessionId || 'new'})`);
   
@@ -890,13 +1010,20 @@ export async function runAgentLoop(
     
     // Initial user prompt
     let userPrompt = `User query: ${query}\n\nAnalyze this query and determine which tools to use to provide the best response.`;
+
+  let currentMaxSteps = configService.AGENT_DEFAULT_MAX_STEPS;
+  const absoluteMaxSteps = configService.AGENT_ABSOLUTE_MAX_STEPS;
+
+  for (let step = 0; step < currentMaxSteps; step++) { // Loop up to currentMaxSteps
+    // Check if absoluteMaxSteps has been reached due to extensions
+    if (step >= absoluteMaxSteps) {
+        logger.warn(`Agent loop reached absolute maximum steps (${absoluteMaxSteps}) and will terminate.`);
+        break;
+    }
+    logger.info(`Agent step ${step + 1}/${currentMaxSteps} (Absolute Max: ${absoluteMaxSteps}) for query: ${query}`);
     
-    // Agent loop
-    for (let step = 0; step < maxSteps; step++) {
-      logger.info(`Agent step ${step + 1}/${maxSteps} for query: ${query}`);
-      
-      // Generate agent reasoning and tool selection
-      const agentPrompt = `${systemPrompt}\n\n${userPrompt}`;
+    // Generate agent reasoning and tool selection
+    const agentPrompt = `${systemPrompt}\n\n${userPrompt}`;
       
       // Add context from previous steps if available
       if (agentState.steps.length > 0) {
@@ -944,8 +1071,19 @@ export async function runAgentLoop(
         break;
       }
       
+      let extendedIteration = false;
       // Execute each tool call
       for (const toolCall of toolCalls) {
+        if (toolCall.tool === "request_more_processing_steps") {
+          if (currentMaxSteps < absoluteMaxSteps) {
+            logger.info("Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.");
+            currentMaxSteps = absoluteMaxSteps;
+            extendedIteration = true; // Signal that this iteration was primarily for extension
+          } else {
+            logger.warn("Agent requested more processing steps, but already at or beyond absoluteMaxSteps.");
+          }
+          // Execute the tool to acknowledge, but its main effect is on currentMaxSteps
+        }
         try {
           logger.info(`Executing tool: ${toolCall.tool}`, { parameters: toolCall.parameters });
           
@@ -974,7 +1112,13 @@ export async function runAgentLoop(
           agentState.context.push(toolOutput);
           
           // Update user prompt with tool results
-          userPrompt += `\n\nTool: ${toolCall.tool}\nResults: ${JSON.stringify(toolOutput, null, 2)}\n\nBased on these results, what's your next step? If you have enough information, provide a final response to the user.`;
+          // Only append tool results to userPrompt if it wasn't just an extension request
+          if (toolCall.tool !== "request_more_processing_steps" || !extendedIteration) {
+               userPrompt += `\n\nTool: ${toolCall.tool}\nResults: ${JSON.stringify(toolOutput, null, 2)}\n\nBased on these results, what's your next step? If you have enough information, provide a final response to the user.`;
+          } else if (extendedIteration && toolCalls.length === 1) {
+              // If the *only* tool call was to extend, prompt for next actual step
+              userPrompt += `\n\nTool: ${toolCall.tool}\nResults: ${JSON.stringify(toolOutput, null, 2)}\n\nProcessing steps extended. What is your next action?`;
+          }
           
          
         } catch (_error: unknown) {
@@ -987,9 +1131,9 @@ export async function runAgentLoop(
       }
       
       // Check if we've reached the maximum number of steps
-      if (step === maxSteps - 1 && !agentState.isComplete) {
-        // Generate final response based on collected information
-        const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nYou've reached the maximum number of steps. Please provide your final response to the user based on the information collected so far.`;
+      if (step === currentMaxSteps - 1 && !agentState.isComplete) { // Check against currentMaxSteps
+        logger.info(`Reached max steps for this phase (${currentMaxSteps}). Generating final response.`);
+        const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nYou've reached the current maximum number of steps. Please provide your final response to the user based on the information collected so far.`;
         const llmProvider = await getLLMProvider();
         agentState.finalResponse = await llmProvider.generateText(finalPrompt);
         agentState.isComplete = true;
@@ -997,6 +1141,7 @@ export async function runAgentLoop(
     }
     
     // If we somehow don't have a final response, generate one
+    // After the loop, `step` holds the number of iterations completed.
     if (!agentState.finalResponse) {
       const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nPlease provide your final response to the user based on the information collected so far.`;
       const llmProvider = await getLLMProvider();
@@ -1014,7 +1159,16 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " + 
           agentState.steps.map(s => `Used ${s.tool} and found: ${JSON.stringify(s.output).substring(0, 200)}...`).join("\n\n");
+        if (step === absoluteMaxSteps) {
+            agentState.finalResponse = (agentState.finalResponse || "") +
+            "\n[Note: The agent reached the absolute maximum number of processing steps.]";
+        }
       }
+    } else {
+        if (step === absoluteMaxSteps) {
+            agentState.finalResponse = (agentState.finalResponse || "") +
+            "\n[Note: The agent utilized the maximum allowed processing steps.]";
+        }
     }
     
     // Add the final response as a suggestion in the session

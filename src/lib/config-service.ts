@@ -13,6 +13,8 @@ interface ModelConfigFile {
   GEMINI_API_KEY?: string;
   CLAUDE_API_KEY?: string;
   // Add other provider-specific keys here as needed
+  SUMMARIZATION_MODEL?: string; // New
+  REFINEMENT_MODEL?: string;   // New
 }
 
 class ConfigService {
@@ -38,6 +40,14 @@ class ConfigService {
 
   private _qdrantSearchLimitDefault: number; // Added for Qdrant search limit
   private _maxDiffLengthForContextTool: number;
+  private _agentDefaultMaxSteps: number;
+  private _agentAbsoluteMaxSteps: number;
+  private _maxRefinementIterations: number;
+  private _fileIndexingChunkSizeChars: number;
+  private _fileIndexingChunkOverlapChars: number;
+  private _summarizationModel: string;
+  private _refinementModel: string;
+  private _requestAdditionalContextMaxSearchResults: number;
   private _maxFilesForSuggestionContextNoSummary: number;
   private _maxSnippetLengthForContextNoSummary: number;
 
@@ -54,6 +64,13 @@ class ConfigService {
   public readonly DEFAULT_QDRANT_SEARCH_LIMIT = 10; // Default Qdrant search limit
   public readonly DEFAULT_MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY = 15; // Default max files before summarizing
   public readonly DEFAULT_MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY = 1500; // Default 1500 chars
+  public readonly DEFAULT_AGENT_DEFAULT_MAX_STEPS = 10;
+  public readonly DEFAULT_AGENT_ABSOLUTE_MAX_STEPS = 15;
+  public readonly DEFAULT_MAX_REFINEMENT_ITERATIONS = 3;
+  public readonly DEFAULT_FILE_INDEXING_CHUNK_SIZE_CHARS = 1000;
+  public readonly DEFAULT_FILE_INDEXING_CHUNK_OVERLAP_CHARS = 200;
+  // For SUMMARIZATION_MODEL and REFINEMENT_MODEL, default will be SUGGESTION_MODEL if empty string.
+  public readonly DEFAULT_REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS = 20;
 
   public readonly DEEPSEEK_RPM_LIMIT_DEFAULT = 60; // Default RPM for DeepSeek
 
@@ -169,6 +186,19 @@ class ConfigService {
     this._geminiApiKey = process.env.GEMINI_API_KEY || "";
     this._claudeApiKey = process.env.CLAUDE_API_KEY || "";
 
+    this._agentDefaultMaxSteps = parseInt(process.env.AGENT_DEFAULT_MAX_STEPS || '', 10) || this.DEFAULT_AGENT_DEFAULT_MAX_STEPS;
+    this._agentAbsoluteMaxSteps = parseInt(process.env.AGENT_ABSOLUTE_MAX_STEPS || '', 10) || this.DEFAULT_AGENT_ABSOLUTE_MAX_STEPS;
+    this._maxRefinementIterations = parseInt(process.env.MAX_REFINEMENT_ITERATIONS || '', 10) || this.DEFAULT_MAX_REFINEMENT_ITERATIONS;
+    this._fileIndexingChunkSizeChars = parseInt(process.env.FILE_INDEXING_CHUNK_SIZE_CHARS || '', 10) || this.DEFAULT_FILE_INDEXING_CHUNK_SIZE_CHARS;
+    this._fileIndexingChunkOverlapChars = parseInt(process.env.FILE_INDEXING_CHUNK_OVERLAP_CHARS || '', 10) || this.DEFAULT_FILE_INDEXING_CHUNK_OVERLAP_CHARS;
+    this._requestAdditionalContextMaxSearchResults = parseInt(process.env.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS || '', 10) || this.DEFAULT_REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS;
+
+    // For _summarizationModel and _refinementModel, we'll set them properly in loadConfigurationsFromFile
+    // and reloadConfigsFromFile after _suggestionModel is definitively set.
+    // For now, initialize them to empty strings or a placeholder that indicates they need to be derived.
+    this._summarizationModel = process.env.SUMMARIZATION_MODEL || ""; 
+    this._refinementModel = process.env.REFINEMENT_MODEL || "";
+
     this._useMixedProviders = process.env.USE_MIXED_PROVIDERS === "true" || false;
     this._suggestionProvider = process.env.SUGGESTION_PROVIDER || this._llmProvider;
     // Default embedding provider to ollama, can be overridden by file/env
@@ -240,6 +270,23 @@ class ConfigService {
     }
     // If not in modelConfig, _suggestionProvider and _llmProvider retain their env/default values
 
+    // Load new model-specific configs
+    if (modelConfig.SUMMARIZATION_MODEL) {
+      this._summarizationModel = modelConfig.SUMMARIZATION_MODEL;
+    }
+    if (modelConfig.REFINEMENT_MODEL) {
+      this._refinementModel = modelConfig.REFINEMENT_MODEL;
+    }
+
+    // Derive summarization and refinement models if they are empty (i.e., not set by env or file)
+    // This ensures _suggestionModel is already finalized from env/file before being used as a fallback.
+    if (!this._summarizationModel) {
+      this._summarizationModel = this._suggestionModel;
+    }
+    if (!this._refinementModel) {
+      this._refinementModel = this._suggestionModel;
+    }
+    
     // EMBEDDING_PROVIDER: file > env > default
     if (modelConfig.EMBEDDING_PROVIDER) {
       this._embeddingProvider = modelConfig.EMBEDDING_PROVIDER;
@@ -277,6 +324,16 @@ class ConfigService {
     process.env.OPENAI_API_KEY = this._openAIApiKey;
     process.env.GEMINI_API_KEY = this._geminiApiKey;
     process.env.CLAUDE_API_KEY = this._claudeApiKey;
+
+    // Update process.env with all new configurations
+    process.env.AGENT_DEFAULT_MAX_STEPS = String(this._agentDefaultMaxSteps);
+    process.env.AGENT_ABSOLUTE_MAX_STEPS = String(this._agentAbsoluteMaxSteps);
+    process.env.MAX_REFINEMENT_ITERATIONS = String(this._maxRefinementIterations);
+    process.env.FILE_INDEXING_CHUNK_SIZE_CHARS = String(this._fileIndexingChunkSizeChars);
+    process.env.FILE_INDEXING_CHUNK_OVERLAP_CHARS = String(this._fileIndexingChunkOverlapChars);
+    process.env.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS = String(this._requestAdditionalContextMaxSearchResults);
+    process.env.SUMMARIZATION_MODEL = this._summarizationModel;
+    process.env.REFINEMENT_MODEL = this._refinementModel;
   }
   
   public reloadConfigsFromFile(_forceSet = true): void {
@@ -296,11 +353,21 @@ class ConfigService {
     this._openAIApiKey = process.env.OPENAI_API_KEY || "";
     this._geminiApiKey = process.env.GEMINI_API_KEY || "";
     this._claudeApiKey = process.env.CLAUDE_API_KEY || "";
+    this._agentDefaultMaxSteps = parseInt(process.env.AGENT_DEFAULT_MAX_STEPS || '', 10) || this.DEFAULT_AGENT_DEFAULT_MAX_STEPS;
+    this._agentAbsoluteMaxSteps = parseInt(process.env.AGENT_ABSOLUTE_MAX_STEPS || '', 10) || this.DEFAULT_AGENT_ABSOLUTE_MAX_STEPS;
+    this._maxRefinementIterations = parseInt(process.env.MAX_REFINEMENT_ITERATIONS || '', 10) || this.DEFAULT_MAX_REFINEMENT_ITERATIONS;
+    this._fileIndexingChunkSizeChars = parseInt(process.env.FILE_INDEXING_CHUNK_SIZE_CHARS || '', 10) || this.DEFAULT_FILE_INDEXING_CHUNK_SIZE_CHARS;
+    this._fileIndexingChunkOverlapChars = parseInt(process.env.FILE_INDEXING_CHUNK_OVERLAP_CHARS || '', 10) || this.DEFAULT_FILE_INDEXING_CHUNK_OVERLAP_CHARS;
+    this._requestAdditionalContextMaxSearchResults = parseInt(process.env.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS || '', 10) || this.DEFAULT_REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS;
+    
+    // Initialize from env, file loading will override if present, then derive.
+    this._summarizationModel = process.env.SUMMARIZATION_MODEL || "";
+    this._refinementModel = process.env.REFINEMENT_MODEL || "";
     this._suggestionProvider = process.env.SUGGESTION_PROVIDER || this._llmProvider;
     this._embeddingProvider = process.env.EMBEDDING_PROVIDER || "ollama";
       
-      this.loadConfigurationsFromFile(); // Then load from files, overriding if values exist
-      this.initializeGlobalState(); // Finally, update globals
+      this.loadConfigurationsFromFile(); // This will load from files and derive _summarizationModel/_refinementModel
+      this.initializeGlobalState(); 
   }
 
   private initializeGlobalState(): void {
@@ -332,6 +399,15 @@ class ConfigService {
   get USE_MIXED_PROVIDERS(): boolean { return this._useMixedProviders; } // Typically from env or default
   get SUGGESTION_PROVIDER(): string { return global.CURRENT_SUGGESTION_PROVIDER || this._suggestionProvider; }
   get EMBEDDING_PROVIDER(): string { return global.CURRENT_EMBEDDING_PROVIDER || this._embeddingProvider; }
+
+  get AGENT_DEFAULT_MAX_STEPS(): number { return parseInt(process.env.AGENT_DEFAULT_MAX_STEPS || '', 10) || this._agentDefaultMaxSteps; }
+  get AGENT_ABSOLUTE_MAX_STEPS(): number { return parseInt(process.env.AGENT_ABSOLUTE_MAX_STEPS || '', 10) || this._agentAbsoluteMaxSteps; }
+  get MAX_REFINEMENT_ITERATIONS(): number { return parseInt(process.env.MAX_REFINEMENT_ITERATIONS || '', 10) || this._maxRefinementIterations; }
+  get FILE_INDEXING_CHUNK_SIZE_CHARS(): number { return parseInt(process.env.FILE_INDEXING_CHUNK_SIZE_CHARS || '', 10) || this._fileIndexingChunkSizeChars; }
+  get FILE_INDEXING_CHUNK_OVERLAP_CHARS(): number { return parseInt(process.env.FILE_INDEXING_CHUNK_OVERLAP_CHARS || '', 10) || this._fileIndexingChunkOverlapChars; }
+  get REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS(): number { return parseInt(process.env.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS || '', 10) || this._requestAdditionalContextMaxSearchResults; }
+  get SUMMARIZATION_MODEL(): string { return process.env.SUMMARIZATION_MODEL || this._summarizationModel; }
+  get REFINEMENT_MODEL(): string { return process.env.REFINEMENT_MODEL || this._refinementModel; }
 
   // Method to get all relevant config for a provider (example for OpenAI)
   public getConfig(): { [key: string]: string | number | boolean | undefined } {
@@ -420,6 +496,8 @@ class ConfigService {
         OPENAI_API_KEY: this.OPENAI_API_KEY,
         GEMINI_API_KEY: this.GEMINI_API_KEY,
         CLAUDE_API_KEY: this.CLAUDE_API_KEY,
+        SUMMARIZATION_MODEL: this.SUMMARIZATION_MODEL, // New
+        REFINEMENT_MODEL: this.REFINEMENT_MODEL,     // New
       };
       // Remove undefined keys before saving
       Object.keys(configToSave).forEach(keyStr => {

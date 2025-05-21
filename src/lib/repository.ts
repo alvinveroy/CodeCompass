@@ -129,8 +129,8 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
 
   let successCount = 0;
   let errorCount = 0;
-  const CHUNK_SIZE = configService.MAX_SNIPPET_LENGTH; // Define CHUNK_SIZE
-  const CHUNK_OVERLAP = 50; // Define CHUNK_OVERLAP
+  const CHUNK_SIZE = configService.FILE_INDEXING_CHUNK_SIZE_CHARS;
+  const CHUNK_OVERLAP = configService.FILE_INDEXING_CHUNK_OVERLAP_CHARS;
 
   for (const filepath of filteredFiles) {
     try {
