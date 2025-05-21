@@ -66,7 +66,10 @@ export function tweakQuery(query: string, results: DetailedQdrantSearchResult[])
 // --- Main Functions (Refactored for DI) ---
 
 // Define types for the injectable functions
-type RefineQueryFunc = (originalQuery: string, results: DetailedQdrantSearchResult[], currentRelevance: number) => string;
+// EXPORT THIS TYPE
+export type RefineQueryFunc = (originalQuery: string, results: DetailedQdrantSearchResult[], currentRelevance: number) => string;
+
+// These types can remain internal if not used elsewhere
 type BroadenQueryFunc = (query: string) => string;
 type FocusQueryFunc = (query: string, results: DetailedQdrantSearchResult[]) => string;
 type TweakQueryFunc = (query: string, results: DetailedQdrantSearchResult[]) => string;

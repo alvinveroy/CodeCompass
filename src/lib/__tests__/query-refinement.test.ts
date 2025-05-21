@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QdrantClient, type Schemas } from '@qdrant/js-client-rest';
 import type { DetailedQdrantSearchResult } from '../types';
-import type { RefineQueryFunc } from '../query-refinement'; // Import the type
+import type { RefineQueryFunc } from '../query-refinement'; // This import should now work
 
 // Mock external dependencies (these are fine as they are)
 vi.mock('../config-service', () => ({
@@ -41,8 +41,8 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('searchWithRefinement', () => {
-    // Type the mock function variable correctly
-    let mockRefineQuery_Injected: Mock<Parameters<RefineQueryFunc>, ReturnType<RefineQueryFunc>>;
+    // Use the imported RefineQueryFunc type for the mock variable
+    let mockRefineQuery_Injected: vi.Mock<Parameters<RefineQueryFunc>, ReturnType<RefineQueryFunc>>;
 
     beforeEach(() => {
       mockRefineQuery_Injected = vi.fn((query, _results, relevance) => {
@@ -90,9 +90,11 @@ describe('Query Refinement Tests', () => {
       expect(relevanceScore).toBe(0.8);
       expect(refinedQuery).toBe('original query broadened by INJECTED mockRefineQuery focused by INJECTED mockRefineQuery');
       expect(mockRefineQuery_Injected).toHaveBeenCalledTimes(2);
-      // Cast the results in the assertion to DetailedQdrantSearchResult[] if needed by mockRefineQuery_Injected's signature
-      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(1, 'original query', expect.any(Array) as DetailedQdrantSearchResult[], 0.2);
-      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(2, 'original query broadened by INJECTED mockRefineQuery', expect.any(Array) as DetailedQdrantSearchResult[], 0.5);
+      // Ensure the results passed to the mock match DetailedQdrantSearchResult[] if that's what RefineQueryFunc expects
+      // The dummySearchResults creates Schemas['ScoredPoint'][], which might be compatible or need casting/adjusting
+      // For the mock call assertion, if RefineQueryFunc expects DetailedQdrantSearchResult[], you might need to cast:
+      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(1, 'original query', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.2);
+      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(2, 'original query broadened by INJECTED mockRefineQuery', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.5);
     });
     
     it('should handle empty search results gracefully (using injected mock)', async () => {
@@ -115,11 +117,10 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('refineQuery (original logic with injected helpers)', () => {
-    // Type the mock function variables correctly
-    let mockBroaden_Injected: Mock<[string], string>;
-    let mockFocus_Injected: Mock<[string, DetailedQdrantSearchResult[]], string>;
-    let mockTweak_Injected: Mock<[string, DetailedQdrantSearchResult[]], string>;
-
+    // Use simple function types for these mocks
+    let mockBroaden_Injected: vi.Mock<[string], string>;
+    let mockFocus_Injected: vi.Mock<[string, DetailedQdrantSearchResult[]], string>;
+    let mockTweak_Injected: vi.Mock<[string, DetailedQdrantSearchResult[]], string>;
 
     beforeEach(() => {
       mockBroaden_Injected = vi.fn().mockReturnValue('mock_broadened_by_INJECTED_helper');
