@@ -6,14 +6,25 @@ import git from 'isomorphic-git';
 import path from 'path';
 // import nodeFs from 'fs'; // Not needed if fsPromises covers fs needs for git
 
-// Mock 'child_process' directly. This is simpler and more standard.
-const MOCKED_CP_EXEC_FN = vi.fn();
-vi.mock('child_process', async (importOriginal) => {
-    const actualCp = await importOriginal<typeof import('child_process')>();
-    return {
-        ...actualCp,
-        exec: MOCKED_CP_EXEC_FN,
-    };
+// This variable will hold the mock function instance. It MUST be `let`.
+let MOCK_EXEC_ASYNC_FN_INSTANCE: vi.Mock;
+
+vi.mock('util', async (importOriginal) => {
+  const actualUtilModule = await importOriginal<typeof import('util')>();
+  // Create the mock function INSIDE the factory.
+  const factoryCreatedMock = vi.fn(); 
+  // Assign the factory-scoped mock to the module-scoped variable.
+  // This assignment happens when the factory is executed (due to hoisting).
+  MOCK_EXEC_ASYNC_FN_INSTANCE = factoryCreatedMock; 
+  return {
+    ...actualUtilModule,
+    promisify: (fnToPromisify: any) => {
+      if (fnToPromisify === actualChildProcessExec) { 
+        return factoryCreatedMock; // Return the mock created in this factory scope
+      }
+      return actualUtilModule.promisify(fnToPromisify);
+    },
+  };
 });
 
 // Import SUT and other dependencies AFTER vi.mock
@@ -51,14 +62,19 @@ vi.mock('fs/promises', () => ({
 // For repository tests, we mostly care that it provides COLLECTION_NAME.
 // The existing mock for config-service in other files might be suitable if adapted.
 // For now, assuming the import from '../config-service' gets a working logger and configService.COLLECTION_NAME.
-vi.mock('../config-service', () => ({ // Re-add the mock for config-service if it was removed
-    configService: {
-      COLLECTION_NAME: 'test_collection',
-      FILE_INDEXING_CHUNK_SIZE_CHARS: 100,
-      FILE_INDEXING_CHUNK_OVERLAP_CHARS: 20,
-    },
-    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
+vi.mock('../config-service', () => { // Re-add the mock for config-service if it was removed
+    const loggerInstance = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    return {
+        __esModule: true, // Important for modules with default exports if ConfigService is one
+        configService: {
+          COLLECTION_NAME: 'test_collection',
+          FILE_INDEXING_CHUNK_SIZE_CHARS: 100,
+          FILE_INDEXING_CHUNK_OVERLAP_CHARS: 20,
+          // Add any other config values DIRECTLY used by repository.ts
+        },
+        logger: loggerInstance,
+    };
+});
 vi.mock('../ollama'); // If generateEmbedding is used by repository.ts (it's not directly)
 
 describe('Repository Utilities', () => {
@@ -74,17 +90,21 @@ describe('Repository Utilities', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    MOCKED_CP_EXEC_FN.mockReset();
+    // MOCK_EXEC_ASYNC_FN_INSTANCE is now guaranteed to be initialized
+    // because the 'util' module (imported by repository.ts) would have been processed.
+    if (MOCK_EXEC_ASYNC_FN_INSTANCE) MOCK_EXEC_ASYNC_FN_INSTANCE.mockReset();
+    
     // Reset other mocks
     vi.mocked(fsPromises.access).mockReset();
     vi.mocked(git.resolveRef).mockReset();
     vi.mocked(git.log).mockReset();
     // Clear logger mocks from the imported logger instance
-    const loggerInstance = (configService as any).logger || logger; // Access logger correctly
-    loggerInstance.info.mockClear(); 
-    loggerInstance.warn.mockClear();
-    loggerInstance.error.mockClear();
-    loggerInstance.debug.mockClear();
+    // The logger instance is part of the configService mock, so it's fresh or reset with vi.clearAllMocks()
+    // However, explicit clearing of its methods is safer if the mock structure changes.
+    logger.info.mockClear(); 
+    logger.warn.mockClear();
+    logger.error.mockClear();
+    logger.debug.mockClear();
   });
 
   afterEach(() => { vi.restoreAllMocks(); });
@@ -96,51 +116,43 @@ describe('Repository Utilities', () => {
     });
 
     it('should call git diff command and return stdout', async () => {
-      setupValidRepoAndCommitsMocks();
-      MOCKED_CP_EXEC_FN.mockImplementationOnce((_cmd, _opts, callback) => {
-        callback(null, 'diff_content_stdout_explicit', '');
-      });
+      // setupValidRepoAndCommitsMocks(); // Already called in beforeEach for the describe block
+      MOCK_EXEC_ASYNC_FN_INSTANCE.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(MOCKED_CP_EXEC_FN).toHaveBeenCalledWith(
+      expect(MOCK_EXEC_ASYNC_FN_INSTANCE).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
-        expect.objectContaining({ cwd: repoPath }),
-        expect.any(Function)
+        expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
       );
       expect(result).toBe('diff_content_stdout_explicit');
     });
 
     it('should truncate long diff output', async () => {
-      setupValidRepoAndCommitsMocks();
+      // setupValidRepoAndCommitsMocks(); // Already called
       const longDiff = 'a'.repeat(10001);
-      MOCKED_CP_EXEC_FN.mockImplementationOnce((_cmd, _opts, callback) => {
-        callback(null, longDiff, '');
-      });
+      MOCK_EXEC_ASYNC_FN_INSTANCE.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
     });
     
     it('should handle errors from git diff command', async () => {
-      setupValidRepoAndCommitsMocks();
-      const mockError = new Error('Git command failed') as ExecException;
-      (mockError as any).code = 128;
-      // For exec, stderr is the third argument to the callback on error
-      MOCKED_CP_EXEC_FN.mockImplementationOnce((_cmd, _opts, callback) => {
-        callback(mockError, '', 'stderr from exec rejection');
-      });
+      // setupValidRepoAndCommitsMocks(); // Already called
+      const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
+      (mockError as any).code = 128; // Standard for many git errors
+      mockError.stderr = 'stderr from execAsync rejection'; // Stderr is part of the error object for promisified exec
+      MOCK_EXEC_ASYNC_FN_INSTANCE.mockRejectedValueOnce(mockError);
       
       const result = await getRepositoryDiff(repoPath);
       
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
-      const loggerInstance = (configService as any).logger || logger;
-      expect(loggerInstance.error).toHaveBeenCalledWith(
+      expect(logger.error).toHaveBeenCalledWith(
         `Error retrieving git diff for ${repoPath}: Git command failed`,
-        expect.objectContaining({
-          message: 'Git command failed', // Error message from the mockError
-          // code: 128, // The error object itself carries the code
-          // stderr: 'stderr from exec rejection', // Stderr is not part of the error object for exec
+        expect.objectContaining({ // The error object itself is passed as the second arg to logger.error
+          message: 'Git command failed',
+          code: 128,
+          stderr: 'stderr from execAsync rejection',
         })
       );
     });

@@ -3,13 +3,20 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest'; // Ensure QdrantClient is imported
 
+// These will hold the mock functions created by the factory for '../lib/agent'
+let AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS: vi.Mock;
+let AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL: vi.Mock;
+
 vi.mock('../lib/agent', async (importOriginal) => {
   const originalModule = await importOriginal<typeof import('../lib/agent')>();
+  const parseMockInFactory = vi.fn();
+  const execMockInFactory = vi.fn();
+  AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS = parseMockInFactory;
+  AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL = execMockInFactory;
   return {
-    ...originalModule, // Spread original module to keep non-mocked exports
-    // Overwrite specific functions with mocks created directly in the factory
-    parseToolCalls: vi.fn(),
-    executeToolCall: vi.fn(),
+    ...originalModule,
+    parseToolCalls: parseMockInFactory,
+    executeToolCall: execMockInFactory,
     // Keep other exports like createAgentState, generateAgentSystemPrompt, toolRegistry as original
   };
 });
@@ -20,9 +27,7 @@ import {
   runAgentLoop, 
   createAgentState, 
   generateAgentSystemPrompt,
-  toolRegistry,
-  parseToolCalls, // This is now the mock from the factory
-  executeToolCall // This is now the mock from the factory
+  // toolRegistry, // Not typically mocked, and not directly used by runAgentLoop tests here
 } from '../lib/agent'; 
 // Import the actual functions for direct testing using a namespace import
 import * as actualAgentFunctions from '../lib/agent'; 
@@ -36,14 +41,18 @@ vi.mock('../lib/config-service', () => {
       MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL: 3000,
       MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY: 1500,
       MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY: 15,
-      AGENT_DEFAULT_MAX_STEPS: 2,
-      AGENT_ABSOLUTE_MAX_STEPS: 3,
+      AGENT_DEFAULT_MAX_STEPS: 2, // Default for tests
+      AGENT_ABSOLUTE_MAX_STEPS: 3, // Default for tests
       REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS: 10,
       COLLECTION_NAME: 'test-collection',
       SUGGESTION_PROVIDER: 'ollama',
       SUGGESTION_MODEL: 'test-model',
       OLLAMA_HOST: 'http://localhost:11434',
-      AGENT_QUERY_TIMEOUT: 60000,
+      AGENT_QUERY_TIMEOUT: 60000, // Example timeout
+      // Ensure all config values used by agent.ts or its direct dependencies are here
+      // For example, if query-refinement defaults are used by searchWithRefinement called from agent:
+      MAX_REFINEMENT_ITERATIONS: 3, 
+      QDRANT_SEARCH_LIMIT_DEFAULT: 5,
     },
     logger: loggerInstance,
   };
@@ -56,13 +65,18 @@ vi.mock('isomorphic-git');
 vi.mock('fs/promises', () => { // Ensure this mock is complete for fs/promises
   const readFileMock = vi.fn();
   const readdirMock = vi.fn();
+  // Add other fs/promises functions if agent.ts or its direct dependencies use them
+  const accessMock = vi.fn();
+  const statMock = vi.fn();
   const mockFsPromises = {
     readFile: readFileMock,
     readdir: readdirMock,
+    access: accessMock,
+    stat: statMock,
   };
   return {
-    ...mockFsPromises,
-    default: mockFsPromises,
+    ...mockFsPromises, // Allow named imports
+    default: mockFsPromises, // Allow default import
   };
 });
 
@@ -89,9 +103,9 @@ const mockQdrantClientInstance = {
 describe('Agent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset the imported mocks (which are from the factory)
-    (parseToolCalls as vi.Mock).mockReset().mockReturnValue([]);
-    (executeToolCall as vi.Mock).mockReset().mockResolvedValue({ status: 'default mock success' });
+    // Reset the factory-created mocks using the module-scoped variables
+    if (AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS) AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS.mockReset().mockReturnValue([]);
+    if (AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockReset().mockResolvedValue({ status: 'default mock success' });
     
     (getLLMProvider as vi.Mock).mockResolvedValue(mockLLMProviderInstance);
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
@@ -154,23 +168,25 @@ describe('Agent', () => {
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}'); // Step 1 reasoning
       
-      // The imported parseToolCalls (which is a mock) will be used for the above LLM output
-      (parseToolCalls as vi.Mock)
+      // The factory-created AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS will be used by SUT
+      if (!AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS) throw new Error("Parse mock not init");
+      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS
         .mockImplementationOnce((_output: string) => [{ tool: 'search_code', parameters: { query: 'tool query' } }]);
       
-      // The imported executeToolCall (mock) will be used
-      (executeToolCall as vi.Mock).mockResolvedValueOnce({ status: 'search_code executed', results: [] });
+      // The factory-created AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL will be used by SUT
+      if (!AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL) throw new Error("Execute mock not init");
+      AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL.mockResolvedValueOnce({ status: 'search_code executed', results: [] });
 
       // After tool execution, LLM generates final response (no more tool calls)
       // This is the third call to generateText in this test's flow.
       mockLLMProviderInstance.generateText.mockResolvedValueOnce('Final response after tool.');
-      // parseToolCalls (mock) for the second reasoning step (should return no tools)
-      (parseToolCalls as vi.Mock).mockReturnValueOnce([]); 
+      // AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS for the second reasoning step (should return no tools)
+      AGENT_FACTORY_MOCK_PARSE_TOOL_CALLS.mockReturnValueOnce([]); 
       
       await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true); 
       
-      expect(executeToolCall).toHaveBeenCalledTimes(1);
-      expect(executeToolCall).toHaveBeenCalledWith(
+      expect(AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledTimes(1);
+      expect(AGENT_FACTORY_MOCK_EXECUTE_TOOL_CALL).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
@@ -182,15 +198,15 @@ describe('Agent', () => {
   
   describe('createAgentState', () => { // Test the original createAgentState
     it('should create a new agent state with the correct structure', () => {
-      const result = createAgentState('test_session', 'Find auth code');
+      const result = actualAgentFunctions.createAgentState('test_session', 'Find auth code'); // Use actual
       expect(result).toEqual({ sessionId: 'test_session', query: 'Find auth code', steps: [], context: [], isComplete: false });
     });
   });
 
   describe('generateAgentSystemPrompt', () => { // Test the original generateAgentSystemPrompt
     it('should include descriptions of all available tools', async () => {
-      const prompt = generateAgentSystemPrompt(toolRegistry);
-      for (const tool of toolRegistry) {
+      const prompt = actualAgentFunctions.generateAgentSystemPrompt(actualAgentFunctions.toolRegistry); // Use actual
+      for (const tool of actualAgentFunctions.toolRegistry) { // Use actual
         expect(prompt).toContain(`Tool: ${tool.name}`);
       }
     });
