@@ -27,6 +27,11 @@ vi.mock('../lib/config-service', () => {
   };
 });
 
+// Create stand-alone mock functions for internal agent functions
+// These need to be defined BEFORE vi.mock('../lib/agent', ...) if they are used inside the factory
+const mockInternalParseToolCalls = vi.fn();
+const mockInternalExecuteToolCall = vi.fn();
+
 // Mock the agent.ts module itself
 vi.mock('../lib/agent', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/agent')>();
@@ -39,9 +44,6 @@ vi.mock('../lib/agent', async (importOriginal) => {
   };
 });
 vi.mock('../lib/llm-provider');
-// Create stand-alone mock functions for internal agent functions
-const mockInternalParseToolCalls = vi.fn();
-const mockInternalExecuteToolCall = vi.fn();
 vi.mock('../lib/state');
 vi.mock('../lib/query-refinement');
 vi.mock('../lib/repository');
