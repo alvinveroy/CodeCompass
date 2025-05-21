@@ -32,25 +32,44 @@ vi.mock('fs', () => {
 });
 
 // Mock winston logger creation and transports
-vi.mock('winston', async (importOriginal) => {
-  const originalWinston = await importOriginal<typeof winston>();
-  return {
-    ...originalWinston,
-    createLogger: vi.fn().mockReturnValue(clearableMockWinstonLogger), // Use the clearable instance
-    transports: {
-      File: vi.fn().mockImplementation(() => ({ // Mock the File transport constructor
-        // Mock any methods on the transport instance if ConfigService calls them
-        on: vi.fn(),
-        log: vi.fn(),
-      })),
-      Stream: vi.fn().mockImplementation(() => ({ // Mock Stream transport too
-        on: vi.fn(),
-        log: vi.fn(),
-      })),
-    },
-    format: originalWinston.format, // Keep original format or mock if needed
-  };
-});
+vi.mock('winston', () => { // REMOVE async (importOriginal)
+      // const originalWinston = await importOriginal<typeof winston>(); // REMOVE this line
+
+      // Define mocks for winston.format properties that ConfigService uses
+      // ConfigService uses: combine, timestamp, printf, colorize, splat, simple, json
+      const mockFormat = {
+        combine: vi.fn((...args: any[]) => ({ // combine should return a format object
+          // Simulate a basic format object structure.
+          // The actual transformation logic isn't critical for most ConfigService tests,
+          // just that createLogger receives a valid format object.
+          _isFormat: true, 
+          transform: vi.fn(info => info) 
+        })),
+        timestamp: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => ({...info, timestamp: new Date().toISOString()})) })),
+        printf: vi.fn(template => ({ _isFormat: true, transform: vi.fn(info => template(info)) })),
+        colorize: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
+        splat: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
+        simple: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
+        json: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
+        // Add any other winston.format properties if ConfigService starts using them
+      };
+
+      return {
+        // ...originalWinston, // REMOVE spreading originalWinston
+        createLogger: vi.fn().mockReturnValue(clearableMockWinstonLogger),
+        transports: {
+          File: vi.fn().mockImplementation(() => ({
+            on: vi.fn(),
+            log: vi.fn(),
+          })),
+          Stream: vi.fn().mockImplementation(() => ({
+            on: vi.fn(),
+            log: vi.fn(),
+          })),
+        },
+        format: mockFormat, // USE the explicitly mocked format object
+      };
+    });
 
 
 describe('ConfigService', () => {

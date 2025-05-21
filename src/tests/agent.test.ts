@@ -638,3 +638,5 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       expect(prompt).toContain("request_more_processing_steps");
     });
 });
+
+});

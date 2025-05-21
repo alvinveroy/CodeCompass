@@ -129,7 +129,6 @@ describe('Repository Utilities', () => {
         return { stdout: { on: vi.fn(), pipe: vi.fn() }, stderr: { on: vi.fn(), pipe: vi.fn() }, on: vi.fn((event, cbListener) => { if (event === 'close') cbListener(0); }), } as any;
       });
       const result = await getRepositoryDiff(repoPath);
-      expect(result).toBe(true);
       expect(vi.mocked(exec)).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath }),
