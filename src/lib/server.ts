@@ -3,9 +3,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 // Assuming these are correctly exported by the SDK, either from root or via defined subpaths.
 // If the SDK's "exports" map points these subpaths to .js files, add .js here.
 // If they are re-exported from the main SDK entry, use that.
-import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types";
-import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol";
-import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate";
+import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
+import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
+import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";

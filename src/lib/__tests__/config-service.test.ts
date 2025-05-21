@@ -409,12 +409,19 @@ describe('ConfigService', () => {
     const service = await createServiceInstance(); // This will trigger logger setup and dir creation attempts
     
     expect(service.LOG_DIR).toBe(path.join(process.cwd(), 'logs')); // Check it fell back
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
+    
+    // The SUT calls service.logger.error, not console.error directly in this path.
+    // The consoleErrorSpy was for a different potential logging path, or can be removed if not needed.
+    // consoleErrorSpy.mockRestore(); // Restore if it was spied on for other reasons in this test.
+
+    // Check that the service's logger was called with the expected error message.
+    // The logger instance on `service` is the MOCK_LOGGER_INSTANCE.
+    expect(service.logger.error).toHaveBeenCalledWith(
       expect.stringContaining('Failed to create user-specific log directory: Permission denied for user log dir. Falling back to local logs dir.')
     );
     // Check that mkdirSync was called for the fallback directory
     expect(vi.mocked(fs.mkdirSync)).toHaveBeenCalledWith(path.join(process.cwd(), 'logs'), { recursive: true });
-    // consoleErrorSpy.mockRestore(); // Handled by vi.restoreAllMocks() in afterEach
+    // consoleErrorSpy.mockRestore(); // This line was commented out, ensure it's removed or handled.
   });
 
 });

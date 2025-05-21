@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert } from 'vitest';
-import { promises as fsPromises } from 'fs';
+import { promises as fsPromises, Dirent } from 'fs'; // Import Dirent directly from 'fs'
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
@@ -39,7 +39,7 @@ vi.mock('fs/promises', () => {
   const accessMock = vi.fn();
   const statMock = vi.fn();
   // Define a mock Dirent structure that fsPromises.readdir would resolve with
-  const mockDirent = (name: string, isDir: boolean): fsPromises.Dirent => ({
+  const mockDirent = (name: string, isDir: boolean): Dirent => ({ // Use imported Dirent
     name,
     isFile: () => !isDir,
     isDirectory: () => isDir,
@@ -119,7 +119,7 @@ describe('Agent', () => {
     (getRecentQueries as vi.Mock).mockReset().mockReturnValue([]);
     vi.mocked(readFile).mockReset().mockResolvedValue('Default file content from generic mock');
     // Define a helper for creating mock Dirent objects if not done in the mock factory
-    const createMockDirent = (name: string, isDir: boolean): fsPromises.Dirent => ({
+    const createMockDirent = (name: string, isDir: boolean): Dirent => ({ // Use imported Dirent
         name,
         isFile: () => !isDir,
         isDirectory: () => isDir,
