@@ -123,9 +123,10 @@ describe('Agent', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   describe('parseToolCalls (original)', () => {
-    it('should parse valid tool calls', () => {
+    it('should parse valid tool calls', async () => {
+      const { parseToolCalls: originalParseToolCalls } = await vi.importActual<typeof import('../lib/agent')>('../lib/agent');
       const output = `TOOL_CALL: {"tool":"search_code","parameters":{"query":"authentication"}}`;
-      const result = actualAgentFunctionsOriginal.parseToolCalls(output);
+      const result = originalParseToolCalls(output);
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ tool: 'search_code', parameters: { query: 'authentication' } });
     });
@@ -135,7 +136,8 @@ describe('Agent', () => {
   describe('executeToolCall (original)', () => {
     const repoPath = '/test/repo';
     it('should throw if tool requires model and model is unavailable', async () => {
-      await expect(actualAgentFunctionsOriginal.executeToolCall(
+      const { executeToolCall: originalExecuteToolCall } = await vi.importActual<typeof import('../lib/agent')>('../lib/agent');
+      await expect(originalExecuteToolCall(
         { tool: 'generate_suggestion', parameters: { query: 'test' } },
         mockQdrantClientInstance, repoPath, false
       )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available');

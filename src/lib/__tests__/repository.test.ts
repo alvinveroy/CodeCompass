@@ -84,10 +84,12 @@ describe('Repository Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     execMock.mockReset();
-    vi.mocked(fsPromises.access).mockReset();
-    vi.mocked(fsPromises.readFile).mockReset();
-    vi.mocked(fsPromises.readdir).mockReset();
-    vi.mocked(fsPromises.stat).mockReset();
+    // Correctly reset mocks for fsPromises methods
+    (fsPromises.access as vi.Mock).mockReset();
+    (fsPromises.readFile as vi.Mock).mockReset();
+    (fsPromises.readdir as vi.Mock).mockReset();
+    (fsPromises.stat as vi.Mock).mockReset();
+
     vi.mocked(git.resolveRef).mockReset();
     vi.mocked(git.listFiles).mockReset();
     vi.mocked(git.log).mockReset();

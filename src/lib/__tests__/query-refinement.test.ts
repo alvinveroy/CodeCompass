@@ -11,7 +11,10 @@ vi.mock('../config-service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('../ollama'); // For generateEmbedding
-vi.mock('../../utils/text-utils');
+// Provide a mock implementation for preprocessText
+vi.mock('../../utils/text-utils', () => ({
+  preprocessText: vi.fn((text: string) => text), // Default mock returns the input text
+}));
 
 // 3. THEN mock the SUT module ('../query-refinement').
 vi.mock('../query-refinement', async (importOriginal) => {
@@ -40,6 +43,7 @@ import * as actualQueryRefinementFunctionsOriginal from '../query-refinement';
 // Import mocked dependencies
 import { generateEmbedding } from '../ollama';
 import { configService, logger } from '../config-service';
+import { preprocessText } from '../../utils/text-utils'; // Import the mocked preprocessText
 import { DetailedQdrantSearchResult } from '../types'; 
 
 // Define a reusable mock Qdrant client
@@ -62,6 +66,7 @@ describe('Query Refinement Tests', () => {
 
     vi.mocked(generateEmbedding).mockResolvedValue([0.1,0.2,0.3]);
     vi.mocked(mockQdrantClientInstance.search).mockClear();
+    vi.mocked(preprocessText).mockClear().mockImplementation((text: string) => text); // Ensure it's reset and has a default behavior
   });
 
   afterEach(() => { vi.restoreAllMocks(); });
