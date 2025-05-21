@@ -20,13 +20,11 @@ vi.mock('../../utils/text-utils', () => ({
 // Mock the SUT module ('../query-refinement')
 vi.mock('../query-refinement', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../query-refinement')>();
-  // Define mocks inline
   return {
     ...actual, // Spread actual implementations
-    refineQuery: vi.fn(),
-    broadenQuery: vi.fn(),
-    focusQueryBasedOnResults: vi.fn(),
-    tweakQuery: vi.fn(),
+    // Only override refineQuery for testing searchWithRefinement's calls to it.
+    // Other functions like broadenQuery will be the originals from 'actual'.
+    refineQuery: vi.fn(), 
   };
 });
 
@@ -61,10 +59,10 @@ describe('Query Refinement Tests', () => {
     // and reset them if we had direct references.
     // For now, each test will set up the behavior it needs on the imported (mocked) functions.
     const mockedQueryRefinementModule = await import('../query-refinement');
-    (mockedQueryRefinementModule.refineQuery as vi.Mock).mockReset();
-    (mockedQueryRefinementModule.broadenQuery as vi.Mock).mockReset();
-    (mockedQueryRefinementModule.focusQueryBasedOnResults as vi.Mock).mockReset();
-    (mockedQueryRefinementModule.tweakQuery as vi.Mock).mockReset();
+    // Reset only the refineQuery mock that's part of the factory's override.
+    if (typeof (mockedQueryRefinementModule.refineQuery as vi.Mock).mockClear === 'function') {
+      (mockedQueryRefinementModule.refineQuery as vi.Mock).mockClear();
+    }
 
     // Clear logger mocks (assuming logger is imported from config-service which is mocked)
     const { logger: queryRefinementLogger } = await vi.importActual<typeof import('../config-service')>('../config-service');
@@ -79,14 +77,13 @@ describe('Query Refinement Tests', () => {
 
   describe('searchWithRefinement', () => {
     // Default mock for refineQuery when called by searchWithRefinement
-    beforeEach(async () => {
-        const mockedQueryRefinementModule = await import('../query-refinement');
-        (mockedQueryRefinementModule.refineQuery as vi.Mock).mockImplementation((query, _results, relevance) => {
+    beforeEach(async () => { // Make this async
+        const { refineQuery: refineQueryFromMockedModule } = await import('../query-refinement');
+        (refineQueryFromMockedModule as vi.Mock).mockImplementation((query, _results, relevance) => {
             if (relevance < 0.3) return `${query} broadened by mock`;
             if (relevance < 0.7) return `${query} focused by mock`;
             return `${query} tweaked by mock`;
         });
-
     });
 
     it('should return results without refinement if relevance threshold is met initially', async () => {
