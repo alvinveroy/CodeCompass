@@ -17,49 +17,41 @@ vi.mock('../../utils/text-utils', () => ({
 }));
 
 // 3. THEN mock the SUT module ('../query-refinement').
-// We will create spies on the original module's functions and inject them for some tests.
-    
+
 // Import the original module to spy on its methods.
-import * as ActualQueryRefinementModule from '../query-refinement';
-    
-// Create spies that will be used by some tests.
-const refineQuerySpyInstance = vi.spyOn(ActualQueryRefinementModule, 'refineQuery');
-const broadenQuerySpyInstance = vi.spyOn(ActualQueryRefinementModule, 'broadenQuery');
-const focusQueryBasedOnResultsSpyInstance = vi.spyOn(ActualQueryRefinementModule, 'focusQueryBasedOnResults');
-const tweakQuerySpyInstance = vi.spyOn(ActualQueryRefinementModule, 'tweakQuery');
-    
+// This alias is used to access original implementations when needed.
+import * as ActualQueryRefinementModuleForOriginalTests from '../query-refinement';
+
+// Create spies that will be injected by the mock factory.
+const refineQuerySpyForSearchWithRefinement = vi.spyOn(ActualQueryRefinementModuleForOriginalTests, 'refineQuery');
+const broadenQuerySpyForRefineQuery = vi.spyOn(ActualQueryRefinementModuleForOriginalTests, 'broadenQuery');
+const focusQueryBasedOnResultsSpyForRefineQuery = vi.spyOn(ActualQueryRefinementModuleForOriginalTests, 'focusQueryBasedOnResults');
+const tweakQuerySpyForRefineQuery = vi.spyOn(ActualQueryRefinementModuleForOriginalTests, 'tweakQuery');
+
 vi.mock('../query-refinement', async (importOriginal) => {
   const original = await importOriginal<typeof import('../query-refinement')>();
   return {
     ...original, // By default, use original implementations
-    // For tests of searchWithRefinement, we want its call to refineQuery to be the spy.
-    // This is tricky because searchWithRefinement calls refineQuery directly.
-    // The spyOn above already modifies the ActualQueryRefinementModule.
-    // If searchWithRefinement is imported from this mocked module, it should see the spied refineQuery.
-    // Let's ensure the spies are active by re-exporting them from the mock.
-    refineQuery: refineQuerySpyInstance,
-    broadenQuery: broadenQuerySpyInstance,
-    focusQueryBasedOnResults: focusQueryBasedOnResultsSpyInstance,
-    tweakQuery: tweakQuerySpyInstance,
-    // searchWithRefinement itself should remain original for its tests.
-    searchWithRefinement: original.searchWithRefinement, 
-    extractKeywords: original.extractKeywords, // Keep original
+    // For tests of searchWithRefinement, its call to refineQuery should be this spy.
+    refineQuery: refineQuerySpyForSearchWithRefinement,
+    // For tests of refineQuery (original), its calls to helpers should be these spies.
+    broadenQuery: broadenQuerySpyForRefineQuery,
+    focusQueryBasedOnResults: focusQueryBasedOnResultsSpyForRefineQuery,
+    tweakQuery: tweakQuerySpyForRefineQuery,
+    // searchWithRefinement and extractKeywords themselves should remain original for their tests.
   };
 });
-    
+
 // 4. Import functions AFTER all vi.mock calls.
 // searchWithRefinement will be original. refineQuery, broadenQuery etc. will be the spies from the factory.
-// These will be the original functions. We will use vi.spyOn to mock them for specific tests.
 import {
-  searchWithRefinement,
-  refineQuery, // Original, will be spied on
-  broadenQuery, // Original, will be spied on
-  focusQueryBasedOnResults, // Original, will be spied on
-  tweakQuery // Original, will be spied on
+  searchWithRefinement, // Original
+  refineQuery,          // refineQuerySpyForSearchWithRefinement
+  broadenQuery,         // broadenQuerySpyForRefineQuery
+  focusQueryBasedOnResults, // focusQueryBasedOnResultsSpyForRefineQuery
+  tweakQuery,           // tweakQuerySpyForRefineQuery
+  extractKeywords       // Original
 } from '../query-refinement';
-// Import the SUT module again using import * as ... to access original implementations for direct testing
-// and for attaching spies.
-import * as actualQueryRefinementFunctionsOriginal from '../query-refinement';
 
 // Import mocked dependencies
 import { generateEmbedding } from '../ollama';
@@ -73,21 +65,20 @@ const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
 
 describe('Query Refinement Tests', () => {
   // Spies are defined above and injected via the mock factory.
-  // We will reference them directly e.g. refineQuerySpyInstance
-    
+
   beforeEach(() => {
     vi.clearAllMocks(); 
-    
+
     // Reset spies and set default implementations for each test
-    refineQuerySpyInstance.mockReset().mockImplementation((_query, _results, relevance) => {
+    refineQuerySpyForSearchWithRefinement.mockReset().mockImplementation((_query, _results, relevance) => {
       if (relevance < 0.3) return 'mock_refined_broadened_for_search';
       if (relevance < 0.7) return 'mock_refined_focused_for_search';
       return 'mock_refined_tweaked_for_search';
     });
-    broadenQuerySpyInstance.mockReset().mockReturnValue('spy_broadened_return_val');
-    focusQueryBasedOnResultsSpyInstance.mockReset().mockReturnValue('spy_focused_return_val');
-    tweakQuerySpyInstance.mockReset().mockReturnValue('spy_tweaked_return_val');
-    
+    broadenQuerySpyForRefineQuery.mockReset().mockReturnValue('spy_broadened_return_val');
+    focusQueryBasedOnResultsSpyForRefineQuery.mockReset().mockReturnValue('spy_focused_return_val');
+    tweakQuerySpyForRefineQuery.mockReset().mockReturnValue('spy_tweaked_return_val');
+
     vi.mocked(generateEmbedding).mockResolvedValue([0.1,0.2,0.3]);
     vi.mocked(mockQdrantClientInstance.search).mockClear();
     vi.mocked(preprocessText).mockClear().mockImplementation((text: string) => text); // Ensure it's reset and has a default behavior
@@ -131,10 +122,10 @@ describe('Query Refinement Tests', () => {
       expect(relevanceScore).toBe(0.8);
       expect(actualRefinedQueryOutput).toBe('mock_refined_focused_for_search'); // From the spied refineQuery
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Completed search with 2 refinements'));
-      expect(refineQuerySpyInstance).toHaveBeenCalledTimes(2); // Assert on the spy
-      expect(refineQuerySpyInstance).toHaveBeenNthCalledWith(1, 'original query',
+      expect(refineQuerySpyForSearchWithRefinement).toHaveBeenCalledTimes(2); // Assert on the spy
+      expect(refineQuerySpyForSearchWithRefinement).toHaveBeenNthCalledWith(1, 'original query',
         [{ id: 'r1', score: 0.2, payload: { content: 'low relevance' } }], 0.2);
-      expect(refineQuerySpyInstance).toHaveBeenNthCalledWith(2, 'mock_refined_broadened_for_search', // Output of 1st spy call
+      expect(refineQuerySpyForSearchWithRefinement).toHaveBeenNthCalledWith(2, 'mock_refined_broadened_for_search', // Output of 1st spy call
         [{ id: 'r2', score: 0.5, payload: { content: 'medium relevance' } }], 0.5);
     });
     
