@@ -133,14 +133,13 @@ describe('Repository Utilities', () => {
 
     it('should call git diff command and return stdout', async () => {
       // Ensure mocks from setupValidRepoAndCommitsMocks are active
-      vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
+      vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
+        const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-          // Directly call the callback with defined stdout
-          callback!(null, 'diff_content_stdout', ''); 
+          cb(null, 'diff_content_stdout', '');
         } else {
-          callback!(new Error(`Test mock (stdout): Unexpected exec command: ${command}`), '', '');
+          cb(new Error(`Test mock (stdout): Unexpected exec command: ${command}`), '', '');
         }
-        // Return a minimal ChildProcess-like object, though promisify doesn't use it.
         return { on: vi.fn(), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
       });
 
@@ -156,11 +155,12 @@ describe('Repository Utilities', () => {
 
     it('should truncate long diff output', async () => {
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
+      vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
+        const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-          callback!(null, longDiff, '');
+          cb(null, longDiff, '');
         } else {
-          callback!(new Error(`Test mock (truncate): Unexpected exec command: ${command}`), '', '');
+          cb(new Error(`Test mock (truncate): Unexpected exec command: ${command}`), '', '');
         }
         return { on: vi.fn(), stdout: { on: vi.fn() }, stderr: { on: vi.fn() } } as any;
       });
@@ -172,24 +172,21 @@ describe('Repository Utilities', () => {
     it('should handle errors from git diff command', async () => {
       const mockError = new Error('Git command failed') as ExecException;
       (mockError as any).code = 128; // Simulate a git error code
-      // Explicitly add stderr to the error object that the callback will pass.
-      // Promisify might pick this up.
-      (mockError as any).stderr = 'error_stderr_content_from_callback_on_error_obj'; 
 
-      vi.mocked(exec).mockImplementationOnce((command, options, callback) => {
+      vi.mocked(exec).mockImplementationOnce((command: string, optionsOrCallback: any, callbackOrUndefined?: any) => {
+        const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrUndefined;
         if (command === 'git diff commit1_oid commit2_oid') {
-            // Pass the mockError. The callback also receives stdout and stderr args.
-            callback!(mockError, '', 'error_stderr_content_from_callback_arg'); 
+            cb(mockError, '', 'error_stderr_content_from_callback_arg');
         } else {
-            callback!(new Error(`Test mock (error): Unexpected exec command: ${command}`), '', '');
+            cb(new Error(`Test mock (error): Unexpected exec command: ${command}`), '', '');
         }
-        return { 
-            on: vi.fn((event, cb) => { 
-                if (event === 'close' && mockError.code) cb(mockError.code); 
-                else if (event === 'close') cb(1); // Default close code if mockError.code is not set
+        return {
+            on: vi.fn((event, cbHandler) => { // Renamed cb to cbHandler to avoid conflict
+                if (event === 'close' && mockError.code) cbHandler(mockError.code);
+                else if (event === 'close') cbHandler(1); // Default close code if mockError.code is not set
             }),
-            stdout: { on: vi.fn() }, 
-            stderr: { on: vi.fn() }, 
+            stdout: { on: vi.fn() },
+            stderr: { on: vi.fn() },
         } as any;
       });
       

@@ -434,14 +434,26 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
 
+    beforeEach(() => { // Added beforeEach for runAgentLoop describe block
+      // Reset mocks that are part of the ../lib/agent mock factory or spied upon
+      // Assuming executeToolCall and parseToolCalls are mocked via vi.mock factory for agent.ts
+      // If they are spied on an actual import, this is correct.
+      // If they are vi.fn() from a vi.mock factory, they are reset by vi.clearAllMocks() in the outer beforeEach.
+      // For clarity, explicitly reset them if they are indeed from a mock factory and used across tests.
+      // If executeToolCall and parseToolCalls are directly imported and then spied, this is fine.
+      // Based on the problem description, they should be mocked via the factory.
+      // So, vi.mocked(executeToolCall) and vi.mocked(parseToolCalls) will refer to the factory's mocks.
+      vi.mocked(executeToolCall).mockReset();
+      vi.mocked(parseToolCalls).mockReset();
+    });
+
     it('should complete and return final response if agent does not call tools', async () => {
-      mockLLMProviderInstance.generateText.mockReset(); 
+      mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce("Test response from verifyLLMProvider") 
-        .mockResolvedValueOnce('Final agent response, no tools needed.'); 
+        .mockResolvedValueOnce("Test response from verifyLLMProvider")
+        .mockResolvedValueOnce('Final agent response, no tools needed.');
       
-      const agentModule = await import('../lib/agent');
-      vi.spyOn(agentModule, 'parseToolCalls').mockReturnValueOnce([]);
+      vi.mocked(parseToolCalls).mockReturnValueOnce([]);
 
       // Clear logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -449,9 +461,9 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await agentModule.runAgentLoop('simple query', 'session1', mockQdrantClient, repoPath, true);
+      const result = await runAgentLoop('simple query', 'session1', mockQdrantClient, repoPath, true);
 
-      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2); 
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(2);
       expect(result).toContain('Final agent response, no tools needed.');
       expect(addSuggestion).toHaveBeenCalledWith('session1', 'simple query', 'Final agent response, no tools needed.');
     });
@@ -459,24 +471,20 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     it('should execute a tool call and then provide final response', async () => {
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce("Test response from verifyLLMProvider") 
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') 
-        .mockResolvedValueOnce('Final response after tool.'); 
+        .mockResolvedValueOnce("Test response from verifyLLMProvider")
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}')
+        .mockResolvedValueOnce('Final response after tool.');
       
-      const agentModule = await import('../lib/agent');
-      const parseSpy = vi.spyOn(agentModule, 'parseToolCalls')
+      vi.mocked(parseToolCalls)
         .mockImplementationOnce((output: string) => {
-          // More robust parsing based on the actual parseToolCalls implementation
           if (output === 'TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') {
             return [{ tool: 'search_code', parameters: { query: 'tool query' } }];
           }
-          // Log unexpected output for debugging if the test fails
-          // console.log('[Test Debug] parseToolCalls mock received unexpected output for first call:', output);
-          return []; 
+          return [];
         })
         .mockReturnValueOnce([]); // For the second reasoning step (final response)
 
-      const execSpy = vi.spyOn(agentModule, 'executeToolCall').mockResolvedValue({ status: 'search_code executed', results: [] });
+      const execSpy = vi.mocked(executeToolCall).mockResolvedValue({ status: 'search_code executed', results: [] });
       
       // Clear all logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -484,9 +492,9 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await agentModule.runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
+      const result = await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); 
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3);
       expect(execSpy).toHaveBeenCalledTimes(1);
       expect(execSpy).toHaveBeenCalledWith(
         expect.objectContaining({ tool: 'search_code' }),
@@ -494,7 +502,6 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       );
       expect(result).toContain('Final response after tool.');
       expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.'));
-      // Spies are restored in afterEach
     });
 
     it('should extend loop if request_more_processing_steps is called and within absolute max', async () => {
@@ -506,13 +513,12 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "second step query"}}')       // Step 2 (extended)
         .mockResolvedValueOnce('Final response in extended step.');                                                       // Step 3 (extended, final)
 
-      const agentModule = await import('../lib/agent');
-      vi.spyOn(agentModule, 'parseToolCalls') 
+      vi.mocked(parseToolCalls)
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'need more' } }])
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'second step query' } }])
         .mockReturnValueOnce([]); // For final response
 
-      vi.spyOn(agentModule, 'executeToolCall').mockImplementation(async (toolCall) => { 
+      vi.mocked(executeToolCall).mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
         if (toolCall.tool === 'search_code') return { status: 'search executed', results: []};
         return { status: 'unknown tool executed' };
@@ -523,52 +529,17 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await agentModule.runAgentLoop('extend loop query', 'session3', mockQdrantClient, repoPath, true);
+      const result = await runAgentLoop('extend loop query', 'session3', mockQdrantClient, repoPath, true);
 
       expect(mockedLoggerFromAgentPerspective.info).toHaveBeenCalledWith(
         'Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.'
       );
       expect(result).toContain('Final response in extended step.');
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(4); // verify + 3 reasoning steps
-      // Spies are restored in afterEach
     });
 
     it('should terminate if absoluteMaxSteps is reached, even with extension request', async () => {
-      // To test this, we need AGENT_DEFAULT_MAX_STEPS to be 1 and AGENT_ABSOLUTE_MAX_STEPS to be 1
-      // This requires modifying the mock configService for this specific test or using a more dynamic mock.
-      // For simplicity, let's assume the mock config is: AGENT_DEFAULT_MAX_STEPS: 1, AGENT_ABSOLUTE_MAX_STEPS: 1
-      // This would require a more complex setup for the mock configService, or a separate test file.
-      // Given the current static mock, this specific scenario is hard to test accurately without altering the shared mock.
-      // Acknowledging this limitation. If the mock was:
-      // AGENT_DEFAULT_MAX_STEPS: 1, AGENT_ABSOLUTE_MAX_STEPS: 1
-      // Then:
-      mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "try to extend"}}') // Step 1, tries to extend
-        .mockResolvedValueOnce('Final response after hitting absolute max.'); // LLM called for final response after loop terminates
-
-      const agentModule = await import('../lib/agent');
-      const parseToolCallsSpy = vi.spyOn(agentModule, 'parseToolCalls')
-        .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'try to extend' } }])
-        .mockReturnValueOnce([]); // For the final response generation
-
-      const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockImplementation(async (toolCall) => {
-        if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
-        return {};
-      });
-
-      // Temporarily override config for this test if possible, or note that this test assumes specific mock values.
       // The current mock has AGENT_DEFAULT_MAX_STEPS: 2, AGENT_ABSOLUTE_MAX_STEPS: 3.
-      // Let's test with those values. The loop will run for default steps (2), then extend to absolute (3).
-      // If request_more_processing_steps is called on step 2, currentMaxSteps becomes 3.
-      // Loop runs for step 0, 1. Tool call on step 1 (index 1) is request_more_processing_steps.
-      // currentMaxSteps becomes 3. Loop continues for step 2.
-      // If on step 2 (index 2), it calls request_more_processing_steps again, it's already at absoluteMaxSteps.
-      // The loop condition `step < currentMaxSteps` (2 < 3) is true.
-      // After step 2 completes, step becomes 3. `3 < 3` is false. Loop terminates.
-      // If it tries to extend at step 2 (index 2), currentMaxSteps is already 3.
-      // The warning "Agent loop reached absolute maximum steps (3) and will terminate." will be logged *before* step 3 (index 3) would run.
-
-      // const agentModule = await import('../lib/agent'); // Duplicate removed
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
         .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
@@ -577,13 +548,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "try to extend again from step 3"}}') // Step 2
         .mockResolvedValueOnce('Final response after hitting absolute max.'); // Final response generation
 
-      vi.spyOn(agentModule, 'parseToolCalls')
+      vi.mocked(parseToolCalls)
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'step 1 query' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'extend from step 2' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'try to extend again from step 3' } }])
         .mockReturnValueOnce([]); // For final response generation
 
-      vi.spyOn(agentModule, 'executeToolCall').mockImplementation(async (toolCall) => {
+      vi.mocked(executeToolCall).mockImplementation(async (toolCall) => {
         if (toolCall.tool === 'search_code') return { status: 'search executed', results: []};
         if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
         return { status: 'unknown tool executed' };
@@ -595,7 +566,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await agentModule.runAgentLoop('absolute max query', 'session4', mockQdrantClient, repoPath, true); 
+      const result = await runAgentLoop('absolute max query', 'session4', mockQdrantClient, repoPath, true);
 
       // The order of these warnings might vary depending on exact logic flow if both conditions are met closely.
       // Check for both, but don't assume order unless the SUT guarantees it.
@@ -614,37 +585,35 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     });
 
     it('should handle agent reasoning timeout by using fallback tool call', async () => {
-      const agentModule = await import('../lib/agent'); 
       // const agentConfigForTest = (await import('../lib/config-service')).configService; // Use agentTestConfig instead
 
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
           .mockResolvedValueOnce("Test response from verifyLLMProvider") // Verification
-          .mockImplementationOnce(() => { 
-            return new Promise((_, reject) => 
+          .mockImplementationOnce(() => {
+            return new Promise((_, reject) =>
                 setTimeout(() => reject(new Error("Simulated Agent reasoning timed out by test")), agentTestConfig.AGENT_QUERY_TIMEOUT + 200)
             );
           })
-          .mockResolvedValueOnce("Final response after fallback."); 
+          .mockResolvedValueOnce("Final response after fallback.");
       
-      vi.spyOn(agentModule, 'parseToolCalls')
-          .mockImplementationOnce((outputFromLLM) => { 
+      vi.mocked(parseToolCalls)
+          .mockImplementationOnce((outputFromLLM) => {
               if (outputFromLLM === `TOOL_CALL: ${JSON.stringify({tool: "search_code",parameters: { query: "reasoning timeout query", sessionId: "session5" }})}`) {
                   return [{ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }];
               }
-              // console.log(`[Test Debug] Fallback parseToolCalls received unexpected: ${outputFromLLM}`);
               return [];
           })
-          .mockReturnValueOnce([]); 
+          .mockReturnValueOnce([]);
 
-      const executeToolCallSpy = vi.spyOn(agentModule, 'executeToolCall').mockResolvedValue({ status: 'fallback search_code executed', results: [] });
+      const executeToolCallSpy = vi.mocked(executeToolCall).mockResolvedValue({ status: 'fallback search_code executed', results: [] });
       
       mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.info.mockClear();
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await agentModule.runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
+      const result = await runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
 
       expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out");
       expect(executeToolCallSpy).toHaveBeenCalledWith(
@@ -653,23 +622,21 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       );
       expect(result).toContain("Final response after fallback.");
       expect(addSuggestion).toHaveBeenCalledWith('session5', 'reasoning timeout query', expect.stringContaining('Final response after fallback.'));
-    }, agentTestConfig.AGENT_QUERY_TIMEOUT + 10000); 
+    }, agentTestConfig.AGENT_QUERY_TIMEOUT + 10000);
 
     it('should handle tool execution timeout by adding error to prompt', async () => {
-      const agentModule = await import('../lib/agent'); 
-      
       mockLLMProviderInstance.generateText.mockReset();
       mockLLMProviderInstance.generateText
-          .mockResolvedValueOnce("Test response from verifyLLMProvider") 
-          .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') 
-          .mockResolvedValueOnce('Final response after tool timeout.'); 
+          .mockResolvedValueOnce("Test response from verifyLLMProvider")
+          .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}')
+          .mockResolvedValueOnce('Final response after tool timeout.');
 
-      vi.spyOn(agentModule, 'parseToolCalls')
-          .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }]) 
-          .mockReturnValueOnce([]); 
+      vi.mocked(parseToolCalls)
+          .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }])
+          .mockReturnValueOnce([]);
       
       const toolExecutionTimeoutError = new Error("Simulated Tool execution timed out: search_code");
-      vi.spyOn(agentModule, 'executeToolCall').mockImplementationOnce(async () => {
+      vi.mocked(executeToolCall).mockImplementationOnce(async () => {
         // Simulate the timeout behavior of Promise.race in agent.ts
         return new Promise((_, reject) => {
             setTimeout(() => reject(toolExecutionTimeoutError), 10); // Short delay, actual timeout is in agent.ts
@@ -681,7 +648,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       mockedLoggerFromAgentPerspective.error.mockClear();
       mockedLoggerFromAgentPerspective.debug.mockClear();
 
-      const result = await agentModule.runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
+      const result = await runAgentLoop('tool timeout query', 'session6', mockQdrantClient, repoPath, true);
 
       // The error logged by agent.ts is the raw error message string
       expect(mockedLoggerFromAgentPerspective.error).toHaveBeenCalledWith(
@@ -705,9 +672,9 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     // This requires generateAgentSystemPrompt to be exported from agent.ts
     
     it('should include descriptions of all available tools', async () => {
-      const agentModule = await import('../lib/agent');
-      const prompt = agentModule.generateAgentSystemPrompt(agentModule.toolRegistry); // Use the actual toolRegistry
-      for (const tool of agentModule.toolRegistry) {
+      // generateAgentSystemPrompt and toolRegistry are directly imported at the top
+      const prompt = generateAgentSystemPrompt(toolRegistry); // Use the actual toolRegistry
+      for (const tool of toolRegistry) {
         expect(prompt).toContain(`Tool: ${tool.name}`);
         expect(prompt).toContain(tool.description);
         expect(prompt).toContain(JSON.stringify(tool.parameters, null, 2));
@@ -715,8 +682,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     });
 
     it('should include critical context assessment and handling instructions', async () => {
-      const agentModule = await import('../lib/agent');
-      const prompt = agentModule.generateAgentSystemPrompt([]); // No tools for this check
+      // generateAgentSystemPrompt is directly imported
+      const prompt = generateAgentSystemPrompt([]); // No tools for this check
       expect(prompt).toContain("CRITICAL CONTEXT ASSESSMENT:");
       expect(prompt).toContain("HANDLING INSUFFICIENT CONTEXT:");
       expect(prompt).toContain("request_additional_context");
