@@ -256,17 +256,7 @@ describe('Repository Utilities', () => {
     });
   });
 
-import { ExecException } from 'child_process'; // Import ExecException for typing
-
-// ... (other imports)
-
-describe('Repository Utilities', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  // ... (validateGitRepository and indexRepository tests) ...
-
+  // getRepositoryDiff tests will now be correctly part of the main describe block
   describe('getRepositoryDiff', () => {
     const repoPath = '/test/diff/repo';
     // const mockExec = exec as vi.MockedFunction<typeof exec>; // Not strictly needed if using vi.mocked(exec)
