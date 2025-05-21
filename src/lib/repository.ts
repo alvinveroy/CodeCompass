@@ -1,4 +1,4 @@
-import git from "isomorphic-git";
+import * as git from "isomorphic-git";
 import fs from "fs/promises";
 import path from "path";
 import { exec } from "child_process"; // Import exec
@@ -26,7 +26,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
   try {
     const gitdir = path.join(repoPath, ".git");
     await fs.access(gitdir);
-    await git.resolveRef({ fs, dir: repoPath, gitdir, ref: "HEAD" });
+    await git.resolveRef({ fs: nodeFs, dir: repoPath, gitdir, ref: "HEAD" });
     logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
   } catch (error: unknown) {
@@ -44,7 +44,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     return;
   }
 
-  const files = await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
+  const files = await git.listFiles({ fs: nodeFs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
   logger.info(`Found ${files.length} files in repository`);
 
   if (!files.length) {
@@ -219,7 +219,7 @@ export async function getRepositoryDiff(repoPath: string): Promise<string> {
   }
 
   try {
-    const commits = await git.log({ fs, dir: repoPath, depth: 2, gitdir: path.join(repoPath, ".git") });
+    const commits = await git.log({ fs: nodeFs, dir: repoPath, depth: 2, gitdir: path.join(repoPath, ".git") });
     if (commits.length < 2) {
       logger.info("Not enough commits to generate a diff.");
       return "No previous commits to compare";

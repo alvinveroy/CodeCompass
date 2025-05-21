@@ -17,6 +17,7 @@ vi.mock('../../utils/text-utils', () => ({
 }));
 
 // Create stand-alone mock functions for internal query-refinement functions
+// This needs to be defined BEFORE vi.mock('../lib/query-refinement', ...) if used inside the factory
 const mockInternalRefineQuery = vi.fn();
 
 // Mock the SUT module ('../lib/query-refinement')
@@ -24,7 +25,7 @@ vi.mock('../lib/query-refinement', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/query-refinement')>();
   return {
     ...actual, // Provide actual implementations for functions we want to test directly
-    refineQuery: mockInternalRefineQuery,
+    refineQuery: mockInternalRefineQuery, // Use the hoisted mock
     // searchWithRefinement itself is NOT mocked here, we want its original implementation from 'actual'
   };
 });
