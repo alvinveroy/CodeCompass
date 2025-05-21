@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll, type Mock, type SpyInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll, type Mock } from 'vitest';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // 2. Mock external dependencies FIRST
@@ -54,7 +54,7 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('searchWithRefinement', () => {
-    let refineQuerySpy: SpyInstance;
+    let refineQuerySpy: Mock<any[], any>; // Or let TypeScript infer: let refineQuerySpy;
     beforeEach(() => { 
         refineQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'refineQuery').mockImplementation((query, _results, relevance) => {
             if (relevance < 0.3) return `${query} broadened by mock`;
@@ -151,9 +151,9 @@ describe('Query Refinement Tests', () => {
     // In this block, we are testing the *original* refineQuery function,
     // so we call it via ActualQueryRefinementModule.refineQuery.
     // Its internal calls (broadenQuery, etc.) should be spied upon directly on ActualQueryRefinementModule.
-    let broadenQuerySpy: SpyInstance;
-    let focusQueryBasedOnResultsSpy: SpyInstance;
-    let tweakQuerySpy: SpyInstance;
+    let broadenQuerySpy: Mock<any[], any>;
+    let focusQueryBasedOnResultsSpy: Mock<any[], any>;
+    let tweakQuerySpy: Mock<any[], any>;
 
     beforeEach(() => { 
         broadenQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'broadenQuery').mockReturnValue('mock_broadened_return_val');

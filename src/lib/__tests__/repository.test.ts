@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type SpyInstance, type MockedFunction } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockedFunction } from 'vitest';
 import { type ExecException } from 'child_process'; // For type annotation
 
 // 1. Mock 'child_process' and replace 'exec' with a vi.fn() created IN THE FACTORY.
@@ -152,10 +152,10 @@ describe('Repository Utilities', () => {
     }
 
 
-    logger.info.mockClear();
-    logger.warn.mockClear();
-    logger.error.mockClear();
-    logger.debug.mockClear();
+    (logger.info as Mock).mockClear();
+    (logger.warn as Mock).mockClear();
+    (logger.error as Mock).mockClear();
+    (logger.debug as Mock).mockClear();
   });
 
   afterEach(() => { vi.restoreAllMocks(); });
@@ -185,7 +185,7 @@ describe('Repository Utilities', () => {
   });
 
   describe('getRepositoryDiff', () => {
-    let mockInjectedValidator: Mock<[string], Promise<boolean>>;
+    let mockInjectedValidator: Mock< (input: string) => Promise<boolean> >;
 
     // Setup mocks specifically for tests that expect validateGitRepository to pass
     // This beforeEach establishes the common "happy path" for validateGitRepository and git.log

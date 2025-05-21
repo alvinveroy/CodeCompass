@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert, type Mock, type SpyInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert, type Mock } from 'vitest';
 import { promises as fsPromises, Dirent } from 'fs'; // Import Dirent directly from 'fs'
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -133,7 +133,7 @@ describe('Agent', () => {
         path: basePath,
         parentPath: path.dirname(basePath),
     });
-    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false) as Dirent]);
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as Dirent[]);
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -161,8 +161,8 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    let parseToolCallsSpy: SpyInstance;
-    let executeToolCallSpy: SpyInstance;
+    let parseToolCallsSpy: Mock<any[], any>;
+    let executeToolCallSpy: Mock<any[], any>;
 
     beforeEach(() => {
         mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 
