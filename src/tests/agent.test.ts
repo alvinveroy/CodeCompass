@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert } from 'vitest';
-
 // Define a holder for mocks that will be used by the factory
-const agentInternalMocks = {
+// Use var for potential hoisting benefits, though this is unusual.
+var agentInternalMocks = {
   parseToolCalls: vi.fn(),
   executeToolCall: vi.fn(),
 };
 
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert } from 'vitest';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';

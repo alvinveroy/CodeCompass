@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-
 // Define a holder for mocks that will be used by the factory
-const queryRefinementInternalMocks = {
+// Use var for potential hoisting benefits
+var queryRefinementInternalMocks = {
   refineQuery: vi.fn(),
   broadenQuery: vi.fn(),
   focusQueryBasedOnResults: vi.fn(),
   tweakQuery: vi.fn(),
 };
 
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // 2. Mock external dependencies FIRST
