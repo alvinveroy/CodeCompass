@@ -155,6 +155,8 @@ QDRANT_HOST=http://localhost:6333
 # COLLECTION_NAME: Name of the Qdrant collection for this repository.
 # It's good practice to use a unique name per repository if you manage multiple.
 # COLLECTION_NAME=codecompass_default_collection
+# QDRANT_SEARCH_LIMIT_DEFAULT: Default number of results to fetch from Qdrant. Default: 10
+# QDRANT_SEARCH_LIMIT_DEFAULT=10
 
 # --- Ollama Configuration (for local LLM and embeddings) ---
 # OLLAMA_HOST: URL for the Ollama server.
