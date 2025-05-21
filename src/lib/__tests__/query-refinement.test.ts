@@ -1,3 +1,6 @@
+// DEFINE MOCK FUNCTION FOR FACTORY FIRST
+const mockInternalRefineQuery = vi.fn();
+
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
@@ -17,8 +20,6 @@ vi.mock('../../utils/text-utils', () => ({
 }));
 
 // REMOVE: vi.mock('../lib/query-refinement', ...)
-
-const mockInternalRefineQuery = vi.fn();
 
 vi.mock('../query-refinement', async (importOriginal) => {
   // mockInternalRefineQuery must be defined above this factory.

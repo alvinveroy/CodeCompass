@@ -1,3 +1,7 @@
+// DEFINE MOCK FUNCTIONS FOR FACTORY FIRST
+const mockInternalParseToolCalls = vi.fn();
+const mockInternalExecuteToolCall = vi.fn();
+
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
@@ -26,9 +30,6 @@ vi.mock('../lib/config-service', () => {
     logger: loggerInstance,
   };
 });
-
-const mockInternalParseToolCalls = vi.fn();
-const mockInternalExecuteToolCall = vi.fn();
 
 vi.mock('../lib/agent', async (importOriginal) => {
   // These mocks (mockInternalParseToolCalls, mockInternalExecuteToolCall) must be defined above this factory.
