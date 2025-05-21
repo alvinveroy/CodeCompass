@@ -174,6 +174,7 @@ describe('Agent', () => {
   describe('parseToolCalls', () => {
     let actualParseToolCalls: typeof import('../lib/agent').parseToolCalls;
     beforeAll(async () => {
+      // Import the original module to get the actual parseToolCalls function
       const actualAgentModule = await vi.importActual<typeof import('../lib/agent')>('../lib/agent');
       actualParseToolCalls = actualAgentModule.parseToolCalls;
     });
@@ -262,6 +263,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
   describe('executeToolCall', () => {
     let actualExecuteToolCall: typeof import('../lib/agent').executeToolCall;
     beforeAll(async () => {
+        // Import the original module to get the actual executeToolCall function
         const actualAgentModule = await vi.importActual<typeof import('../lib/agent')>('../lib/agent');
         actualExecuteToolCall = actualAgentModule.executeToolCall;
     });
