@@ -1,19 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { 
-  parseToolCalls, 
+  // parseToolCalls, // Will be imported after mock setup
+  // executeToolCall, // Will be imported after mock setup
   createAgentState, 
-  executeToolCall, // Add executeToolCall
-  runAgentLoop,    // Add runAgentLoop
-  // Import internal helpers if you decide to test them directly, 
-  // otherwise they are tested via executeToolCall and runAgentLoop
-  // getProcessedDiff, 
-  // processSnippet,
+  // runAgentLoop,    // Will be imported after mock setup
   generateAgentSystemPrompt,
   toolRegistry // Import toolRegistry for checking prompt generation
 } from '../lib/agent'; // Adjust path as necessary
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { promises as fsPromises } from 'fs'; // For mocking fs.readFile etc.
 import path from 'path';
+
+// Define mock functions at the top level of the test file
+const mockParseToolCalls = vi.fn();
+const mockExecuteToolCall = vi.fn();
 
 // Mock for configService that agent.ts will use
 vi.mock('../lib/config-service', () => {
@@ -59,20 +59,12 @@ vi.mock('../lib/repository');
 // Modify the vi.mock factory for '../lib/agent':
 vi.mock('../lib/agent', async (importOriginal) => {
   const originalModule = await importOriginal<typeof import('../lib/agent')>();
-  // Create new mocks for each test run if the factory is re-evaluated
-  const executeToolCallMock = vi.fn();
-  const parseToolCallsMock = vi.fn();
   return {
-    // Explicitly list all exports from agent.ts
-    runAgentLoop: originalModule.runAgentLoop, // Ensure this is the original
-    executeToolCall: executeToolCallMock,    // This is our mock
-    parseToolCalls: parseToolCallsMock,      // This is our mock
-    createAgentState: originalModule.createAgentState, // Keep original
-    generateAgentSystemPrompt: originalModule.generateAgentSystemPrompt, // Keep original
-    toolRegistry: originalModule.toolRegistry, // Keep original
-    // Add any other exports from agent.ts, mapping them to originalModule.exportName
-    // For example, if agent.ts also exports 'getProcessedDiff' (though it's internal currently):
-    // getProcessedDiff: originalModule.getProcessedDiff, 
+    ...originalModule, // Spread original module first
+    // Override specific functions with our top-level mocks
+    parseToolCalls: mockParseToolCalls,
+    executeToolCall: mockExecuteToolCall,
+    // runAgentLoop will be originalModule.runAgentLoop
   };
 });
 
@@ -97,6 +89,16 @@ vi.mock('fs/promises', () => {
 import { getLLMProvider } from '../lib/llm-provider';
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries } from '../lib/state';
 import { searchWithRefinement } from '../lib/query-refinement';
+// Import the functions. runAgentLoop will be original.
+// parseToolCalls and executeToolCall will be our top-level mocks.
+import { 
+  runAgentLoop, 
+  parseToolCalls, // This IS mockParseToolCalls
+  executeToolCall, // This IS mockExecuteToolCall
+  // createAgentState, // Already imported at the top
+  // generateAgentSystemPrompt, // Already imported at the top
+  // toolRegistry  // Already imported at the top
+} from '../lib/agent';
 // AFTER importing agent.ts (implicitly via other SUT imports), import the logger from the mocked module
 // This logger will be the one created by the vi.mock factory.
 import { logger as mockedLoggerFromAgentPerspective, configService as agentTestConfig } from '../lib/config-service'; // Import agentTestConfig
@@ -171,13 +173,18 @@ describe('Agent', () => {
 
   // Add new describe blocks for other functions
   describe('parseToolCalls', () => {
+    let actualParseToolCalls: typeof import('../lib/agent').parseToolCalls;
+    beforeAll(async () => {
+      const actualAgentModule = await vi.importActual<typeof import('../lib/agent')>('../lib/agent');
+      actualParseToolCalls = actualAgentModule.parseToolCalls;
+    });
     it('should parse valid tool calls', () => {
       // Use a simple string with exact formatting
       const output = `I will use tools.
 TOOL_CALL: {"tool":"search_code","parameters":{"query":"authentication"}}
 TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project structure"}}`;
       
-      const result = parseToolCalls(output);
+      const result = actualParseToolCalls(output); // Test the original
       
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
@@ -199,7 +206,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         This JSON is malformed.
       `;
       
-      const result = parseToolCalls(output);
+      const result = actualParseToolCalls(output); // Test the original
       
       expect(result).toHaveLength(0);
     });
@@ -207,7 +214,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     it('should return empty array when no tool calls are found', () => {
       const output = 'This response has no tool calls.';
       
-      const result = parseToolCalls(output);
+      const result = actualParseToolCalls(output); // Test the original
       
       expect(result).toHaveLength(0);
     });
@@ -254,6 +261,11 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
   // For now, we will assume getProcessedDiff and processSnippet are tested via executeToolCall.
 
   describe('executeToolCall', () => {
+    let actualExecuteToolCall: typeof import('../lib/agent').executeToolCall;
+    beforeAll(async () => {
+        const actualAgentModule = await vi.importActual<typeof import('../lib/agent')>('../lib/agent');
+        actualExecuteToolCall = actualAgentModule.executeToolCall;
+    });
     // Common setup for executeToolCall tests
     const mockQdrantClient = mockQdrantClientInstance; // Use the shared mock
     const repoPath = '/test/repo';
@@ -270,7 +282,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           relevanceScore: 0.85
         });
 
-        const result = await executeToolCall(
+        const result = await actualExecuteToolCall( // Use actual
           { tool: 'search_code', parameters: { query: 'test query' } },
           mockQdrantClient, repoPath, suggestionModelAvailable
         ) as any;
@@ -285,7 +297,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       });
 
       it('should throw if query parameter is not a string', async () => {
-        await expect(executeToolCall(
+        await expect(actualExecuteToolCall( // Use actual
           { tool: 'search_code', parameters: { query: 123 } },
           mockQdrantClient, repoPath, suggestionModelAvailable
         )).rejects.toThrow("Parameter 'query' for tool 'search_code' must be a string");
@@ -301,7 +313,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           relevanceScore: 0.9
         });
 
-        const result = await executeToolCall(
+        const result = await actualExecuteToolCall( // Use actual
           { tool: 'get_repository_context', parameters: { query: 'context query' } },
           mockQdrantClient, repoPath, suggestionModelAvailable
         ) as any;
@@ -325,7 +337,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           });
           mockLLMProviderInstance.generateText.mockResolvedValueOnce('Generated suggestion text');
 
-          const result = await executeToolCall(
+          const result = await actualExecuteToolCall( // Use actual
               { tool: 'generate_suggestion', parameters: { query: 'suggestion query' } },
               mockQdrantClient, repoPath, suggestionModelAvailable
           ) as any;
@@ -345,7 +357,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           (searchWithRefinement as jest.Mock).mockResolvedValueOnce({ results: [], refinedQuery: 'more refined', relevanceScore: 0 });
           (git.listFiles as jest.Mock).mockResolvedValueOnce(['fileA.ts', 'fileB.ts']); // Specific mock for this test if needed
 
-          await executeToolCall(
+          await actualExecuteToolCall( // Use actual
             { tool: 'request_additional_context', parameters: { context_type: 'MORE_SEARCH_RESULTS', query_or_path: 'original query' } },
             mockQdrantClient, repoPath, suggestionModelAvailable
           );
@@ -367,7 +379,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
             //   throw new Error(`readFile mock in test: unexpected path ${p}`);
             // });
 
-          const result = await executeToolCall(
+          const result = await actualExecuteToolCall( // Use actual
             { tool: 'request_additional_context', parameters: { context_type: 'FULL_FILE_CONTENT', query_or_path: 'src/valid.ts' } },
             mockQdrantClient, repoPath, suggestionModelAvailable
           ) as any;
@@ -377,7 +389,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         });
 
         it('should throw if path is outside repository', async () => {
-          await expect(executeToolCall(
+          await expect(actualExecuteToolCall( // Use actual
             { tool: 'request_additional_context', parameters: { context_type: 'FULL_FILE_CONTENT', query_or_path: '../outside.txt' } },
             mockQdrantClient, repoPath, suggestionModelAvailable
           )).rejects.toThrow('Access denied: Path "../outside.txt" is outside the repository.');
@@ -391,7 +403,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
                 { name: 'file.ts', isDirectory: () => false }, 
                 { name: 'subdir', isDirectory: () => true }
               ] as fsPromises.Dirent[]);
-              const result = await executeToolCall(
+              const result = await actualExecuteToolCall( // Use actual
                   { tool: 'request_additional_context', parameters: { context_type: 'DIRECTORY_LISTING', query_or_path: 'src' } },
                   mockQdrantClient, repoPath, suggestionModelAvailable
               ) as any;
@@ -410,7 +422,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
                   .mockResolvedValueOnce({ points: [{ payload: { chunk_index: 0, content: 'prev chunk' } }], next_page_offset: null }) // Prev chunk
                   .mockResolvedValueOnce({ points: [{ payload: { chunk_index: 2, content: 'next chunk' } }], next_page_offset: null }); // Next chunk
 
-              const result = await executeToolCall(
+              const result = await actualExecuteToolCall( // Use actual
                   { tool: 'request_additional_context', parameters: { context_type: 'ADJACENT_FILE_CHUNKS', query_or_path: 'file.ts', chunk_index: 1 } },
                   mockQdrantClient, repoPath, suggestionModelAvailable
               ) as any;
@@ -428,7 +440,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
 
     describe('tool: request_more_processing_steps', () => {
       it('should return acknowledgment', async () => {
-        const result = await executeToolCall(
+        const result = await actualExecuteToolCall( // Use actual
           { tool: 'request_more_processing_steps', parameters: { reasoning: 'need more' } },
           mockQdrantClient, repoPath, suggestionModelAvailable
         );
@@ -437,14 +449,14 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     });
 
     it('should throw if tool requires model and model is unavailable', async () => {
-      await expect(executeToolCall(
+      await expect(actualExecuteToolCall( // Use actual
         { tool: 'generate_suggestion', parameters: { query: 'test' } },
         mockQdrantClient, repoPath, false // suggestionModelAvailable = false
       )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available');
     });
 
     it('should throw for an unknown tool', async () => {
-      await expect(executeToolCall(
+      await expect(actualExecuteToolCall( // Use actual
         { tool: 'non_existent_tool', parameters: {} },
         mockQdrantClient, repoPath, suggestionModelAvailable
       )).rejects.toThrow('Tool not found: non_existent_tool');
@@ -456,14 +468,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
     const repoPath = '/test/repo';
 
     beforeEach(() => { 
-      // vi.clearAllMocks() in the top-level beforeEach should handle clearing call history.
-      // executeToolCall and parseToolCalls are now guaranteed to be the mocks from the factory.
-      (executeToolCall as vi.Mock).mockReset();
-      (parseToolCalls as vi.Mock).mockReset();
+      // Reset the top-level mocks
+      mockParseToolCalls.mockReset();
+      mockExecuteToolCall.mockReset();
 
-      // Default implementations can be set here if common, or in each test.
-      (parseToolCalls as vi.Mock).mockReturnValue([]); 
-      (executeToolCall as vi.Mock).mockResolvedValue({ status: 'default mock success' });
+      // Setup default behaviors
+      mockParseToolCalls.mockReturnValue([]); 
+      mockExecuteToolCall.mockResolvedValue({ status: 'default mock success' });
     });
 
     it('should complete and return final response if agent does not call tools', async () => {
@@ -472,7 +483,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce("Test response from verifyLLMProvider")
         .mockResolvedValueOnce('Final agent response, no tools needed.');
       
-      (parseToolCalls as vi.Mock).mockReturnValueOnce([]);
+      mockParseToolCalls.mockReturnValueOnce([]); // Use top-level mock
 
       // Clear logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -494,7 +505,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}')
         .mockResolvedValueOnce('Final response after tool.');
       
-      (parseToolCalls as vi.Mock)
+      mockParseToolCalls // Use top-level mock
         .mockImplementationOnce((output: string) => {
           if (output === 'TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}') {
             return [{ tool: 'search_code', parameters: { query: 'tool query' } }];
@@ -503,7 +514,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         })
         .mockReturnValueOnce([]); // For the second reasoning step (final response)
 
-      const execSpy = (executeToolCall as vi.Mock).mockResolvedValue({ status: 'search_code executed', results: [] });
+      mockExecuteToolCall.mockResolvedValueOnce({ status: 'search_code executed', results: [] }); // Use top-level mock
       
       // Clear all logger mocks for this specific test run
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -514,8 +525,8 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       const result = await runAgentLoop('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3);
-      expect(execSpy).toHaveBeenCalledTimes(1);
-      expect(execSpy).toHaveBeenCalledWith(
+      expect(mockExecuteToolCall).toHaveBeenCalledTimes(1); // Assert on the top-level mock
+      expect(mockExecuteToolCall).toHaveBeenCalledWith( // Assert on the top-level mock
         expect.objectContaining({ tool: 'search_code' }),
         mockQdrantClient, repoPath, true
       );
@@ -532,12 +543,12 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "second step query"}}')       // Step 2 (extended)
         .mockResolvedValueOnce('Final response in extended step.');                                                       // Step 3 (extended, final)
 
-      (parseToolCalls as vi.Mock)
+      mockParseToolCalls // Use top-level mock
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'need more' } }])
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'second step query' } }])
         .mockReturnValueOnce([]); // For final response
 
-      (executeToolCall as vi.Mock).mockImplementation(async (toolCall) => {
+      mockExecuteToolCall.mockImplementation(async (toolCall) => { // Use top-level mock
         if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
         if (toolCall.tool === 'search_code') return { status: 'search executed', results: []};
         return { status: 'unknown tool executed' };
@@ -567,13 +578,13 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
         .mockResolvedValueOnce('TOOL_CALL: {"tool": "request_more_processing_steps", "parameters": {"reasoning": "try to extend again from step 3"}}') // Step 2
         .mockResolvedValueOnce('Final response after hitting absolute max.'); // Final response generation
 
-      (parseToolCalls as vi.Mock)
+      mockParseToolCalls // Use top-level mock
         .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'step 1 query' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'extend from step 2' } }])
         .mockReturnValueOnce([{ tool: 'request_more_processing_steps', parameters: { reasoning: 'try to extend again from step 3' } }])
         .mockReturnValueOnce([]); // For final response generation
 
-      (executeToolCall as vi.Mock).mockImplementation(async (toolCall) => {
+      mockExecuteToolCall.mockImplementation(async (toolCall) => { // Use top-level mock
         if (toolCall.tool === 'search_code') return { status: 'search executed', results: []};
         if (toolCall.tool === 'request_more_processing_steps') return { status: 'acknowledged' };
         return { status: 'unknown tool executed' };
@@ -616,7 +627,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           })
           .mockResolvedValueOnce("Final response after fallback.");
       
-      (parseToolCalls as vi.Mock)
+      mockParseToolCalls // Use top-level mock
           .mockImplementationOnce((outputFromLLM) => {
               if (outputFromLLM === `TOOL_CALL: ${JSON.stringify({tool: "search_code",parameters: { query: "reasoning timeout query", sessionId: "session5" }})}`) {
                   return [{ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }];
@@ -625,7 +636,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           })
           .mockReturnValueOnce([]);
 
-      const executeToolCallSpy = (executeToolCall as vi.Mock).mockResolvedValue({ status: 'fallback search_code executed', results: [] });
+      mockExecuteToolCall.mockResolvedValueOnce({ status: 'fallback search_code executed', results: [] }); // Use top-level mock
       
       mockedLoggerFromAgentPerspective.warn.mockClear();
       mockedLoggerFromAgentPerspective.info.mockClear();
@@ -635,7 +646,7 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
       const result = await runAgentLoop('reasoning timeout query', 'session5', mockQdrantClient, repoPath, true);
 
       expect(mockedLoggerFromAgentPerspective.warn).toHaveBeenCalledWith("Agent (step 1): Reasoning timed out or failed: Agent reasoning timed out");
-      expect(executeToolCallSpy).toHaveBeenCalledWith(
+      expect(mockExecuteToolCall).toHaveBeenCalledWith( // Assert on top-level mock
           expect.objectContaining({ tool: 'search_code', parameters: { query: 'reasoning timeout query', sessionId: 'session5' } }),
           mockQdrantClient, repoPath, true
       );
@@ -650,12 +661,12 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query"}}')
           .mockResolvedValueOnce('Final response after tool timeout.');
 
-      (parseToolCalls as vi.Mock)
+      mockParseToolCalls // Use top-level mock
           .mockReturnValueOnce([{ tool: 'search_code', parameters: { query: 'tool query' } }])
           .mockReturnValueOnce([]);
       
       const toolExecutionTimeoutError = new Error("Simulated Tool execution timed out: search_code");
-      (executeToolCall as vi.Mock).mockImplementationOnce(async () => {
+      mockExecuteToolCall.mockImplementationOnce(async () => { // Use top-level mock
         // Simulate the timeout behavior of Promise.race in agent.ts
         return new Promise((_, reject) => {
             setTimeout(() => reject(toolExecutionTimeoutError), 10); // Short delay, actual timeout is in agent.ts
