@@ -275,12 +275,15 @@ export function parseToolCalls(output: string): { tool: string; parameters: unkn
         const jsonPart = line.substring('TOOL_CALL:'.length).trim();
         logger.debug("Found potential tool call", { jsonPart });
         
-        const parsed = JSON.parse(jsonPart) as { tool?: string; parameters?: unknown };
+        const parsed = JSON.parse(jsonPart); // Keep as unknown initially
         logger.debug("Successfully parsed JSON", { parsed });
         
-        if (parsed && typeof parsed.tool === 'string' && parsed.parameters) {
+        // More robust check for the structure
+        if (parsed && typeof parsed === 'object' && parsed !== null &&
+            typeof (parsed as any).tool === 'string' && 
+            typeof (parsed as any).parameters === 'object' && (parsed as any).parameters !== null) {
           results.push({
-            tool: parsed.tool,
+            tool: (parsed as any).tool,
             parameters: parsed.parameters
           });
         }
@@ -309,13 +312,17 @@ export async function executeToolCall(
   
   // Find the tool in the registry
   const toolInfo = toolRegistry.find(t => t.name === tool);
-  if (!toolInfo) {
-    throw new Error(`Tool not found: ${tool}`);
-  }
   
   // Check if the tool requires the suggestion model
-  if (toolInfo.requiresModel && !suggestionModelAvailable) {
+  // This check must happen *after* confirming toolInfo exists.
+  if (toolInfo && toolInfo.requiresModel && !suggestionModelAvailable) {
+    logger.warn(`Attempt to use model-dependent tool '${tool}' when model is unavailable. ToolInfo: ${JSON.stringify(toolInfo)}, suggestionModelAvailable: ${suggestionModelAvailable}`);
     throw new Error(`Tool ${tool} requires the suggestion model which is not available`);
+  }
+  
+  // If toolInfo is still not found after the above, it's a fundamental issue.
+  if (!toolInfo) {
+    throw new Error(`Tool not found: ${tool}`);
   }
   
   // Execute the appropriate tool
