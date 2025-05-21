@@ -184,7 +184,7 @@ describe('Query Refinement Utilities', () => {
         return processed.trim();
       });
 
-      const keywords = extractKeywords(text); // extractKeywords will call the mocked preprocessText
+      const keywords = actualExtractKeywords(text); // Test the ACTUAL function
                                              // then do its own .toLowerCase().replace(/[.,;:!?(){}[\]"']/g, " ")
 
       // After extractKeywords' internal cleaning (which removes periods), "class." becomes "class"
