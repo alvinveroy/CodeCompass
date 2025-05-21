@@ -1014,11 +1014,13 @@ export async function runAgentLoop(
 
   let currentMaxSteps = configService.AGENT_DEFAULT_MAX_STEPS;
   const absoluteMaxSteps = configService.AGENT_ABSOLUTE_MAX_STEPS;
+  let terminatedDueToAbsoluteMax = false;
 
   for (let step = 0; step < currentMaxSteps; step++) { // Loop up to currentMaxSteps
     // Check if absoluteMaxSteps has been reached due to extensions
     if (step >= absoluteMaxSteps) {
         logger.warn(`Agent loop reached absolute maximum steps (${absoluteMaxSteps}) and will terminate.`);
+        terminatedDueToAbsoluteMax = true;
         break;
     }
     logger.info(`Agent step ${step + 1}/${currentMaxSteps} (Absolute Max: ${absoluteMaxSteps}) for query: ${query}`);

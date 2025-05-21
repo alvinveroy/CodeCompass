@@ -44,16 +44,12 @@ vi.mock('../lib/llm-provider');
 vi.mock('../lib/state');
 vi.mock('../lib/query-refinement');
 vi.mock('../lib/repository');
-vi.mock('isomorphic-git'); // Auto-mock for isomorphic-git, specific functions will be spied/mocked below
-vi.mock('fs/promises', async (importOriginal) => {
-  const actual = await importOriginal() as typeof fsPromises;
-  return {
-    ...actual, // Spread actual module to keep other exports if any
-    readFile: vi.fn(),
-    readdir: vi.fn(),
-    // Add other fs methods if used by agent.ts directly or indirectly
-  };
-});
+vi.mock('isomorphic-git'); 
+vi.mock('fs/promises', () => ({
+  readFile: vi.fn(),
+  readdir: vi.fn(),
+  // Add other fs/promises functions if agent.ts starts using them
+}));
 
 
 // Import mocked versions for easier access in tests
@@ -298,8 +294,10 @@ TOOL_CALL: {"tool":"get_repository_context","parameters":{"query":"project struc
           expect(searchWithRefinement).toHaveBeenCalledWith(
             mockQdrantClient, 
             'original query', 
-            expect.any(Array), 
-            mockedConfigService.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS // Check the limit from mocked config
+            expect.any(Array), // files array
+            mockedConfigService.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS, // customLimit
+            undefined, // maxRefinements (should be default from configService)
+            undefined // relevanceThreshold (should be default from searchWithRefinement)
           );
         });
       });

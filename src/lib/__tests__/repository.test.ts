@@ -92,6 +92,12 @@ describe('Repository Utilities', () => {
   describe('indexRepository', () => {
     const repoPath = '/test/repo';
 
+    beforeEach(() => {
+      // Default scroll mock for indexRepository tests to prevent stale check errors
+      // unless a specific test overrides it.
+      vi.mocked(mockQdrantClientInstance.scroll).mockResolvedValue({ points: [], next_page_offset: undefined });
+    });
+
     it('should skip indexing if not a valid git repository', async () => {
       // Ensure validateGitRepository (called by indexRepository) returns false
       vi.mocked(fs.access).mockResolvedValue(undefined); // .git dir might exist
@@ -128,7 +134,7 @@ describe('Repository Utilities', () => {
 
         await indexRepository(mockQdrantClientInstance, repoPath);
         expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Filtered to 2 code files for indexing')); // file.ts and empty.js
-        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Skipping /test/repo/empty.js: empty file'));
+        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Skipping empty.js: empty file')); // Path is relative in log
         expect(mockQdrantClientInstance.upsert).toHaveBeenCalledTimes(1); // Only for file.ts
         expect(mockQdrantClientInstance.upsert).toHaveBeenCalledWith(configService.COLLECTION_NAME, expect.objectContaining({
             points: [expect.objectContaining({ payload: expect.objectContaining({ filepath: 'file.ts' }) })]
@@ -298,11 +304,14 @@ describe('Repository Utilities', () => {
         { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } }, 
         { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
       ]);
-      vi.mocked(exec).mockImplementation((command, options, callback) => {
-        if (typeof options === 'function') { // Handle case where options is omitted
-          callback = options;
+      vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
+        let cb = callbackOrUndefined;
+        if (typeof optionsOrCallback === 'function') {
+          cb = optionsOrCallback;
         }
-        if (callback) callback(null, 'diff_content_stdout', '');
+        if (cb) {
+          cb(null, 'diff_content_stdout', '');
+        }
         return {} as any; // Return a dummy child process
       });
       const result = await getRepositoryDiff(repoPath);
@@ -320,11 +329,14 @@ describe('Repository Utilities', () => {
         { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
       ]);
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000
-      vi.mocked(exec).mockImplementation((command, options, callback) => {
-        if (typeof options === 'function') { // Handle case where options is omitted
-          callback = options;
+      vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
+        let cb = callbackOrUndefined;
+        if (typeof optionsOrCallback === 'function') {
+          cb = optionsOrCallback;
         }
-        if (callback) callback(null, longDiff, '');
+        if (cb) {
+          cb(null, longDiff, '');
+        }
         return {} as any;
       });
       const result = await getRepositoryDiff(repoPath);
@@ -337,11 +349,14 @@ describe('Repository Utilities', () => {
       vi.mocked(git.log).mockResolvedValue([
         { oid: 'c2', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['c1'], tree: 't2' } }, { oid: 'c1', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 't1' } }
       ]);
-      vi.mocked(exec).mockImplementation((command, options, callback) => {
-        if (typeof options === 'function') { // Handle case where options is omitted
-          callback = options;
+      vi.mocked(exec).mockImplementation((command, optionsOrCallback, callbackOrUndefined) => {
+        let cb = callbackOrUndefined;
+        if (typeof optionsOrCallback === 'function') {
+          cb = optionsOrCallback;
         }
-        if (callback) callback(new Error('Git command failed'), '', 'error_stderr');
+        if (cb) {
+          cb(new Error('Git command failed'), '', 'error_stderr');
+        }
         return {} as any;
       });
       const result = await getRepositoryDiff(repoPath);

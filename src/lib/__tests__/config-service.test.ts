@@ -52,7 +52,30 @@ describe('ConfigService', () => {
     vi.resetModules();
     // Re-import the class after resetModules
     // We need to re-mock winston and fs as they are used by the constructor after reset
-    vi.mock('fs'); 
+    vi.mock('fs', () => ({
+      existsSync: vi.fn(),
+      readFileSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      mkdirSync: vi.fn(),
+      // Add other fs functions if ConfigService uses them directly
+    }));
+    // Re-apply specific fs mock implementations needed *before* ConfigService constructor runs
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      if (p === MOCK_CONFIG_DIR) return true;
+      if (p === MOCK_LOG_DIR) return false;
+      return false;
+    });
+    vi.mocked(fs.mkdirSync).mockImplementation((p, options) => {
+      // This mock needs to handle the { recursive: true } option if used by Winston or ConfigService
+      // For simplicity, just don't throw for expected paths.
+      if (p === MOCK_LOG_DIR || p === MOCK_CONFIG_DIR) {
+        return undefined;
+      }
+      // console.warn(`fs.mkdirSync called with unhandled path: ${p}`);
+      return undefined; // Allow other calls or make more specific
+    });
+    vi.mocked(fs.readFileSync).mockReturnValue('{}'); // Default for config files
+
     vi.mock('winston', async (importOriginal) => {
       const originalWinston = await importOriginal<typeof winston>();
       return {

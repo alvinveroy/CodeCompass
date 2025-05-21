@@ -170,7 +170,7 @@ describe('Query Refinement Utilities', () => {
   });
 
   describe('focusQueryBasedOnResults', () => {
-    it('should add keywords from top results to the query', () => {
+    it('should add keywords from top results to the query', async () => {
       const originalQuery = "find user";
       const results = [
         { payload: { content: "function processUser(user: UserType)" } },
