@@ -11,19 +11,30 @@ vi.mock('child_process', async (importOriginal) => {
 });
 
 // Import exec AFTER mocking child_process. This 'exec' will be the vi.fn() from the factory.
-import { exec } from 'child_process';
+import { exec as actualChildProcessExecMock } from 'child_process'; // Rename to avoid conflict if 'exec' is used elsewhere
 
-// Mock 'fs/promises'
-vi.mock('fs/promises', async (importOriginal) => {
-  const actualFsPromises = await importOriginal<typeof import('fs/promises')>();
-  return {
-    ...actualFsPromises,
-    readFile: vi.fn(),
-    readdir: vi.fn(),
-    access: vi.fn(),
-    stat: vi.fn(),
-  };
-});
+// Explicit mock functions for fs/promises methods
+const mockFsAccess = vi.fn();
+const mockFsReadFile = vi.fn();
+const mockFsReadDir = vi.fn();
+const mockFsStat = vi.fn();
+
+vi.mock('fs/promises', () => ({
+  __esModule: true, // Indicate that this is an ES module mock
+  // This is what `import fs from 'fs/promises'` in the SUT will receive
+  default: { 
+    access: mockFsAccess,
+    readFile: mockFsReadFile,
+    readdir: mockFsReadDir,
+    stat: mockFsStat,
+    // Add any other functions from fs/promises if they are used directly via fs.XXX in SUT
+  },
+  // These are for `import { access } from 'fs/promises'` in tests or SUT
+  access: mockFsAccess,
+  readFile: mockFsReadFile,
+  readdir: mockFsReadDir,
+  stat: mockFsStat,
+}));
 
 // Mock 'isomorphic-git'
 // isomorphic-git exports named functions. We mock them directly.
@@ -50,9 +61,8 @@ vi.mock('util', async (importOriginal) => {
   return {
     ...actualUtil,
     promisify: (fnToPromisify: any) => {
-      // Check if fnToPromisify is the exec function from child_process
-      // This check might need to be more robust depending on the actual function reference.
-      if (fnToPromisify && fnToPromisify.name === 'exec') { // Check name of function being promisified
+      // More robust check: compare with the actual mocked exec function
+      if (fnToPromisify === actualChildProcessExecMock) { 
         return mockExecAsyncFn;
       }
       return actualUtil.promisify(fnToPromisify); // Promisify others normally
@@ -79,7 +89,8 @@ vi.mock('../ollama');
 import * as repositoryFunctions from '../repository'; // Import all exports as a namespace
 import { logger, configService } from '../config-service';
 // Import specific fs/promises methods directly
-import { access as fsAccess, readFile, readdir, stat } from 'fs/promises'; // Renamed to avoid potential clashes
+// This fsAccess should now correctly point to mockFsAccess
+import { access as fsAccess } from 'fs/promises';
 import * as git from 'isomorphic-git'; // Import as namespace
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -87,8 +98,8 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 
 describe('Repository Utilities', () => {
   const repoPath = '/test/diff/repo';
-  // exec is already the mock from the factory. Cast it for type safety.
-  const execMock = exec as vi.MockedFunction<typeof exec>; // More precise type
+  // Use the imported actualChildProcessExecMock as the execMock reference
+  const execMock = actualChildProcessExecMock as vi.MockedFunction<typeof actualChildProcessExecMock>; 
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
@@ -110,11 +121,12 @@ describe('Repository Utilities', () => {
     // execMock is vi.fn() from factory, clearAllMocks resets its state (calls, impls)
     
     // Reset all fs/promises mocks to basic spies
-    vi.mocked(fsAccess).mockReset();
-    vi.mocked(readFile).mockReset();
-    vi.mocked(readdir).mockReset();
-    vi.mocked(stat).mockReset();
-
+    // No longer need vi.mocked(fsAccess).mockReset() as we control mockFsAccess directly
+    mockFsAccess.mockReset();
+    mockFsReadFile.mockReset();
+    mockFsReadDir.mockReset();
+    mockFsStat.mockReset();
+    
 
     // Reset all isomorphic-git mocks
     vi.mocked(git.resolveRef).mockReset();
@@ -139,18 +151,21 @@ describe('Repository Utilities', () => {
   describe('validateGitRepository (direct tests)', () => {
     // These tests use the original implementation of validateGitRepository
     it('should return true for a valid repository', async () => {
-      vi.mocked(fsAccess).mockResolvedValue(undefined as unknown as void);
+      // Configure the specific mock function directly
+      mockFsAccess.mockResolvedValue(undefined as unknown as void);
       vi.mocked(git.resolveRef).mockResolvedValue('refs/heads/main');
       const result = await repositoryFunctions.validateGitRepository(repoPath);
       expect(result).toBe(true);
     });
     it('should return false if .git access is denied', async () => {
-      vi.mocked(fsAccess).mockRejectedValueOnce(new Error('Permission denied'));
+      // Configure the specific mock function directly
+      mockFsAccess.mockRejectedValueOnce(new Error('Permission denied'));
       const result = await repositoryFunctions.validateGitRepository(repoPath);
       expect(result).toBe(false);
     });
     it('should return false if HEAD cannot be resolved', async () => {
-      vi.mocked(fsAccess).mockResolvedValue(undefined as unknown as void); // fs.access passes
+      // Configure the specific mock function directly
+      mockFsAccess.mockResolvedValue(undefined as unknown as void); // fs.access passes
       vi.mocked(git.resolveRef).mockRejectedValueOnce(new Error('No HEAD')); // git.resolveRef fails
       const result = await repositoryFunctions.validateGitRepository(repoPath);
       expect(result).toBe(false);
@@ -171,10 +186,7 @@ describe('Repository Utilities', () => {
     });
 
     it('should call git diff command and return stdout', async () => {
-      execMock.mockImplementationOnce((_cmd, _opts, callback) => {
-        callback(null, 'diff_content_stdout_explicit', '');
-      });
-      // Now we mock the behavior of the promisified function directly
+      // Remove: execMock.mockImplementationOnce(...) as mockExecAsyncFn handles the async behavior now.
       mockExecAsyncFn.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
@@ -186,12 +198,12 @@ describe('Repository Utilities', () => {
     it('should truncate long diff output', async () => {
       const MAX_DIFF_LENGTH_FROM_SUT = 10000;
       const longDiff = 'a'.repeat(MAX_DIFF_LENGTH_FROM_SUT + 1);
-      execMock.mockImplementationOnce((_cmd, _opts, callback) => {
-        callback(null, longDiff, '');
-      });
+      // Remove: execMock.mockImplementationOnce(...)
       mockExecAsyncFn.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
+      // Add assertion for mockExecAsyncFn call
+      expect(mockExecAsyncFn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: repoPath }));
       expect(result).toBe('a'.repeat(MAX_DIFF_LENGTH_FROM_SUT) + "\n... (diff truncated)");
       expect(result).toContain('... (diff truncated)');
     });
@@ -200,14 +212,14 @@ describe('Repository Utilities', () => {
       const mockError = new Error('Git command failed') as ExecException;
       const stderrText = 'stderr from exec callback';
       mockError.code = 128;
-      mockError.stderr = stderrText; // Ensure the error object has stderr for the assertion
+      mockError.stderr = stderrText; 
 
-      execMock.mockImplementationOnce((_cmd, _opts, callback) => {
-        callback(mockError, '', stderrText);
-      });
-      mockExecAsyncFn.mockRejectedValueOnce(mockError); // Simulate execAsync throwing an error
+      // Remove: execMock.mockImplementationOnce(...)
+      mockExecAsyncFn.mockRejectedValueOnce(mockError); 
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
+      // Add assertion for mockExecAsyncFn call
+      expect(mockExecAsyncFn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: repoPath }));
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
       expect(logger.error).toHaveBeenCalledWith(
         `Error retrieving git diff for ${repoPath}: Git command failed`,
