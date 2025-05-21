@@ -37,6 +37,12 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
   logger.info(`Checking Ollama model: ${model}`);
   
   try {
+    // if (isEmbeddingModel) { // This block is effectively the same as the else block's start
+    //   const response = await axios.post<OllamaEmbeddingResponse>(
+    // This can be simplified as the initial check for response.status and response.data.embedding/response
+    // is the main differentiator, not the type of POST.
+    // However, the request body *is* different. Let's keep the structure but fix the error handling.
+
     if (isEmbeddingModel) {
       const response = await axios.post<OllamaEmbeddingResponse>(
         `${host}/api/embeddings`,
@@ -58,10 +64,13 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
         return true;
       }
     }
-    throw new Error(`Model ${model} not functional`);
+    // throw new Error(`Model ${model} not functional`); // This was a bit too aggressive. The error below is better.
+    logger.warn(`Ollama model ${model} did not return expected data structure in response.`); // More specific log
+    // Fall through to throw the more general error below if this path is taken.
+    // This ensures an error is always thrown if the positive checks don't pass.
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    let errorDetails: { message: string, response?: { status: number; data: unknown } } = { message: err.message };
+    const errorDetails: { message: string, response?: { status: number; data: unknown } } = { message: err.message };
 
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
@@ -118,9 +127,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     // incrementCounter('embedding_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
     
-    let errorLogDetails: { 
-      message: string; 
-      code?: string; 
+    const errorLogDetails: { // Changed let to const
+      message: string;
+      code?: string;
       response?: { status: number; data: unknown };
       inputLength: number;
       inputSnippet: string;
