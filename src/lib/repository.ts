@@ -27,7 +27,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
     const gitdir = path.join(repoPath, ".git");
     await fs.access(gitdir);
     await git.resolveRef({ fs: nodeFs, dir: repoPath, gitdir, ref: "HEAD" });
-    // logger.info(`Valid Git repository at: ${repoPath}`); // Retain this info log as per best practice
+    // logger.info(`Valid Git repository at: ${repoPath}`);
     return true;
   } catch (error: unknown) {
     return false;
