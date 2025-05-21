@@ -127,7 +127,7 @@ describe('Repository Utilities', () => {
         vi.mocked(generateEmbedding).mockResolvedValue([0.1, 0.2]);
 
         await indexRepository(mockQdrantClientInstance, repoPath);
-        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Filtered to 1 code files for indexing')); // only file.ts
+        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Filtered to 2 code files for indexing')); // file.ts and empty.js
         expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Skipping /test/repo/empty.js: empty file'));
         expect(mockQdrantClientInstance.upsert).toHaveBeenCalledTimes(1); // Only for file.ts
         expect(mockQdrantClientInstance.upsert).toHaveBeenCalledWith(configService.COLLECTION_NAME, expect.objectContaining({
@@ -238,6 +238,10 @@ describe('Repository Utilities', () => {
         });
         vi.mocked(fs.stat).mockResolvedValue({ mtime: new Date() } as any);
         vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+        
+        // Mock Qdrant scroll to prevent errors during stale check for this specific test
+        vi.mocked(mockQdrantClientInstance.scroll).mockResolvedValueOnce({ points: [], next_page_offset: undefined });
+
 
         await indexRepository(mockQdrantClientInstance, repoPath);
         expect(logger.error).toHaveBeenCalledWith('Failed to index /test/repo/bad.ts', { message: 'Read failed for bad.ts' });
@@ -294,12 +298,15 @@ describe('Repository Utilities', () => {
         { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } }, 
         { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
       ]);
-      mockExec.mockImplementation((command, options, callback) => {
+      vi.mocked(exec).mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') { // Handle case where options is omitted
+          callback = options;
+        }
         if (callback) callback(null, 'diff_content_stdout', '');
         return {} as any; // Return a dummy child process
       });
       const result = await getRepositoryDiff(repoPath);
-      expect(mockExec).toHaveBeenCalledWith(
+      expect(exec).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath }),
         expect.any(Function)

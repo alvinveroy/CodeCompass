@@ -80,10 +80,22 @@ describe('ConfigService', () => {
 
     // Default mock for log directory creation
     vi.mocked(fs.existsSync).mockImplementation((p) => {
-        if (p === MOCK_LOG_DIR || p === MOCK_CONFIG_DIR) return false; // Simulate not existing initially
+        // Simulate that the base config directory exists, but the log dir might not.
+        if (p === MOCK_CONFIG_DIR) return true; 
+        if (p === MOCK_LOG_DIR) return false; // Winston will try to create this.
         return false;
     });
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined); // Simulate successful creation
+    vi.mocked(fs.mkdirSync).mockImplementation((p) => {
+      // Ensure recursive creation is handled if Winston attempts it.
+      // The actual path Winston uses for mkdirSync will be MOCK_LOG_DIR.
+      // We need to make sure this mock doesn't throw for that path.
+      if (p === MOCK_LOG_DIR || p === MOCK_CONFIG_DIR) {
+        return undefined;
+      }
+      // For other paths, if any, let it behave as default (or throw if not expected)
+      // This simplistic approach assumes Winston is the primary user of mkdirSync here.
+      return undefined; // Simulate successful creation for any path it's called with.
+    });
   });
 
   afterEach(() => {

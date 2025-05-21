@@ -172,7 +172,8 @@ export function createAgentState(sessionId: string, query: string): AgentState {
 }
 
 // Generate the agent system prompt
-function generateAgentSystemPrompt(availableTools: Tool[]): string {
+// Exported for testing
+export function generateAgentSystemPrompt(availableTools: Tool[]): string {
   return `You are CodeCompass Agent, an AI assistant that helps developers understand and work with codebases.
 You will be provided with context from the repository, which may include search results, file content, and summaries of recent changes (diffs).
 If a diff is very large, a summary will be given. Use all provided information to inform your responses and plans.
