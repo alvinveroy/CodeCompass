@@ -73,12 +73,12 @@ vi.mock('fs/promises', () => {
 
 // Import mocked dependencies
 import { getLLMProvider } from '../lib/llm-provider';
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, _getRelevantResults } from '../lib/state';
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, _getRelevantResults as _getRelevantResults_unused } from '../lib/state';
 import { searchWithRefinement } from '../lib/query-refinement';
-import { _logger as _mockedLoggerFromAgentPerspective, _configService as _agentTestConfig } from '../lib/config-service';
-import { validateGitRepository, getRepositoryDiff, _getCommitHistoryWithChanges } from '../lib/repository';
+import { _logger as _mockedLoggerFromAgentPerspective_unused, _configService as _agentTestConfig_unused } from '../lib/config-service';
+import { validateGitRepository, getRepositoryDiff, _getCommitHistoryWithChanges as _getCommitHistoryWithChanges_unused } from '../lib/repository';
 import git from 'isomorphic-git';
-import { readFile, readdir, _stat, _access } from 'fs/promises';
+import { readFile, readdir, _stat as _stat_unused, _access as _access_unused } from 'fs/promises';
 
 // For testing the *original* parseToolCalls and executeToolCall:
 let ActualAgentModule: typeof import('../lib/agent');
@@ -106,9 +106,9 @@ describe('Agent', () => {
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
     // Clear logger mocks (assuming logger is imported from config-service which is mocked)
-    const { logger: agentLogger } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service'); // eslint-disable-line @typescript-eslint/no-unused-vars
-    // if (agentLogger && typeof (agentLogger.info as Mock).mockClear === 'function') { // Check if logger and its methods are mocks
-    //   (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
+    const { logger: _agentLogger_unused } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service'); 
+    // if (_agentLogger_unused && typeof (_agentLogger_unused.info as Mock).mockClear === 'function') { // Check if logger and its methods are mocks
+    //   (Object.values(_agentLogger_unused) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     // }
 
     (validateGitRepository as Mock).mockReset().mockResolvedValue(true);
@@ -203,13 +203,17 @@ describe('Agent', () => {
 
       // Verify that the LLM was called for reasoning and final response
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // Verification, Reasoning, Final Response
-      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool')); // eslint-disable-line @typescript-eslint/unbound-method
-      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code')); // eslint-disable-line @typescript-eslint/unbound-method
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool')); 
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code')); 
 
       // Verify that searchWithRefinement (a dependency of executeToolCall for "search_code") was called
-      expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']); // eslint-disable-line @typescript-eslint/unbound-method
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']); 
       
-      expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.')); // eslint-disable-line @typescript-eslint/unbound-method
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.')); 
     });
   });
   

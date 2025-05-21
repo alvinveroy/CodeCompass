@@ -3,9 +3,9 @@ import { type ExecException } from 'child_process'; // For type annotation
 
 // 1. Mock 'child_process' and replace 'exec' with a vi.fn() created IN THE FACTORY.
 vi.mock('child_process', async (importOriginal) => {
-  const actualCp = await importOriginal<typeof import('child_process')>(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const _actualCp = await importOriginal<typeof import('child_process')>(); 
   return {
-    ...actualCp,
+    ..._actualCp,
     exec: vi.fn(), // This vi.fn() is created when the factory runs.
   };
 });
@@ -33,9 +33,9 @@ vi.mock('fs/promises', () => {
 // Mock 'isomorphic-git'
 // isomorphic-git exports named functions. We mock them directly.
 vi.mock('isomorphic-git', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('isomorphic-git')>(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const _actual = await importOriginal<typeof import('isomorphic-git')>(); 
   return {
-    // ...actual, // Spread actual to keep other exports // This was causing issues with TREE mock
+    // ..._actual, // Spread actual to keep other exports // This was causing issues with TREE mock
     resolveRef: vi.fn(),
     listFiles: vi.fn(),
     log: vi.fn(),
@@ -43,7 +43,7 @@ vi.mock('isomorphic-git', async (importOriginal) => {
     // diffTrees: vi.fn(), // No longer directly called by SUT's getCommitHistoryWithChanges
     walk: vi.fn(),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TREE: vi.fn((args: any) => ({
+    TREE: vi.fn((args?: { ref?: string; oid?: string }) => ({
       // Simulate Walker object structure expected by SUT's git.TREE({ ref: treeOid })
       // The mock TREE needs to return something that walk's `trees` parameter can use.
       // The important part for the mock is that `trees[0]._id` or similar can be accessed if the test relies on it.
@@ -108,7 +108,7 @@ const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExe
 // Import named mocks from isomorphic-git
 import * as git from 'isomorphic-git'; // Import as namespace
 import path from 'path';
-import { QdrantClient } from '@qdrant/js-client-rest';
+// import { QdrantClient } from '@qdrant/js-client-rest'; // _QdrantClient if used
 
 
 describe('Repository Utilities', () => {
@@ -118,17 +118,22 @@ describe('Repository Utilities', () => {
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
-    vi.mocked(git.log).mockResolvedValue([ // Use git.log
-      { oid: 'commit2_oid', commit: { message: 'Second', author: {} as unknown as any, committer: {} as unknown as any, parent: ['commit1_oid'], tree: 'tree2' } }, // eslint-disable-line @typescript-eslint/no-explicit-any
-      { oid: 'commit1_oid', commit: { message: 'First', author: {} as unknown as any, committer: {} as unknown as any, parent: [], tree: 'tree1' } } // eslint-disable-line @typescript-eslint/no-explicit-any
-    ] as unknown as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(git.log).mockResolvedValue([ 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } }, 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } } 
+    ] as any); 
   };
   
   // Renamed for clarity
   const setupGitLogWithSingleCommit = () => {
-    vi.mocked(git.log).mockResolvedValue([ // Use git.log
-      { oid: 'commit1_oid', commit: { message: 'First', author: {} as unknown as any, committer: {} as unknown as any, parent: [], tree: 'tree1' } } // eslint-disable-line @typescript-eslint/no-explicit-any
-    ] as unknown as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(git.log).mockResolvedValue([ 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } } 
+    ] as any); 
   };
 
   beforeEach(() => {
@@ -273,13 +278,19 @@ describe('Repository Utilities', () => {
             { oid: 'commit2', commit: { message: 'Feat: new feature', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, tree: 'tree2_oid', parent: ['commit1_oid'] } },
             { oid: 'commit1', commit: { message: 'Initial commit', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, tree: 'tree1_oid', parent: [] } },
         ];
-        vi.mocked(git.log).mockResolvedValue(mockCommits as unknown as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        vi.mocked(git.log).mockResolvedValue(mockCommits as any); 
 
-        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => { // Use mockedReadCommit
-            if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as unknown as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-            if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-            if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-            return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as unknown as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => { 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as any; 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any; 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any; 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as any; 
         });
 
         // vi.mocked(git.diffTrees) no longer needed here as SUT uses git.walk for diffing.
@@ -290,27 +301,33 @@ describe('Repository Utilities', () => {
             // trees[0] corresponds to parentCommitData.commit.tree
             // trees[1] corresponds to commitData.commit.tree
 
-            if (map && trees.length === 1 && (trees[0] as any)._id === 'mock_tree_id_default') { // eslint-disable-line @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (map && trees.length === 1 && (trees[0] as any)._id === 'mock_tree_id_default') { 
                 // Simulate initial commit walk: one file added
                 // The SUT's initial commit logic uses `trees: [git.TREE()]`. Our `git.TREE` mock without args gives `_id: 'mock_tree_id_default'`.
-                await map('initial.ts', [{ type: () => 'blob', oid: () => 'blob_oid_initial', mode: () => 0o100644 }] as unknown as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await map('initial.ts', [{ type: () => 'blob', oid: () => 'blob_oid_initial', mode: () => 0o100644 }] as any); 
             } else if (map && trees.length === 2) {
                 // Simulate two-tree walk for diffing (e.g., between tree1_oid and tree2_oid)
                 // This part needs to align with how the SUT calls git.TREE({ ref: treeOid })
                 // Our TREE mock sets _id to args.ref. So trees[0]._id will be 'tree1_oid', trees[1]._id will be 'tree2_oid'.
-                if ((trees[0] as any)._id === 'tree1_oid' && (trees[1] as any)._id === 'tree2_oid') { // eslint-disable-line @typescript-eslint/no-explicit-any
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if ((trees[0] as any)._id === 'tree1_oid' && (trees[1] as any)._id === 'tree2_oid') { 
                     // Simulate one modified file
                     const mockEntryBefore = { type: () => 'blob', oid: () => 'blob_before_oid', mode: () => 0o100644 };
                     const mockEntryAfter = { type: () => 'blob', oid: () => 'blob_after_oid', mode: () => 0o100644 };
-                    await map('file.ts', [mockEntryBefore as any, mockEntryAfter as any]); // eslint-disable-line @typescript-eslint/no-explicit-any
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    await map('file.ts', [mockEntryBefore as any, mockEntryAfter as any]); 
                     
                     // Simulate one added file
                     const mockEntryAdded = { type: () => 'blob', oid: () => 'blob_added_oid', mode: () => 0o100644 };
-                    await map('added_file.ts', [null, mockEntryAdded as any]); // eslint-disable-line @typescript-eslint/no-explicit-any
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    await map('added_file.ts', [null, mockEntryAdded as any]); 
 
                     // Simulate one deleted file
                     const mockEntryDeleted = { type: () => 'blob', oid: () => 'blob_deleted_oid', mode: () => 0o100644 };
-                    await map('deleted_file.ts', [mockEntryDeleted as any, null]); // eslint-disable-line @typescript-eslint/no-explicit-any
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    await map('deleted_file.ts', [mockEntryDeleted as any, null]); 
                 }
             }
             return []; // Default return for walk

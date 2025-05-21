@@ -37,8 +37,6 @@ describe('Config Module', () => {
   });
 
   describe('Default Configuration', () => {
-    // Use 'any' for type to avoid complex typeof import for the singleton instance
-    // or define a proper type if preferred: typeof import('../lib/config-service').configService
     let currentConfigService: InstanceType<typeof import('../lib/config-service').ConfigService>;
 
     beforeEach(async () => {
@@ -80,7 +78,7 @@ describe('Config Module', () => {
   });
 
   describe('Logger Configuration', () => {
-    let currentConfigService: any;
+    let currentConfigService: InstanceType<typeof import('../lib/config-service').ConfigService>;
 
     beforeEach(async () => {
       // Dynamically import for a fresh instance
@@ -141,6 +139,7 @@ describe('Config Module', () => {
             // This should ideally not be called for config files if existsSync is false
             if (typeof pathToCheck === 'string' && (pathToCheck.endsWith('model-config.json') || pathToCheck.endsWith('deepseek-config.json'))) {
               const e = new Error(`ENOENT: no such file or directory, open '${pathToCheck}' (mocked)`);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (e as any).code = 'ENOENT';
               throw e;
             }

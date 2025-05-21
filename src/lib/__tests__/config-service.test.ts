@@ -27,19 +27,19 @@ vi.mock('fs', () => {
 vi.mock('winston', () => {
       // Define the logger instance that createLogger will return INSIDE the factory
       const MOCK_LOGGER_INSTANCE = { // Changed name to avoid confusion
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-        debug: vi.fn(),
-        add: vi.fn(), // Ensure this is present
-        remove: vi.fn(), // And any other methods like remove if used
+        info: vi.fn((_message?: unknown, ..._meta: unknown[]) => undefined),
+        warn: vi.fn((_message?: unknown, ..._meta: unknown[]) => undefined),
+        error: vi.fn((_message?: unknown, ..._meta: unknown[]) => undefined),
+        debug: vi.fn((_message?: unknown, ..._meta: unknown[]) => undefined),
+        add: vi.fn((_transport: unknown) => MOCK_LOGGER_INSTANCE), 
+        remove: vi.fn((_transport: unknown) => MOCK_LOGGER_INSTANCE), 
       };
 
       // Define mocks for winston.format properties that ConfigService uses
       // ConfigService uses: combine, timestamp, printf, colorize, splat, simple, json
       const mockFormat = {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        combine: vi.fn((..._args: any[]) => ({ // combine should return a format object
+        combine: vi.fn((..._args: unknown[]) => ({ // combine should return a format object
           // Simulate a basic format object structure.
           // The actual transformation logic isn't critical for most ConfigService tests,
           // just that createLogger receives a valid format object.
@@ -88,7 +88,7 @@ describe('ConfigService', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (ImportedConfigServiceClass as any).instance = undefined;
     // Call the public static getter to create/get the new instance
-    return ImportedConfigServiceClass.getInstance() as ActualConfigService;
+    return ImportedConfigServiceClass.getInstance();
   };
 
   beforeEach(async () => {
@@ -128,7 +128,7 @@ describe('ConfigService', () => {
     // This relies on the factory structure: vi.mock('winston', () => { const MOCK_LOGGER_INSTANCE = {...}; return { createLogger: vi.fn().mockReturnValue(MOCK_LOGGER_INSTANCE), ... } })
     // Access the mock logger instance directly from the mock setup
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const loggerInstanceFromMockFactory = (_winstonMockedModule as any).default.createLogger();
+    const loggerInstanceFromMockFactory = (_winstonMockedModule as any).default.createLogger() as import('winston').Logger;
 
 
     if (loggerInstanceFromMockFactory) {
@@ -221,7 +221,7 @@ describe('ConfigService', () => {
   it('should derive SUMMARIZATION_MODEL from SUGGESTION_MODEL if not set', async () => {
     // Ensure SUMMARIZATION_MODEL is not in env or file for this specific test
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUMMARIZATION_MODEL', undefined as any);
+    vi.stubEnv('SUMMARIZATION_MODEL', undefined as any); 
     vi.stubEnv('SUGGESTION_MODEL', 'test_suggestion_model');
     // fs.existsSync will default to only MOCK_CONFIG_DIR existing from beforeEach, so no model-config.json
     // fs.readFileSync will default to '{}'
@@ -240,22 +240,22 @@ describe('ConfigService', () => {
   it('should persist model configuration when setSuggestionModel is called', async () => {
     // Ensure env vars for derived models are clear for this specific test
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUMMARIZATION_MODEL', undefined as any);
+    vi.stubEnv('SUMMARIZATION_MODEL', undefined as any); 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('REFINEMENT_MODEL', undefined as any);
+    vi.stubEnv('REFINEMENT_MODEL', undefined as any); 
     // Also clear any potential top-level model env vars that might interfere with defaults
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUGGESTION_MODEL', undefined as any);
+    vi.stubEnv('SUGGESTION_MODEL', undefined as any); 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUGGESTION_PROVIDER', undefined as any);
+    vi.stubEnv('SUGGESTION_PROVIDER', undefined as any); 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('EMBEDDING_PROVIDER', undefined as any);
+    vi.stubEnv('EMBEDDING_PROVIDER', undefined as any); 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('OPENAI_API_KEY', undefined as any);
+    vi.stubEnv('OPENAI_API_KEY', undefined as any); 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('GEMINI_API_KEY', undefined as any);
+    vi.stubEnv('GEMINI_API_KEY', undefined as any); 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('CLAUDE_API_KEY', undefined as any);
+    vi.stubEnv('CLAUDE_API_KEY', undefined as any); 
 
 
     // Setup fs mocks: .codecompass dir exists, but model-config.json does not yet.
@@ -326,7 +326,7 @@ describe('ConfigService', () => {
   it('should handle malformed model-config.json gracefully', async () => {
     // Ensure SUGGESTION_MODEL is not set in env for this specific test
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUGGESTION_MODEL', undefined as any);
+    vi.stubEnv('SUGGESTION_MODEL', undefined as any); 
     // Specific fs setup for this test
     vi.mocked(fs.existsSync).mockImplementation((p) => 
       String(p) === MOCK_CONFIG_DIR || String(p) === MOCK_MODEL_CONFIG_FILE // model-config.json "exists"
@@ -358,7 +358,7 @@ describe('ConfigService', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.stubEnv('OLLAMA_HOST', undefined as any); // Example, if it affects global state indirectly
 
-    const service = await createServiceInstance(); 
+    const service = await createServiceInstance();
     // initializeGlobalState is called in constructor
     expect(global.CURRENT_SUGGESTION_PROVIDER).toBe('test_provider_global');
     expect(global.CURRENT_SUGGESTION_MODEL).toBe('test_model_global');
@@ -367,7 +367,7 @@ describe('ConfigService', () => {
   it('reloadConfigsFromFile should re-read environment and file configs', async () => {
     // Initial setup: no env var, no file for SUGGESTION_MODEL
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUGGESTION_MODEL', undefined as any);
+    vi.stubEnv('SUGGESTION_MODEL', undefined as any); 
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p) === MOCK_CONFIG_DIR); // Only .codecompass dir
     vi.mocked(fs.readFileSync).mockReturnValue('{}'); // No config files initially
 
