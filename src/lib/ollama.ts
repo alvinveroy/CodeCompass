@@ -1,4 +1,4 @@
-import axios from "axios"; // axios will be used by OllamaProvider.generateText
+import axios, { AxiosError } from "axios"; // axios will be used by OllamaProvider.generateText
 import { configService, logger } from "./config-service";
 import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types"; // OllamaGenerateResponse might be used by OllamaProvider
 import { preprocessText } from "../utils/text-utils";
@@ -61,17 +61,19 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
     throw new Error(`Model ${model} not functional`);
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    const axiosError = error as { response?: { status: number; data: unknown } };
-    
-    logger.error(`Ollama model check error for ${model}`, {
-      message: err.message,
-      response: axiosError.response
+    let errorDetails: { message: string, response?: { status: number; data: unknown } } = { message: err.message };
+
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      errorDetails.response = axiosError.response
         ? {
             status: axiosError.response.status,
             data: axiosError.response.data,
           }
-        : null,
-    });
+        : undefined;
+    }
+    
+    logger.error(`Ollama model check error for ${model}`, errorDetails);
     throw new Error(
       `Ollama model ${model} is not available. Pull it with: ollama pull ${model}`
     );
@@ -115,23 +117,31 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   } catch (error: unknown) {
     // incrementCounter('embedding_errors'); // Metrics removed
     const err = error instanceof Error ? error : new Error(String(error));
-    const axiosError = error as { 
-      code?: string; 
-      response?: { status: number; data: unknown } 
-    };
     
-    logger.error("Ollama embedding error", {
+    let errorLogDetails: { 
+      message: string; 
+      code?: string; 
+      response?: { status: number; data: unknown };
+      inputLength: number;
+      inputSnippet: string;
+    } = {
       message: err.message,
-      code: axiosError.code,
-      response: axiosError.response
+      inputLength: truncatedText.length,
+      inputSnippet: truncatedText.slice(0, 100),
+    };
+
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      errorLogDetails.code = axiosError.code;
+      errorLogDetails.response = axiosError.response
         ? {
             status: axiosError.response.status,
             data: axiosError.response.data,
           }
-        : null,
-      inputLength: truncatedText.length,
-      inputSnippet: truncatedText.slice(0, 100),
-    });
+        : undefined;
+    }
+    
+    logger.error("Ollama embedding error", errorLogDetails);
     throw new Error(`Failed to generate embedding: ${err.message}`);
   }
 }
