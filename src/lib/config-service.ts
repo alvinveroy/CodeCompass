@@ -82,6 +82,28 @@ class ConfigService {
       }
     }
     
+    // QDRANT_HOST and COLLECTION_NAME were previously initialized directly from process.env or defaults
+    // Let's align QDRANT_HOST with the validation pattern used for OLLAMA_HOST
+    const defaultQdrantHost = "http://127.0.0.1:6333";
+    const qdrantHostEnv = process.env.QDRANT_HOST;
+    if (qdrantHostEnv && qdrantHostEnv.trim() !== "") {
+      try {
+        const parsedUrl = new URL(qdrantHostEnv);
+        if (parsedUrl.protocol && (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:')) {
+          this.QDRANT_HOST = qdrantHostEnv;
+        } else {
+          this.logger.warn(`QDRANT_HOST environment variable "${qdrantHostEnv}" has an invalid or missing protocol. Falling back to default: ${defaultQdrantHost}`);
+          this.QDRANT_HOST = defaultQdrantHost;
+        }
+      } catch (e) {
+        this.logger.warn(`QDRANT_HOST environment variable "${qdrantHostEnv}" is not a valid URL. Error: ${(e as Error).message}. Falling back to default: ${defaultQdrantHost}`);
+        this.QDRANT_HOST = defaultQdrantHost;
+      }
+    } else {
+      this.QDRANT_HOST = defaultQdrantHost; // Use default if env var is not set or is empty/whitespace
+    }
+    this.COLLECTION_NAME = process.env.COLLECTION_NAME || "codecompass_collection"; // Default, not typically changed by user config
+
     this.logger = winston.createLogger({
       level: process.env.NODE_ENV === "test" ? "error" : "info",
       format: winston.format.combine(
@@ -119,27 +141,8 @@ class ConfigService {
       this.OLLAMA_HOST = defaultOllamaHost; // Use default if env var is not set or is empty/whitespace
     }
 
-    // Validate and set QDRANT_HOST
-    const defaultQdrantHost = "http://127.0.0.1:6333";
-    const qdrantHostEnv = process.env.QDRANT_HOST;
-    if (qdrantHostEnv && qdrantHostEnv.trim() !== "") {
-      try {
-        const parsedUrl = new URL(qdrantHostEnv);
-        if (parsedUrl.protocol && (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:')) {
-          this.QDRANT_HOST = qdrantHostEnv;
-        } else {
-          this.logger.warn(`QDRANT_HOST environment variable "${qdrantHostEnv}" has an invalid or missing protocol. Falling back to default: ${defaultQdrantHost}`);
-          this.QDRANT_HOST = defaultQdrantHost;
-        }
-      } catch (e) {
-        this.logger.warn(`QDRANT_HOST environment variable "${qdrantHostEnv}" is not a valid URL. Error: ${(e as Error).message}. Falling back to default: ${defaultQdrantHost}`);
-        this.QDRANT_HOST = defaultQdrantHost;
-      }
-    } else {
-      this.QDRANT_HOST = defaultQdrantHost; // Use default if env var is not set or is empty/whitespace
-    }
-    
-    this.COLLECTION_NAME = "codecompass"; // Default, not typically changed by user config
+    // QDRANT_HOST and COLLECTION_NAME are now initialized above, before logger.
+    // The previous direct assignment of this.QDRANT_HOST and this.COLLECTION_NAME is removed from here.
     
     this.MAX_INPUT_LENGTH = 4096;
     this.MAX_SNIPPET_LENGTH = 500;
