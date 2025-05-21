@@ -111,7 +111,7 @@ describe('Repository Utilities', () => {
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
-    vi.mocked(mockedGitLog).mockResolvedValue([ // Use mockedGitLog
+    vi.mocked(git.log).mockResolvedValue([ // Use git.log
       { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } },
       { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
     ] as any);
@@ -119,7 +119,7 @@ describe('Repository Utilities', () => {
   
   // Renamed for clarity
   const setupGitLogWithSingleCommit = () => {
-    vi.mocked(mockedGitLog).mockResolvedValue([ // Use mockedGitLog
+    vi.mocked(git.log).mockResolvedValue([ // Use git.log
       { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } }
     ] as any);
   };
