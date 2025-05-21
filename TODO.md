@@ -73,21 +73,20 @@ The following prioritization aims to tackle foundational improvements first, bui
         *   [x] Guide the agent on how to react to insufficient context (e.g., "If initial search results are sparse or low-relevance for a broad query, consider using `get_repository_context` with a broader query, or explicitly request a wider search using `request_broader_context` tool if available.").
 
 3.  **Task P2.3 (Advanced - Formerly Task 6.1): LLM-Powered Query Refinement:**
-    *   [ ] Modify `src/lib/query-refinement.ts`:
-        *   [ ] Design a new prompt for an LLM to perform query refinement. Input: original query, initial (poor) search results, (optional) high-level repository summary. Output: a refined query string.
-        *   [ ] Integrate this LLM call into the `searchWithRefinement` loop as an alternative or supplement to the current rule-based refinement.
-        *   [ ] Add necessary configuration for this LLM call (e.g., specific model, prompt template).
+    *   [x] Modify `src/lib/query-refinement.ts`:
+        *   [x] Design a new prompt for an LLM to perform query refinement. Input: original query, initial (poor) search results, (optional) high-level repository summary. Output: a refined query string.
+        *   [x] Integrate this LLM call into the `searchWithRefinement` loop as an alternative or supplement to the current rule-based refinement.
+        *   [x] Add necessary configuration for this LLM call (e.g., specific model, prompt template via `configService`).
 
 4.  **Task P2.4 (Advanced - Formerly Task 7.1-7.3): Explicit "Request More Context" Agent Tool:**
-    *   [ ] Define a new tool in `src/lib/agent.ts` (in `toolRegistry` and `executeToolCall`):
-        *   Name: e.g., `request_broader_context`.
-        *   Parameters: e.g., `current_query: string`, `desired_context_type: enum("wider_search_results", "file_listing_for_module", "full_content_of_file", "dependencies_of_symbol")`, `target_identifier: string (e.g., module name, file path, symbol name)`.
-    *   [ ] Implement the logic for `executeToolCall` for this new tool. This might involve:
-        *   Re-running `searchWithRefinement` with an adjusted original query or increased search limit.
-        *   Using `isomorphic-git` or file system operations to list files in a directory.
-        *   Reading full file content.
-        *   (More advanced) Integrating with a code analysis library to find dependencies.
-    *   [ ] Update `generateAgentSystemPrompt` to inform the agent about this new tool and when to use it.
+    *   [>] Define a new tool in `src/lib/agent.ts` (in `toolRegistry` and `executeToolCall`):
+        *   [>] Name: e.g., `request_additional_context`.
+        *   [>] Parameters: e.g., `context_type: enum("MORE_SEARCH_RESULTS", "FULL_FILE_CONTENT", "DIRECTORY_LISTING")`, `query_or_path: string`, `reasoning: string`.
+    *   [>] Implement the logic for `executeToolCall` for this new tool. This might involve:
+        *   [>] Re-running `searchWithRefinement` with an adjusted original query or increased search limit for "MORE_SEARCH_RESULTS".
+        *   [>] Using file system operations to list files in a directory for "DIRECTORY_LISTING".
+        *   [>] Reading full file content for "FULL_FILE_CONTENT", potentially with summarization for very large files.
+    *   [>] Update `generateAgentSystemPrompt` to inform the agent about this new tool and when to use it.
 
 ---
 
