@@ -8,22 +8,19 @@ import nodeFs from 'fs';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // --- Mock for promisify(exec) ---
-// 1. Define the mock function that promisify(exec) will return.
-//    This needs to be accessible by tests.
-const MOCK_EXEC_ASYNC_IMPLEMENTATION = vi.fn();
+// This variable will hold the mock function instance created by the 'util' mock factory.
+let MOCK_EXEC_ASYNC_FN_INSTANCE: vi.Mock;
 
-// 2. Mock the 'util' module.
 vi.mock('util', async (importOriginal) => {
-  const actualUtilModule = await importOriginal<typeof util>(); // Use the imported util
+  const actualUtilModule = await importOriginal<typeof import('util')>();
+  const factoryCreatedMock = vi.fn(); 
+  MOCK_EXEC_ASYNC_FN_INSTANCE = factoryCreatedMock; // Assign to the outer scope variable
   return {
-    ...actualUtilModule, // Spread all exports from the actual 'util' module
+    ...actualUtilModule,
     promisify: (fnToPromisify: any) => {
-      // If the function being promisified is the actual exec from child_process,
-      // return our predefined mock function.
-      if (fnToPromisify === actualChildProcessExec) {
-        return MOCK_EXEC_ASYNC_IMPLEMENTATION;
+      if (fnToPromisify === actualChildProcessExec) { 
+        return factoryCreatedMock; 
       }
-      // Otherwise, call the original promisify.
       return actualUtilModule.promisify(fnToPromisify);
     },
   };
@@ -87,7 +84,9 @@ const mockQdrantClientInstance = {
 describe('Repository Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    MOCK_EXEC_ASYNC_IMPLEMENTATION.mockReset(); // Reset the mock for execAsync
+    if (MOCK_EXEC_ASYNC_FN_INSTANCE) { // Check if initialized
+        MOCK_EXEC_ASYNC_FN_INSTANCE.mockReset();
+    }
     // Reset other mocks like logger, fsPromises, git functions
     vi.mocked(fsPromises.access).mockReset();
     vi.mocked(fsPromises.stat).mockReset(); // Ensure stat is reset if used by SUT
@@ -161,11 +160,13 @@ describe('Repository Utilities', () => {
 
     it('should call git diff command and return stdout', async () => {
       setupValidRepoAndCommitsMocks();
-      MOCK_EXEC_ASYNC_IMPLEMENTATION.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
+      // Ensure MOCK_EXEC_ASYNC_FN_INSTANCE is used
+      if (!MOCK_EXEC_ASYNC_FN_INSTANCE) throw new Error("MOCK_EXEC_ASYNC_FN_INSTANCE not initialized");
+      MOCK_EXEC_ASYNC_FN_INSTANCE.mockResolvedValueOnce({ stdout: 'diff_content_stdout_explicit', stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       
-      expect(MOCK_EXEC_ASYNC_IMPLEMENTATION).toHaveBeenCalledWith(
+      expect(MOCK_EXEC_ASYNC_FN_INSTANCE).toHaveBeenCalledWith(
         'git diff commit1_oid commit2_oid', 
         expect.objectContaining({ cwd: repoPath, maxBuffer: 1024 * 1024 * 5 })
       );
@@ -175,7 +176,8 @@ describe('Repository Utilities', () => {
     it('should truncate long diff output', async () => {
       setupValidRepoAndCommitsMocks();
       const longDiff = 'a'.repeat(10001); // MAX_DIFF_LENGTH is 10000 in repository.ts
-      MOCK_EXEC_ASYNC_IMPLEMENTATION.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
+      if (!MOCK_EXEC_ASYNC_FN_INSTANCE) throw new Error("MOCK_EXEC_ASYNC_FN_INSTANCE not initialized");
+      MOCK_EXEC_ASYNC_FN_INSTANCE.mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
 
       const result = await getRepositoryDiff(repoPath);
       expect(result).toContain('... (diff truncated)');
@@ -187,7 +189,8 @@ describe('Repository Utilities', () => {
       const mockError = new Error('Git command failed') as ExecException & { stdout?: string; stderr?: string };
       (mockError as any).code = 128;
       mockError.stderr = 'stderr from execAsync rejection'; 
-      MOCK_EXEC_ASYNC_IMPLEMENTATION.mockRejectedValueOnce(mockError);
+      if (!MOCK_EXEC_ASYNC_FN_INSTANCE) throw new Error("MOCK_EXEC_ASYNC_FN_INSTANCE not initialized");
+      MOCK_EXEC_ASYNC_FN_INSTANCE.mockRejectedValueOnce(mockError);
       
       // Clear logger before the call, as validateGitRepository might log
       logger.error.mockClear(); 
