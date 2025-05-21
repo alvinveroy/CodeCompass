@@ -23,6 +23,7 @@
     "version:release": "ts-node src/scripts/version-bump.ts patch --commit --push --changelog",
     "version:minor-release": "ts-node src/scripts/version-bump.ts minor --commit --push --changelog",
     "version:major-release": "ts-node src/scripts/version-bump.ts major --commit --push --changelog",
+    "version:set-from-tag": "ts-node src/scripts/version-bump.ts",
     "publish:local": "npm run build && npm version patch && npm publish",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix"

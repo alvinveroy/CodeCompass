@@ -9,17 +9,11 @@ type BumpType = 'major' | 'minor' | 'patch';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-const bumpType: BumpType = (args[0] as BumpType) || 'patch';
+const bumpTypeOrVersionArg: string | undefined = args[0];
 const shouldCommit = args.includes('--commit');
 const shouldPush = args.includes('--push');
 const updateChangelog = args.includes('--changelog');
 const shouldPublish = args.includes('--publish');
-
-// Validate bump type
-if (!['major', 'minor', 'patch'].includes(bumpType)) {
-  console.error('Invalid bump type. Use "major", "minor", or "patch"');
-  process.exit(1);
-}
 
 // Get the project root directory
 const projectRoot = path.resolve(__dirname, '..', '..');
@@ -33,19 +27,32 @@ const packageJson = JSON.parse(packageJsonContent) as { version: string };
 const currentVersion: string = packageJson.version;
 const [major, minor, patch] = currentVersion.split('.').map(Number);
 
-// Calculate new version based on bump type
+// Calculate or set new version
 let newVersion: string;
-switch (bumpType) {
-  case 'major':
-    newVersion = `${major + 1}.0.0`;
-    break;
-  case 'minor':
-    newVersion = `${major}.${minor + 1}.0`;
-    break;
-  case 'patch':
-  default:
-    newVersion = `${major}.${minor}.${patch + 1}`;
-    break;
+const versionRegex = /^\d+\.\d+\.\d+$/;
+
+if (bumpTypeOrVersionArg && versionRegex.test(bumpTypeOrVersionArg)) {
+  newVersion = bumpTypeOrVersionArg;
+  console.log(`Using provided version: ${newVersion}`);
+} else {
+  const bumpType: BumpType = (bumpTypeOrVersionArg as BumpType) || 'patch';
+  if (!['major', 'minor', 'patch'].includes(bumpType)) {
+    console.error(`Invalid argument: '${bumpTypeOrVersionArg}'. Must be 'major', 'minor', 'patch', or a full version string (e.g., '1.2.3').`);
+    process.exit(1);
+  }
+
+  switch (bumpType) {
+    case 'major':
+      newVersion = `${major + 1}.0.0`;
+      break;
+    case 'minor':
+      newVersion = `${major}.${minor + 1}.0`;
+      break;
+    case 'patch':
+      newVersion = `${major}.${minor}.${patch + 1}`;
+      break;
+  }
+  console.log(`Calculated new version ${newVersion} using bump type: ${bumpType}`);
 }
 
 // Update package.json while preserving formatting
