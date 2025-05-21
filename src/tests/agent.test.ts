@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, assert, type Mock, type SpyInstance } from 'vitest';
 import { promises as fsPromises, Dirent } from 'fs'; // Import Dirent directly from 'fs'
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -39,7 +39,7 @@ vi.mock('fs/promises', () => {
   const accessMock = vi.fn();
   const statMock = vi.fn();
   // Define a mock Dirent structure that fsPromises.readdir would resolve with
-  const mockDirent = (name: string, isDir: boolean): Dirent => ({ // Use imported Dirent
+  const mockDirent = (name: string, isDir: boolean, basePath: string = '/test/repo/some/path'): Dirent => ({
     name,
     isFile: () => !isDir,
     isDirectory: () => isDir,
@@ -48,6 +48,8 @@ vi.mock('fs/promises', () => {
     isSymbolicLink: () => false,
     isFIFO: () => false,
     isSocket: () => false,
+    path: basePath, // Add path property
+    parentPath: path.dirname(basePath), // Add parentPath property
   });
 
   const mockFsPromises = {
@@ -98,28 +100,28 @@ describe('Agent', () => {
   beforeEach(async () => {
     vi.clearAllMocks(); // Clear all mocks from previous tests
 
-    (getLLMProvider as vi.Mock).mockResolvedValue(mockLLMProviderInstance);
+    (getLLMProvider as Mock).mockResolvedValue(mockLLMProviderInstance);
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
     // Clear logger mocks (assuming logger is imported from config-service which is mocked)
     const { logger: agentLogger } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service');
-    if (agentLogger && typeof (agentLogger.info as vi.Mock).mockClear === 'function') { // Check if logger and its methods are mocks
-      (Object.values(agentLogger) as vi.Mock[]).forEach(mockFn => mockFn.mockClear?.());
+    if (agentLogger && typeof (agentLogger.info as Mock).mockClear === 'function') { // Check if logger and its methods are mocks
+      (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     }
 
-    (validateGitRepository as vi.Mock).mockReset().mockResolvedValue(true);
-    (getRepositoryDiff as vi.Mock).mockReset().mockResolvedValue('Default diff content');
-    (searchWithRefinement as vi.Mock).mockReset().mockResolvedValue({ results: [], refinedQuery: 'refined query', relevanceScore: 0 });
+    (validateGitRepository as Mock).mockReset().mockResolvedValue(true);
+    (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
+    (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
-    (getOrCreateSession as vi.Mock).mockReset().mockImplementation((sessionIdParam, _repoPath) => ({ id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} }));
-    (addQuery as vi.Mock).mockReset();
-    (addSuggestion as vi.Mock).mockReset();
-    (updateContext as vi.Mock).mockReset();
-    (getRecentQueries as vi.Mock).mockReset().mockReturnValue([]);
+    (getOrCreateSession as Mock).mockReset().mockImplementation((sessionIdParam, _repoPath) => ({ id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} }));
+    (addQuery as Mock).mockReset();
+    (addSuggestion as Mock).mockReset();
+    (updateContext as Mock).mockReset();
+    (getRecentQueries as Mock).mockReset().mockReturnValue([]);
     vi.mocked(readFile).mockReset().mockResolvedValue('Default file content from generic mock');
     // Define a helper for creating mock Dirent objects if not done in the mock factory
-    const createMockDirent = (name: string, isDir: boolean): Dirent => ({ // Use imported Dirent
+    const createMockDirent = (name: string, isDir: boolean, basePath: string = '/test/repo/some/path'): Dirent => ({
         name,
         isFile: () => !isDir,
         isDirectory: () => isDir,
@@ -128,8 +130,10 @@ describe('Agent', () => {
         isSymbolicLink: () => false,
         isFIFO: () => false,
         isSocket: () => false,
+        path: basePath,
+        parentPath: path.dirname(basePath),
     });
-    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)]);
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false) as Dirent]);
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -157,8 +161,8 @@ describe('Agent', () => {
   describe('runAgentLoop', () => {
     const mockQdrantClient = mockQdrantClientInstance;
     const repoPath = '/test/repo';
-    let parseToolCallsSpy: vi.SpyInstance;
-    let executeToolCallSpy: vi.SpyInstance;
+    let parseToolCallsSpy: SpyInstance;
+    let executeToolCallSpy: SpyInstance;
 
     beforeEach(() => {
         mockLLMProviderInstance.generateText.mockResolvedValueOnce("LLM Verification OK"); 

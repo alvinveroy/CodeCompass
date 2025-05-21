@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll, type Mock, type SpyInstance } from 'vitest';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // 2. Mock external dependencies FIRST
@@ -44,8 +44,8 @@ describe('Query Refinement Tests', () => {
 
     // Clear logger mocks (assuming logger is imported from config-service which is mocked)
     const { logger: queryRefinementLogger } = await vi.importActual<typeof import('../config-service')>('../config-service');
-     if (queryRefinementLogger && typeof (queryRefinementLogger.info as vi.Mock).mockClear === 'function') {
-      (Object.values(queryRefinementLogger) as vi.Mock[]).forEach(mockFn => mockFn.mockClear?.());
+     if (queryRefinementLogger && typeof (queryRefinementLogger.info as Mock).mockClear === 'function') {
+      (Object.values(queryRefinementLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     }
   });
 
@@ -54,7 +54,7 @@ describe('Query Refinement Tests', () => {
   });
 
   describe('searchWithRefinement', () => {
-    let refineQuerySpy: vi.SpyInstance;
+    let refineQuerySpy: SpyInstance;
     beforeEach(() => { 
         refineQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'refineQuery').mockImplementation((query, _results, relevance) => {
             if (relevance < 0.3) return `${query} broadened by mock`;
@@ -151,9 +151,9 @@ describe('Query Refinement Tests', () => {
     // In this block, we are testing the *original* refineQuery function,
     // so we call it via ActualQueryRefinementModule.refineQuery.
     // Its internal calls (broadenQuery, etc.) should be spied upon directly on ActualQueryRefinementModule.
-    let broadenQuerySpy: vi.SpyInstance;
-    let focusQueryBasedOnResultsSpy: vi.SpyInstance;
-    let tweakQuerySpy: vi.SpyInstance;
+    let broadenQuerySpy: SpyInstance;
+    let focusQueryBasedOnResultsSpy: SpyInstance;
+    let tweakQuerySpy: SpyInstance;
 
     beforeEach(() => { 
         broadenQuerySpy = vi.spyOn(ActualQueryRefinementModule, 'broadenQuery').mockReturnValue('mock_broadened_return_val');

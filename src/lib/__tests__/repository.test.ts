@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type SpyInstance, type MockedFunction } from 'vitest';
 import { type ExecException } from 'child_process'; // For type annotation
 
 // 1. Mock 'child_process' and replace 'exec' with a vi.fn() created IN THE FACTORY.
@@ -93,7 +93,7 @@ import { logger } from '../config-service'; // configService is mocked, only log
 import { access as mockedFsAccessImported, readFile as mockedFsReadFileImported, readdir as mockedFsReadDirImported, stat as mockedFsStatImported } from 'fs/promises';
 
 // Retrieve the mock function via the globalThis workaround
-const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as vi.Mock;
+const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as Mock;
 
 // Import named mocks from isomorphic-git
 import {
@@ -112,7 +112,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 describe('Repository Utilities', () => {
   const repoPath = '/test/diff/repo';
   // Use the imported actualChildProcessExecMock as the execMock reference
-  const execMock = actualChildProcessExecMockInstance as vi.MockedFunction<typeof actualChildProcessExecMockInstance>; 
+  const execMock = actualChildProcessExecMockInstance as MockedFunction<typeof actualChildProcessExecMockInstance>; 
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
@@ -147,8 +147,8 @@ describe('Repository Utilities', () => {
     vi.mocked(mockedReadCommit).mockReset();
     vi.mocked(mockedDiffTrees).mockReset();
     vi.mocked(mockedGitWalk).mockReset();
-    if (MockedGIT_TREE_Func && typeof (MockedGIT_TREE_Func as vi.Mock).mockClear === 'function') {
-        (MockedGIT_TREE_Func as vi.Mock).mockClear();
+    if (MockedGIT_TREE_Func && typeof (MockedGIT_TREE_Func as Mock).mockClear === 'function') {
+        (MockedGIT_TREE_Func as Mock).mockClear();
     }
 
 
@@ -185,7 +185,7 @@ describe('Repository Utilities', () => {
   });
 
   describe('getRepositoryDiff', () => {
-    let mockInjectedValidator: vi.Mock<[string], Promise<boolean>>;
+    let mockInjectedValidator: Mock<[string], Promise<boolean>>;
 
     // Setup mocks specifically for tests that expect validateGitRepository to pass
     // This beforeEach establishes the common "happy path" for validateGitRepository and git.log

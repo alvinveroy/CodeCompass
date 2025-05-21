@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import fs from 'fs'; // Use actual fs for mocking its methods
 import path from 'path';
 // Import specific parts of winston that the test needs to interact with directly
@@ -130,7 +130,7 @@ describe('ConfigService', () => {
 
     if (loggerInstanceFromMockFactory) {
       Object.values(loggerInstanceFromMockFactory).forEach(fn => {
-        if (typeof fn === 'function' && 'mockClear' in fn) (fn as vi.Mock).mockClear();
+        if (typeof fn === 'function' && 'mockClear' in fn) (fn as Mock).mockClear();
       });
     }
     createLoggerMock.mockClear(); // Clear calls to createLogger itself
