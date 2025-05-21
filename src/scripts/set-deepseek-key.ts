@@ -41,7 +41,7 @@ function main(): void { // Removed async, added void return type
   
   // Test the connection
   try {
-    void import('../lib/deepseek').then(async (deepseek) => {
+    void import('../lib/deepseek.js').then(async (deepseek) => {
       console.log('Testing DeepSeek connection...');
       const connected = await deepseek.testDeepSeekConnection();
       if (connected) {

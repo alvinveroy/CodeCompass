@@ -45,7 +45,7 @@ describe('Config Module', () => {
       // Dynamically import configService to ensure a fresh instance for each test
       // after vi.resetModules() in the outer beforeEach has run,
       // and after OLLAMA_HOST/QDRANT_HOST env vars have been deleted.
-      const mod = await import('../lib/config-service');
+      const mod = await import('../lib/config-service.js');
       currentConfigService = mod.configService;
     });
 
@@ -84,7 +84,7 @@ describe('Config Module', () => {
 
     beforeEach(async () => {
       // Dynamically import for a fresh instance
-      const mod = await import('../lib/config-service');
+      const mod = await import('../lib/config-service.js');
       currentConfigService = mod.configService;
     });
 
@@ -162,7 +162,7 @@ describe('Config Module', () => {
       process.env.OLLAMA_HOST = testUrl;
       
       vi.resetModules(); // Ensure configService is re-initialized
-      const mod = await import('../lib/config-service');
+      const mod = await import('../lib/config-service.js');
       const freshConfigService = mod.configService;
       // reloadConfigsFromFile is implicitly called by constructor if resetModules works as expected
       // or call it explicitly if needed after re-import
@@ -175,7 +175,7 @@ describe('Config Module', () => {
       process.env.QDRANT_HOST = testUrl;
       
       vi.resetModules();
-      const mod = await import('../lib/config-service');
+      const mod = await import('../lib/config-service.js');
       const freshConfigService = mod.configService;
       freshConfigService.reloadConfigsFromFile(true);
       expect(freshConfigService.QDRANT_HOST).toBe(testUrl);
@@ -192,7 +192,7 @@ describe('Config Module', () => {
       
       // Ensure a completely fresh import of config-service after env vars are set
       vi.resetModules(); 
-      const { configService: freshConfigService } = await import('../lib/config-service');
+      const { configService: freshConfigService } = await import('../lib/config-service.js');
       
       // The ConfigService constructor should have picked up these env vars.
       // reloadConfigsFromFile(true) is called by the constructor.

@@ -986,7 +986,7 @@ export async function runAgentLoop(
   });
   
   // Import the clearProviderCache function and use it
-  const { clearProviderCache } = await import('./llm-provider');
+  const { clearProviderCache } = await import('./llm-provider.js');
   clearProviderCache();
   
   const currentProvider = await getLLMProvider();

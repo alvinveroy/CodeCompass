@@ -1,8 +1,9 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"; // Added ResourceTemplate
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types";
-import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"; // Restored import
-import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate"; // Added Variables
+// Attempt to import from likely 'dist' locations with .js extension
+import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/dist/types.js";
+import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/dist/shared/protocol.js";
+import { Variables } from "@modelcontextprotocol/sdk/dist/shared/uriTemplate.js";
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
