@@ -536,6 +536,7 @@ Please correct the parameters and try again.`;
                   reasoning: "Internal error: capability entry is not a function."
               });
             }
+        } // Closes 'if (Object.prototype.hasOwnProperty.call(capabilities, rawCapabilityName))'
       } else {
         // This 'else' handles the case where rawCapabilityName is not a key of 'capabilities'
         // This replaces the old 'else' block that handled unknown capabilities.
