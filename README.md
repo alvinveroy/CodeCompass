@@ -8,9 +8,11 @@ CodeCompass helps developers tackle legacy or existing codebases by giving AI co
 
 ## Features
 
-- **Codebase Analysis**: Maps your repository's structure and dependencies.
-- **Smart AI Context**: Uses Agentic RAG to make AI suggestions fit your code perfectly.
+- **Codebase Analysis**: Maps your repository's structure and dependencies, now with support for indexing very large files through automated chunking.
+- **Smart AI Context**: Uses Agentic RAG, enhanced with detailed `git diff` information (summarized if large) and dynamic summarization of extensive file lists or code snippets, to make AI suggestions fit your code perfectly.
+- **Intelligent Agent Interactions**: The AI agent can proactively request additional, specific context—such as full file contents, directory listings, or code surrounding a particular chunk—and can ask for more processing time for complex queries.
 - **Flexible Setup**: Runs locally with Ollama or connects to cloud AI like DeepSeek.
+- **Highly Configurable**: Offers extensive environment variables to fine-tune indexing parameters, agent behavior (like loop steps and refinement iterations), context processing limits, and specific LLM models for tasks like summarization.
 
 ## Project Status and Roadmap
 

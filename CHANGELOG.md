@@ -13,6 +13,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2025-05-27
+### Added
+- **Enhanced Contextual Understanding & Agent Capabilities (Completes TODOs for v1.5.0):**
+    - **Configurable Qdrant Search Limit:** Introduced `QDRANT_SEARCH_LIMIT_DEFAULT` (default: 10) to control the number of search results fetched from Qdrant.
+    - **Large File Indexing (Chunking):** Implemented file chunking for indexing large files, ensuring their content is searchable. Configurable via `FILE_INDEXING_CHUNK_SIZE_CHARS` (default: 1000) and `FILE_INDEXING_CHUNK_OVERLAP_CHARS` (default: 200).
+    - **Improved Diff Context:** The `get_repository_context` tool now provides actual `git diff` content. For large diffs (exceeding `MAX_DIFF_LENGTH_FOR_CONTEXT_TOOL`, default: 3000 chars), an LLM-based summary is generated using `SUMMARIZATION_MODEL`.
+    - **Dynamic Context Presentation & Summarization:**
+        - LLM-based summarization for long lists of files (more than `MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY`, default: 15 files) in agent context.
+        - LLM-based summarization for long code snippets (exceeding `MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY`, default: 1500 chars) in agent context.
+    - **Advanced Agent Tools & Control:**
+        - New `request_additional_context` tool allowing the agent to dynamically fetch:
+            - `MORE_SEARCH_RESULTS` (limit configurable by `REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS`, default: 20).
+            - `FULL_FILE_CONTENT` (with LLM-based summarization for very large files).
+            - `DIRECTORY_LISTING` (for exploring repository structure).
+            - `ADJACENT_FILE_CHUNKS` (to get context around a specific indexed file chunk).
+        - New `request_more_processing_steps` tool for the agent to request extended processing time if needed.
+    - **Flexible Agent Configuration:**
+        - Configurable default (`AGENT_DEFAULT_MAX_STEPS`, default: 10) and absolute maximum (`AGENT_ABSOLUTE_MAX_STEPS`, default: 15) agent loop steps.
+        - Configurable query refinement iterations (`MAX_REFINEMENT_ITERATIONS`, default: 3).
+    - **Dedicated Models for Specific Tasks:** Configuration options for `SUMMARIZATION_MODEL` and `REFINEMENT_MODEL`, which default to the primary `SUGGESTION_MODEL` if not explicitly set.
+
+### Changed
+- **Agent Behavior:** The agent's system prompt and internal logic have been updated to effectively utilize the new tools (`request_additional_context`, `request_more_processing_steps`) and context assessment strategies. The agent is now more capable of identifying and addressing insufficient context.
+- **Repository Indexing:** The `indexRepository` function now automatically chunks large files based on `FILE_INDEXING_CHUNK_SIZE_CHARS` and `FILE_INDEXING_CHUNK_OVERLAP_CHARS`, significantly improving context coverage for large codebases.
+- **Contextual Data for LLM:** Tools like `get_repository_context` and `generate_suggestion` now provide more refined, relevant, and potentially summarized contextual data (diffs, file lists, snippets) to the LLM, enhancing the quality of AI assistance.
+- **Query Refinement:** The `searchWithRefinement` process benefits from the `MAX_REFINEMENT_ITERATIONS` setting and can leverage a specific `REFINEMENT_MODEL` if configured.
+
 ## [1.4.5] - 2025-05-20
 ### Fixed
 - Resolved TypeScript build error `TS2339: Property 'onRequest' does not exist on type 'McpServer'` by removing the manual `server.onRequest("resources/list", ...)` handler in `src/lib/server.ts`.
