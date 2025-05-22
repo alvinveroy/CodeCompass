@@ -17,7 +17,7 @@ function formatQdrantResultForContext(result: DetailedQdrantSearchResult): strin
   contextChunk += `ID: ${result.id}\n`;
 
   switch (payload.dataType) {
-    case 'file_chunk':
+    case 'file_chunk': {
       contextChunk += `Type: File Chunk\n`;
       contextChunk += `File: ${payload.filepath}\n`;
       if (payload.repositoryPath) contextChunk += `Repository: ${payload.repositoryPath}\n`;
@@ -25,7 +25,8 @@ function formatQdrantResultForContext(result: DetailedQdrantSearchResult): strin
       contextChunk += `Modified: ${payload.last_modified}\n`;
       contextChunk += `Content Snippet:\n---\n${payload.file_content_chunk}\n---\n`;
       break;
-    case 'commit_info':
+    }
+    case 'commit_info': {
       contextChunk += `Type: Commit Information\n`;
       contextChunk += `Commit OID: ${payload.commit_oid}\n`;
       if (payload.repositoryPath) contextChunk += `Repository: ${payload.repositoryPath}\n`;
@@ -37,7 +38,8 @@ function formatQdrantResultForContext(result: DetailedQdrantSearchResult): strin
       }
       contextChunk += `Changed Files Summary: ${payload.changed_files_summary.join('; ')}\n`;
       break;
-    case 'diff_chunk':
+    }
+    case 'diff_chunk': {
       contextChunk += `Type: Diff Chunk\n`;
       contextChunk += `Commit OID: ${payload.commit_oid}\n`;
       if (payload.repositoryPath) contextChunk += `Repository: ${payload.repositoryPath}\n`;
@@ -46,11 +48,14 @@ function formatQdrantResultForContext(result: DetailedQdrantSearchResult): strin
       contextChunk += `Chunk: ${payload.chunk_index + 1}/${payload.total_chunks}\n`;
       contextChunk += `Diff Snippet:\n---\n${payload.diff_content_chunk}\n---\n`;
       break;
-    default:
+    }
+    default: {
       // This case should ideally not be reached if types are correct and exhaustive
       const exhaustiveCheck: never = payload; // Ensures all cases are handled
       logger.warn(`Unknown Qdrant payload type encountered in formatQdrantResultForContext: ${JSON.stringify(exhaustiveCheck)}`);
       contextChunk += `Type: Unknown\nContent: ${JSON.stringify(payload)}\n`;
+      break;
+    }
   }
   return contextChunk + "[End of Data Segment]\n\n";
 }

@@ -3,7 +3,6 @@ import fs from "fs/promises";
 import path from "path";
 import { exec } from "child_process"; // Import exec
 import { promisify } from "util"; // To promisify exec
-import { v4 as uuidv4 } from "uuid";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { LLMProvider } from './llm-provider'; // Assuming path, adjust if necessary
 import {
@@ -149,8 +148,6 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
 
   let successCount = 0;
   let errorCount = 0;
-  const CHUNK_SIZE = configService.FILE_INDEXING_CHUNK_SIZE_CHARS;
-  const CHUNK_OVERLAP = configService.FILE_INDEXING_CHUNK_OVERLAP_CHARS;
 
   for (const filepath of filteredFiles) {
     try {

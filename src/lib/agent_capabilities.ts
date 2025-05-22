@@ -59,16 +59,15 @@ export async function capability_searchCodeSnippets(
     let lastModified: string | undefined = undefined;
 
     if (payload?.dataType === 'file_chunk') {
-      const fcPayload = payload as FileChunkPayload;
-      filepathDisplay = fcPayload.filepath;
-      snippetContent = fcPayload.file_content_chunk;
+      filepathDisplay = payload.filepath;
+      snippetContent = payload.file_content_chunk;
       isChunked = true;
-      originalFilepath = fcPayload.filepath;
-      chunkIndex = fcPayload.chunk_index;
-      totalChunks = fcPayload.total_chunks;
-      lastModified = fcPayload.last_modified;
+      originalFilepath = payload.filepath;
+      chunkIndex = payload.chunk_index;
+      totalChunks = payload.total_chunks;
+      lastModified = payload.last_modified;
       if (isChunked) {
-        filepathDisplay = `${fcPayload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
+        filepathDisplay = `${payload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
       }
     } else if (payload) {
       // Handle other types or log a warning if only file_chunk is expected here
@@ -128,30 +127,27 @@ export async function capability_getRepositoryOverview(
 
     // Populate based on payload type
     if (payload?.dataType === 'file_chunk') {
-      const fcPayload = payload as FileChunkPayload;
-      filepathDisplay = fcPayload.filepath;
-      snippetContent = fcPayload.file_content_chunk;
+      filepathDisplay = payload.filepath;
+      snippetContent = payload.file_content_chunk;
       isChunked = true;
-      originalFilepath = fcPayload.filepath;
-      chunkIndex = fcPayload.chunk_index;
-      totalChunks = fcPayload.total_chunks;
-      lastModified = fcPayload.last_modified;
+      originalFilepath = payload.filepath;
+      chunkIndex = payload.chunk_index;
+      totalChunks = payload.total_chunks;
+      lastModified = payload.last_modified;
       if (isChunked) {
-        filepathDisplay = `${fcPayload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
+        filepathDisplay = `${payload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
       }
     } else if (payload?.dataType === 'commit_info') {
-      const ciPayload = payload as CommitInfoPayload;
-      filepathDisplay = `Commit: ${ciPayload.commit_oid.substring(0, 7)}`;
-      snippetContent = `Message: ${ciPayload.commit_message}`;
-      lastModified = ciPayload.commit_date;
+      filepathDisplay = `Commit: ${payload.commit_oid.substring(0, 7)}`;
+      snippetContent = `Message: ${payload.commit_message}`;
+      lastModified = payload.commit_date;
     } else if (payload?.dataType === 'diff_chunk') {
-      const dcPayload = payload as DiffChunkPayload;
-      filepathDisplay = `Diff: ${dcPayload.filepath} (Commit: ${dcPayload.commit_oid.substring(0,7)})`;
-      snippetContent = dcPayload.diff_content_chunk;
+      filepathDisplay = `Diff: ${payload.filepath} (Commit: ${payload.commit_oid.substring(0,7)})`;
+      snippetContent = payload.diff_content_chunk;
       isChunked = true;
-      originalFilepath = dcPayload.filepath;
-      chunkIndex = dcPayload.chunk_index;
-      totalChunks = dcPayload.total_chunks;
+      originalFilepath = payload.filepath;
+      chunkIndex = payload.chunk_index;
+      totalChunks = payload.total_chunks;
     } else if (payload) {
       logger.warn(`capability_getRepositoryOverview: Unexpected payload type ${payload.dataType} for result ID ${r.id}`);
       filepathDisplay = (payload as { filepath?: string }).filepath || `Unknown path (ID: ${r.id})`;
@@ -238,16 +234,15 @@ export async function capability_fetchMoreSearchResults(
     let lastModified: string | undefined = undefined;
 
     if (payload?.dataType === 'file_chunk') {
-      const fcPayload = payload as FileChunkPayload;
-      filepathDisplay = fcPayload.filepath;
-      snippetContent = fcPayload.file_content_chunk;
+      filepathDisplay = payload.filepath;
+      snippetContent = payload.file_content_chunk;
       isChunked = true;
-      originalFilepath = fcPayload.filepath;
-      chunkIndex = fcPayload.chunk_index;
-      totalChunks = fcPayload.total_chunks;
-      lastModified = fcPayload.last_modified;
+      originalFilepath = payload.filepath;
+      chunkIndex = payload.chunk_index;
+      totalChunks = payload.total_chunks;
+      lastModified = payload.last_modified;
       if (isChunked) {
-        filepathDisplay = `${fcPayload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
+        filepathDisplay = `${payload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
       }
     } else if (payload) {
       logger.warn(`capability_fetchMoreSearchResults: Received non-file_chunk payload type: ${payload.dataType} for result ID ${r.id}`);
@@ -387,10 +382,29 @@ export async function capability_getAdjacentFileChunks(
       });
 
       if (scrollResponse.points.length > 0 && scrollResponse.points[0].payload) {
-        const payload = scrollResponse.points[0].payload as FileChunkPayload; // Cast to FileChunkPayload
-        adjacentChunksResult.push({
-          filepath: payload.filepath,
-          chunk_index: payload.chunk_index,
+        const pointPayload = scrollResponse.points[0].payload; // Type is already narrowed by filter if Qdrant respects it fully
+                                                              // Or, we can cast if confident, but better to check dataType if it could be mixed.
+                                                              // Given the filter, it *should* be FileChunkPayload.
+        if (pointPayload.dataType === 'file_chunk') { // Explicit check for safety
+          adjacentChunksResult.push({
+            filepath: pointPayload.filepath,
+            chunk_index: pointPayload.chunk_index,
+            snippet: pointPayload.file_content_chunk,
+          });
+        } else {
+          // This case should ideally not be hit due to the Qdrant filter
+          logger.warn(`capability_getAdjacentFileChunks: Expected file_chunk, got ${pointPayload.dataType} for ${filepath} chunk ${targetIndex}`);
+          adjacentChunksResult.push({
+            filepath: filepath,
+            chunk_index: targetIndex,
+            snippet: "",
+            note: `Chunk ${targetIndex} for file ${filepath} had unexpected data type ${pointPayload.dataType}.`
+          });
+        }
+      } else {
+         adjacentChunksResult.push({
+          filepath: filepath,
+          chunk_index: targetIndex,
           snippet: payload.file_content_chunk,
         });
       } else {

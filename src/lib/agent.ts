@@ -1,12 +1,9 @@
 import { logger, configService } from "./config-service";
 import { getLLMProvider } from "./llm-provider";
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults, addAgentSteps } from "./state";
+import { getOrCreateSession, addSuggestion, addAgentSteps } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { searchWithRefinement } from "./query-refinement"; // Changed import path
-import { validateGitRepository, getRepositoryDiff } from "./repository";
-import { AgentState, AgentStep, ParsedToolCall } from "./types"; // Added ParsedToolCall
-import git from "isomorphic-git";
-import fs from "fs/promises";
+import { getRepositoryDiff } from "./repository";
+import { AgentState, ParsedToolCall } from "./types"; // Added ParsedToolCall
 import path from "path";
 import { z } from "zod";
 import * as capabilities from "./agent_capabilities"; // Import all capabilities
@@ -457,46 +454,50 @@ async function runAgentQueryOrchestrator(
         continue; // Continue to the next iteration, allowing LLM to make another decision
       }
 
-      const capabilityName = parsedCapability.capability as keyof typeof capabilities;
-      const capabilityFunc = capabilities[capabilityName];
+      const rawCapabilityName = parsedCapability.capability;
+      // Type guard to check if rawCapabilityName is a valid key of capabilities
+      if (Object.prototype.hasOwnProperty.call(capabilities, rawCapabilityName)) {
+        const capabilityName = rawCapabilityName as keyof typeof capabilities; // Now safer
+        const capabilityFunc = capabilities[capabilityName];
 
-      if (typeof capabilityFunc === 'function') {
-        const capabilityDef = capabilityDefinitions.find(cd => cd.name === capabilityName);
-        if (!capabilityDef) {
-          // This case should ideally not be hit if capabilityName is derived from `keyof typeof capabilities`
-          // and capabilityDefinitions is comprehensive.
-          logger.error(`Orchestrator: Capability definition not found for known capability "${capabilityName}"`);
-          currentPromptContent += `\n\nInternal Error: Capability definition missing for "${capabilityName}". Please report this.`;
-          agentState.steps.push({
-              tool: "internal_error",
-              input: { capability_name: capabilityName },
-              output: { error: `Capability definition for "${capabilityName}" not found internally.` },
-              reasoning: "Internal error during capability definition lookup."
-          });
-        } else {
-          // Validate parameters
-          const validationResult = capabilityDef.parameters_schema.safeParse(parsedCapability.parameters);
+        if (typeof capabilityFunc === 'function') {
+          const capabilityDef = capabilityDefinitions.find(cd => cd.name === capabilityName);
+          if (!capabilityDef) {
+            // This case should ideally not be hit if capabilityName is derived from `keyof typeof capabilities`
+            // and capabilityDefinitions is comprehensive.
+            logger.error(`Orchestrator: Capability definition not found for known capability "${capabilityName}"`);
+            currentPromptContent += `\n\nInternal Error: Capability definition missing for "${capabilityName}". Please report this.`;
+            agentState.steps.push({
+                tool: "internal_error",
+                input: { capability_name: capabilityName },
+                output: { error: `Capability definition for "${capabilityName}" not found internally.` },
+                reasoning: "Internal error during capability definition lookup."
+            });
+          } else {
+            // Validate parameters
+            const validationResult = capabilityDef.parameters_schema.safeParse(parsedCapability.parameters);
 
-          if (!validationResult.success) {
-            logger.warn(`Orchestrator: Invalid parameters for capability ${capabilityName}. Errors:`, { errors: validationResult.error.issues, providedParams: parsedCapability.parameters });
-            currentPromptContent += `\n\nError: Invalid parameters provided for capability "${capabilityName}".
+            if (!validationResult.success) {
+              logger.warn(`Orchestrator: Invalid parameters for capability ${capabilityName}. Errors:`, { errors: validationResult.error.issues, providedParams: parsedCapability.parameters });
+              currentPromptContent += `\n\nError: Invalid parameters provided for capability "${capabilityName}".
 Expected schema: ${JSON.stringify(capabilityDef.parameters_schema?._def || { description: capabilityDef.parameters_schema?.description }, null, 2)}
 Errors: ${validationResult.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}
 Please correct the parameters and try again.`;
-            agentState.steps.push({
-              tool: capabilityName,
-              input: parsedCapability.parameters,
-              output: { error: "Invalid parameters", details: validationResult.error.issues },
-              reasoning: parsedCapability.reasoning || "Attempted to call capability with invalid parameters."
-            });
-          } else {
-            // Parameters are valid, proceed with execution
-            try {
-              logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: validationResult.data });
-              const capabilityResult = await capabilityFunc(capabilityContext, validationResult.data as any); // Use validated data. 'as any' because capabilityFunc expects specific param types not easily inferred here.
-
               agentState.steps.push({
                 tool: capabilityName,
+                input: parsedCapability.parameters,
+                output: { error: "Invalid parameters", details: validationResult.error.issues },
+                reasoning: parsedCapability.reasoning || "Attempted to call capability with invalid parameters."
+              });
+            } else {
+              // Parameters are valid, proceed with execution
+              try {
+                logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: validationResult.data });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+                const capabilityResult = await capabilityFunc(capabilityContext, validationResult.data as any); // validationResult.data is type-checked by Zod against the specific capability's schema
+
+                agentState.steps.push({
+                  tool: capabilityName,
                 input: validationResult.data, // Log validated and potentially transformed data
                 output: capabilityResult,
                 reasoning: parsedCapability.reasoning || llmResponseText // Fallback to full LLM response if reasoning not in JSON
@@ -523,14 +524,26 @@ Please correct the parameters and try again.`;
               });
             }
           }
+        } else {
+          // This case should ideally not be hit if all entries in 'capabilities' are functions.
+          logger.warn(`Orchestrator: Capability "${capabilityName}" found but is not a function.`);
+          currentPromptContent += `\n\nInternal Error: Capability "${capabilityName}" is not executable.`;
+          agentState.steps.push({
+              tool: "internal_error_non_function_capability",
+              input: { capability_name: capabilityName },
+              output: { error: `Capability "${capabilityName}" is not executable.` },
+              reasoning: "Internal error: capability entry is not a function."
+          });
         }
       } else {
-        logger.warn(`Orchestrator: LLM tried to call unknown capability "${capabilityName}"`);
-        currentPromptContent += `\n\nError: You tried to call an unknown capability: "${capabilityName}". Please choose from the available capabilities.`;
+        // This 'else' handles the case where rawCapabilityName is not a key of 'capabilities'
+        // This replaces the old 'else' block that handled unknown capabilities.
+        logger.warn(`Orchestrator: LLM tried to call unknown capability "${rawCapabilityName}"`);
+        currentPromptContent += `\n\nError: You tried to call an unknown capability: "${rawCapabilityName}". Please choose from the available capabilities.`;
         agentState.steps.push({
             tool: "unknown_capability_call",
-            input: { capability_name: capabilityName, parameters: parsedCapability.parameters },
-            output: { error: `Capability "${capabilityName}" not found.` },
+            input: { capability_name: rawCapabilityName, parameters: parsedCapability.parameters },
+            output: { error: `Capability "${rawCapabilityName}" not found.` },
             reasoning: parsedCapability.reasoning || "LLM attempted to call an unknown capability."
         });
       }

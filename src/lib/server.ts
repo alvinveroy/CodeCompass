@@ -14,7 +14,6 @@ import { configService, logger } from "./config-service";
 
 import {
   DetailedQdrantSearchResult,
-  AgentInitialQueryResponse, // Existing
   FileChunkPayload,         // New
   CommitInfoPayload,        // New
   DiffChunkPayload          // New
@@ -25,9 +24,7 @@ import { initializeQdrant } from "./qdrant";
 import { searchWithRefinement } from "./query-refinement";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
-import { SuggestionPlanner } from "./suggestion-service";
 import { processAgentQuery } from './agent-service';
-// AgentInitialQueryResponse is already imported in the block below
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 
@@ -577,8 +574,6 @@ function registerTools( // Removed async
     
     addQuery(session.id, searchQuery, results, relevanceScore); 
     
-    const llmProvider = await getLLMProvider();
-    
     const fileChunkResults = results.filter(
         (result): result is DetailedQdrantSearchResult & { payload: FileChunkPayload } => 
             result.payload?.dataType === 'file_chunk'
@@ -669,6 +664,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         
         return {
           content: [{
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: "text" as const,
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
           }],
@@ -678,6 +674,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         logger.error("Failed to read changelog", { message: errorMessage });
         return {
           content: [{
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: "text" as const,
             text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
           }],
@@ -891,6 +888,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           })
           .filter(item => item !== null); // Ensure no nulls from mapping
         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         context.push(...additionalContext as Array<{type: string; relevance: number; note: string; [key: string]: any}>); // Cast as it's a mix
       }
 
@@ -1067,6 +1065,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         logger.warn(`get_repository_context: Encountered result with unknown payload type or missing dataType: ID ${r.id}`);
         return null;
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .filter(item => item !== null) as Array<{type: string; relevance: number; [key: string]: any}>; // Type for prompt construction
       
       const summaryPrompt = `
