@@ -145,7 +145,6 @@ describe('Query Refinement Tests', () => {
       const result = actualRefineQuery("original", [], 0.1, {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
-      // eslint-disable-next-line @typescript-eslint/unbound-method -- False positive for standalone vi.fn()
       expect(mockBroaden_Injected).toHaveBeenCalledWith("original");
       expect(result).toBe('mock_broadened_by_INJECTED_helper');
       expect(mockFocus_Injected).not.toHaveBeenCalled();

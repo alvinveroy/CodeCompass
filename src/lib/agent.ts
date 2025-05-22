@@ -1218,7 +1218,7 @@ export async function runAgentLoop(
             const toolName: string = mapStep.tool; // Explicitly type toolName
             const outputString: string = stringifyStepOutput(mapStep.output); // Use helper, explicitly type
             const safePreviewText: string = (outputString || 'No output').substring(0, 200); // Explicitly type safePreviewText
-            return `Used ${toolName} and found: ${safePreviewText}...`; 
+            return `Used ${String(toolName)} and found: ${String(safePreviewText)}...`;
           }).join("\n\n");
       }
     }
