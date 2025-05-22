@@ -487,7 +487,7 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 
     const httpPort = configService.HTTP_PORT; // Read from configService
      
-    const httpServer = http.createServer(expressApp);
+    const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
     httpServer.listen(httpPort, () => {
       logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
     });

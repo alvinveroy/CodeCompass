@@ -1,6 +1,6 @@
 {
   "name": "@alvinveroy/codecompass",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "AI-powered MCP server for codebase navigation and LLM prompt optimization",
   "main": "dist/index.js",
   "bin": {
@@ -68,6 +68,7 @@
   "devDependencies": {
     "@eslint/js": "^9.8.0",
     "@types/diff": "^5.2.0",
+    "@types/express": "^5.0.2",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.5.9",
     "@types/uuid": "^10.0.0",
