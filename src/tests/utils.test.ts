@@ -22,8 +22,8 @@ interface PartialOriginalConfig {
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const originalModule = await vi.importActual('../lib/config-service') as any;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  const originalModule = await vi.importActual('../lib/config-service') as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
   const originalInstanceFromActual = originalModule.configService as PartialOriginalConfig;
 
   const mockConfigServiceValues: MockableConfigService = {
@@ -65,12 +65,12 @@ describe('Utils Module', () => {
     // The `eslint-disable` is justified because `vi.importActual` in a mocked context
     // doesn't always give TypeScript enough info for a precise type.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const originalModuleFromActualImport = await vi.importActual('../lib/config-service') as any;
+    const originalModuleFromActualImport = await vi.importActual('../lib/config-service') as any; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     // Step 2: Access the 'configService' property and explicitly cast it to 'PartialOriginalConfig'.
     // This is where we tell TypeScript the shape we expect for this specific property.
     // This assertion is necessary and correct.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const originalInstance = originalModuleFromActualImport.configService as PartialOriginalConfig;
 
     // Step 3: Use the now correctly-typed 'originalInstance'
@@ -84,6 +84,7 @@ describe('Utils Module', () => {
     // (which TS thinks is the original ConfigService) to our `MockableConfigService` type.
     // This is safe because our vi.mock factory ensures it *is* a MockableConfigService at runtime.
      
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     testSubjectMockedConfigService = configServiceInstanceFromMockFactory as unknown as MockableConfigService;
 
     vi.useFakeTimers();

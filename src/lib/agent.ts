@@ -1080,7 +1080,7 @@ export async function runAgentLoop(
       if (agentState.steps.length > 0) {
         const contextStr = agentState.steps.map(step => {
           const outputStr = stringifyStepOutput(step.output); // Use helper
-           
+          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
           // Reason: stringifyStepOutput ensures outputStr is a string, making this template literal safe.
           // The linter may not fully trace the type through the helper in all contexts for 'unknown' inputs.
           return `Previous tool: ${step.tool}\nResults: ${outputStr}`;
