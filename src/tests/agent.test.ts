@@ -194,7 +194,7 @@ describe('Agent', () => {
         // General setup for LLM provider mock for this describe block. Tests can override.
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
-        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any], refinedQuery: 'refined', relevanceScore: 0.8 });
+        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any], refinedQuery: 'refined', relevanceScore: 0.8 } as any);
     });
 
     afterEach(() => {

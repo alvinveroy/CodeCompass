@@ -276,10 +276,8 @@ describe('Repository Utilities', () => {
             { oid: 'commit2', commit: { message: 'Feat: new feature', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672531200, timezoneOffset: 0 }, tree: 'tree2_oid', parent: ['commit1_oid'] } },
             { oid: 'commit1', commit: { message: 'Initial commit', author: { name: 'Test Author', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, committer: { name: 'Test Committer', email: 'test@example.com', timestamp: 1672444800, timezoneOffset: 0 }, tree: 'tree1_oid', parent: [] } },
         ];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        vi.mocked(git.log).mockResolvedValue(mockCommits as any); 
+        vi.mocked(git.log).mockResolvedValue(mockCommits as unknown as import('isomorphic-git').ReadCommitResult[]); 
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => { 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as any; 
@@ -298,34 +296,30 @@ describe('Repository Utilities', () => {
             // We can inspect `trees[0]._id` and `trees[1]._id` if needed to simulate specific diffs.
             // trees[0] corresponds to parentCommitData.commit.tree
             // trees[1] corresponds to commitData.commit.tree
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (map && trees.length === 1 && (trees[0] as any)._id === 'mock_tree_id_default') { 
+            interface MockTree { _id: string; /* other properties */ }
+            if (map && trees.length === 1 && (trees[0] as MockTree)._id === 'mock_tree_id_default') { 
                 // Simulate initial commit walk: one file added
                 // The SUT's initial commit logic uses `trees: [git.TREE()]`. Our `git.TREE` mock without args gives `_id: 'mock_tree_id_default'`.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await map('initial.ts', [{ type: () => 'blob', oid: () => 'blob_oid_initial', mode: () => 0o100644 }] as any); 
+                const mockEntry = { type: () => 'blob', oid: () => 'blob_oid_initial', mode: () => 0o100644 } as unknown as import('isomorphic-git').WalkerEntry;
+                await map('initial.ts', [mockEntry]); 
             } else if (map && trees.length === 2) {
                 // Simulate two-tree walk for diffing (e.g., between tree1_oid and tree2_oid)
                 // This part needs to align with how the SUT calls git.TREE({ ref: treeOid })
                 // Our TREE mock sets _id to args.ref. So trees[0]._id will be 'tree1_oid', trees[1]._id will be 'tree2_oid'.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                if ((trees[0] as any)._id === 'tree1_oid' && (trees[1] as any)._id === 'tree2_oid') { 
+                interface MockTree { _id: string; /* other properties */ } // Already defined in previous block, but repetition in search is ok if it matches
+                if ((trees[0] as MockTree)._id === 'tree1_oid' && (trees[1] as MockTree)._id === 'tree2_oid') { 
                     // Simulate one modified file
-                    const mockEntryBefore = { type: () => 'blob', oid: () => 'blob_before_oid', mode: () => 0o100644 };
-                    const mockEntryAfter = { type: () => 'blob', oid: () => 'blob_after_oid', mode: () => 0o100644 };
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    await map('file.ts', [mockEntryBefore as any, mockEntryAfter as any]); 
+                    const mockEntryBefore = { type: () => 'blob', oid: () => 'blob_before_oid', mode: () => 0o100644 } as unknown as import('isomorphic-git').WalkerEntry;
+                    const mockEntryAfter = { type: () => 'blob', oid: () => 'blob_after_oid', mode: () => 0o100644 } as unknown as import('isomorphic-git').WalkerEntry;
+                    await map('file.ts', [mockEntryBefore, mockEntryAfter]); 
                     
                     // Simulate one added file
-                    const mockEntryAdded = { type: () => 'blob', oid: () => 'blob_added_oid', mode: () => 0o100644 };
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    await map('added_file.ts', [null, mockEntryAdded as any]); 
+                    const mockEntryAdded = { type: () => 'blob', oid: () => 'blob_added_oid', mode: () => 0o100644 } as unknown as import('isomorphic-git').WalkerEntry;
+                    await map('added_file.ts', [null, mockEntryAdded]); 
 
                     // Simulate one deleted file
-                    const mockEntryDeleted = { type: () => 'blob', oid: () => 'blob_deleted_oid', mode: () => 0o100644 };
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    await map('deleted_file.ts', [mockEntryDeleted as any, null]); 
+                    const mockEntryDeleted = { type: () => 'blob', oid: () => 'blob_deleted_oid', mode: () => 0o100644 } as unknown as import('isomorphic-git').WalkerEntry;
+                    await map('deleted_file.ts', [mockEntryDeleted, null]); 
                 }
             }
             return []; // Default return for walk
