@@ -294,7 +294,7 @@ describe('Repository Utilities', () => {
             // trees[0] corresponds to parentCommitData.commit.tree
             // trees[1] corresponds to commitData.commit.tree
             interface MockTree { _id: string; /* other properties */ }
-            if (map && trees.length === 1 && (trees[0] as MockTree)._id === 'mock_tree_id_default') { 
+            if (map && trees.length === 1 && (trees[0] as unknown as MockTree)._id === 'mock_tree_id_default') { 
                 // Simulate initial commit walk: one file added
                 // The SUT's initial commit logic uses `trees: [git.TREE()]`. Our `git.TREE` mock without args gives `_id: 'mock_tree_id_default'`.
                 const mockEntry = { type: () => 'blob', oid: () => 'blob_oid_initial', mode: () => 0o100644 } as unknown as import('isomorphic-git').WalkerEntry;
