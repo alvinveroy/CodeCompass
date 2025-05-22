@@ -279,14 +279,11 @@ describe('Repository Utilities', () => {
         vi.mocked(git.log).mockResolvedValue(mockCommits as unknown as import('isomorphic-git').ReadCommitResult[]); 
 
         vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => { 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as any; 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any; 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as any; 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as any; 
+            await Promise.resolve(); // Add a no-op await
+            if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
+            if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
+            if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
+            return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as unknown as import('isomorphic-git').ReadCommitResult; 
         });
 
         // vi.mocked(git.diffTrees) no longer needed here as SUT uses git.walk for diffing.
