@@ -102,8 +102,10 @@ describe('Query Refinement Tests', () => {
       // The dummySearchResults creates Schemas['ScoredPoint'][], which might be compatible or need casting/adjusting
       // For the mock call assertion, if RefineQueryFunc expects DetailedQdrantSearchResult[], you might need to cast:
        
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(1, 'original query', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.2);
        
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(2, 'original query broadened by INJECTED mockRefineQuery', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.5);
     });
     
@@ -123,8 +125,10 @@ describe('Query Refinement Tests', () => {
         expect(relevanceScore).toBe(0);
         expect(refinedQuery).toBe('query for no results broadened by INJECTED mockRefineQuery broadened by INJECTED mockRefineQuery');
          
+        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Completed search with 2 refinements`));
          
+        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(mockRefineQuery_Injected).toHaveBeenCalledTimes(2);
     });
   });
