@@ -39,18 +39,20 @@ vi.mock('fs/promises', () => {
   const accessMock = vi.fn();
   const statMock = vi.fn();
   // Define a mock Dirent structure that fsPromises.readdir would resolve with
-  const mockDirent = (name: string, isDir: boolean, basePath = '/test/repo/some/path'): Dirent => ({
-    name,
-    isFile: () => !isDir,
-    isDirectory: () => isDir,
-    isBlockDevice: () => false,
-    isCharacterDevice: () => false,
-    isSymbolicLink: () => false,
-    isFIFO: () => false,
-    isSocket: () => false,
-    path: basePath, // Add path property
-    parentPath: path.dirname(basePath), // Add parentPath property
-  });
+  const mockDirent = (name: string, isDir: boolean, _basePath = '/test/repo/some/path'): Dirent => { // _basePath unused
+    const dirent = new Dirent();
+    // Override properties needed for the mock
+    (dirent as any).name = name;
+    (dirent as any).isFile = () => !isDir;
+    (dirent as any).isDirectory = () => isDir;
+    (dirent as any).isBlockDevice = () => false;
+    (dirent as any).isCharacterDevice = () => false;
+    (dirent as any).isSymbolicLink = () => false;
+    (dirent as any).isFIFO = () => false;
+    (dirent as any).isSocket = () => false;
+    // Standard fs.Dirent does not have 'path' or 'parentPath' properties.
+    return dirent;
+  };
 
   const mockFsPromises = {
     readFile: readFileMock,
