@@ -42,7 +42,6 @@ vi.mock('isomorphic-git', async (importOriginal) => {
     readCommit: vi.fn(),
     // diffTrees: vi.fn(), // No longer directly called by SUT's getCommitHistoryWithChanges
     walk: vi.fn(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     TREE: vi.fn((args?: { ref?: string; oid?: string }) => ({
       // Simulate Walker object structure expected by SUT's git.TREE({ ref: treeOid })
       // The mock TREE needs to return something that walk's `trees` parameter can use.
@@ -68,7 +67,7 @@ vi.mock('util', async (importOriginal) => {
     __esModule: true,
     ...actualUtil,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    promisify: (fnToPromisify: (...args: any[]) => any) => { 
+    promisify: (fnToPromisify: (...args: any[]) => any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (fnToPromisify && (typeof fnToPromisify.name === 'string' && fnToPromisify.name === 'exec' || fnToPromisify === actualChildProcessExecMockInstance)) {
         return internalMockedPromisifiedExec;
       }
@@ -278,7 +277,7 @@ describe('Repository Utilities', () => {
         vi.mocked(git.log).mockResolvedValue(mockCommits as unknown as import('isomorphic-git').ReadCommitResult[]); 
 
         vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => {
-            await Promise.resolve(); 
+            await Promise.resolve(); // Add a no-op await
             if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
             if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
             if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 

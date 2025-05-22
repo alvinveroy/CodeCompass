@@ -9,6 +9,24 @@ import git from "isomorphic-git";
 import fs from "fs/promises";
 import path from "path";
 
+// Helper function for robust stringification of unknown step output
+function stringifyStepOutput(output: unknown): string {
+  if (typeof output === 'string') {
+    return output;
+  }
+  if (output === null || output === undefined) {
+    return String(output);
+  }
+  if (typeof output === 'object') {
+    try {
+      return JSON.stringify(output, null, 2);
+    } catch {
+      return '[Unserializable Object]';
+    }
+  }
+  return String(output);
+}
+
 // Tool registry for agent to understand available tools
 export interface Tool {
   name: string;
@@ -1056,23 +1074,10 @@ export async function runAgentLoop(
       // Add context from previous steps if available
       if (agentState.steps.length > 0) {
         const contextStr = agentState.steps.map(step => {
-          let outputStr: string;
-          if (typeof step.output === 'string') {
-            outputStr = step.output;
-          } else if (step.output === null || step.output === undefined) {
-            outputStr = String(step.output); // "null" or "undefined"
-          } else if (typeof step.output === 'object') {
-            try {
-              outputStr = JSON.stringify(step.output, null, 2);
-            } catch {
-              outputStr = '[Unserializable Object]';
-            }
-          } else { // Handles numbers, booleans, symbols
-            outputStr = String(step.output);
-          }
-          return `Previous tool: ${step.tool}\nResults: ${outputStr}`; // Ensure outputStr is used here
+          const outputStr = stringifyStepOutput(step.output); // Use helper
+          return `Previous tool: ${step.tool}\nResults: ${outputStr}`;
         }).join('\n\n');
-        
+      
         userPrompt += `\n\nContext from previous steps:\n${contextStr}`;
       }
       
@@ -1203,16 +1208,7 @@ export async function runAgentLoop(
           "Here's what I found so far: " +
           agentState.steps.map((s: AgentStep) => {
             const toolName = s.tool;
-            let outputString: string;
-            if (typeof s.output === 'object' && s.output !== null) {
-              try {
-                outputString = JSON.stringify(s.output, null, 2); // Added null, 2 for readability
-              } catch {
-                outputString = '[Unserializable Object]';
-              }
-            } else {
-              outputString = String(s.output);
-            }
+            const outputString = stringifyStepOutput(s.output); // Use helper
             const safePreviewText = (outputString || 'No output').substring(0, 200);
             return `Used ${toolName} and found: ${safePreviewText}...`;
           }).join("\n\n");

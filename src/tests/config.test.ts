@@ -125,7 +125,7 @@ describe('Config Module', () => {
       // This ensures that ConfigService does not load from actual config files during these tests.
       vi.doMock('fs', async () => {
         // Explicitly type actualFs to match the 'fs' module's structure
-        const actualFs = await vi.importActual('fs') as typeof import('fs');
+        const actualFs = await vi.importActual('fs') as typeof fs; // Use the imported fs namespace
         return {
           ...actualFs, // Delegate all other fs calls to the actual module
           existsSync: vi.fn((pathToCheck: string) => {
@@ -142,7 +142,7 @@ describe('Config Module', () => {
               const e = new Error(`ENOENT: no such file or directory, open '${pathToCheck}' (mocked)`);
               const errorWithCode = e as Error & { code?: string | number };
               errorWithCode.code = 'ENOENT';
-              throw e; // This was previously identified as an eslint issue, ensure it's handled if it reappears
+              throw e; 
             }
             return actualFs.readFileSync(pathToCheck, options as fs.WriteFileOptions); // Now actualFs.readFileSync is correctly typed
           }),

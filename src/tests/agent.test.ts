@@ -138,7 +138,7 @@ describe('Agent', () => {
 
     (getLLMProvider as Mock).mockResolvedValue(mockLLMProviderInstance);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
+    mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("Default LLM response");
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
     // Clear logger mocks (assuming logger is imported from config-service which is mocked)
@@ -213,7 +213,6 @@ describe('Agent', () => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any /* eslint-disable-line @typescript-eslint/no-explicit-any */], refinedQuery: 'refined', relevanceScore: 0.8 });
     });
 
@@ -249,6 +248,7 @@ describe('Agent', () => {
       expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code')); 
 
       // Verify that searchWithRefinement (a dependency of executeToolCall for "search_code") was called
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']); 
       
       expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.')); 

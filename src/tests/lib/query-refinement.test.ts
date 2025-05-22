@@ -96,6 +96,7 @@ describe('Query Refinement Tests', () => {
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(relevanceScore).toBe(0.8);
       expect(refinedQuery).toBe('original query broadened by INJECTED mockRefineQuery focused by INJECTED mockRefineQuery');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockRefineQuery_Injected).toHaveBeenCalledTimes(2);
       // Ensure the results passed to the mock match DetailedQdrantSearchResult[] if that's what RefineQueryFunc expects
       // The dummySearchResults creates Schemas['ScoredPoint'][], which might be compatible or need casting/adjusting
@@ -121,7 +122,6 @@ describe('Query Refinement Tests', () => {
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
         expect(refinedQuery).toBe('query for no results broadened by INJECTED mockRefineQuery broadened by INJECTED mockRefineQuery');
-        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Completed search with 2 refinements`)); 
         // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(mockRefineQuery_Injected).toHaveBeenCalledTimes(2);
@@ -148,12 +148,9 @@ describe('Query Refinement Tests', () => {
       const result = actualRefineQuery("original", [], 0.1, {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockBroaden_Injected).toHaveBeenCalledWith("original");
       expect(result).toBe('mock_broadened_by_INJECTED_helper');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockFocus_Injected).not.toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockTweak_Injected).not.toHaveBeenCalled();
     });
 
@@ -162,12 +159,9 @@ describe('Query Refinement Tests', () => {
       const result = actualRefineQuery("original", results, 0.5, {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockFocus_Injected).toHaveBeenCalledWith("original", results);
       expect(result).toBe('mock_focused_by_INJECTED_helper');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockBroaden_Injected).not.toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockTweak_Injected).not.toHaveBeenCalled();
     });
 
@@ -176,12 +170,9 @@ describe('Query Refinement Tests', () => {
       const result = actualRefineQuery("original", results, 0.75, {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockTweak_Injected).toHaveBeenCalledWith("original", results);
       expect(result).toBe('mock_tweaked_by_INJECTED_helper');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockBroaden_Injected).not.toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockFocus_Injected).not.toHaveBeenCalled();
     });
   });
