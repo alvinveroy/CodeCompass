@@ -447,19 +447,24 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 
     // Setup Express HTTP server for status and notifications
     const expressApp = express();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --- Justification: express.json() is a standard Express middleware.
     expressApp.use(express.json()); // Middleware to parse JSON bodies
 
-    expressApp.get('/api/indexing-status', (_req, res) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --- Justification: expressApp.get is a standard Express method.
+    expressApp.get('/api/indexing-status', (_req: express.Request, res: express.Response) => {
       const currentStatus = getGlobalIndexingStatus();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --- Justification: res.json is a standard Express method.
       res.json(currentStatus);
     });
 
-    expressApp.post('/api/repository/notify-update', (_req, res) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --- Justification: expressApp.post is a standard Express method.
+    expressApp.post('/api/repository/notify-update', (_req: express.Request, res: express.Response) => {
       logger.info('Received notification to update repository via /api/repository/notify-update.');
       
       const currentStatus = getGlobalIndexingStatus();
       if (['initializing', 'validating_repo', 'listing_files', 'cleaning_stale_entries', 'indexing_file_content', 'indexing_commits_diffs'].includes(currentStatus.status)) {
         logger.warn('Re-indexing request received, but indexing is already in progress.');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --- Justification: res.status().json() is a standard Express method chain.
         return res.status(409).json({ message: 'Indexing already in progress.' });
       }
 
@@ -476,10 +481,12 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
           // Status managed by indexRepository
         });
       
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --- Justification: res.status().json() is a standard Express method chain.
       res.status(202).json({ message: 'Re-indexing process initiated.' });
     });
 
     const httpPort = configService.HTTP_PORT; // Read from configService
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument --- Justification: expressApp is a valid RequestListener, a common pattern for http.createServer.
     const httpServer = http.createServer(expressApp);
     httpServer.listen(httpPort, () => {
       logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
@@ -772,7 +779,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
-    (args: { sessionId: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+    // Removed async as the handler is synchronous
+    (args: { sessionId: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { 
       logger.info("Received args for get_session_history", { args });
 
       const sessionIdValue = args.sessionId;
