@@ -5,7 +5,7 @@ import path from 'path';
 import { transports as winstonTransports, createLogger as _winstonCreateLogger } from 'winston'; // Import named exports
 
 // Import the class directly for testing.
-import { ConfigService as ActualConfigService, ConfigService as _ConfigService } from '../config-service'; // Import ConfigService class itself
+import { ConfigService as ActualConfigService, ConfigService as _ConfigService } from '../../lib/config-service'; // Import ConfigService class itself
 // import fsActual from 'fs'; // Not strictly needed if we define the mock structure directly
 
 // Mock the entire fs module
@@ -83,7 +83,7 @@ describe('ConfigService', () => {
     vi.resetModules(); // This is key
     // fs mocks are set per test *before* this is called.
     // Import the ConfigService class directly for instance manipulation
-    const { ConfigService: ImportedConfigServiceClass } = await import('../config-service.js');
+    const { ConfigService: ImportedConfigServiceClass } = await import('../../lib/config-service.js');
     // Reset the private static instance variable
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (ImportedConfigServiceClass as any).instance = undefined;

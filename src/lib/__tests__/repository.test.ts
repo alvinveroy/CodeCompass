@@ -77,7 +77,7 @@ vi.mock('util', async (importOriginal) => {
 });
 
 // Mock other external dependencies
-vi.mock('../config-service', () => {
+vi.mock('../../lib/config-service', () => {
     const loggerInstance = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
     return {
         __esModule: true,
@@ -89,15 +89,15 @@ vi.mock('../config-service', () => {
         logger: loggerInstance,
     };
 });
-vi.mock('../ollama'); 
+vi.mock('../../lib/ollama'); 
 
 // Import exec AFTER mocking child_process. This 'exec' will be the vi.fn() from the factory.
 // We need a reference to this instance for the util.promisify mock.
 import { exec as actualChildProcessExecMockInstance } from 'child_process';
 
 // Import SUT and other necessary modules AFTER all vi.mock calls
-import * as repositoryFunctions from '../repository'; // Import all exports as a namespace
-import { logger } from '../config-service'; // configService is mocked, only logger needed here
+import * as repositoryFunctions from '../../lib/repository'; // Import all exports as a namespace
+import { logger } from '../../lib/config-service'; // configService is mocked, only logger needed here
 // Import specific fs/promises methods directly
 // We will import the mocked versions of these functions
 import { access as mockedFsAccessImported, readFile as mockedFsReadFileImported, readdir as mockedFsReadDirImported, stat as mockedFsStatImported } from 'fs/promises';

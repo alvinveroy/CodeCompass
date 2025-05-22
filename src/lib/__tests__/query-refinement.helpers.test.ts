@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Import the functions to be tested directly from the module
-import * as queryRefinementHelpers from '../query-refinement';
-import { preprocessText } from '../../utils/text-utils';
-import { DetailedQdrantSearchResult } from '../types'; 
+import * as queryRefinementHelpers from '../../lib/query-refinement';
+import { preprocessText } from '../../../utils/text-utils';
+import { DetailedQdrantSearchResult } from '../../lib/types'; 
 
-vi.mock('../../utils/text-utils'); // Mock dependencies of helpers
+vi.mock('../../../utils/text-utils'); // Mock dependencies of helpers
 // Mock configService and logger if they are DIRECTLY used by these helpers
 // If they are only used by searchWithRefinement or refineQuery (dispatcher),
 // then this mock might not be needed here.
 // For now, assuming helpers might use logger for debug/info.
-vi.mock('../config-service', () => ({
+vi.mock('../../lib/config-service', () => ({
     configService: {
       // Add any config values DIRECTLY used by extractKeywords, broadenQuery, etc.
       // If none, this can be simpler or removed if logger isn't used by helpers.

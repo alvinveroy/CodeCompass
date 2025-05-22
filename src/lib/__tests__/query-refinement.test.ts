@@ -2,11 +2,11 @@
 
 import { describe, it, expect, vi, beforeEach, type MockedFunction } from 'vitest'; // Explicitly import MockedFunction
 import { QdrantClient, type Schemas } from '@qdrant/js-client-rest';
-import type { DetailedQdrantSearchResult } from '../types';
-import type { RefineQueryFunc } from '../query-refinement';
+import type { DetailedQdrantSearchResult } from '../../lib/types';
+import type { RefineQueryFunc } from '../../lib/query-refinement';
 
 // Mock external dependencies (these are fine as they are)
-vi.mock('../config-service', () => ({
+vi.mock('../../lib/config-service', () => ({
   configService: {
     COLLECTION_NAME: 'test_refine_collection',
     QDRANT_SEARCH_LIMIT_DEFAULT: 5,
@@ -14,10 +14,10 @@ vi.mock('../config-service', () => ({
   },
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../ollama', () => ({
+vi.mock('../../lib/ollama', () => ({
   generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
 }));
-vi.mock('../../utils/text-utils', () => ({
+vi.mock('../../../utils/text-utils', () => ({
   preprocessText: vi.fn((text: string) => text),
 }));
 
@@ -25,11 +25,11 @@ vi.mock('../../utils/text-utils', () => ({
 import {
   searchWithRefinement,
   refineQuery as actualRefineQuery,
-} from '../query-refinement';
+} from '../../lib/query-refinement';
 
 // Import mocked dependencies
-import { generateEmbedding } from '../ollama';
-import { logger } from '../config-service'; // configService itself is not used directly in tests
+import { generateEmbedding } from '../../lib/ollama';
+import { logger } from '../../lib/config-service'; // configService itself is not used directly in tests
 
 const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
 
