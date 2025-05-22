@@ -50,6 +50,13 @@ class ConfigService {
   private _requestAdditionalContextMaxSearchResults: number;
   private _maxFilesForSuggestionContextNoSummary: number;
   private _maxSnippetLengthForContextNoSummary: number;
+  private _diffChunkSizeChars: number;
+  private _diffChunkOverlapChars: number;
+  private _commitHistoryMaxCountForIndexing: number; // 0 for all
+  private _qdrantBatchUpsertSize: number;
+  private _agentMaxContextItems: number;
+  private _diffLinesOfContext: number;
+
 
   private _useMixedProviders: boolean;
   private _suggestionProvider: string;
@@ -71,6 +78,13 @@ class ConfigService {
   public readonly DEFAULT_FILE_INDEXING_CHUNK_OVERLAP_CHARS = 200;
   // For SUMMARIZATION_MODEL and REFINEMENT_MODEL, default will be SUGGESTION_MODEL if empty string.
   public readonly DEFAULT_REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS = 20;
+  public readonly DEFAULT_DIFF_CHUNK_SIZE_CHARS = 1000;
+  public readonly DEFAULT_DIFF_CHUNK_OVERLAP_CHARS = 100;
+  public readonly DEFAULT_COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING = 0; // 0 means all commits
+  public readonly DEFAULT_QDRANT_BATCH_UPSERT_SIZE = 100;
+  public readonly DEFAULT_AGENT_MAX_CONTEXT_ITEMS = 10;
+  public readonly DEFAULT_DIFF_LINES_OF_CONTEXT = 3;
+
 
   public readonly DEEPSEEK_RPM_LIMIT_DEFAULT = 60; // Default RPM for DeepSeek
 
@@ -202,6 +216,12 @@ class ConfigService {
     this._fileIndexingChunkSizeChars = parseInt(process.env.FILE_INDEXING_CHUNK_SIZE_CHARS || '', 10) || this.DEFAULT_FILE_INDEXING_CHUNK_SIZE_CHARS;
     this._fileIndexingChunkOverlapChars = parseInt(process.env.FILE_INDEXING_CHUNK_OVERLAP_CHARS || '', 10) || this.DEFAULT_FILE_INDEXING_CHUNK_OVERLAP_CHARS;
     this._requestAdditionalContextMaxSearchResults = parseInt(process.env.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS || '', 10) || this.DEFAULT_REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS;
+    this._diffChunkSizeChars = parseInt(process.env.DIFF_CHUNK_SIZE_CHARS || '', 10) || this.DEFAULT_DIFF_CHUNK_SIZE_CHARS;
+    this._diffChunkOverlapChars = parseInt(process.env.DIFF_CHUNK_OVERLAP_CHARS || '', 10) || this.DEFAULT_DIFF_CHUNK_OVERLAP_CHARS;
+    this._commitHistoryMaxCountForIndexing = parseInt(process.env.COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING || '', 10) || this.DEFAULT_COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING;
+    this._qdrantBatchUpsertSize = parseInt(process.env.QDRANT_BATCH_UPSERT_SIZE || '', 10) || this.DEFAULT_QDRANT_BATCH_UPSERT_SIZE;
+    this._agentMaxContextItems = parseInt(process.env.AGENT_MAX_CONTEXT_ITEMS || '', 10) || this.DEFAULT_AGENT_MAX_CONTEXT_ITEMS;
+    this._diffLinesOfContext = parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this.DEFAULT_DIFF_LINES_OF_CONTEXT;
 
     // For _summarizationModel and _refinementModel, we'll set them properly in loadConfigurationsFromFile
     // and reloadConfigsFromFile after _suggestionModel is definitively set.
@@ -344,6 +364,12 @@ class ConfigService {
     process.env.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS = String(this._requestAdditionalContextMaxSearchResults);
     process.env.SUMMARIZATION_MODEL = this._summarizationModel;
     process.env.REFINEMENT_MODEL = this._refinementModel;
+    process.env.DIFF_CHUNK_SIZE_CHARS = String(this._diffChunkSizeChars);
+    process.env.DIFF_CHUNK_OVERLAP_CHARS = String(this._diffChunkOverlapChars);
+    process.env.COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING = String(this._commitHistoryMaxCountForIndexing);
+    process.env.QDRANT_BATCH_UPSERT_SIZE = String(this._qdrantBatchUpsertSize);
+    process.env.AGENT_MAX_CONTEXT_ITEMS = String(this._agentMaxContextItems);
+    process.env.DIFF_LINES_OF_CONTEXT = String(this._diffLinesOfContext);
   }
   
   public reloadConfigsFromFile(_forceSet = true): void {
@@ -369,6 +395,12 @@ class ConfigService {
     this._fileIndexingChunkSizeChars = parseInt(process.env.FILE_INDEXING_CHUNK_SIZE_CHARS || '', 10) || this.DEFAULT_FILE_INDEXING_CHUNK_SIZE_CHARS;
     this._fileIndexingChunkOverlapChars = parseInt(process.env.FILE_INDEXING_CHUNK_OVERLAP_CHARS || '', 10) || this.DEFAULT_FILE_INDEXING_CHUNK_OVERLAP_CHARS;
     this._requestAdditionalContextMaxSearchResults = parseInt(process.env.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS || '', 10) || this.DEFAULT_REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS;
+    this._diffChunkSizeChars = parseInt(process.env.DIFF_CHUNK_SIZE_CHARS || '', 10) || this.DEFAULT_DIFF_CHUNK_SIZE_CHARS;
+    this._diffChunkOverlapChars = parseInt(process.env.DIFF_CHUNK_OVERLAP_CHARS || '', 10) || this.DEFAULT_DIFF_CHUNK_OVERLAP_CHARS;
+    this._commitHistoryMaxCountForIndexing = parseInt(process.env.COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING || '', 10) || this.DEFAULT_COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING;
+    this._qdrantBatchUpsertSize = parseInt(process.env.QDRANT_BATCH_UPSERT_SIZE || '', 10) || this.DEFAULT_QDRANT_BATCH_UPSERT_SIZE;
+    this._agentMaxContextItems = parseInt(process.env.AGENT_MAX_CONTEXT_ITEMS || '', 10) || this.DEFAULT_AGENT_MAX_CONTEXT_ITEMS;
+    this._diffLinesOfContext = parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this.DEFAULT_DIFF_LINES_OF_CONTEXT;
     
     // Initialize from env, file loading will override if present, then derive.
     this._summarizationModel = process.env.SUMMARIZATION_MODEL || "";
@@ -418,6 +450,12 @@ class ConfigService {
   get REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS(): number { return parseInt(process.env.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS || '', 10) || this._requestAdditionalContextMaxSearchResults; }
   get SUMMARIZATION_MODEL(): string { return process.env.SUMMARIZATION_MODEL || this._summarizationModel; }
   get REFINEMENT_MODEL(): string { return process.env.REFINEMENT_MODEL || this._refinementModel; }
+  get DIFF_CHUNK_SIZE_CHARS(): number { return parseInt(process.env.DIFF_CHUNK_SIZE_CHARS || '', 10) || this._diffChunkSizeChars; }
+  get DIFF_CHUNK_OVERLAP_CHARS(): number { return parseInt(process.env.DIFF_CHUNK_OVERLAP_CHARS || '', 10) || this._diffChunkOverlapChars; }
+  get COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING(): number { return parseInt(process.env.COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING || '', 10) || this._commitHistoryMaxCountForIndexing; }
+  get QDRANT_BATCH_UPSERT_SIZE(): number { return parseInt(process.env.QDRANT_BATCH_UPSERT_SIZE || '', 10) || this._qdrantBatchUpsertSize; }
+  get AGENT_MAX_CONTEXT_ITEMS(): number { return parseInt(process.env.AGENT_MAX_CONTEXT_ITEMS || '', 10) || this._agentMaxContextItems; }
+  get DIFF_LINES_OF_CONTEXT(): number { return parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this._diffLinesOfContext; }
 
   // Method to get all relevant config for a provider (example for OpenAI)
   public getConfig(): { [key: string]: string | number | boolean | undefined } {
