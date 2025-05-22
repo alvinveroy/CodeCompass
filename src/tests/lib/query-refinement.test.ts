@@ -66,8 +66,7 @@ describe('Query Refinement Tests', () => {
       }));
 
     it('should return results without refinement if threshold met (using injected mock)', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(mockQdrantClientInstance.search).mockResolvedValue(dummySearchResults(0.8) as any); 
+      vi.mocked(mockQdrantClientInstance.search).mockResolvedValue(dummySearchResults(0.8) as unknown as Schemas['ScoredPoint'][]); 
       const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
         mockQdrantClientInstance, 'initial query', [], undefined, 2, 0.75,
         mockRefineQuery_Injected
