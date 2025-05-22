@@ -762,6 +762,7 @@ Structure your analysis with these sections:
       const chunkIndexParam = typedParams.chunk_index;
 
       if (typeof contextTypeParam !== 'string' || !['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS'].includes(contextTypeParam)) {
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         throw new Error(`Parameter 'context_type' for tool '${tool}' must be one of ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS']. Received: ${contextTypeParam}`);
       }
       if (typeof queryOrPathParam !== 'string') {
@@ -1215,15 +1216,14 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
           agentState.steps.map((mapStep: AgentStep): string => { // Explicitly type mapStep and callback return type
-            const toolNameStr: string = String(mapStep.tool);
+            const toolNameStr = String(mapStep.tool);
             const outputRaw: unknown = mapStep.output;
             const outputStringified: string = stringifyStepOutput(outputRaw);
             const outputOrDefault: string = outputStringified || 'No output';
             const outputSubstr: string = outputOrDefault.substring(0, 200);
             // Final explicit cast to string for the part derived from unknown output
-            const outputPreviewStr: string = String(outputSubstr);
+            const outputPreviewStr = String(outputSubstr);
 
-            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions -- stringifyStepOutput ensures string, linter struggles with unknown input type flow
             return `Used ${toolNameStr} and found: ${outputPreviewStr}...`;
           }).join("\n\n");
       }
