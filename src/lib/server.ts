@@ -3,6 +3,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 // Assuming these are correctly exported by the SDK, either from root or via defined subpaths.
 // If the SDK's "exports" map points these subpaths to .js files, add .js here.
 // If they are re-exported from the main SDK entry, use that.
+import express from 'express';
+import http from 'http';
 import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
@@ -27,6 +29,12 @@ import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provid
 import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
+
+// Global state for indexing
+let indexingStatus: 'idle' | 'in-progress' | 'completed' | 'failed' = 'idle';
+let indexingProgress = 0; // Percentage 0-100
+let indexingError: string | null = null;
+let indexingLastUpdatedAt = new Date();
 
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
   if (typeof params === 'object' && params !== null) {
@@ -119,7 +127,28 @@ export async function startServer(repoPath: string): Promise<void> {
     
     const qdrantClient = await initializeQdrant();
     // const llmProvider = await getLLMProvider(); // Already initialized a few lines above
-    await indexRepository(qdrantClient, repoPath, llmProvider);
+    
+    // Start initial indexing in the background
+    indexingStatus = 'in-progress';
+    indexingProgress = 0;
+    indexingError = null;
+    indexingLastUpdatedAt = new Date();
+    logger.info(`Initial indexing process started for ${repoPath} in the background.`);
+
+    indexRepository(qdrantClient, repoPath, llmProvider)
+      .then(() => {
+        indexingStatus = 'completed';
+        indexingProgress = 100;
+        indexingLastUpdatedAt = new Date();
+        logger.info(`Initial indexing process completed successfully for ${repoPath}.`);
+      })
+      .catch((error: unknown) => {
+        indexingStatus = 'failed';
+        indexingProgress = 100; // Consider if progress should be 0 or last known on failure
+        indexingError = error instanceof Error ? error.message : String(error);
+        indexingLastUpdatedAt = new Date();
+        logger.error(`Initial indexing process failed for ${repoPath}: ${indexingError}`);
+      });
 
     // Prompts will be registered using server.prompt() later
 
@@ -160,6 +189,7 @@ export async function startServer(repoPath: string): Promise<void> {
         get_changelog: {},
         agent_query: {},
         switch_suggestion_model: {},
+        get_indexing_status: {}, // New tool for indexing status
       },
       prompts: {}, // Explicitly declare prompts capability
     };
@@ -310,6 +340,26 @@ export async function startServer(repoPath: string): Promise<void> {
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
     registerPrompts(server); 
+
+    server.tool(
+      "get_indexing_status",
+      "Retrieves the current status of repository indexing. Provides information on whether indexing is idle, in-progress, completed, or failed, along with progress percentage and any error messages.",
+      z.object({}), // No parameters
+      async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        logger.info("Tool 'get_indexing_status' execution started.");
+        return {
+          content: [{
+            type: "text",
+            text: `# Indexing Status
+- Status: ${indexingStatus}
+- Progress: ${indexingProgress}%
+- Last Updated: ${indexingLastUpdatedAt.toISOString()}
+${indexingError ? `- Error: ${indexingError}` : ''}
+            `,
+          }],
+        };
+      }
+    );
     
     server.tool(
       "switch_suggestion_model",
@@ -401,6 +451,62 @@ export async function startServer(repoPath: string): Promise<void> {
     );
 
     const transport = new StdioServerTransport();
+
+    // Setup Express HTTP server for status and notifications
+    const expressApp = express();
+    expressApp.use(express.json()); // Middleware to parse JSON bodies
+
+    expressApp.get('/api/indexing-status', (_req, res) => {
+      res.json({
+        status: indexingStatus,
+        progress: indexingProgress,
+        error: indexingError,
+        lastUpdatedAt: indexingLastUpdatedAt.toISOString(),
+      });
+    });
+
+    expressApp.post('/api/repository/notify-update', (_req, res) => {
+      logger.info('Received notification to update repository via /api/repository/notify-update.');
+      
+      if (indexingStatus === 'in-progress') {
+        logger.warn('Re-indexing request received, but indexing is already in progress.');
+        return res.status(409).json({ message: 'Indexing already in progress.' });
+      }
+
+      logger.info(`Triggering re-indexing for repository: ${repoPath}`);
+      indexingStatus = 'in-progress';
+      indexingProgress = 0;
+      indexingError = null;
+      indexingLastUpdatedAt = new Date();
+
+      // Re-use qdrantClient, repoPath, llmProvider from the outer scope
+      indexRepository(qdrantClient, repoPath, llmProvider)
+        .then(() => {
+          indexingStatus = 'completed';
+          indexingProgress = 100;
+          indexingLastUpdatedAt = new Date();
+          logger.info(`Repository re-indexing completed successfully for ${repoPath}.`);
+        })
+        .catch((error: unknown) => {
+          indexingStatus = 'failed';
+          // Consider if progress should be 0 or last known on failure
+          indexingProgress = 100; 
+          indexingError = error instanceof Error ? error.message : String(error);
+          indexingLastUpdatedAt = new Date();
+          logger.error(`Repository re-indexing failed for ${repoPath}: ${indexingError}`);
+        });
+      
+      res.status(202).json({ message: 'Re-indexing process initiated.' });
+    });
+
+    const httpPort = configService.HTTP_PORT || 3001; // Default to 3001 if not set
+    if (!configService.HTTP_PORT) {
+      logger.warn(`HTTP_PORT not found in configuration. Defaulting to ${httpPort}. Please set HTTP_PORT in your config.`);
+    }
+    const httpServer = http.createServer(expressApp);
+    httpServer.listen(httpPort, () => {
+      logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
+    });
     
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
     const toolStubs = serverCapabilities.tools || {};
