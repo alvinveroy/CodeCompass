@@ -201,7 +201,8 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
 
 # --- DeepSeek Specific (Optional) ---
 # DEEPSEEK_API_URL: Custom API URL for DeepSeek if not using the default.
-# DEEPSEEK_API_URL=https://api.deepseek.com
+# Default: "https://api.deepseek.com/chat/completions"
+# DEEPSEEK_API_URL=https://api.deepseek.com/chat/completions
 # DEEPSEEK_RPM_LIMIT: Requests per minute limit for DeepSeek. Default: 20
 # DEEPSEEK_RPM_LIMIT=20
 
