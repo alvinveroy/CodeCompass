@@ -116,6 +116,12 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         if (!Array.isArray(res.data.embedding) || res.data.embedding.some(isNaN)) {
           throw new Error(`Ollama API returned an invalid embedding vector (not an array of numbers or contains NaN) for model ${model}. Length: ${res.data.embedding?.length}`);
         }
+        // ADD THIS CHECK:
+        const expectedDimension = configService.EMBEDDING_DIMENSION;
+        if (res.data.embedding.length !== expectedDimension) {
+          logger.error(`Ollama API returned an embedding vector with unexpected dimension for model ${model}. Expected: ${expectedDimension}, Actual: ${res.data.embedding.length}.`);
+          throw new Error(`Ollama API returned an embedding vector with unexpected dimension. Expected: ${expectedDimension}, Actual: ${res.data.embedding.length}`);
+        }
         return res.data; // Return the whole OllamaEmbeddingResponse object
       });
       
