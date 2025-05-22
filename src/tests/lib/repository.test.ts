@@ -67,7 +67,7 @@ vi.mock('util', async (importOriginal) => {
     __esModule: true,
     ...actualUtil,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    promisify: (fnToPromisify: (...args: any[]) => any) => { 
+    promisify: (fnToPromisify: (...args: any[]) => any) => {
       if (fnToPromisify && (typeof fnToPromisify.name === 'string' && fnToPromisify.name === 'exec' || fnToPromisify === actualChildProcessExecMockInstance)) {
         return internalMockedPromisifiedExec;
       }

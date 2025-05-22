@@ -160,7 +160,7 @@ describe('Agent', () => {
 
     (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; });
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
-     
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
     (getOrCreateSession as Mock).mockReset().mockImplementation((sessionIdParam, _repoPath) => ({ id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} }));
@@ -174,6 +174,7 @@ describe('Agent', () => {
     // Use 'as any' to resolve the stubborn TS2345 error for the mock.
     // This is acceptable in tests where the precise generic of Dirent isn't crucial.
     // Using the top-level createMockDirent
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent<Buffer>[]);
   });
   afterEach(() => { vi.restoreAllMocks(); });
