@@ -391,7 +391,7 @@ export async function capability_getAdjacentFileChunks(
                                                               // Or, we can cast if confident, but better to check dataType if it could be mixed.
                                                               // Given the filter, it *should* be FileChunkPayload.
         if (pointPayload.dataType === 'file_chunk') { // Explicit check for safety
-          const fileChunkPayload = pointPayload as FileChunkPayload; // Cast to specific type
+          const fileChunkPayload = pointPayload as unknown as FileChunkPayload; // Cast via unknown
           adjacentChunksResult.push({
             filepath: fileChunkPayload.filepath,
             chunk_index: fileChunkPayload.chunk_index,
