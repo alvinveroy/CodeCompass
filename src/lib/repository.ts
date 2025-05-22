@@ -567,8 +567,14 @@ async function indexCommitsAndDiffs(
     );
     
     try {
-      const commitVector = await llmProvider.generateEmbedding(commitTextToEmbed);
-      const commitPayload: CommitInfoPayload = {
+      // === Commit Info ID Generation and Embedding ===
+      if (!commit.oid || typeof commit.oid !== 'string') {
+        logger.error(`Skipping commit due to invalid OID for ID generation. Commit: ${JSON.stringify(commit)}`);
+        continue;
+      }
+      // Generate commit ID first
+      const commitPointId = uuidv5(`commit:${String(repoPath)}:${String(commit.oid)}`, CODECOMPASS_NAMESPACE);
+      const commitPayload: CommitInfoPayload = { // Define payload before embedding attempt
         dataType: 'commit_info',
         commit_oid: commit.oid,
         commit_message: commit.message,
@@ -609,8 +615,14 @@ async function indexCommitsAndDiffs(
           const diffContextualText = preprocessText(`Diff for ${changedFile.path} in commit ${commit.oid} (type: ${changedFile.type}):\n${diffChunk}`);
           
           try {
-            const diffVector = await llmProvider.generateEmbedding(diffContextualText);
-            const diffPayload: DiffChunkPayload = {
+            // === Diff Chunk ID Generation and Embedding ===
+            if (!commit.oid || typeof commit.oid !== 'string' || !changedFile.path || typeof changedFile.path !== 'string') {
+              logger.error(`Skipping diff chunk due to invalid commit OID or changed file path for ID generation. Commit OID: ${commit.oid}, FilePath: ${changedFile.path}`);
+              continue;
+            }
+            // Generate diff ID first
+            const diffPointId = uuidv5(`diff:${String(repoPath)}:${String(commit.oid)}:${String(changedFile.path)}:chunk:${i}`, CODECOMPASS_NAMESPACE);
+            const diffPayload: DiffChunkPayload = { // Define payload before embedding
               dataType: 'diff_chunk',
               commit_oid: commit.oid,
               filepath: changedFile.path,
@@ -621,19 +633,20 @@ async function indexCommitsAndDiffs(
               repositoryPath: repoPath, // Optional
             };
             pointsToUpsert.push({
-              // Generate UUID for diff chunk pointId
-              id: uuidv5(`diff:${repoPath}:${commit.oid}:${changedFile.path}:chunk:${i}`, CODECOMPASS_NAMESPACE),
-              vector: diffVector,
+              id: diffPointId,
+              // Now attempt embedding
+              vector: await llmProvider.generateEmbedding(diffContextualText), // Embedding done here
               payload: diffPayload,
             });
           } catch (embedError) {
-              logger.error(`Failed to generate embedding for diff chunk of ${changedFile.path} in commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
+              // This catch block will now primarily catch errors from llmProvider.generateEmbedding for diffs
+              logger.error(`Failed to process or generate embedding for diff chunk of ${changedFile.path} in commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
               // Continue to next chunk/file
           }
         }
       }
     }
-    
+
     // Batch upsert periodically
     if (pointsToUpsert.length >= configService.QDRANT_BATCH_UPSERT_SIZE) {
         logger.info(`Upserting batch of ${pointsToUpsert.length} commit/diff points...`);
