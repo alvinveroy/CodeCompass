@@ -1214,7 +1214,7 @@ export async function runAgentLoop(
         // Provide a fallback response
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
-          agentState.steps.map((mapStep: AgentStep) => { // Explicitly type mapStep
+          agentState.steps.map((mapStep: AgentStep): string => { // Explicitly type mapStep and callback return type
             const toolName: string = mapStep.tool; // Explicitly type toolName
             const outputString: string = stringifyStepOutput(mapStep.output); // Use helper, explicitly type
             const safePreviewText: string = (outputString || 'No output').substring(0, 200); // Explicitly type safePreviewText
