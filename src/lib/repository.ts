@@ -585,15 +585,19 @@ async function indexCommitsAndDiffs(
         parent_oids: commit.parents,
         repositoryPath: repoPath, // Optional
       };
+
+      // Now attempt embedding
+      const commitVector = await llmProvider.generateEmbedding(commitTextToEmbed);
+      
       pointsToUpsert.push({
-        // Generate UUID for commit pointId
-        id: uuidv5(`commit:${repoPath}:${commit.oid}`, CODECOMPASS_NAMESPACE),
+        id: commitPointId,
         vector: commitVector,
         payload: commitPayload,
       });
     } catch (embedError) {
-        logger.error(`Failed to generate embedding for commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
-        continue; // Skip this commit if embedding fails
+        // This catch block will now primarily catch errors from llmProvider.generateEmbedding
+        logger.error(`Failed to process or generate embedding for commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
+        continue; // Skip this commit if ID generation or embedding fails
     }
 
 
