@@ -277,7 +277,7 @@ describe('Repository Utilities', () => {
         ];
         vi.mocked(git.log).mockResolvedValue(mockCommits as unknown as import('isomorphic-git').ReadCommitResult[]); 
 
-        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => { // eslint-disable-line require-await
+        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => {  
             // await Promise.resolve(); // Add a no-op await // This was causing require-await, removed as mock doesn't need to be truly async for this test
             if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
             if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 

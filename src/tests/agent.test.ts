@@ -159,7 +159,7 @@ describe('Agent', () => {
 
     (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; });
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
     (getOrCreateSession as Mock).mockReset().mockImplementation((sessionIdParam, _repoPath) => ({ id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} }));
@@ -210,7 +210,7 @@ describe('Agent', () => {
         runAgentLoopSUT_local = ActualAgentModule.runAgentLoop;
 
         // General setup for LLM provider mock for this describe block. Tests can override.
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+         
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
