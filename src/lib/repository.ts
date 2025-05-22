@@ -502,7 +502,6 @@ export async function getCommitHistoryWithChanges(
           // and then iterate its entries, or use `walk` with the `oids` parameter.
           // Given the context of an initial commit, `GIT_TREE()` should refer to its tree.
           // The simplest fix for the `walk` call, assuming `GIT_TREE()` refers to the tree of the current commit:
-        // This line was the duplicate, ensure it's removed. The one above after `map:` is correct.
         });
       }
 

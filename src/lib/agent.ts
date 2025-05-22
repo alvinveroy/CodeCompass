@@ -252,9 +252,9 @@ When responding to the user's main query, follow these steps:
 2. Formulate a plan. Think step-by-step.
 3. Choose the most appropriate capability to execute next to gather a piece of information for your plan.
 4. Explain your reasoning for choosing this capability and specify the exact parameters to use.
-5. Format your chosen capability call as a JSON object:
+5. **CRITICAL**: Format your chosen capability call as a single, valid JSON object. This JSON object **MUST BE THE ONLY CONTENT** in your response. Do not include any other text before or after the JSON object.
+   Example JSON format:
    {"capability": "capability_name", "parameters": {...parameters_object...}, "reasoning": "Your reasoning here..."}
-   This JSON object should be the *only* content in your response if you are calling a capability.
 6. After receiving the results from the capability, analyze them.
 7. Decide if you have enough information to answer the user's original query.
    - If yes, provide a comprehensive final answer to the user. Do NOT use the JSON capability call format for the final answer. Just provide the answer as plain text.
