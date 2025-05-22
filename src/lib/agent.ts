@@ -1216,9 +1216,9 @@ export async function runAgentLoop(
           "Here's what I found so far: " +
           agentState.steps.map((mapStep: AgentStep) => { // Renamed s to mapStep to avoid lint error if outer scope has 's'
             const toolName = mapStep.tool;
-            const outputString = stringifyStepOutput(mapStep.output); // Use helper
+            const outputString: string = stringifyStepOutput(mapStep.output); // Use helper, explicitly type
             const safePreviewText = (outputString || 'No output').substring(0, 200);
-            return `Used ${toolName} and found: ${safePreviewText}...`;
+            return `Used ${toolName} and found: ${safePreviewText}...`; 
           }).join("\n\n");
       }
     }

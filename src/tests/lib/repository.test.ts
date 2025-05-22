@@ -113,8 +113,7 @@ import * as git from 'isomorphic-git'; // Import as namespace
 
 describe('Repository Utilities', () => {
   const repoPath = '/test/diff/repo';
-  // Use the imported actualChildProcessExecMock as the execMock reference
-  const _execMock = actualChildProcessExecMockInstance as MockedFunction<typeof actualChildProcessExecMockInstance>; 
+  // _execMock was unused and potentially causing a lint error, so it's removed.
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
