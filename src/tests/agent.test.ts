@@ -137,7 +137,7 @@ describe('Agent', () => {
     vi.clearAllMocks(); // Clear all mocks from previous tests
 
     (getLLMProvider as Mock).mockResolvedValue(mockLLMProviderInstance);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("Default LLM response");
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
@@ -147,7 +147,7 @@ describe('Agent', () => {
       (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("Default LLM response");
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
@@ -159,7 +159,7 @@ describe('Agent', () => {
 
     (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; });
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
     (getOrCreateSession as Mock).mockReset().mockImplementation((sessionIdParam, _repoPath) => ({ id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} }));
@@ -211,7 +211,7 @@ describe('Agent', () => {
         runAgentLoopSUT_local = ActualAgentModule.runAgentLoop;
 
         // General setup for LLM provider mock for this describe block. Tests can override.
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+         
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
         vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any /* eslint-disable-line @typescript-eslint/no-explicit-any */], refinedQuery: 'refined', relevanceScore: 0.8 });
@@ -228,7 +228,7 @@ describe('Agent', () => {
       // 1. Verification call in runAgentLoop
       // 2. Agent reasoning call (should return TOOL_CALL string)
       // 3. Final response call (if loop ends or max steps reached)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+       
       mockLLMProviderInstance.generateText
         .mockReset() // Clear any beforeEach general setup for this specific test sequence
         .mockResolvedValueOnce("LLM Verification OK") // For currentProvider.generateText("Test message")
@@ -249,7 +249,7 @@ describe('Agent', () => {
       expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code')); 
 
       // Verify that searchWithRefinement (a dependency of executeToolCall for "search_code") was called
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+       
       expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']); 
       
       expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.')); 

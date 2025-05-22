@@ -38,7 +38,7 @@ vi.mock('winston', () => {
       // Define mocks for winston.format properties that ConfigService uses
       // ConfigService uses: combine, timestamp, printf, colorize, splat, simple, json
       const mockFormat = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         combine: vi.fn((..._args: unknown[]) => ({ // combine should return a format object
           // Simulate a basic format object structure.
           // The actual transformation logic isn't critical for most ConfigService tests,

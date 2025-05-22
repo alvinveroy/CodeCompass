@@ -27,11 +27,11 @@ vi.mock('../lib/config-service', async () => {
   const originalInstance: PartialOriginalConfig = originalModule.configService;
 
   const mockConfigServiceValues: MockableConfigService = {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     MAX_RETRIES: originalInstance.MAX_RETRIES,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     RETRY_DELAY: originalInstance.RETRY_DELAY,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     OLLAMA_HOST: originalInstance.OLLAMA_HOST,
     logger: {
       warn: vi.fn(),
@@ -43,7 +43,7 @@ vi.mock('../lib/config-service', async () => {
 
   return {
     // Export the mocked configService and logger
-    configService: mockConfigServiceValues as MockableConfigService,
+    configService: mockConfigServiceValues,
     logger: mockConfigServiceValues.logger,
     // If there are other exports from config-service that utils.ts might use,
     // spread originalModule here, but be careful not to overwrite your mocks.
@@ -78,16 +78,16 @@ describe('Utils Module', () => {
     // This is the crucial part: we cast the statically imported `configServiceInstanceFromMockFactory`
     // (which TS thinks is the original ConfigService) to our `MockableConfigService` type.
     // This is safe because our vi.mock factory ensures it *is* a MockableConfigService at runtime.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     testSubjectMockedConfigService = configServiceInstanceFromMockFactory as unknown as MockableConfigService;
 
     vi.useFakeTimers();
     
     // Reset the properties of the *actual mocked instance* before each test
     // using the correctly typed testSubjectMockedConfigService.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+     
     testSubjectMockedConfigService.MAX_RETRIES = typedActualOriginalConfigService.MAX_RETRIES;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+     
     testSubjectMockedConfigService.RETRY_DELAY = typedActualOriginalConfigService.RETRY_DELAY;
     
     // Ensure logger and its methods exist before trying to clear mocks
