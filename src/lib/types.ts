@@ -101,7 +101,7 @@ export interface OllamaGenerateResponse {
 // Modify the existing QdrantPoint interface:
 // Replace the existing QdrantPoint interface with this:
 export interface QdrantPoint {
-  id: string; // Ensure unique IDs, e.g., `file:${filepath}:chunk:${index}`, `commit:${oid}`, `diff:${commit_oid}:${filepath}:chunk:${index}`
+  id: string; // Must be a UUID. Original identifying info (filepath, commit, etc.) is in payload.
   vector: number[];
   payload: FileChunkPayload | CommitInfoPayload | DiffChunkPayload;
 }
