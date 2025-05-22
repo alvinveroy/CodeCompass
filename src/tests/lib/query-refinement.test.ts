@@ -71,7 +71,7 @@ describe('Query Refinement Tests', () => {
         mockQdrantClientInstance, 'initial query', [], undefined, 2, 0.75,
         mockRefineQuery_Injected
       );
-      expect(vi.mocked(mockQdrantClientInstance.search)).toHaveBeenCalledTimes(1);
+      expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(1);
       // Ensure results are cast or match DetailedQdrantSearchResult for this assertion
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(refinedQuery).toBe('initial query');
@@ -90,7 +90,7 @@ describe('Query Refinement Tests', () => {
         mockRefineQuery_Injected
       );
 
-      expect(vi.mocked(mockQdrantClientInstance.search)).toHaveBeenCalledTimes(3);
+      expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3);
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(relevanceScore).toBe(0.8);
       expect(refinedQuery).toBe('original query broadened by INJECTED mockRefineQuery focused by INJECTED mockRefineQuery');
@@ -115,7 +115,7 @@ describe('Query Refinement Tests', () => {
             mockQdrantClientInstance, 'query for no results', [], undefined, 2, 0.7,
             mockRefineQuery_Injected // Pass the mock
         );
-        expect(vi.mocked(mockQdrantClientInstance.search)).toHaveBeenCalledTimes(3);
+        expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3);
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
         expect(refinedQuery).toBe('query for no results broadened by INJECTED mockRefineQuery broadened by INJECTED mockRefineQuery');

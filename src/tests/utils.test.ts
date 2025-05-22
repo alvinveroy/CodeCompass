@@ -21,6 +21,7 @@ interface PartialOriginalConfig {
 
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- This assertion is necessary for tsc to correctly type the dynamic import
   const originalModule = await vi.importActual('../lib/config-service') as { configService: PartialOriginalConfig; [key: string]: unknown };
   const originalInstanceFromActual = originalModule.configService; // No longer unsafe access due to improved type of originalModule
 
@@ -60,6 +61,7 @@ describe('Utils Module', () => {
 
   beforeEach(async () => {
     // Step 1: Get the actual module with a more specific type.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- This assertion is necessary for tsc to correctly type the dynamic import
     const originalModuleFromActualImport = await vi.importActual('../lib/config-service') as { configService: PartialOriginalConfig; [key: string]: unknown };
     
     // Step 2: Access the 'configService' property.

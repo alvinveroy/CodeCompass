@@ -163,7 +163,7 @@ describe('Agent', () => {
      
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
-    (getOrCreateSession as Mock).mockReset().mockImplementation((sessionIdParam, _repoPath) => ({ id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} }));
+    (getOrCreateSession as Mock).mockReset().mockResolvedValue({ id: 'default-test-session', queries: [], suggestions: [], context: {} });
     (addQuery as Mock).mockReset();
     (addSuggestion as Mock).mockReset();
     (updateContext as Mock).mockReset();
@@ -215,7 +215,13 @@ describe('Agent', () => {
          
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
-        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts', last_modified: '2023-01-01'}} as unknown as import('../lib/types').DetailedQdrantSearchResult], refinedQuery: 'refined', relevanceScore: 0.8 });
+        const mockSearchResult: import('../lib/types').DetailedQdrantSearchResult = {
+            id: 'search-res-1',
+            score: 0.8,
+            payload: { content: 'mock snippet', filepath: 'file.ts', last_modified: '2023-01-01' }
+            // No vector or version needed as per DetailedQdrantSearchResult
+        };
+        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [mockSearchResult], refinedQuery: 'refined', relevanceScore: 0.8 });
     });
 
     afterEach(() => {

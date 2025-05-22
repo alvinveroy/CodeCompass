@@ -1078,7 +1078,7 @@ export async function runAgentLoop(
       
       // Add context from previous steps if available
       if (agentState.steps.length > 0) {
-        const contextStr = agentState.steps.map(s => { // Changed step to s to avoid conflict with outer scope variable if any
+        const contextStr = agentState.steps.map((s: AgentStep) => { // Explicitly type 's'
           const outputStr = stringifyStepOutput(s.output); // Use helper
            
           // Reason: stringifyStepOutput ensures outputStr is a string, making this template literal safe.
