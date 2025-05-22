@@ -97,33 +97,24 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       }
 
       for (const point of scrollResult.points) {
-        const payload = point.payload as any; // Cast to any initially, then type check
-        let indexedFilepath: string | undefined = undefined;
+        const pointId = point.id; // Qdrant point IDs can be string or number
+        const payload = point.payload as Partial<FileChunkPayload | CommitInfoPayload | DiffChunkPayload>; // Use Partial for safety
 
         if (payload && payload.dataType === 'file_chunk') {
-          indexedFilepath = (payload as FileChunkPayload).filepath;
-        } else if (payload && payload.filepath) {
-          // Handle legacy format if necessary, or log a warning
-          // For now, we assume new format or only care about 'file_chunk' for this stale check
-          logger.debug(`Point ID ${point.id} is not of dataType 'file_chunk' or has an unexpected payload structure. Skipping stale check for this point based on filepath.`);
-          // continue; // Or handle differently if other types need stale checking based on filepath
-        }
-        // Ensure point.id is correctly typed; uuidv4 generates strings.
-        const pointId = point.id; 
-
-        if (indexedFilepath) {
-          if (!currentFilePathsInRepo.has(indexedFilepath)) {
-            pointsToDelete.push(pointId);
-            logger.debug(`Marking stale entry for deletion: ${indexedFilepath} (ID: ${pointId})`);
-          }
-        } else {
-          // This case could indicate an issue with how data is being indexed or a point without a filepath.
-          // If a point is not a file_chunk, it's okay if it doesn't have a filepath for *this specific* stale check.
-          if (!(payload && payload.dataType === 'file_chunk')) {
-             logger.debug(`Point ID ${pointId} is not a file_chunk payload. Skipping stale filepath check.`);
+          const fileChunkPayload = payload as FileChunkPayload; // Now we know it's a FileChunkPayload
+          if (fileChunkPayload.filepath) {
+            if (!currentFilePathsInRepo.has(fileChunkPayload.filepath)) {
+              pointsToDelete.push(String(pointId)); // Ensure ID is string for Qdrant selector
+              logger.debug(`Marking stale file_chunk entry for deletion: ${fileChunkPayload.filepath} (ID: ${pointId})`);
+            }
           } else {
             logger.warn(`Found file_chunk point in Qdrant (ID: ${pointId}) without a 'filepath' in its payload. Skipping stale check for this point.`);
           }
+        } else {
+          // This point is not a file_chunk, or has no payload/dataType.
+          // We only perform stale checks based on filepath for file_chunks in this routine.
+          // Other data types (commit_info, diff_chunk) might have different stale criteria or be managed elsewhere.
+          logger.debug(`Point ID ${pointId} is not a 'file_chunk' or lacks expected payload structure. Skipping filepath-based stale check.`);
         }
       }
       // Handle different types for next_page_offset to ensure type safety.

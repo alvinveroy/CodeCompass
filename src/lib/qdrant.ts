@@ -15,20 +15,43 @@ export type SimplePoint = {
 
 // Initialize Qdrant
 export async function initializeQdrant(): Promise<QdrantClient> {
+  if (qdrantClientInstance) {
+    try {
+      // Perform a lightweight operation to check if the client is still healthy
+      await qdrantClientInstance.getCollections(); // Example: list collections
+      logger.info("Qdrant client already initialized and healthy.");
+      return qdrantClientInstance;
+    } catch (e) {
+      logger.warn("Qdrant client was initialized but seems unhealthy. Re-initializing.", { error: e instanceof Error ? e.message : String(e) });
+      // Fall through to re-initialize
+    }
+  }
+
   const qdrantHost = configService.QDRANT_HOST;
   const collectionName = configService.COLLECTION_NAME;
-  logger.info(`Checking Qdrant at ${qdrantHost}`);
+  logger.info(`Initializing Qdrant client for ${qdrantHost}`);
   const client = new QdrantClient({ url: qdrantHost });
+
   await withRetry(async () => {
-    await client.getCollections();
     const collections = await client.getCollections();
     if (!collections.collections.some(c => c.name === collectionName)) {
-      await client.createCollection(collectionName, { vectors: { size: 768, distance: "Cosine" } }); // Vector size might need to be dynamic if embedding model changes
+      // Determine vector size from embedding model if possible, or make it configurable
+      // For now, assuming 768 is a common default (e.g., nomic-embed-text)
+      // This should ideally come from configService or be dynamically determined
+      const vectorSize = 768; // TODO: Make this configurable or dynamic
+      logger.info(`Creating collection: ${collectionName} with vector size ${vectorSize}`);
+      await client.createCollection(collectionName, {
+        vectors: { size: vectorSize, distance: "Cosine" }
+      });
       logger.info(`Created collection: ${collectionName}`);
+    } else {
+      logger.info(`Collection '${collectionName}' already exists.`);
     }
   });
+
   qdrantClientInstance = client;
-  return client;
+  logger.info("Qdrant client initialized successfully.");
+  return qdrantClientInstance;
 }
 
 export function getQdrantClient(): QdrantClient {

@@ -20,6 +20,7 @@ import { searchWithRefinement } from "./query-refinement";
 import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
 import { SuggestionPlanner } from "./suggestion-service";
+import { processAgentQuery } from './agent-service';
 import { AgentInitialQueryResponse } from "./types";
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
@@ -483,110 +484,50 @@ function registerTools( // Removed async
       // maxSteps removed
     },
     async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
-      logger.info(`Tool 'agent_query' execution started.`);
-      // args are already parsed by Zod via McpServer based on the schema above.
-      // No need for normalizeToolParams here if using args directly.
-      logger.info("Received args for agent_query", { args });
+      logger.info(`Tool 'agent_query' execution started with args:`, args);
 
-      const query = args.query || "repository information"; // Default if query is empty string after parsing
-      const initialSessionId = args.sessionId;
+      const query = args.query;
+      const sessionId = args.sessionId;
 
-      if (args.query === undefined || args.query === null || args.query.trim() === "") {
-        logger.warn("No query provided or query is empty for agent_query, using default 'repository information'");
+      if (!query || typeof query !== 'string' || query.trim() === "") {
+        const errorMsg = "Invalid or missing 'query' parameter for agent_query. Please provide a non-empty query string.";
+        logger.error(errorMsg, { receivedQuery: query });
+        return {
+          content: [{
+            type: "text",
+            text: `# Agent Query Error\n\n${errorMsg}`,
+          }],
+        };
       }
-    
-    try {
-      configService.reloadConfigsFromFile(true);
 
-      const llmProvider = await getLLMProvider();
-      logger.info(`Agent using provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
-      const session = getOrCreateSession(initialSessionId, repoPath);
-      const isGitRepo = await validateGitRepository(repoPath);
-      const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
-        : [];
-      updateContext(session.id, repoPath, files); // Update context for the session
+      try {
+        // Ensure config is fresh for this operation, especially if models/providers might have changed
+        // configService.reloadConfigsFromFile(true); // processAgentQuery will use current configService state
 
-      const { results: searchResults, refinedQuery } = await searchWithRefinement(
-        qdrantClient, 
-        query, // query is already string
-        files
-      );
-      const topScore = searchResults.length > 0 ? searchResults[0].score : 0;
-      addQuery(session.id, query, searchResults, topScore);
-
-      const searchContextSnippets = searchResults.map(r => ({
-        filepath: r.payload.filepath,
-        snippet: r.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH),
-        relevance: r.score,
-      }));
-
-      const augmentedPrompt = `User Query: "${query}"
-${refinedQuery !== query ? `Refined Query (used for vector search): "${refinedQuery}"` : ''}
-
-Relevant code snippets based on the query:
-${searchContextSnippets.length > 0 
-  ? searchContextSnippets.map(c => `File: ${c.filepath} (Relevance: ${c.relevance.toFixed(2)})\n\`\`\`\n${c.snippet}\n\`\`\``).join("\n\n")
-  : "No specific code snippets found directly matching the query."
-}
-
-Based on the user query and the provided relevant code snippets (if any), please generate a detailed plan and a comprehensive summary for addressing the user's query.
-Ensure the plan outlines steps to answer the query or solve the task, and the summary provides a direct answer or solution.
-`;
-      
-      const planner = new SuggestionPlanner(llmProvider);
-      const agentResponse: AgentInitialQueryResponse = await planner.initiateAgentQuery(
-        augmentedPrompt,
-        session.id
-      );
-
-      if (agentResponse.status === "ERROR") {
-        logger.error("Error in agent_query", { 
-          sessionId: agentResponse.sessionId, 
-          message: agentResponse.message 
+        // processAgentQuery will internally get the LLMProvider and QdrantClient
+        const agentResponseText = await processAgentQuery(query, sessionId);
+        
+        return {
+          content: [{
+            type: "text",
+            text: agentResponseText,
+          }],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error("Critical error in agent_query tool handler", { 
+          message: errorMessage,
+          stack: error instanceof Error ? error.stack : undefined,
         });
         return {
           content: [{
             type: "text",
-            text: `# Agent Query Failed\n\nSession ID: ${agentResponse.sessionId}\nStatus: ${agentResponse.status}\nMessage: ${agentResponse.message}\n\nPlan:\n\`\`\`\n${agentResponse.generatedPlanText || "No plan generated."}\n\`\`\`\nSummary:\n\`\`\`\n${agentResponse.agentState.finalResponse || "No summary generated."}\n\`\`\``,
+            text: `# Agent Query Failed\n\nAn unexpected error occurred: ${errorMessage}\nPlease check server logs for details.`,
           }],
         };
       }
-      
-      const responseText = `# Agent Query Result
-
-**Session ID:** ${agentResponse.sessionId}
-**Status:** ${agentResponse.status}
-**Message:** ${agentResponse.message}
-
-## Generated Plan
-\`\`\`
-${agentResponse.generatedPlanText || "No plan generated."}
-\`\`\`
-
-## Generated Summary
-\`\`\`
-${agentResponse.agentState.finalResponse || "No summary generated."}
-\`\`\`
-`;
-      
-      return {
-        content: [{
-          type: "text",
-          text: responseText,
-        }],
-      };
-    } catch (error: unknown) {
-      logger.error("Error in agent_query tool", { error: error instanceof Error ? error.message : String(error) });
-      
-      return {
-        content: [{
-          type: "text",
-          text: `# Error in Agent Query Tool\n\nThere was an unexpected error processing your query: ${error instanceof Error ? error.message : String(error)}\n\nPlease check the server logs for more details.`,
-        }],
-      };
     }
-  });
+  );
 
   // Tool to execute the next step of an agent's plan - REMOVED
   
@@ -631,35 +572,49 @@ ${agentResponse.agentState.finalResponse || "No summary generated."}
     
     const llmProvider = await getLLMProvider();
     
-    const summaries = await Promise.all(results.map(async result => {
-      const snippet = result.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH);
-      let summary = "Summary unavailable";
+    const fileChunkResults = results.filter(
+        (result): result is DetailedQdrantSearchResult & { payload: FileChunkPayload } => 
+            result.payload?.dataType === 'file_chunk'
+    );
+
+    if (fileChunkResults.length === 0 && results.length > 0) {
+        logger.info(`Search for "${searchQuery}" found ${results.length} results, but none were file_chunks. Matched data might be from commits or diffs.`);
+    } else if (results.length === 0) {
+        logger.info(`Search for "${searchQuery}" found no results.`);
+    }
+    
+    const summaries = await Promise.all(fileChunkResults.map(async result => {
+      // Now, result.payload is known to be FileChunkPayload
+      const snippet = result.payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH);
+      let summaryText = "Summary unavailable"; // Renamed from 'summary' to avoid conflict with outer scope
       
       if (suggestionModelAvailable) {
         try {
-          // Create a summarization prompt
           const summarizePrompt = `Summarize this code snippet in 50 words or less:\n\n${snippet}`;
-          summary = await llmProvider.generateText(summarizePrompt);
+          // Ensure llmProvider is available in this scope. It's initialized in startServer.
+          // If not directly available, it needs to be passed or retrieved via getLLMProvider().
+          // Assuming llmProvider is accessible here (e.g., passed to registerTools or retrieved).
+          // For now, let's assume getLLMProvider() is the way if not passed down.
+          const currentLlmProvider = await getLLMProvider(); // Get it if not passed down
+          summaryText = await currentLlmProvider.generateText(summarizePrompt);
         } catch (error: unknown) {
-          logger.warn(`Failed to generate summary: ${(error as Error).message}`);
-          summary = "Summary generation failed";
+          logger.warn(`Failed to generate summary for ${result.payload.filepath}: ${(error as Error).message}`);
+          summaryText = "Summary generation failed";
         }
       }
       
       return {
         filepath: result.payload.filepath,
         snippet,
-        summary,
+        summary: summaryText, // Use the renamed variable
         last_modified: result.payload.last_modified,
         relevance: result.score,
       };
     }));
-    
-    // Format the response as clean markdown
+
     const formattedResponse = `# Search Results for: "${searchQuery}"
 ${refinedQuery !== searchQuery ? `\n> Query refined to: "${refinedQuery}"` : ''}
-
-${summaries.map(s => `
+${summaries.length > 0 ? summaries.map(s => `
 ## ${s.filepath}
 - Last Modified: ${s.last_modified}
 - Relevance: ${s.relevance.toFixed(2)}
@@ -835,30 +790,101 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       );
       
       // Map search results to context
-      const context = results.map(r => ({
-        filepath: r.payload.filepath,
-        snippet: r.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH),
-        last_modified: r.payload.last_modified,
-        relevance: r.score,
-        note: ""
-      }));
+      const context = results
+      .map(r => {
+        if (r.payload?.dataType === 'file_chunk') {
+          const payload = r.payload as FileChunkPayload;
+          return {
+            type: 'file_chunk' as const,
+            filepath: payload.filepath,
+            snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+            last_modified: payload.last_modified,
+            relevance: r.score,
+            note: ""
+          };
+        } else if (r.payload?.dataType === 'commit_info') {
+          const payload = r.payload as CommitInfoPayload;
+          return {
+            type: 'commit_info' as const,
+            commit_oid: payload.commit_oid,
+            message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH),
+            author: payload.commit_author_name,
+            date: payload.commit_date,
+            relevance: r.score,
+            note: "Commit Information"
+          };
+        } else if (r.payload?.dataType === 'diff_chunk') {
+          const payload = r.payload as DiffChunkPayload;
+          return {
+            type: 'diff_chunk' as const,
+            commit_oid: payload.commit_oid,
+            filepath: payload.filepath,
+            snippet: payload.diff_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+            change_type: payload.change_type,
+            relevance: r.score,
+            note: "Diff Information"
+          };
+        }
+        logger.warn(`generate_suggestion: Encountered result with unknown payload type or missing dataType: ID ${r.id}`);
+        return null; 
+      })
+      .filter(item => item !== null) as Array<{type: string; relevance: number; note: string; [key: string]: any}>;
       
       if (context.length < 2 && relevantResults.length > 0) {
         const additionalContext = relevantResults
-          .filter(r => !context.some(c => c.filepath === (r as DetailedQdrantSearchResult).payload?.filepath))
-          .slice(0, 2)
+          .filter(rUnk => { // Check if this result is already in context by a more robust ID or combination
+            const r = rUnk as DetailedQdrantSearchResult; // Assuming relevantResults are DetailedQdrantSearchResult
+            if (r.payload?.dataType === 'file_chunk') {
+              return !context.some(c => c.type === 'file_chunk' && c.filepath === (r.payload as FileChunkPayload).filepath);
+            } else if (r.payload?.dataType === 'commit_info') {
+              return !context.some(c => c.type === 'commit_info' && c.commit_oid === (r.payload as CommitInfoPayload).commit_oid);
+            } else if (r.payload?.dataType === 'diff_chunk') {
+              // Diff uniqueness might be more complex, e.g., commit_oid + filepath + chunk_index
+              return !context.some(c => c.type === 'diff_chunk' && c.commit_oid === (r.payload as DiffChunkPayload).commit_oid && c.filepath === (r.payload as DiffChunkPayload).filepath);
+            }
+            return false; // Don't include if type is unknown or not handled
+          })
+          .slice(0, 2) // Limit additional context items
           .map(rUnk => {
-            const r = rUnk as DetailedQdrantSearchResult;
-            return {
-              filepath: r.payload?.filepath || "unknown",
-              snippet: r.payload?.content?.slice(0, configService.MAX_SNIPPET_LENGTH) || "",
-              last_modified: r.payload?.last_modified || "unknown",
-              relevance: r.score || 0.5,
-              note: "From previous related query"
-            };
-          });
+            const r = rUnk as DetailedQdrantSearchResult; // Cast again for type safety
+            if (r.payload?.dataType === 'file_chunk') {
+              const payload = r.payload as FileChunkPayload;
+              return {
+                type: 'file_chunk' as const,
+                filepath: payload.filepath,
+                snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+                last_modified: payload.last_modified,
+                relevance: r.score,
+                note: "From previous related query"
+              };
+            } else if (r.payload?.dataType === 'commit_info') {
+              const payload = r.payload as CommitInfoPayload;
+              return {
+                type: 'commit_info' as const,
+                commit_oid: payload.commit_oid,
+                message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH),
+                author: payload.commit_author_name,
+                date: payload.commit_date,
+                relevance: r.score,
+                note: "From previous related query (Commit Info)"
+              };
+            } else if (r.payload?.dataType === 'diff_chunk') {
+              const payload = r.payload as DiffChunkPayload;
+              return {
+                type: 'diff_chunk' as const,
+                commit_oid: payload.commit_oid,
+                filepath: payload.filepath,
+                snippet: payload.diff_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+                change_type: payload.change_type,
+                relevance: r.score,
+                note: "From previous related query (Diff Info)"
+              };
+            }
+            return null; // Should be filtered out by preceding filter if type is not handled
+          })
+          .filter(item => item !== null); // Ensure no nulls from mapping
         
-        context.push(...additionalContext);
+        context.push(...additionalContext as Array<{type: string; relevance: number; note: string; [key: string]: any}>); // Cast as it's a mix
       }
 
       const prompt = `
@@ -869,7 +895,16 @@ Recent Changes: ${_diff}
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
 **Relevant Snippets**:
-${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)}${c.note ? `, Note: ${c.note}` : ''})\n${c.snippet}`).join("\n\n")}
+${context.map(c => {
+      if (c.type === 'file_chunk') {
+        return `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)}${c.note ? `, Note: ${c.note}` : ''})\nSnippet:\n${c.snippet}`;
+      } else if (c.type === 'commit_info') {
+        return `Commit: ${c.commit_oid} (Author: ${c.author}, Date: ${c.date}, Relevance: ${c.relevance.toFixed(2)}${c.note ? `, Note: ${c.note}` : ''})\nMessage Snippet:\n${c.message}`;
+      } else if (c.type === 'diff_chunk') {
+        return `Diff: ${c.filepath} in commit ${c.commit_oid} (Type: ${c.change_type}, Relevance: ${c.relevance.toFixed(2)}${c.note ? `, Note: ${c.note}` : ''})\nDiff Snippet:\n${c.snippet}`;
+      }
+      return ''; // Should not happen if filter(item => item !== null) works
+    }).join("\n\n")}
 
 **Instruction**:
 Based on the provided context and snippets, generate a detailed code suggestion for "${queryStr}". Include:
@@ -892,16 +927,39 @@ ${refinedQuery !== queryStr ? `\n> Query refined to: "${refinedQuery}"` : ''}
 ${suggestion}
 
 ## Context Used
-${context.map(c => `
-### ${c.filepath}
+${context.map(c => {
+      if (c.type === 'file_chunk') {
+        return `
+### File: ${c.filepath}
 - Last modified: ${c.last_modified}
 - Relevance: ${c.relevance.toFixed(2)}
 ${c.note ? `- Note: ${c.note}` : ''}
-
 \`\`\`
 ${c.snippet}
+\`\`\``;
+      } else if (c.type === 'commit_info') {
+        return `
+### Commit: ${c.commit_oid}
+- Author: ${c.author}, Date: ${c.date}
+- Relevance: ${c.relevance.toFixed(2)}
+${c.note ? `- Note: ${c.note}` : ''}
+Message Snippet:
 \`\`\`
-`).join('\n')}
+${c.message}
+\`\`\``;
+      } else if (c.type === 'diff_chunk') {
+        return `
+### Diff: ${c.filepath} (Commit: ${c.commit_oid})
+- Change Type: ${c.change_type}
+- Relevance: ${c.relevance.toFixed(2)}
+${c.note ? `- Note: ${c.note}` : ''}
+Diff Snippet:
+\`\`\`
+${c.snippet}
+\`\`\``;
+      }
+      return ''; // Should not happen
+    }).join('\n')}
 
 ## Recent Changes
 \`\`\`
