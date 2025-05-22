@@ -2,15 +2,14 @@
 
 ## Overview
 
-The `src/lib/types.ts` module defines various TypeScript interfaces and Zod schemas used throughout the CodeCompass application. These types and schemas ensure data consistency and provide validation for inputs and outputs of different modules, especially for MCP (Model-Context-Protocol) tool parameters and API responses.
+The `src/lib/types.ts` module defines various TypeScript interfaces and Zod schemas used throughout the CodeCompass application. These types and schemas ensure data consistency and provide validation for inputs and outputs of different modules, especially for MCP (Model-Context-Protocol) tool parameters, Qdrant data structures, and agent interactions.
 
 ## Zod Schemas
 
-Zod schemas are used for runtime validation of data structures, particularly for parameters passed to MCP tools.
+Zod schemas are used for runtime validation of data structures.
 
 ### `SearchCodeSchema`
-
--   **Purpose**: Validates parameters for the `search_code` tool.
+-   **Purpose**: Validates parameters for code search operations.
 -   **Schema**:
     ```typescript
     z.object({ 
@@ -23,48 +22,45 @@ Zod schemas are used for runtime validation of data structures, particularly for
     -   `sessionId?: string`: Optional session ID.
 
 ### `GenerateSuggestionSchema`
-
--   **Purpose**: Validates parameters for the `generate_suggestion` tool.
+-   **Purpose**: Validates parameters for suggestion generation operations.
 -   **Schema**:
     ```typescript
     z.object({
       query: z.string().min(1, "Query is required").optional(),
       prompt: z.string().min(1, "Prompt is required").optional(),
       sessionId: z.string().optional()
-    }).transform((data) => ({ // Transforms to ensure 'query' is always present
+    }).transform((data) => ({
       query: data.query || data.prompt || "",
       sessionId: data.sessionId
-    })).refine(data => data.query.length > 0, { // Ensures either original query or prompt was non-empty
+    })).refine(data => data.query.length > 0, {
       message: "Either query or prompt must be a non-empty string",
       path: ["query"],
     })
     ```
 -   **Fields**:
-    -   `query?: string`: The primary query or topic for the suggestion (optional).
-    -   `prompt?: string`: An alternative way to specify the query (optional).
+    -   `query?: string`: The primary query or topic for the suggestion.
+    -   `prompt?: string`: An alternative way to specify the query.
     -   `sessionId?: string`: Optional session ID.
--   **Transformation**: The schema transforms the input so that `data.query` is populated from `data.prompt` if `data.query` is not provided.
--   **Refinement**: It then refines the transformed data to ensure that the resulting `query` field is non-empty.
+-   **Transformation**: Ensures `query` is populated from `prompt` if `query` is missing, defaulting to an empty string if both are missing.
+-   **Refinement**: Ensures the final `query` field is non-empty.
 
 ### `GetRepositoryContextSchema`
-
--   **Purpose**: Validates parameters for the `get_repository_context` tool.
+-   **Purpose**: Validates parameters for repository context retrieval operations.
 -   **Schema**:
     ```typescript
     z.object({ 
       query: z.string().min(1, "Query is required"),
       sessionId: z.string().optional()
     }).or(
-      z.string().min(1, "Query is required").transform(query => ({ query })) // Allows a raw string as input
+      z.string().min(1, "Query is required").transform(query => ({ query }))
     )
     ```
 -   **Fields**:
     -   `query: string`: The query for which repository context is needed (required, non-empty).
     -   `sessionId?: string`: Optional session ID.
--   **Alternative**: Accepts a plain string, which is then transformed into an object `{ query: string }`.
+-   **Alternative**: Accepts a plain non-empty string, which is transformed into an object `{ query: string }`.
 
 ### `AgentQuerySchema`
-
 -   **Purpose**: Validates parameters for the `agent_query` tool.
 -   **Schema**:
     ```typescript
@@ -77,8 +73,7 @@ Zod schemas are used for runtime validation of data structures, particularly for
     -   `query: string`: The user's query for the agent (required, non-empty).
     -   `sessionId?: string`: Optional session ID.
 
-### `AgentStepSchema`
-
+### `AgentStepSchema` (Zod)
 -   **Purpose**: Validates the structure of a single step taken by an agent.
 -   **Schema**:
     ```typescript
@@ -90,13 +85,12 @@ Zod schemas are used for runtime validation of data structures, particularly for
     })
     ```
 -   **Fields**:
-    -   `tool: string`: Name of the tool used.
-    -   `input: unknown`: Parameters passed to the tool.
-    -   `output: unknown`: Result from the tool.
+    -   `tool: string`: Name of the tool or capability used.
+    -   `input: unknown`: Parameters passed to the tool/capability.
+    -   `output: unknown`: Result from the tool/capability.
     -   `reasoning: string`: Agent's reasoning for this step.
 
-### `AgentStateSchema`
-
+### `AgentStateSchema` (Zod)
 -   **Purpose**: Validates the overall state of an agent's execution.
 -   **Schema**:
     ```typescript
@@ -115,72 +109,116 @@ Zod schemas are used for runtime validation of data structures, particularly for
     -   `query: string`: Initial user query.
     -   `planText?: string`: Raw plan generated by the LLM (optional).
     -   `steps: AgentStep[]`: Array of agent steps.
-    -   `context: unknown[]`: Accumulated context.
+    -   `context: unknown[]`: Accumulated context from capability outputs.
     -   `finalResponse?: string`: Final response from the agent (optional).
     -   `isComplete: boolean`: Flag indicating if processing is complete.
 
 ## TypeScript Interfaces
 
-These interfaces define the shape of various data objects used in the application.
+### Ollama API Responses
 
-### `OllamaEmbeddingResponse`
-
+#### `OllamaEmbeddingResponse`
 -   **Purpose**: Represents the expected response structure from Ollama's embedding API.
 -   **Fields**:
     -   `embedding: number[]`: An array of numbers representing the vector embedding.
 
-### `OllamaGenerateResponse`
-
+#### `OllamaGenerateResponse`
 -   **Purpose**: Represents the expected response structure from Ollama's text generation API.
 -   **Fields**:
     -   `response: string`: The generated text.
 
-### `QdrantPoint`
+### Qdrant Data Structures
 
+#### `BaseQdrantPayload`
+-   **Purpose**: A base interface for Qdrant point payloads, defining common fields.
+-   **Fields**:
+    -   `dataType: 'file_chunk' | 'commit_info' | 'diff_chunk'`: Discriminator field indicating the type of data.
+    -   `repositoryPath?: string`: Optional path to the repository, useful if the Qdrant collection spans multiple repositories.
+
+#### `FileChunkPayload`
+-   **Purpose**: Defines the payload structure for indexed file content chunks.
+-   **Extends**: `BaseQdrantPayload`
+-   **Fields**:
+    -   `dataType: 'file_chunk'`
+    -   `filepath: string`: Path to the source file.
+    -   `file_content_chunk: string`: The actual content of the file chunk.
+    -   `chunk_index: number`: 0-based index of this chunk within the file.
+    -   `total_chunks: number`: Total number of chunks for this file.
+    -   `last_modified: string`: ISO string of the file's last modification date.
+
+#### `CommitInfoPayload`
+-   **Purpose**: Defines the payload structure for indexed commit metadata.
+-   **Extends**: `BaseQdrantPayload`
+-   **Fields**:
+    -   `dataType: 'commit_info'`
+    -   `commit_oid: string`: The OID (hash) of the commit.
+    -   `commit_message: string`: The commit message.
+    -   `commit_author_name: string`: Name of the commit author.
+    -   `commit_author_email: string`: Email of the commit author.
+    -   `commit_date: string`: ISO string of the commit date.
+    -   `changed_files_summary: string[]`: Summary of files changed in this commit (e.g., "M path/to/file.ts").
+    -   `parent_oids: string[]`: Array of parent commit OIDs.
+
+#### `DiffChunkPayload`
+-   **Purpose**: Defines the payload structure for indexed chunks of textual diffs.
+-   **Extends**: `BaseQdrantPayload`
+-   **Fields**:
+    -   `dataType: 'diff_chunk'`
+    -   `commit_oid: string`: The OID of the commit this diff is associated with.
+    -   `filepath: string`: The path of the file this diff pertains to.
+    -   `diff_content_chunk: string`: The content of the diff chunk.
+    -   `chunk_index: number`: 0-based index of this chunk within the diff.
+    -   `total_chunks: number`: Total number of chunks for this diff.
+    -   `change_type: 'modify' | 'add' | 'delete' | 'typechange'`: Type of change.
+
+#### `QdrantPoint`
 -   **Purpose**: Defines the structure of a point to be stored in Qdrant.
 -   **Fields**:
-    -   `id: string`: Unique identifier for the point.
+    -   `id: string`: Unique identifier for the point (UUID).
     -   `vector: number[]`: The vector embedding.
-    -   `payload: object`:
-        -   `filepath: string`: Path to the source file.
-        -   `content: string`: The content that was embedded.
-        -   `last_modified: string`: ISO string of the last modification date.
+    -   `payload: FileChunkPayload | CommitInfoPayload | DiffChunkPayload`: The structured payload, discriminated by `dataType`.
 
-### `QdrantSearchResult`
-
--   **Purpose**: Defines the structure of a search result item from Qdrant.
+#### `QdrantSearchResult`
+-   **Purpose**: Defines a simplified structure for a search result item from Qdrant.
 -   **Fields**:
     -   `id: string | number`: ID of the matching point.
-    -   `payload: object`:
-        -   `content: string`: The indexed content.
-        -   `filepath: string`: Path to the source file.
-        -   `last_modified: string`: Last modification date.
+    -   `payload: Partial<FileChunkPayload | CommitInfoPayload | DiffChunkPayload>`: A partial, less strict payload.
     -   `score: number`: Relevance score of the result.
 
-### `AgentStep`
+#### `DetailedQdrantSearchResult`
+-   **Purpose**: Provides a comprehensive structure for Qdrant search results, including all potential fields.
+-   **Fields**:
+    -   `id: string | number`: ID of the point.
+    -   `score: number`: Relevance score.
+    -   `payload: FileChunkPayload | CommitInfoPayload | DiffChunkPayload`: The structured payload.
+    -   `version?: number`: Version of the point (optional).
+    -   `vector?: number[] | Record<string, unknown> | number[][] | null`: Vector data (optional).
+    -   `shard_key?: string`: Shard key if applicable (optional).
+    -   `order_value?: number`: Order value if applicable (optional).
 
+### Agent-Related Types
+
+#### `AgentStep` (Interface)
 -   **Purpose**: Represents a single step in an agent's execution flow.
 -   **Fields**:
-    -   `tool: string`: Name of the tool executed.
-    -   `input: unknown`: Input parameters for the tool.
-    -   `output: unknown`: Output/result from the tool.
+    -   `tool: string`: Name of the tool or capability executed.
+    -   `input: unknown`: Input parameters for the tool/capability.
+    -   `output: unknown`: Output/result from the tool/capability.
     -   `reasoning: string`: The agent's reasoning behind this step.
 
-### `AgentState`
-
+#### `AgentState` (Interface)
 -   **Purpose**: Represents the complete state of an agent's interaction.
 -   **Fields**:
     -   `sessionId: string`: Unique session identifier.
     -   `query: string`: The initial user query.
     -   `planText?: string`: The raw plan text generated by the LLM (optional).
     -   `steps: AgentStep[]`: Array of executed agent steps.
-    -   `context: unknown[]`: Accumulated information/context from tool outputs.
+    -   `context: unknown[]`: Accumulated information/context from tool/capability outputs.
     -   `finalResponse?: string`: The final synthesized response from the agent (optional).
     -   `isComplete: boolean`: Flag indicating if the agent has completed its processing.
 
-### `AgentInitialQueryResponse`
-
--   **Purpose**: Defines the response structure from the `SuggestionPlanner.initiateAgentQuery` method.
+#### `AgentInitialQueryResponse`
+-   **Purpose**: Defines the response structure from initiating an agent query (e.g., via `SuggestionPlanner.initiateAgentQuery`).
 -   **Fields**:
     -   `sessionId: string`: Session ID.
     -   `status: "COMPLETED" | "ERROR"`: Outcome status.
@@ -188,23 +226,12 @@ These interfaces define the shape of various data objects used in the applicatio
     -   `generatedPlanText?: string`: The raw plan text from the LLM (optional).
     -   `agentState: AgentState`: The complete, updated agent state.
 
-### `DetailedQdrantSearchResult`
-
--   **Purpose**: Provides a more comprehensive structure for Qdrant search results, including optional fields that might be returned by the Qdrant client.
+#### `ParsedToolCall`
+-   **Purpose**: Represents a parsed tool call directive from LLM output.
 -   **Fields**:
-    -   `id: string | number`: ID of the point.
-    -   `score: number`: Relevance score.
-    -   `payload: object`:
-        -   `filepath: string`: Path to the source file.
-        -   `content: string`: Indexed content.
-        -   `last_modified: string`: Last modification date.
-        -   `[key: string]: unknown`: Allows for other arbitrary payload fields.
-    -   `version?: number`: Version of the point (optional).
-    -   `vector?: number[] | Record<string, unknown> | number[][] | null`: Vector data (optional).
-    -   `shard_key?: string`: Shard key if applicable (optional).
-    -   `order_value?: number`: Order value if applicable (optional).
+    -   `tool: string`: The name of the tool to be called.
+    -   `parameters: Record<string, unknown>`: The parameters for the tool call.
 
 ## Removed Types/Schemas
-
--   `FeedbackSchema`: This Zod schema was previously defined but has been removed.
--   `AgentStepExecutionResponse`: This interface was previously defined but has been removed.
+-   The `FeedbackSchema` Zod schema has been removed.
+-   The `AgentStepExecutionResponse` interface has been removed.
