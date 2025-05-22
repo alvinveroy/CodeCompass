@@ -74,7 +74,7 @@ describe('Query Refinement Tests', () => {
       );
       expect(mockSearchFn).toHaveBeenCalledTimes(1);
       // Ensure results are cast or match DetailedQdrantSearchResult for this assertion
-      expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
+      expect(results[0].score).toBe(0.8);
       expect(refinedQuery).toBe('initial query');
       expect(relevanceScore).toBe(0.8);
       expect(mockRefineQuery_Injected).not.toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe('Query Refinement Tests', () => {
       );
 
       expect(mockSearchFn).toHaveBeenCalledTimes(3);
-      expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
+      expect(results[0].score).toBe(0.8);
       expect(relevanceScore).toBe(0.8);
       expect(refinedQuery).toBe('original query broadened by INJECTED mockRefineQuery focused by INJECTED mockRefineQuery');
        
@@ -138,7 +138,7 @@ describe('Query Refinement Tests', () => {
     });
 
     const dummyResultsArray = (score: number): DetailedQdrantSearchResult[] => ([
-        { id: 'res1', score, payload: { content: 'some content', filepath: 'file.ts', last_modified: '2023-01-01' }, vector: [], version: 0 } // Added last_modified
+        { id: 'res1', score, payload: { dataType: 'file_chunk', filepath: 'file.ts', file_content_chunk: 'some content', chunk_index: 0, total_chunks: 1, last_modified: '2023-01-01' }, vector: [], version: 0 }
     ]);
 
     it('should call broadenQuery (injected) for very low relevance (<0.3)', () => {

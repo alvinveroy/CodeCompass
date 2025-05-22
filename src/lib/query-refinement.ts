@@ -161,7 +161,7 @@ export async function searchWithRefinement(
       vector: embedding,
       limit: searchLimit,
       filter: files.length ? { must: [{ key: "filepath", match: { any: files } }] } : undefined,
-    }) as DetailedQdrantSearchResult[];
+    }) as unknown as DetailedQdrantSearchResult[];
 
     const avgRelevance = searchResults.length > 0
       ? searchResults.reduce((sum, r) => sum + r.score, 0) / searchResults.length

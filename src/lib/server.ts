@@ -12,7 +12,13 @@ import git from "isomorphic-git";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
 
-import { DetailedQdrantSearchResult } from "./types";
+import {
+  DetailedQdrantSearchResult,
+  AgentInitialQueryResponse, // Existing
+  FileChunkPayload,         // New
+  CommitInfoPayload,        // New
+  DiffChunkPayload          // New
+} from "./types";
 import { z } from "zod";
 import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant } from "./qdrant";
@@ -115,7 +121,8 @@ export async function startServer(repoPath: string): Promise<void> {
     }
     
     const qdrantClient = await initializeQdrant();
-    await indexRepository(qdrantClient, repoPath);
+    // const llmProvider = await getLLMProvider(); // Already initialized a few lines above
+    await indexRepository(qdrantClient, repoPath, llmProvider);
 
     // Prompts will be registered using server.prompt() later
 

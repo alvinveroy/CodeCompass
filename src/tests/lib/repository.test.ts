@@ -351,16 +351,30 @@ describe('Repository Utilities', () => {
         expect(history[0].oid).toBe('commit2');
         expect(history[0].changedFiles).toEqual(
           expect.arrayContaining([
-            { path: 'file.ts', type: 'modify' },
-            { path: 'added_file.ts', type: 'add' },
-            { path: 'deleted_file.ts', type: 'delete' },
+            expect.objectContaining({ path: 'file.ts', type: 'modify', oldOid: 'blob_before_oid', newOid: 'blob_after_oid' }), // diffText can be omitted if too complex or checked separately
+            expect.objectContaining({ path: 'added_file.ts', type: 'add', oldOid: null, newOid: 'blob_added_oid' }),
+            expect.objectContaining({ path: 'deleted_file.ts', type: 'delete', oldOid: 'blob_deleted_oid', newOid: null })
           ])
         );
-        expect(history[0].changedFiles.length).toBe(3); // Ensure no extra files
+        // Optionally, check for diffText presence if crucial for this test
+        history[0].changedFiles.forEach(file => {
+            if (file.type !== 'typechange' && file.type !== 'equal') { // 'equal' type not used here
+                expect(file.diffText).toEqual(expect.any(String));
+            }
+        });
+        expect(history[0].changedFiles.length).toBe(3);
 
         // Check commit1 (initial commit, uses single-tree walk)
         expect(history[1].oid).toBe('commit1');
-        expect(history[1].changedFiles).toEqual([{ path: 'initial.ts', type: 'add' }]);
+        expect(history[1].changedFiles).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ path: 'initial.ts', type: 'add', oldOid: null, newOid: 'blob_oid_initial' })
+          ])
+        );
+        if (history[1].changedFiles[0]) {
+            expect(history[1].changedFiles[0].diffText).toEqual(expect.any(String));
+        }
+        expect(history[1].changedFiles.length).toBe(1);
     });
 
     it('should handle errors from git.log', async () => {

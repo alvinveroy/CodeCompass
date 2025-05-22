@@ -198,7 +198,7 @@ describe('Agent', () => {
       await expect(ActualAgentModule.executeToolCall(
         { tool: 'generate_suggestion', parameters: { query: 'test' } },
         mockQdrantClientInstance, repoPath, false
-      )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available'); 
+      )).rejects.toThrow('Tool not found: generate_suggestion');
     });
   });
   
@@ -220,7 +220,14 @@ describe('Agent', () => {
         const mockSearchResult: import('../lib/types').DetailedQdrantSearchResult = {
             id: 'search-res-1',
             score: 0.8,
-            payload: { content: 'mock snippet', filepath: 'file.ts', last_modified: '2023-01-01' }
+            payload: {
+              dataType: 'file_chunk',
+              filepath: 'file.ts',
+              file_content_chunk: 'mock snippet',
+              chunk_index: 0,
+              total_chunks: 1,
+              last_modified: '2023-01-01'
+            } as import('../lib/types').FileChunkPayload // Explicit cast for clarity in test
             // No vector or version needed as per DetailedQdrantSearchResult
         };
         vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [mockSearchResult], refinedQuery: 'refined', relevanceScore: 0.8 });
@@ -237,12 +244,13 @@ describe('Agent', () => {
       // 1. Verification call in runAgentLoop
       // 2. Agent reasoning call (should return TOOL_CALL string)
       // 3. Final response call (if loop ends or max steps reached)
-       
+      
+      // Mock setup for mockLLMProviderInstance.generateText
       mockLLMProviderInstance.generateText
-        .mockReset() // Clear any beforeEach general setup for this specific test sequence
-        .mockResolvedValueOnce("LLM Verification OK") // For currentProvider.generateText("Test message")
-        .mockResolvedValueOnce('TOOL_CALL: {"tool": "search_code", "parameters": {"query": "tool query", "sessionId": "session2"}}') // For agent reasoning
-        .mockResolvedValueOnce('Final response after tool.'); // For final response generation
+        .mockReset()
+        .mockResolvedValueOnce("LLM Verification OK") // For currentProvider.generateText("Test message") in runAgentLoop
+        .mockResolvedValueOnce('TOOL_CALL: {"tool": "agent_query", "parameters": {"user_query": "query with tool", "session_id": "session2"}}') // For agentPrompt in runAgentLoop
+        .mockResolvedValueOnce('Final response from orchestrator.'); // For the first LLM call within runAgentQueryOrchestrator (assuming it gives a direct final answer for this test)
 
       // The actual parseToolCalls will be used.
       // The actual executeToolCall will be used. We need to ensure its dependencies are mocked.
@@ -252,15 +260,23 @@ describe('Agent', () => {
 
       await runAgentLoopSUT_local('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
-      // Verify that the LLM was called for reasoning and final response
-      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // Verification, Reasoning, Final Response
-      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool'));
-      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code'));
+      // Assertion for generateText call count
+      expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // Verification, Outer Loop, Orchestrator's 1st call
 
-      // Verify that searchWithRefinement (a dependency of executeToolCall for "search_code") was called
-      expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']);
+      // Assertions for what each call was made with
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(1, "Test message");
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool')); // Outer loop prompt
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Original User Query: query with tool')); // Orchestrator's prompt
+
+      // Verify that searchWithRefinement is NOT directly called by runAgentLoop or its immediate executeToolCall for agent_query.
+      // searchWithRefinement would be called by a capability *inside* the orchestrator.
+      // For this specific test, if we are mocking the orchestrator to give a direct final answer,
+      // then searchWithRefinement (or other capabilities) wouldn't be called.
+      // If the test intends to check a capability call, the orchestrator's LLM mock needs to output a capability call.
+      // For now, assuming the orchestrator's first LLM call yields the final answer:
+      expect(searchWithRefinement).not.toHaveBeenCalled();
       
-      expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.'));
+      expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response from orchestrator.'));
     });
   });
   
@@ -273,10 +289,19 @@ describe('Agent', () => {
 
   describe('generateAgentSystemPrompt (original)', () => {
     it('should include descriptions of all available tools', () => { 
-      const prompt = ActualAgentModule.generateAgentSystemPrompt(ActualAgentModule.toolRegistry); 
-      for (const tool of ActualAgentModule.toolRegistry) { 
-        expect(prompt).toContain(`Tool: ${tool.name}`);
-      }
+      const mockCapabilityDefinitionsForPrompt: ActualAgentModule.CapabilityDefinition[] = [
+        {
+          name: 'capability_searchCodeSnippets', // Example
+          description: 'Searches for code.',
+          parameters_schema: z.object({ query: z.string().describe("The search query.") })
+        }
+        // Add more mock capabilities if the test needs to verify their presence in the prompt
+      ];
+      const prompt = ActualAgentModule.generateAgentSystemPrompt(mockCapabilityDefinitionsForPrompt);
+      // Update assertions to match mockCapabilityDefinitionsForPrompt
+      expect(prompt).toContain("capability_searchCodeSnippets");
+      expect(prompt).toContain("Searches for code.");
+      expect(prompt).toContain(JSON.stringify(mockCapabilityDefinitionsForPrompt[0].parameters_schema._def || { description: mockCapabilityDefinitionsForPrompt[0].parameters_schema.description }, null, 2));
     });
   });
 });

@@ -194,7 +194,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
             total_chunks: contentChunks.length,
             repositoryPath: repoPath, // Optional: add repoPath if useful for multi-repo scenarios
           };
-          pointsToUpsert.push({ id: pointId, vector: embedding, payload });
+          pointsToUpsert.push({ id: pointId, vector: embedding, payload: payload as unknown as Record<string, unknown> });
         }
 
         if (pointsToUpsert.length > 0) {
@@ -219,7 +219,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
 
   try {
     logger.info(`Starting indexing of commit history and diffs for ${repoPath}`);
-    await indexCommitsAndDiffs(qdrantClient, repoPath, llmProvider, filteredFiles);
+    await indexCommitsAndDiffs(qdrantClient, repoPath, llmProvider);
   } catch (commitIndexError) {
     logger.error(`Failed to index commit history and diffs for ${repoPath}`, {
       message: commitIndexError instanceof Error ? commitIndexError.message : String(commitIndexError),
@@ -572,7 +572,7 @@ async function indexCommitsAndDiffs(
       pointsToUpsert.push({
         id: `commit:${commit.oid}`, // Deterministic ID
         vector: commitVector,
-        payload: commitPayload,
+        payload: commitPayload as unknown as Record<string, unknown>,
       });
     } catch (embedError) {
         logger.error(`Failed to generate embedding for commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
@@ -612,7 +612,7 @@ async function indexCommitsAndDiffs(
             pointsToUpsert.push({
               id: `diff:${commit.oid}:${preprocessText(changedFile.path)}:chunk:${i}`, // Deterministic ID
               vector: diffVector,
-              payload: diffPayload,
+              payload: diffPayload as unknown as Record<string, unknown>,
             });
           } catch (embedError) {
               logger.error(`Failed to generate embedding for diff chunk of ${changedFile.path} in commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });

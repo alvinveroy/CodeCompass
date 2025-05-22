@@ -83,13 +83,13 @@ describe('Query Refinement Helper Utilities', () => {
   describe('focusQueryBasedOnResults (direct test)', () => {
     it('should add keywords from top results to the query', () => {
       const originalQuery = "find user";
-      const results = [
-        { payload: { content: "function processUser(user: UserType)" } },
-        { payload: { content: "class UserProfile extends BaseProfile" } },
+      const results_focusQuery = [ // Renamed to avoid conflict if 'results' is used elsewhere in scope
+        { id: 'id1', score: 0.8, payload: { dataType: 'file_chunk', filepath: 'user.ts', file_content_chunk: "function processUser(user: UserType)", chunk_index: 0, total_chunks: 1, last_modified: '2023-01-01' } },
+        { id: 'id2', score: 0.7, payload: { dataType: 'file_chunk', filepath: 'profile.ts', file_content_chunk: "class UserProfile extends BaseProfile", chunk_index: 0, total_chunks: 1, last_modified: '2023-01-01' } },
       ] as DetailedQdrantSearchResult[];
       // preprocessText is mocked in beforeEach
       // extractKeywords will be called internally by focusQueryBasedOnResults
-      const focused = queryRefinementHelpers.focusQueryBasedOnResults(originalQuery, results);
+      const focused = queryRefinementHelpers.focusQueryBasedOnResults(originalQuery, results_focusQuery);
       expect(focused).toBeDefined();
       expect(typeof focused).toBe('string');
       // Based on the simple preprocessText mock and extractKeywords logic:
@@ -105,8 +105,8 @@ describe('Query Refinement Helper Utilities', () => {
     it('should not change query if no content in results', () => {
         const originalQuery = "find user";
         const results = [
-            { payload: { content: "" } },
-            { payload: {} } // No content property
+            { id: 'empty1', score: 0.1, payload: { dataType: 'file_chunk', filepath: 'empty.ts', file_content_chunk: "", chunk_index: 0, total_chunks: 1, last_modified: '2023-01-01' } },
+            { id: 'nocontent1', score: 0.1, payload: { dataType: 'commit_info', commit_oid: 'nocontent', commit_message: "", commit_author_name: 'test', commit_author_email: 'test@example.com', commit_date: '2023-01-01', changed_files_summary: [], parent_oids: [] } } // No content property
         ] as DetailedQdrantSearchResult[];
         const focused = queryRefinementHelpers.focusQueryBasedOnResults(originalQuery, results);
         expect(focused).toBe(originalQuery);
@@ -123,7 +123,7 @@ describe('Query Refinement Helper Utilities', () => {
   describe('tweakQuery (direct test)', () => {
     it('should add file type if not present in query', () => {
       const query = "search login function";
-      const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
+      const results = [{ id: 'id_tweak1', score: 0.8, payload: { dataType: 'file_chunk', filepath: "src/auth/login.ts", file_content_chunk: "content", chunk_index:0, total_chunks:1, last_modified:"date" } }] as DetailedQdrantSearchResult[];
       const tweaked = queryRefinementHelpers.tweakQuery(query, results);
       expect(tweaked).toBeDefined();
       expect(typeof tweaked).toBe('string');
@@ -132,7 +132,7 @@ describe('Query Refinement Helper Utilities', () => {
 
     it('should add directory if file type present but directory not', () => {
       const query = "search login.ts function";
-      const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
+      const results = [{ id: 'id_tweak2', score: 0.8, payload: { dataType: 'file_chunk', filepath: "src/auth/login.ts", file_content_chunk: "content", chunk_index:0, total_chunks:1, last_modified:"date" } }] as DetailedQdrantSearchResult[];
       const tweaked = queryRefinementHelpers.tweakQuery(query, results);
       expect(tweaked).toBeDefined();
       expect(typeof tweaked).toBe('string');
@@ -141,14 +141,14 @@ describe('Query Refinement Helper Utilities', () => {
     
     it('should not change query if context already present or no context to add', () => {
         const query = "search login.ts function in src";
-        const results = [{ payload: { filepath: "src/auth/login.ts" } }] as DetailedQdrantSearchResult[];
+        const results = [{ id: 'id_tweak3', score: 0.8, payload: { dataType: 'file_chunk', filepath: "src/auth/login.ts", file_content_chunk: "content", chunk_index:0, total_chunks:1, last_modified:"date" } }] as DetailedQdrantSearchResult[];
         let tweaked = queryRefinementHelpers.tweakQuery(query, results);
         expect(tweaked).toBeDefined();
         expect(typeof tweaked).toBe('string');
         expect(tweaked).toBe(query);
 
-        const resultsNoPath = [{ payload: { content: "some content" } }] as DetailedQdrantSearchResult[];
-        tweaked = queryRefinementHelpers.tweakQuery("some query", resultsNoPath);
+        const resultsNoPath_tweakQuery = [{ id: 'id3', score: 0.6, payload: { dataType: 'commit_info', commit_oid: 'abc', commit_message: "some content", commit_author_name: 'test', commit_author_email: 'test@example.com', commit_date: '2023-01-01', changed_files_summary: [], parent_oids: [] } }] as DetailedQdrantSearchResult[];
+        tweaked = queryRefinementHelpers.tweakQuery("some query", resultsNoPath_tweakQuery);
         expect(tweaked).toBeDefined();
         expect(typeof tweaked).toBe('string');
         expect(tweaked).toBe("some query");
@@ -163,8 +163,8 @@ describe('Query Refinement Helper Utilities', () => {
 
     it('should handle result with no filepath', () => {
         const query = "some query";
-        const results = [{ payload: { content: "content without filepath" } }] as DetailedQdrantSearchResult[];
-        const tweaked = queryRefinementHelpers.tweakQuery(query, results);
+        const results_noFilepath_tweakQuery = [{ id: 'id4', score: 0.5, payload: { dataType: 'commit_info', commit_oid: 'def', commit_message: "content without filepath", commit_author_name: 'test', commit_author_email: 'test@example.com', commit_date: '2023-01-01', changed_files_summary: [], parent_oids: [] } }] as DetailedQdrantSearchResult[];
+        const tweaked = queryRefinementHelpers.tweakQuery(query, results_noFilepath_tweakQuery);
         expect(tweaked).toBe(query);
     });
   });

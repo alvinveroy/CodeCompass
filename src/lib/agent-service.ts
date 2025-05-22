@@ -94,7 +94,7 @@ export async function processAgentQuery(query: string, sessionId?: string): Prom
     searchResults = qdrantResponse.map(point => ({
         id: point.id,
         score: point.score,
-        payload: point.payload as FileChunkPayload | CommitInfoPayload | DiffChunkPayload, // Trusting the payload structure from Qdrant
+        payload: point.payload as unknown as FileChunkPayload | CommitInfoPayload | DiffChunkPayload, // Trusting the payload structure from Qdrant
         version: point.version,
         // vector: point.vector, // Not typically needed for context generation
         // shard_key: (point as any).shard_key, // Qdrant types might not expose this directly
