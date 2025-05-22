@@ -1215,11 +1215,16 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
           agentState.steps.map((mapStep: AgentStep): string => { // Explicitly type mapStep and callback return type
-            // mapStep.tool is already string.
-            // stringifyStepOutput returns string.
-            // The linter struggles with the type flow from mapStep.output (unknown) through stringifyStepOutput here.
+            const toolNameStr: string = String(mapStep.tool);
+            const outputRaw: unknown = mapStep.output;
+            const outputStringified: string = stringifyStepOutput(outputRaw);
+            const outputOrDefault: string = outputStringified || 'No output';
+            const outputSubstr: string = outputOrDefault.substring(0, 200);
+            // Final explicit cast to string for the part derived from unknown output
+            const outputPreviewStr: string = String(outputSubstr);
+
             // eslint-disable-next-line @typescript-eslint/restrict-template-expressions -- stringifyStepOutput ensures string, linter struggles with unknown input type flow
-            return `Used ${String(mapStep.tool)} and found: ${String((stringifyStepOutput(mapStep.output) || 'No output').substring(0, 200))}...`;
+            return `Used ${toolNameStr} and found: ${outputPreviewStr}...`;
           }).join("\n\n");
       }
     }
