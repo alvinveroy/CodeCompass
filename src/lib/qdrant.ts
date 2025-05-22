@@ -102,6 +102,9 @@ export async function batchUpsertVectors(
   for (let i = 0; i < points.length; i += batchSize) {
     const batch = points.slice(i, i + batchSize);
     try {
+      // TEMPORARY DEBUG LOG:
+      logger.debug(`[DEBUG QDRANT IDs] Batch ${Math.floor(i / batchSize) + 1} IDs: ${JSON.stringify(batch.map(p => p.id))}`);
+      
       await withRetry(async () => {
         // The js-client-rest library expects points to be an object { points: PointStruct[] }
         // or just PointStruct[] if using client.upsertPoints

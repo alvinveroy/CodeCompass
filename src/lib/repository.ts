@@ -16,7 +16,7 @@ import * as Diff from 'diff';
 // import { Buffer } from 'buffer'; // Buffer is global in Node.js
 import { configService, logger } from "./config-service";
 // import { generateEmbedding } from "./ollama"; // We will use llmProvider.generateEmbedding() instead.
-import { v5 as uuidv5 } from 'uuid'; // Import uuidv5
+import { v4 as uuidv4 } from 'uuid'; // Import uuidv4
 import nodeFs from 'fs'; // Standard fs for isomorphic-git functions requiring it
 import { batchUpsertVectors } from './qdrant';
 
@@ -36,9 +36,6 @@ export interface CommitDetail {
   parents: string[]; // Add parent OIDs
   changedFiles: CommitChange[];
 }
-
-// Define a namespace for UUID generation (this can be any valid UUID)
-const CODECOMPASS_NAMESPACE = 'f1a2b3c4-d5e6-7890-1234-567890abcdef';
 
 export async function validateGitRepository(repoPath: string): Promise<boolean> {
   try {
@@ -187,8 +184,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
           // Embed the preprocessed chunk
           const embedding = await llmProvider.generateEmbedding(chunkContent); // Use llmProvider
           // Generate UUID for pointId
-          const idContentFileChunk = `file:${repoPath}:${filepath}:chunk:${i}`;
-          const pointId = uuidv5(idContentFileChunk, CODECOMPASS_NAMESPACE);
+          const pointId = uuidv4();
 
           const payload: FileChunkPayload = {
             dataType: 'file_chunk',
@@ -573,7 +569,7 @@ async function indexCommitsAndDiffs(
         continue;
       }
       // Generate commit ID first
-      const commitPointId = uuidv5(`commit:${String(repoPath)}:${String(commit.oid)}`, CODECOMPASS_NAMESPACE);
+      const commitPointId = uuidv4();
       const commitPayload: CommitInfoPayload = { // Define payload before embedding attempt
         dataType: 'commit_info',
         commit_oid: commit.oid,
@@ -625,7 +621,7 @@ async function indexCommitsAndDiffs(
               continue;
             }
             // Generate diff ID first
-            const diffPointId = uuidv5(`diff:${String(repoPath)}:${String(commit.oid)}:${String(changedFile.path)}:chunk:${i}`, CODECOMPASS_NAMESPACE);
+            const diffPointId = uuidv4();
             const diffPayload: DiffChunkPayload = { // Define payload before embedding
               dataType: 'diff_chunk',
               commit_oid: commit.oid,
