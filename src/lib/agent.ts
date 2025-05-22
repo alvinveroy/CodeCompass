@@ -1059,14 +1059,16 @@ export async function runAgentLoop(
           let outputStr: string;
           if (typeof step.output === 'string') {
             outputStr = step.output;
-          } else if (typeof step.output === 'object' && step.output !== null) {
+          } else if (step.output === null || step.output === undefined) {
+            outputStr = String(step.output); // "null" or "undefined"
+          } else if (typeof step.output === 'object') {
             try {
               outputStr = JSON.stringify(step.output, null, 2);
             } catch {
               outputStr = '[Unserializable Object]';
             }
-          } else {
-            outputStr = String(step.output); // Handles null, undefined, primitives
+          } else { // Handles numbers, booleans, symbols
+            outputStr = String(step.output);
           }
           return `Previous tool: ${step.tool}\nResults: ${outputStr}`; // Ensure outputStr is used here
         }).join('\n\n');

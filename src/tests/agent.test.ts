@@ -8,13 +8,21 @@ const createMockDirent = (name: string, isDir: boolean): Dirent => {
   const dirent = new Dirent();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockDirent = dirent as any;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.name = name;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.isFile = () => !isDir;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.isDirectory = () => isDir;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.isBlockDevice = () => false;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.isCharacterDevice = () => false;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.isSymbolicLink = () => false;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.isFIFO = () => false;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.isSocket = () => false;
   return dirent;
 };
@@ -59,13 +67,21 @@ vi.mock('fs/promises', () => {
     const dirent = new Dirent();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockDirent = dirent as any;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.name = name;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.isFile = () => !isDir;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.isDirectory = () => isDir;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.isBlockDevice = () => false;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.isCharacterDevice = () => false;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.isSymbolicLink = () => false;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.isFIFO = () => false;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.isSocket = () => false;
     // Standard fs.Dirent does not have 'path' or 'parentPath' properties.
     return dirent;
@@ -185,7 +201,7 @@ describe('Agent', () => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any], refinedQuery: 'refined', relevanceScore: 0.8 });
     });
 

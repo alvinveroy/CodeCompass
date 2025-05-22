@@ -109,7 +109,6 @@ const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExe
 
 // Import named mocks from isomorphic-git
 import * as git from 'isomorphic-git'; // Import as namespace
-// import path from 'path'; // DELETE THIS LINE
 // import { QdrantClient } from '@qdrant/js-client-rest'; // _QdrantClient if used
 
 
@@ -120,17 +119,17 @@ describe('Repository Utilities', () => {
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
-    vi.mocked(git.log).mockResolvedValue([ 
-      { oid: 'commit2_oid', commit: { message: 'Second', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: ['commit1_oid'], tree: 'tree2' } }, 
-      { oid: 'commit1_oid', commit: { message: 'First', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: [], tree: 'tree1' } } 
-    ] as unknown as import('isomorphic-git').ReadCommitResult[]); 
+    vi.mocked(git.log).mockResolvedValue([
+      { oid: 'commit2_oid', commit: { message: 'Second', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: ['commit1_oid'], tree: 'tree2' } }, // eslint-disable-line @typescript-eslint/no-explicit-any
+      { oid: 'commit1_oid', commit: { message: 'First', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: [], tree: 'tree1' } } // eslint-disable-line @typescript-eslint/no-explicit-any
+    ] as unknown as import('isomorphic-git').ReadCommitResult[]);
   };
   
   // Renamed for clarity
   const setupGitLogWithSingleCommit = () => {
-    vi.mocked(git.log).mockResolvedValue([ 
-      { oid: 'commit1_oid', commit: { message: 'First', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: [], tree: 'tree1' } } 
-    ] as unknown as import('isomorphic-git').ReadCommitResult[]); 
+    vi.mocked(git.log).mockResolvedValue([
+      { oid: 'commit1_oid', commit: { message: 'First', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: [], tree: 'tree1' } } // eslint-disable-line @typescript-eslint/no-explicit-any
+    ] as unknown as import('isomorphic-git').ReadCommitResult[]);
   };
 
   beforeEach(() => {
