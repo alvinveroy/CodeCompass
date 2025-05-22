@@ -403,6 +403,7 @@ export async function getCommitHistoryWithChanges(
                     const contentA = changeEntry.oldOid ? Buffer.from((await git.readBlob({ fs: nodeFs, dir: repoPath, gitdir, oid: changeEntry.oldOid })).blob).toString('utf8') : '';
                     const contentB = changeEntry.newOid ? Buffer.from((await git.readBlob({ fs: nodeFs, dir: repoPath, gitdir, oid: changeEntry.newOid })).blob).toString('utf8') : '';
                     // Using configService for diff context lines
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                     changeEntry.diffText = Diff.createPatch(filepath, contentA, contentB, '', '', { context: configService.DIFF_LINES_OF_CONTEXT });
                   } catch (diffError) {
                     logger.warn(`Could not generate diff for ${filepath} in commit ${commitEntry.oid}`, { error: diffError instanceof Error ? diffError.message : String(diffError) });
@@ -463,6 +464,7 @@ export async function getCommitHistoryWithChanges(
               try {
                 const contentB = Buffer.from((await git.readBlob({ fs: nodeFs, dir: repoPath, gitdir, oid })).blob).toString('utf8');
                 // For 'add' in initial commit, diff is against an empty file.
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 changeEntry.diffText = Diff.createPatch(filepath, '', contentB, '', '', { context: configService.DIFF_LINES_OF_CONTEXT });
               } catch (diffError) {
                  logger.warn(`Could not generate diff for added file ${filepath} in initial commit ${commitEntry.oid}`, { error: diffError instanceof Error ? diffError.message : String(diffError) });
