@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- **Build Process and Developer Experience (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Refined the `src/scripts/update-gitignore.ts` script to more robustly handle newline characters when appending entries, ensuring a cleaner `.gitignore` file. This script already included `CHANGELOG.md` and `RETROSPECTION.md` in its list of ensured ignores.
+    - Updated `CHANGELOG.md` and `RETROSPECTION.md` to document this enhancement and reflect on the process.
 - **Background Indexing with Progress Reporting (Git Commit ID: [Will be filled by user after commit]):**
     - Implemented detailed status tracking for repository indexing within `src/lib/repository.ts`. This includes states like 'initializing', 'listing_files', 'indexing_file_content', 'completed', 'error', along with progress metrics (files/commits indexed, overall percentage).
     - Introduced `getGlobalIndexingStatus()` in `src/lib/repository.ts` to expose the current indexing status.
