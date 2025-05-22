@@ -60,7 +60,7 @@ vi.mock('util', async (importOriginal) => {
   const internalMockedPromisifiedExec = vi.fn(); 
   
   // Store it on a temporary global to retrieve it in the test file after imports.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
   (globalThis as any).__test__mockedPromisifiedExec = internalMockedPromisifiedExec;
 
   return {
