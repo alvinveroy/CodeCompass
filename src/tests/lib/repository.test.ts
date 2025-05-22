@@ -120,9 +120,9 @@ describe('Repository Utilities', () => {
   const setupGitLogWithTwoCommits = () => {
     const mockAuthor = { name: 'Test', email: 'test@example.com', timestamp: Date.now() / 1000, timezoneOffset: 0 };
     vi.mocked(git.log).mockResolvedValue([
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+       
       { oid: 'commit2_oid', commit: { message: 'Second', author: mockAuthor, committer: mockAuthor, parent: ['commit1_oid'], tree: 'tree2' } },
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+       
       { oid: 'commit1_oid', commit: { message: 'First', author: mockAuthor, committer: mockAuthor, parent: [], tree: 'tree1' } }
     ] as unknown as import('isomorphic-git').ReadCommitResult[]);
   };
@@ -131,7 +131,7 @@ describe('Repository Utilities', () => {
   const setupGitLogWithSingleCommit = () => {
     const mockAuthor = { name: 'Test', email: 'test@example.com', timestamp: Date.now() / 1000, timezoneOffset: 0 };
     vi.mocked(git.log).mockResolvedValue([
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+       
       { oid: 'commit1_oid', commit: { message: 'First', author: mockAuthor, committer: mockAuthor, parent: [], tree: 'tree1' } }
     ] as unknown as import('isomorphic-git').ReadCommitResult[]);
   };
