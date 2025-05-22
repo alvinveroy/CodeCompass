@@ -112,7 +112,11 @@ export async function generateEmbedding(text: string): Promise<number[]> {
           throw new Error("Invalid embedding response from Ollama API");
         }
         
-        return res.data;
+        // Ensure the embedding is an array of numbers and has the expected dimension
+        if (!Array.isArray(res.data.embedding) || res.data.embedding.some(isNaN)) {
+          throw new Error(`Ollama API returned an invalid embedding vector (not an array of numbers or contains NaN) for model ${model}. Length: ${res.data.embedding?.length}`);
+        }
+        return res.data; // Return the whole OllamaEmbeddingResponse object
       });
       
       return response.embedding;
@@ -143,6 +147,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     }
     
     logger.error("Ollama embedding error", errorLogDetails);
-    throw new Error(`Failed to generate embedding: ${err.message}`);
+    // It's critical to re-throw here so that the calling function (e.g., in repository.ts)
+    // knows that embedding failed and can skip adding a point with a bad/missing vector.
+    // Or, return a specific marker like null/undefined if the caller is designed to handle it.
+    throw new Error(`Failed to generate embedding with Ollama model ${configService.EMBEDDING_MODEL}: ${err.message}`);
   }
 }

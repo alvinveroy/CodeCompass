@@ -35,7 +35,7 @@ export async function initializeQdrant(): Promise<QdrantClient> {
 
   await withRetry(async () => {
     // Expected vector configuration
-    const expectedVectorSize = 768; // TODO: Make this configurable or dynamic based on EMBEDDING_MODEL
+    const expectedVectorSize = configService.EMBEDDING_DIMENSION;
     const expectedVectorDistance = "Cosine";
 
     const collections = await client.getCollections();

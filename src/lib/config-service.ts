@@ -29,6 +29,7 @@ class ConfigService {
   private _llmProvider: string;
   private _suggestionModel: string;
   private _embeddingModel: string;
+  private _embeddingDimension: number; // New
   private _deepSeekApiKey: string;
   private _deepSeekApiUrl: string;
   private _deepSeekModel: string;
@@ -87,6 +88,7 @@ class ConfigService {
   public readonly DEFAULT_AGENT_MAX_CONTEXT_ITEMS = 10;
   public readonly DEFAULT_DIFF_LINES_OF_CONTEXT = 3;
   public readonly DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY = 10000;
+  public readonly DEFAULT_EMBEDDING_DIMENSION = 768; // For nomic-embed-text
   public readonly DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY = 50;
 
 
@@ -201,6 +203,7 @@ class ConfigService {
     this._llmProvider = process.env.LLM_PROVIDER || "ollama";
     this._suggestionModel = process.env.SUGGESTION_MODEL || "llama3.1:8b";
     this._embeddingModel = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5"; // Ollama default
+    this._embeddingDimension = parseInt(process.env.EMBEDDING_DIMENSION || '', 10) || this.DEFAULT_EMBEDDING_DIMENSION;
     this._deepSeekApiKey = process.env.DEEPSEEK_API_KEY || "";
     this._deepSeekApiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
     this._deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-coder";
@@ -350,6 +353,7 @@ class ConfigService {
     process.env.SUGGESTION_PROVIDER = this._suggestionProvider;
     process.env.EMBEDDING_PROVIDER = this._embeddingProvider;
     process.env.EMBEDDING_MODEL = this._embeddingModel; // EMBEDDING_MODEL is usually from env or default
+    process.env.EMBEDDING_DIMENSION = String(this._embeddingDimension);
     process.env.LLM_PROVIDER = this._llmProvider;
     process.env.OLLAMA_HOST = this.OLLAMA_HOST; // Ensure OLLAMA_HOST from env/default is in process.env
     process.env.QDRANT_HOST = this.QDRANT_HOST; // Ensure QDRANT_HOST from env/default is in process.env
@@ -384,6 +388,7 @@ class ConfigService {
       // Re-initialize from env/defaults
     this._llmProvider = process.env.LLM_PROVIDER || "ollama";
     this._suggestionModel = process.env.SUGGESTION_MODEL || "llama3.1:8b";
+    this._embeddingDimension = parseInt(process.env.EMBEDDING_DIMENSION || '', 10) || this.DEFAULT_EMBEDDING_DIMENSION;
     this._embeddingModel = process.env.EMBEDDING_MODEL || "nomic-embed-text:v1.5";
     this._deepSeekApiKey = process.env.DEEPSEEK_API_KEY || "";
     this._deepSeekApiUrl = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/chat/completions";
@@ -435,6 +440,7 @@ class ConfigService {
   get LLM_PROVIDER(): string { return global.CURRENT_LLM_PROVIDER || this._llmProvider; }
   get SUGGESTION_MODEL(): string { return global.CURRENT_SUGGESTION_MODEL || this._suggestionModel; }
   get EMBEDDING_MODEL(): string { return process.env.EMBEDDING_MODEL || this._embeddingModel; } 
+  get EMBEDDING_DIMENSION(): number { return parseInt(process.env.EMBEDDING_DIMENSION || '', 10) || this._embeddingDimension; }
   get DEEPSEEK_API_KEY(): string { return process.env.DEEPSEEK_API_KEY || this._deepSeekApiKey; }
   get DEEPSEEK_API_URL(): string { return process.env.DEEPSEEK_API_URL || this._deepSeekApiUrl; }
   get DEEPSEEK_MODEL(): string { return process.env.DEEPSEEK_MODEL || this._deepSeekModel; }
