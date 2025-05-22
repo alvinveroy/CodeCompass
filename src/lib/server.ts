@@ -735,7 +735,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   // Add get_changelog tool
   server.tool(
     "get_changelog", // name
-    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.", // description
+    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`. Title: Get Changelog", // description (Title incorporated here)
     {}, // paramsSchema (as ZodRawShape for no parameters)
     async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { // handler
       try {
@@ -758,8 +758,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           }],
         };
       }
-    },
-    { title: "Get Changelog" } // annotations
+    }
+    // The 5th argument (annotations object) has been removed.
   );
   
   // Add reset_metrics tool - REMOVED

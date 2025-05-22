@@ -193,3 +193,25 @@
 ## Action Items / Follow-ups
 - Review other `server.tool` registrations in `src/lib/server.ts` to ensure they consistently use the correct signatures and argument types, especially for `paramsSchema`.
 - If similar issues arise, consult the MCP SDK documentation or examples for the recommended `server.tool` usage patterns.
+
+# Retrospection for Build Error Fix (get_changelog Tool Registration - TS2345) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The TypeScript error message `TS2345`, although initially pointing to the `paramsSchema` argument line, clearly indicated that a function argument was being mismatched with an object parameter type. This guided the debugging towards an overload resolution issue.
+- Comparison with other working tool registrations within `src/lib/server.ts` (e.g., `get_indexing_status`, `agent_query`) revealed a consistent and successful 4-argument pattern for `server.tool()`.
+
+## What could be improved?
+- **SDK Overload Clarity:** The MCP SDK's `server.tool` method has multiple overloads. When a specific overload (like a 5-argument version for annotations) is not working as expected, it can be time-consuming to debug. Clearer documentation or more specific TypeScript error messages from the SDK for overload mismatches could be beneficial.
+- **Initial Debugging Path:** The error message pointing to the `paramsSchema` line initially led to re-verification of that argument, while the core issue was the overall argument structure not matching a preferred overload due to the 5th argument.
+
+## What did we learn?
+- When facing TypeScript overload resolution errors (`TS2345`), it's crucial to:
+    1. Identify the exact argument TypeScript is complaining about and the type it expects for that parameter in the problematic overload.
+    2. Review all arguments passed to the function.
+    3. Compare the call structure with known working examples or SDK documentation for the intended signature.
+- Sticking to simpler, well-established overload patterns (like the 4-argument `server.tool` signature) is often more robust than attempting to use less common or more complex ones, especially if the latter's exact typings are subtle.
+- If annotations like a `title` are needed and a dedicated annotations argument causes issues, incorporating such information into the `description` string is a viable workaround.
+
+## Action Items / Follow-ups
+- If separate annotations are strongly desired for tools, further investigate the MCP SDK's specific requirements or recommended patterns for the 5-argument `server.tool` overload, or check if annotations should be part of an options object for the 4th argument.
+- For now, maintain consistency by using the 4-argument `server.tool(name, description, paramsSchema, handler)` signature for new tools unless a clear need and verified pattern for other overloads arise.
