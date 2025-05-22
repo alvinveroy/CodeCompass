@@ -795,7 +795,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       const context = results
       .map(r => {
         if (r.payload?.dataType === 'file_chunk') {
-          const payload = r.payload as FileChunkPayload;
+          const payload = r.payload;
           return {
             type: 'file_chunk',
             filepath: payload.filepath,
@@ -805,7 +805,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
             note: ""
           };
         } else if (r.payload?.dataType === 'commit_info') {
-          const payload = r.payload as CommitInfoPayload;
+          const payload = r.payload;
           return {
             type: 'commit_info',
             commit_oid: payload.commit_oid,
@@ -816,7 +816,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
             note: "Commit Information"
           };
         } else if (r.payload?.dataType === 'diff_chunk') {
-          const payload = r.payload as DiffChunkPayload;
+          const payload = r.payload;
           return {
             type: 'diff_chunk',
             commit_oid: payload.commit_oid,
@@ -850,7 +850,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           .map(rUnk => {
             const r = rUnk as DetailedQdrantSearchResult; // Cast again for type safety
             if (r.payload?.dataType === 'file_chunk') {
-              const payload = r.payload as FileChunkPayload;
+              const payload = r.payload;
               return {
                 type: 'file_chunk', // Removed 'as const'
                 filepath: payload.filepath,
@@ -860,7 +860,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
                 note: "From previous related query"
               };
             } else if (r.payload?.dataType === 'commit_info') {
-              const payload = r.payload as CommitInfoPayload;
+              const payload = r.payload;
               return {
                 type: 'commit_info', // Removed 'as const'
                 commit_oid: payload.commit_oid,
@@ -871,7 +871,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
                 note: "From previous related query (Commit Info)"
               };
             } else if (r.payload?.dataType === 'diff_chunk') {
-              const payload = r.payload as DiffChunkPayload;
+              const payload = r.payload;
               return {
                 type: 'diff_chunk', // Removed 'as const'
                 commit_oid: payload.commit_oid,
@@ -1038,7 +1038,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       const context = results
       .map(r => {
         if (r.payload?.dataType === 'file_chunk') {
-          const payload = r.payload as FileChunkPayload;
+          const payload = r.payload;
           return {
             type: 'file_chunk',
             filepath: payload.filepath,
@@ -1047,7 +1047,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
             relevance: r.score,
           };
         } else if (r.payload?.dataType === 'commit_info') {
-          const payload = r.payload as CommitInfoPayload;
+          const payload = r.payload;
           return {
             type: 'commit_info',
             commit_oid: payload.commit_oid,
@@ -1057,7 +1057,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
             relevance: r.score,
           };
         } else if (r.payload?.dataType === 'diff_chunk') {
-          const payload = r.payload as DiffChunkPayload;
+          const payload = r.payload;
           return {
             type: 'diff_chunk',
             commit_oid: payload.commit_oid,
