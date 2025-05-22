@@ -524,17 +524,17 @@ Please correct the parameters and try again.`;
               });
             }
           }
-        } else {
-          // This case should ideally not be hit if all entries in 'capabilities' are functions.
-          logger.warn(`Orchestrator: Capability "${capabilityName}" found but is not a function.`);
-          currentPromptContent += `\n\nInternal Error: Capability "${capabilityName}" is not executable.`;
-          agentState.steps.push({
-              tool: "internal_error_non_function_capability",
-              input: { capability_name: capabilityName },
-              output: { error: `Capability "${capabilityName}" is not executable.` },
-              reasoning: "Internal error: capability entry is not a function."
-          });
-        }
+            } else {
+              // This case should ideally not be hit if all entries in 'capabilities' are functions.
+              logger.warn(`Orchestrator: Capability "${capabilityName}" found but is not a function.`);
+              currentPromptContent += `\n\nInternal Error: Capability "${capabilityName}" is not executable.`;
+              agentState.steps.push({
+                  tool: "internal_error_non_function_capability",
+                  input: { capability_name: capabilityName },
+                  output: { error: `Capability "${capabilityName}" is not executable.` },
+                  reasoning: "Internal error: capability entry is not a function."
+              });
+            }
       } else {
         // This 'else' handles the case where rawCapabilityName is not a key of 'capabilities'
         // This replaces the old 'else' block that handled unknown capabilities.
