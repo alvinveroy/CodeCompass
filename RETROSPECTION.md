@@ -255,6 +255,26 @@
 - If time permits in the future, a brief investigation into ESLint's parser options or rule configurations for `@typescript-eslint/parser` related to Express types could be beneficial to see if these `eslint-disable` comments can be eliminated without sacrificing linting quality elsewhere.
 - Ensure all `async` functions in the codebase are reviewed for actual use of `await` to prevent unnecessary `async` declarations.
 
+# Retrospection for Final ESLint Pass (no-misused-promises & Cleanup) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The `npm run lint:fix` command successfully cleaned up several unused `eslint-disable` directives, simplifying the codebase.
+- The final `no-misused-promises` error was correctly identified as relating to an unnecessary `async` keyword on a synchronous callback.
+- Installing `@types/express` was a good proactive step, even if it didn't directly fix all `no-unsafe-*` issues, it ensures better type safety for Express code.
+
+## What could be improved?
+- **Understanding `no-misused-promises`:** This rule can sometimes be subtle. It's important to remember that any `async` function returns a Promise, and if a callback signature expects `void` (or a non-Promise return), this rule will trigger.
+- **Iterative Linting:** The process of linting, fixing, and re-linting (sometimes with `--fix`) is effective but can be iterative. Ensuring changes are saved and accurately reflected before each lint run is key.
+
+## What did we learn?
+- The `no-misused-promises` rule is valuable for ensuring that `async` functions are used appropriately, especially in contexts like callbacks where the calling function might not expect or handle a Promise.
+- Regularly running `lint:fix` can help maintain code hygiene by removing redundant `eslint-disable` comments.
+- Even after installing type definitions, some ESLint rules (especially `no-unsafe-*` ones) might require targeted `eslint-disable` comments for idiomatic library patterns if ESLint's type inference remains stricter than TypeScript's.
+
+## Action Items / Follow-ups
+- Perform a quick review of other callbacks in the codebase, especially those passed to third-party library functions, to ensure `async` is used only when necessary and that `no-misused-promises` is not being violated elsewhere.
+- Continue to be precise with `eslint-disable` comments, targeting only the necessary rules and providing clear justifications.
+
 # Retrospection for Final ESLint Fixes (Server Express Middleware & require-await) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
