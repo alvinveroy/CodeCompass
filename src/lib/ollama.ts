@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios"; // axios will be used by OllamaProvider.generateText
 import { configService, logger } from "./config-service";
-import { OllamaEmbeddingResponse, OllamaGenerateResponse } from "./types"; // OllamaGenerateResponse might be used by OllamaProvider
+import { OllamaEmbeddingResponse } from "./types"; // OllamaGenerateResponse might be used by OllamaProvider
 import { preprocessText } from "../utils/text-utils";
 import { withRetry } from "../utils/retry-utils";
 
@@ -50,7 +50,7 @@ export async function checkOllamaModel(model: string, isEmbeddingModel: boolean)
       logger.warn(`Ollama embedding model ${model} did not return expected data structure.`);
       return false; // Explicitly return false
     } else {
-      const response = await axios.post<OllamaGenerateResponse>(
+      const response = await axios.post(
         `${host}/api/generate`,
         { model, prompt: "test", stream: false },
         { timeout: 10000 }
