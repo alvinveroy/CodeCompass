@@ -194,26 +194,30 @@
 - Review other `server.tool` registrations in `src/lib/server.ts` to ensure they consistently use the correct signatures and argument types, especially for `paramsSchema`.
 - If similar issues arise, consult the MCP SDK documentation or examples for the recommended `server.tool` usage patterns.
 
-# Retrospection for ESLint Error Resolution (Server Express App) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+# Retrospection for ESLint Resolution Cycle (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-- The ESLint error messages pinpointed specific lines and rules, aiding in focused debugging.
-- The previous fixes for `fs-extra` in `install-git-hooks.ts` and unused disables in `repository.ts` were successful.
+- Iterative linting and fixing, including the use of `npm run lint:fix`, helped systematically reduce the number of ESLint issues.
+- Specific ESLint rules like `@typescript-eslint/require-await` and `@typescript-eslint/no-misused-promises` correctly identified areas where function signatures (`async` keyword) needed adjustment.
+- Installing relevant type definitions (e.g., `@types/express`) was a correct diagnostic step to improve ESLint's type understanding.
+- The strategy of using targeted `eslint-disable-next-line` comments with clear justifications proved effective for handling cases where ESLint's interpretation of types for well-established libraries (like Express.js, `fs-extra`) was overly strict or potentially misconfigured, while TypeScript itself was satisfied.
 
 ## What could be improved?
-- **ESLint's Type Understanding for Express:** The persistence of `no-unsafe-*` errors for standard Express.js API calls (e.g., `app.get`, `res.json`) suggests a deeper issue with how ESLint's TypeScript parser is interpreting the types from `@types/express` within this project's configuration. While `eslint-disable` comments are a pragmatic fix, ideally, the linter would correctly recognize these patterns as type-safe.
-- **Clarity of `require-await` Error Location:** If the line number for `require-await` was slightly off or pointed to a wrapper function, it could make debugging harder. Ensuring the exact problematic `async` function is identified is key.
+- **Initial ESLint Setup/Configuration:** The recurrence of `no-unsafe-*` errors for standard library patterns (Express, `fs-extra`) suggests that the ESLint configuration (parser, plugins, rule settings) might benefit from a review to better align with TypeScript's type system for these libraries. This could potentially reduce the need for `eslint-disable` comments.
+- **Understanding Error Nuances:** Some errors, like `no-misused-promises` on a seemingly synchronous function, can be puzzling if the actual code in the editor doesn't immediately reveal an `async` keyword. Ensuring the linted code perfectly matches the edited code is crucial.
+- **Iterative Disabling:** When initially applying `eslint-disable` comments, being as precise as possible with the disabled rules can prevent later warnings about unused disable directives.
 
 ## What did we learn?
-- When ESLint flags standard usage of well-typed popular libraries like Express.js with `no-unsafe-*` errors, and TypeScript itself is satisfied, it often points to:
-    - A need for more explicit type annotations within the local code (e.g., for `req`, `res`).
-    - A limitation or misconfiguration in ESLint's TypeScript parsing/type resolution for those specific library patterns.
-    - In such cases, targeted `eslint-disable` comments with clear justifications are a necessary evil to maintain a clean lint pass without sacrificing correct and idiomatic library usage.
-- The `require-await` rule is effective in highlighting potentially unnecessary `async` keywords, which can simplify code and avoid confusion about a function's behavior.
+- A clean ESLint pass is crucial for code quality and maintainability. Addressing all errors and warnings, even if it requires justified `eslint-disable` comments, is important.
+- Type definitions play a vital role not just for TypeScript compilation but also for ESLint's TypeScript-aware rules. Keeping them up-to-date is beneficial.
+- For complex projects or when integrating multiple tools (TypeScript, ESLint, specific libraries), achieving a perfectly harmonious linting setup without any bypasses can be challenging. Pragmatic solutions like justified `eslint-disable` comments are sometimes necessary.
+- The `require-await` and `no-misused-promises` rules are valuable for maintaining correct `async` function usage and callback signatures.
 
 ## Action Items / Follow-ups
-- Consider a deeper investigation into the ESLint and TypeScript parser configuration (`.eslintrc.js`, `tsconfig.json` for ESLint) to understand why it struggles with Express types, potentially looking for plugin conflicts or outdated parser versions.
-- Regularly review `eslint-disable` comments, especially those related to `no-unsafe-*` rules for library code, to see if updates to ESLint, its plugins, or type definitions allow for their removal.
+- Periodically review the ESLint configuration, especially parser options and plugin settings, to see if adjustments can reduce the need for `eslint-disable` comments for standard library patterns.
+- When encountering persistent `no-unsafe-*` errors with well-typed libraries, verify that the project's `tsconfig.json` (especially `include`, `exclude`, and `typeRoots`/`types`) is correctly configured and understood by ESLint.
+- Continue the practice of providing clear justifications for all `eslint-disable` comments.
+- Regularly run `npm run lint:fix` to clean up any newly unused `eslint-disable` directives.
 
 # Retrospection for Build Error Fix (get_changelog Tool Registration - TS2345) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
@@ -237,74 +241,3 @@
 - If separate annotations are strongly desired for tools, further investigate the MCP SDK's specific requirements or recommended patterns for the 5-argument `server.tool` overload, or check if annotations should be part of an options object for the 4th argument.
 - For now, maintain consistency by using the 4-argument `server.tool(name, description, paramsSchema, handler)` signature for new tools unless a clear need and verified pattern for other overloads arise.
 
-# Retrospection for Final ESLint Fixes (Server Express Middleware & require-await) (Git Commit ID: a4eb7ac)
-
-## What went well?
-- The remaining ESLint errors were few and highly localized, making them easier to address.
-- The `require-await` rule correctly identified a potentially unnecessary `async` keyword on the `get_session_history` handler.
-- The previous strategy of using `eslint-disable` for standard library patterns that ESLint misinterprets (like Express middleware) proved effective.
-
-## What could be improved?
-- **ESLint Configuration for Express:** The fact that `express.json()` and its use with `app.use()` triggers `no-unsafe-*` rules points to a persistent, albeit minor, friction point with ESLint's understanding of Express types. While `eslint-disable` is a practical solution, a more ideal setup would have ESLint correctly recognizing these patterns. This might involve tweaking ESLint's TypeScript parser settings or specific rule configurations for `@types/express`.
-
-## What did we learn?
-- Synchronous functions should not be marked `async`. The `require-await` rule is a good safeguard for this.
-- For widely-used libraries like Express.js, when TypeScript is satisfied with the types and the code follows standard practices, `eslint-disable` comments for `no-unsafe-*` rules can be a necessary measure if ESLint's type analysis is overly aggressive or slightly misaligned with the library's typings. The key is to provide clear justification.
-
-## Action Items / Follow-ups
-- If time permits in the future, a brief investigation into ESLint's parser options or rule configurations for `@typescript-eslint/parser` related to Express types could be beneficial to see if these `eslint-disable` comments can be eliminated without sacrificing linting quality elsewhere.
-- Ensure all `async` functions in the codebase are reviewed for actual use of `await` to prevent unnecessary `async` declarations.
-
-# Retrospection for no-misused-promises ESLint Fix (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
-
-## What went well?
-- The ESLint error message `@typescript-eslint/no-misused-promises` was clear and pointed to the exact location of the issue.
-- The fix was straightforward: identifying an unnecessary `async` keyword on a synchronous callback.
-
-## What could be improved?
-- Ensuring that `async` is only used on functions that genuinely perform `await` operations or are intended to return a Promise can prevent this class of error. A quick scan for `async` functions without `await` during development could be beneficial.
-
-## What did we learn?
-- The `no-misused-promises` ESLint rule is effective in catching cases where `async` functions are used in contexts expecting synchronous, void-returning functions (like many event listener callbacks or simple Node.js callbacks).
-- Understanding that `async` functions always return a Promise is key to diagnosing this rule's violations.
-
-## Action Items / Follow-ups
-- Briefly review other simple callbacks in the codebase to ensure `async` is not used unnecessarily, particularly for those passed to Node.js core modules or external libraries that expect void-returning functions.
-
-# Retrospection for Final ESLint Pass (no-misused-promises & Cleanup) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
-
-## What went well?
-- The `npm run lint:fix` command successfully cleaned up several unused `eslint-disable` directives, simplifying the codebase.
-- The final `no-misused-promises` error was correctly identified as relating to an unnecessary `async` keyword on a synchronous callback.
-- Installing `@types/express` was a good proactive step, even if it didn't directly fix all `no-unsafe-*` issues, it ensures better type safety for Express code.
-
-## What could be improved?
-- **Understanding `no-misused-promises`:** This rule can sometimes be subtle. It's important to remember that any `async` function returns a Promise, and if a callback signature expects `void` (or a non-Promise return), this rule will trigger.
-- **Iterative Linting:** The process of linting, fixing, and re-linting (sometimes with `--fix`) is effective but can be iterative. Ensuring changes are saved and accurately reflected before each lint run is key.
-
-## What did we learn?
-- The `no-misused-promises` rule is valuable for ensuring that `async` functions are used appropriately, especially in contexts like callbacks where the calling function might not expect or handle a Promise.
-- Regularly running `lint:fix` can help maintain code hygiene by removing redundant `eslint-disable` comments.
-- Even after installing type definitions, some ESLint rules (especially `no-unsafe-*` ones) might require targeted `eslint-disable` comments for idiomatic library patterns if ESLint's type inference remains stricter than TypeScript's.
-
-## Action Items / Follow-ups
-- Perform a quick review of other callbacks in the codebase, especially those passed to third-party library functions, to ensure `async` is used only when necessary and that `no-misused-promises` is not being violated elsewhere.
-- Continue to be precise with `eslint-disable` comments, targeting only the necessary rules and providing clear justifications.
-
-# Retrospection for Final ESLint Fixes (Server Express Middleware & require-await) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
-
-## What went well?
-- The remaining ESLint errors were few and highly localized, making them easier to address.
-- The `require-await` rule correctly identified a potentially unnecessary `async` keyword on the `get_session_history` handler.
-- The previous strategy of using `eslint-disable` for standard library patterns that ESLint misinterprets (like Express middleware) proved effective.
-
-## What could be improved?
-- **ESLint Configuration for Express:** The fact that `express.json()` and its use with `app.use()` triggers `no-unsafe-*` rules points to a persistent, albeit minor, friction point with ESLint's understanding of Express types. While `eslint-disable` is a practical solution, a more ideal setup would have ESLint correctly recognizing these patterns. This might involve tweaking ESLint's TypeScript parser settings or specific rule configurations for `@types/express`.
-
-## What did we learn?
-- Synchronous functions should not be marked `async`. The `require-await` rule is a good safeguard for this.
-- For widely-used libraries like Express.js, when TypeScript is satisfied with the types and the code follows standard practices, `eslint-disable` comments for `no-unsafe-*` rules can be a necessary measure if ESLint's type analysis is overly aggressive or slightly misaligned with the library's typings. The key is to provide clear justification.
-
-## Action Items / Follow-ups
-- If time permits in the future, a brief investigation into ESLint's parser options or rule configurations for `@typescript-eslint/parser` related to Express types could be beneficial to see if these `eslint-disable` comments can be eliminated without sacrificing linting quality elsewhere.
-- Ensure all `async` functions in the codebase are reviewed for actual use of `await` to prevent unnecessary `async` declarations.
