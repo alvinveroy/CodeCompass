@@ -1,2 +1,2 @@
 // Version information
-export const VERSION = '1.4.5';
+export const VERSION = '1.5.4';
