@@ -291,7 +291,7 @@ describe('Agent', () => {
 
   describe('generateAgentSystemPrompt (original)', () => {
     it('should include descriptions of all available tools', () => { 
-      const mockCapabilityDefinitionsForPrompt: ActualAgentModule.CapabilityDefinition[] = [
+      const mockCapabilityDefinitionsForPrompt: AgentCapabilityDefinition[] = [
         {
           name: 'capability_searchCodeSnippets', // Example
           description: 'Searches for code.',
