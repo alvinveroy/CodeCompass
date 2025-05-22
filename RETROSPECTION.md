@@ -174,3 +174,22 @@
 ## Action Items / Follow-ups
 - Perform a quick review of `ConfigService` to ensure that all properties read from configuration files are actually defined in their respective interfaces.
 - Double-check other tool registrations in `server.ts` to confirm they adhere to the correct `server.tool()` signature for the installed SDK version.
+
+# Retrospection for Build Error Fix (get_changelog Tool Registration) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The TypeScript error message `TS2769: No overload matches this call` and the line number clearly indicated the problematic `server.tool` call.
+- Comparing with other working tool registrations (like `get_indexing_status`) provided a clue that `paramsSchema` for parameter-less tools should be `{}` (a `ZodRawShape`) rather than a `z.object({})` instance when passed in certain argument positions.
+
+## What could be improved?
+- **SDK Signature Clarity:** The multiple overloads for `server.tool` in the MCP SDK can sometimes make it tricky to determine the exact expected signature without referring to documentation or examples. A more constrained API or clearer error messages from the SDK's types could help.
+- **Consistency in Tool Registration:** Ensuring all tool registrations follow a consistent pattern (e.g., always using the 5-argument signature if description and annotations are present) can reduce confusion and errors.
+
+## What did we learn?
+- For parameter-less tools in the MCP SDK, using an empty object literal `{}` for the `paramsSchema` argument (when it expects a `ZodRawShape`) is often the correct approach.
+- When encountering `No overload matches this call` errors with SDKs, it's crucial to carefully examine the available method signatures and ensure all arguments' types and order match one of them.
+- Small differences in how Zod schemas are provided (e.g., `z.object({})` instance vs. `{}` shape) can matter depending on the SDK's type expectations.
+
+## Action Items / Follow-ups
+- Review other `server.tool` registrations in `src/lib/server.ts` to ensure they consistently use the correct signatures and argument types, especially for `paramsSchema`.
+- If similar issues arise, consult the MCP SDK documentation or examples for the recommended `server.tool` usage patterns.

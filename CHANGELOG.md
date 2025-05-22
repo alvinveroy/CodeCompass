@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Build Error (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved TypeScript error `TS2769: No overload matches this call` for the `get_changelog` tool registration in `src/lib/server.ts`. The `server.tool()` call was restructured to use the 5-argument signature `(name, description, paramsSchema, handler, annotations)`, with `paramsSchema` correctly set to `{}` for this parameter-less tool.
 - **Build Errors (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved TypeScript errors in `src/lib/config-service.ts` (TS2339: Property 'HTTP_PORT' does not exist on type 'Partial<ModelConfigFile>') by removing the attempt to load `HTTP_PORT` from `model-config.json`. `HTTP_PORT` is correctly managed via environment variables or defaults.
     - Fixed TypeScript error in `src/lib/server.ts` (TS2339: Property 'addTool' does not exist on type 'McpServer') by reverting the `get_changelog` tool registration to use `server.tool()` with the correct 4-argument signature.

@@ -734,8 +734,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 
   // Add get_changelog tool
   server.tool(
-    "get_changelog",
-    z.object({}), // paramsSchema for a parameter-less tool
+    "get_changelog", // name
+    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.", // description
+    {}, // paramsSchema (as ZodRawShape for no parameters)
     async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { // handler
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
@@ -752,16 +753,13 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         logger.error("Failed to read changelog", { message: errorMessage });
         return {
           content: [{
-            type: "text", // No 'as const' needed here as it's an error response
+            type: "text", 
             text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
           }],
         };
       }
     },
-    { // optionsObject
-      description: "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
-      annotations: { title: "Get Changelog" }
-    }
+    { title: "Get Changelog" } // annotations
   );
   
   // Add reset_metrics tool - REMOVED
