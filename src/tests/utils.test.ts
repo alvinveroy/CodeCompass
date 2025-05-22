@@ -19,12 +19,6 @@ interface PartialOriginalConfig {
   // Add other properties if accessed from originalInstance
 }
 
-// Add this interface for more specific typing of the imported actual module
-interface OriginalModuleType {
-  configService: PartialOriginalConfig;
-  // Add other expected exports from the actual config-service module if any
-}
-
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
   const originalModule = await vi.importActual('../lib/config-service'); // More specific cast
@@ -66,11 +60,15 @@ describe('Utils Module', () => {
   let originalDefaultRetryValues: { MAX_RETRIES: number; RETRY_DELAY: number; };
 
   beforeEach(async () => {
-    // Import the original config service to get its true default values for resetting retry logic.
-    // We only need MAX_RETRIES and RETRY_DELAY from the original for resetting.
+    // Cast the result of vi.importActual to `any` first, as its precise type can be elusive.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { configService: actualOriginalConfigServiceUntyped } = await vi.importActual('../lib/config-service') as any; 
-    const originalInstance = actualOriginalConfigServiceUntyped as PartialOriginalConfig;
+    const originalModule = await vi.importActual('../lib/config-service') as any; 
+    
+    // Now, access `configService` and cast it to the specific partial type we need.
+    // This explicitly tells TypeScript the shape of `originalModule.configService`.
+    const originalInstance = originalModule.configService as PartialOriginalConfig;
+
+    // The rest of the assignments should now work correctly if PartialOriginalConfig is accurate.
     originalDefaultRetryValues = {
       MAX_RETRIES: originalInstance.MAX_RETRIES,
       RETRY_DELAY: originalInstance.RETRY_DELAY,
