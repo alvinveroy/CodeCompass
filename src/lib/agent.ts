@@ -493,14 +493,14 @@ Please correct the parameters and try again.`;
               // Parameters are valid, proceed with execution
               try {
                 logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: validationResult.data });
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment
                 const capabilityResult = await capabilityFunc(capabilityContext, validationResult.data as any);
 
                 agentState.steps.push({
                   tool: capabilityName,
                 input: validationResult.data, // Log validated and potentially transformed data
                 output: capabilityResult,
-                 
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 reasoning: parsedCapability.reasoning || llmResponseText
               });
 
