@@ -93,7 +93,7 @@ const CapabilityAnalyzeCodeProblemWithContextParamsSchema = z.object({
 export type CapabilityAnalyzeCodeProblemWithContextParams = z.infer<typeof CapabilityAnalyzeCodeProblemWithContextParamsSchema>;
 
 // Define a type for the list of available capabilities to pass to the prompt
-interface CapabilityDefinition {
+export interface CapabilityDefinition {
   name: keyof typeof capabilities; // Ensures name is a valid capability function
   description: string;
   parameters_schema: z.ZodType<unknown>; // Zod schema for parameters
