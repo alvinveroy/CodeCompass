@@ -122,19 +122,36 @@ describe('Agent', () => {
     (getRecentQueries as Mock).mockReset().mockReturnValue([]);
     vi.mocked(readFile).mockReset().mockResolvedValue('Default file content from generic mock');
     // Define a helper for creating mock Dirent objects if not done in the mock factory
-    const createMockDirent = (name: string, isDir: boolean, basePath = '/test/repo/some/path'): Dirent => ({ // Dirent type is from 'fs'
-        name,
-        isFile: () => !isDir,
-        isDirectory: () => isDir,
-        isBlockDevice: () => false,
-        isCharacterDevice: () => false,
-        isSymbolicLink: () => false,
-        isFIFO: () => false,
-        isSocket: () => false,
-        path: basePath,
-        parentPath: path.dirname(basePath),
-    });
-    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent[]); // Cast to unknown first
+    // The key is that the object structurally matches what fs.Dirent provides.
+    // Node's readdir with withFileTypes: true returns Dirent objects.
+    // The generic type for Dirent defaults to string for path properties.
+    // If a specific part of the code expects Dirent<Buffer>, that's where the conflict arises.
+    // For mocking, we often don't need the exact Buffer type for path.
+    const createMockDirent = (name: string, isDir: boolean, _basePath = '/test/repo/some/path'): Dirent => { // _basePath unused
+        const dirent = new Dirent(); // Create a real Dirent instance
+        // Override properties needed for the mock
+        // Object.defineProperty is used to make properties configurable and writable if needed,
+        // but direct assignment should work for simple mocks if Dirent properties are writable.
+        // For simplicity, we'll assume direct assignment works or cast.
+        (dirent as any).name = name;
+        (dirent as any).isFile = () => !isDir;
+        (dirent as any).isDirectory = () => isDir;
+        (dirent as any).isBlockDevice = () => false;
+        (dirent as any).isCharacterDevice = () => false;
+        (dirent as any).isSymbolicLink = () => false;
+        (dirent as any).isFIFO = () => false;
+        (dirent as any).isSocket = () => false;
+        // The 'path' property is not standard on Dirent from 'fs', it's usually inferred or constructed.
+        // If your code relies on a 'path' or 'parentPath' property on Dirent objects *returned by readdir*,
+        // that's a custom extension not part of Node's fs.Dirent.
+        // For standard Dirent, only name and type methods are guaranteed.
+        // Let's remove custom path/parentPath from the mock Dirent itself if not strictly needed by SUT.
+        return dirent;
+    };
+    
+    // Mock readdir to resolve with an array of these mock Dirent objects.
+    // The cast to `Dirent[]` should be sufficient if createMockDirent returns valid Dirent-like objects.
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as Dirent[]);
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
