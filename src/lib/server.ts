@@ -664,6 +664,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         
         return {
           content: [{
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: "text" as const,
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
           }],
@@ -673,6 +674,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         logger.error("Failed to read changelog", { message: errorMessage });
         return {
           content: [{
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: "text" as const,
             text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
           }],
@@ -702,7 +704,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         // Return an error structure consistent with other tools
         return {
           content: [{
-            type: "text",
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+            type: "text" as const,
             text: `# Error Getting Session History\n\n${errorMsg}`,
           }],
         };
@@ -797,6 +800,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         if (r.payload?.dataType === 'file_chunk') {
           const payload = r.payload as FileChunkPayload;
           return {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: 'file_chunk' as const,
             filepath: payload.filepath,
             snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
@@ -807,6 +811,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         } else if (r.payload?.dataType === 'commit_info') {
           const payload = r.payload as CommitInfoPayload;
           return {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: 'commit_info' as const,
             commit_oid: payload.commit_oid,
             message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH),
@@ -818,6 +823,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         } else if (r.payload?.dataType === 'diff_chunk') {
           const payload = r.payload as DiffChunkPayload;
           return {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: 'diff_chunk' as const,
             commit_oid: payload.commit_oid,
             filepath: payload.filepath,
@@ -887,7 +893,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           .filter(item => item !== null); // Ensure no nulls from mapping
         
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        context.push(...additionalContext as Array<{type: string; relevance: number; note: string; [key: string]: any}>); // Cast as it's a mix
+        context.push(...additionalContext as Array<{type: string; relevance: number; note: string; [key: string]: unknown}>); // Cast as it's a mix
       }
 
       const prompt = `
@@ -1033,6 +1039,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         if (r.payload?.dataType === 'file_chunk') {
           const payload = r.payload as FileChunkPayload;
           return {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: 'file_chunk' as const,
             filepath: payload.filepath,
             snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
@@ -1042,6 +1049,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         } else if (r.payload?.dataType === 'commit_info') {
           const payload = r.payload as CommitInfoPayload;
           return {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: 'commit_info' as const,
             commit_oid: payload.commit_oid,
             message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH), // Snippet of commit message
@@ -1052,6 +1060,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         } else if (r.payload?.dataType === 'diff_chunk') {
           const payload = r.payload as DiffChunkPayload;
           return {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: 'diff_chunk' as const,
             commit_oid: payload.commit_oid,
             filepath: payload.filepath,
