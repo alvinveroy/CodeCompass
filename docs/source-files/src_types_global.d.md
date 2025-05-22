@@ -41,23 +41,23 @@ export {};
 
 ### Defined Global Variables:
 
-These variables can be accessed via `global.VARIABLE_NAME` or `globalThis.VARIABLE_NAME`.
+These variables can be accessed via `global.VARIABLE_NAME` or `globalThis.VARIABLE_NAME`. At the global declaration level, these are all optional.
 
--   `CURRENT_LLM_PROVIDER: string`:
-    Stores the identifier (e.g., 'ollama', 'deepseek', 'openai') for the LLM provider that is currently active for general LLM tasks. This can be dynamically changed at runtime.
+-   `CURRENT_LLM_PROVIDER?: string`:
+    Optionally stores the identifier (e.g., 'ollama', 'deepseek', 'openai') for the LLM provider that is currently active for general LLM tasks. This can be dynamically changed at runtime. If not set directly on `global`, `ConfigService` will use its configured default.
 
--   `CURRENT_SUGGESTION_PROVIDER: string`:
-    Stores the identifier for the LLM provider specifically designated for generating code suggestions. This allows using a different provider for suggestions than for other LLM tasks if desired.
+-   `CURRENT_SUGGESTION_PROVIDER?: string`:
+    Optionally stores the identifier for the LLM provider specifically designated for generating code suggestions. If not set directly on `global`, `ConfigService` will use its configured default.
 
--   `CURRENT_EMBEDDING_PROVIDER: string`:
-    Stores the identifier for the LLM provider used for generating embeddings (e.g., 'ollama').
+-   `CURRENT_EMBEDDING_PROVIDER?: string`:
+    Optionally stores the identifier for the LLM provider used for generating embeddings (e.g., 'ollama'). If not set directly on `global`, `ConfigService` will use its configured default.
 
--   `CURRENT_SUGGESTION_MODEL?: string` (declared as `string | undefined` for the `var`):
-    Stores the identifier for the specific language model to be used for suggestions (e.g., 'llama3.1:8b', 'deepseek-coder', 'gpt-4'). This is optional; if not set, a default model from the `CURRENT_SUGGESTION_PROVIDER` might be used.
+-   `CURRENT_SUGGESTION_MODEL?: string`:
+    Optionally stores the identifier for the specific language model to be used for suggestions (e.g., 'llama3.1:8b', 'deepseek-coder', 'gpt-4'). If not set directly on `global`, `ConfigService` will use its configured default.
 
 ## Usage Context
 
-These global variables are primarily intended to be read and updated by the `ConfigService`. The `ConfigService` provides getter methods that first check if these global variables are set (e.g., `global.CURRENT_LLM_PROVIDER`). If they are, the global value is returned; otherwise, a default value from the service's internal configuration (potentially loaded from environment variables or a config file) is used.
+These global variables are primarily intended to be read and updated by the `ConfigService`. The `ConfigService` provides getter methods that first check if these global variables are set and have a value (e.g., `global.CURRENT_LLM_PROVIDER`). If they do, the global value is returned; otherwise, a default value from the service's internal configuration (potentially loaded from environment variables or a config file) is used.
 
 This mechanism allows for dynamic, application-wide changes to the active LLM providers and models, for example, through an MCP tool like `switch_suggestion_model`. When such a tool is invoked, it updates these global variables, and subsequent calls to `ConfigService` for provider/model information will reflect these changes for the duration of the application's runtime or until changed again.
 

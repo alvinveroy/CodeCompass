@@ -17,22 +17,23 @@ This module handles all direct interactions with an Ollama server. It provides f
     -   If `isEmbeddingModel` is true, it attempts to generate a test embedding.
     -   If `isEmbeddingModel` is false, it attempts to generate a short text response.
     -   Uses `axios` to make POST requests to `/api/embeddings` or `/api/generate` endpoints.
-    -   Throws an error if the model is not available or not functional, which is caught by the calling context (e.g., in `llm-provider.ts` or `server.ts`).
+    -   Returns `true` if the model is available and functional, `false` otherwise (e.g., on API error or if the response structure is unexpected). It does not throw an error itself; callers decide if a `false` return is critical.
 
 -   **`generateEmbedding(text: string): Promise<number[]>`**:
     -   Generates vector embeddings for the input text using the Ollama server.
     -   Uses the embedding model specified by `configService.EMBEDDING_MODEL`.
+    -   Checks that the returned embedding vector matches `configService.EMBEDDING_DIMENSION`.
     -   Preprocesses the input text using `preprocessText` from `src/utils/text-utils.ts`.
     -   Truncates text if it exceeds `configService.MAX_INPUT_LENGTH`.
     -   Makes a POST request to the `/api/embeddings` endpoint.
     -   Uses `withRetry` for robustness.
-    -   Returns the embedding vector or throws an error if generation fails.
+    -   Returns the embedding vector. Throws an error if generation fails, if the embedding is invalid (e.g. contains NaN, non-finite values), or if its dimension doesn't match `configService.EMBEDDING_DIMENSION`.
 
 ## Notes
 
--   This module relies heavily on `configService` for Ollama host URL, embedding model name, request timeouts, and retry settings.
+-   This module relies heavily on `configService` for Ollama host URL, embedding model name, embedding dimension, request timeouts, and retry settings.
 -   All API interactions are wrapped with `withRetry` to handle transient network issues.
 -   Detailed logging is included for diagnostics, including request details and error messages.
 -   The `checkOllamaModel` function is crucial for ensuring that models specified in the configuration are actually usable before attempting operations with them.
--   Metrics collection (e.g., `incrementCounter`, `timeExecution`) has been commented out or removed.
--   Functions for text generation (like `generateTextWithOllama`) that were previously in this file have been moved or integrated into `OllamaProvider` in `src/lib/llm-provider.ts`.
+-   Metrics collection has been removed from this module.
+-   Functions for direct text generation (like a standalone `generateTextWithOllama`) are not present in this file; such functionality is handled by `OllamaProvider` in `src/lib/llm-provider.ts`.
