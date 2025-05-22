@@ -347,6 +347,7 @@ export function parseCapabilityCall(llmOutput: string): ParsedCapabilityCall | n
     const trimmedOutput = llmOutput.trim();
     // Basic check to see if it looks like a JSON object
     if (trimmedOutput.startsWith("{") && trimmedOutput.endsWith("}")) {
+      //eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const parsedJson: string = JSON.parse(trimmedOutput);
       const validationResult = CapabilityCallSchema.safeParse(parsedJson);
       if (validationResult.success) {
@@ -493,7 +494,7 @@ Please correct the parameters and try again.`;
               // Parameters are valid, proceed with execution
               try {
                 logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: validationResult.data });
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
                 const capabilityResult: unknown = await capabilityFunc(capabilityContext, validationResult.data as any);
 
                 agentState.steps.push({
