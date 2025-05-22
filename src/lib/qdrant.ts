@@ -114,8 +114,8 @@ export async function batchUpsertVectors(
       logger.debug(`Batch upserted ${batch.length} points (total processed: ${Math.min(i + batchSize, points.length)})`);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      let detailedErrorMessage = `Original error message: ${err.message}`;
-      let errorDetailsPayload: Record<string, unknown> = { 
+      const detailedErrorMessage = `Original error message: ${err.message}`;
+      const errorDetailsPayload: Record<string, unknown> = { 
         collectionName, 
         batchStartIndex: i, 
         batchSize 
