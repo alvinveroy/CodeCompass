@@ -626,7 +626,7 @@ ${s.snippet}
 
 ### Summary
 ${s.summary}
-`).join('\n')}
+`).join('\n') : "\nNo relevant code snippets found in files for your query. The query might have matched commit messages or diffs, which are not detailed by this tool."}
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     
