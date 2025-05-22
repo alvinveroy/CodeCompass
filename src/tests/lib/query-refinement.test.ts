@@ -32,7 +32,7 @@ import { generateEmbedding } from '../../lib/ollama';
 import { logger } from '../../lib/config-service'; // configService itself is not used directly in tests
 // Define mockSearchFn once
 const mockSearchFn = vi.fn();
-const mockQdrantClientInstance = { search: vi.fn() } as unknown as QdrantClient;
+const mockQdrantClientInstance = { search: mockSearchFn } as unknown as QdrantClient;
 
 // Remove the VitestMockedFunction utility type if it was causing issues.
 // We will use the imported `Mock` type directly.
