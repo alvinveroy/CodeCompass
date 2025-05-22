@@ -81,7 +81,7 @@ describe('Utils Module', () => {
     // This is the crucial part: we cast the statically imported `configServiceInstanceFromMockFactory`
     // (which TS thinks is the original ConfigService) to our `MockableConfigService` type.
     // This is safe because our vi.mock factory ensures it *is* a MockableConfigService at runtime.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     testSubjectMockedConfigService = configServiceInstanceFromMockFactory as unknown as MockableConfigService;
 
     vi.useFakeTimers();
