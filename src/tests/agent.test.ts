@@ -159,7 +159,7 @@ describe('Agent', () => {
 
     (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; });
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
-     
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
     (getOrCreateSession as Mock).mockReset().mockImplementation((sessionIdParam, _repoPath) => ({ id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} }));
@@ -177,7 +177,6 @@ describe('Agent', () => {
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  // describe('parseToolCalls (original)', () => { // This line was removed by user's change for line 201
   describe('parseToolCalls (original)', () => {
     it('should parse valid tool calls', () => {
       const output = `TOOL_CALL: {"tool":"search_code","parameters":{"query":"authentication"}}`;

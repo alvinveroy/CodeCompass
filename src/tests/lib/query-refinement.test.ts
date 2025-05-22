@@ -96,14 +96,11 @@ describe('Query Refinement Tests', () => {
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(relevanceScore).toBe(0.8);
       expect(refinedQuery).toBe('original query broadened by INJECTED mockRefineQuery focused by INJECTED mockRefineQuery');
-       
       expect(mockRefineQuery_Injected).toHaveBeenCalledTimes(2);
       // Ensure the results passed to the mock match DetailedQdrantSearchResult[] if that's what RefineQueryFunc expects
       // The dummySearchResults creates Schemas['ScoredPoint'][], which might be compatible or need casting/adjusting
       // For the mock call assertion, if RefineQueryFunc expects DetailedQdrantSearchResult[], you might need to cast:
-       
       expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(1, 'original query', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.2); // Cast is okay for test
-       
       expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(2, 'original query broadened by INJECTED mockRefineQuery', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.5); // Cast is okay for test
     });
     
@@ -122,8 +119,7 @@ describe('Query Refinement Tests', () => {
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
         expect(refinedQuery).toBe('query for no results broadened by INJECTED mockRefineQuery broadened by INJECTED mockRefineQuery');
-        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Completed search with 2 refinements`)); 
-         
+        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Completed search with 2 refinements`));
         expect(mockRefineQuery_Injected).toHaveBeenCalledTimes(2);
     });
   });

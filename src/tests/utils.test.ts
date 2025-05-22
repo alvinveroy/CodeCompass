@@ -19,19 +19,22 @@ interface PartialOriginalConfig {
   // Add other properties if accessed from originalInstance
 }
 
+// Add this interface for more specific typing of the imported actual module
+interface OriginalModuleType {
+  configService: PartialOriginalConfig;
+  // Add other expected exports from the actual config-service module if any
+}
+
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const originalModule = await vi.importActual('../lib/config-service') as any; // Keep `as any` for the module itself
+  const originalModule = await vi.importActual('../lib/config-service') as OriginalModuleType; // More specific cast
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
   const originalInstance: PartialOriginalConfig = originalModule.configService;
 
   const mockConfigServiceValues: MockableConfigService = {
-     
     MAX_RETRIES: originalInstance.MAX_RETRIES,
-     
     RETRY_DELAY: originalInstance.RETRY_DELAY,
-     
     OLLAMA_HOST: originalInstance.OLLAMA_HOST,
     logger: {
       warn: vi.fn(),
@@ -85,9 +88,9 @@ describe('Utils Module', () => {
     
     // Reset the properties of the *actual mocked instance* before each test
     // using the correctly typed testSubjectMockedConfigService.
-     
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     testSubjectMockedConfigService.MAX_RETRIES = typedActualOriginalConfigService.MAX_RETRIES;
-     
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     testSubjectMockedConfigService.RETRY_DELAY = typedActualOriginalConfigService.RETRY_DELAY;
     
     // Ensure logger and its methods exist before trying to clear mocks

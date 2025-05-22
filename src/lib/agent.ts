@@ -15,15 +15,19 @@ function stringifyStepOutput(output: unknown): string {
     return output;
   }
   if (output === null || output === undefined) {
-    return String(output);
+    return String(output); // Handles null and undefined correctly
   }
-  if (typeof output === 'object') {
+  // Explicitly handle arrays and objects for JSON.stringify
+  if (Array.isArray(output) || (typeof output === 'object' && output !== null)) {
     try {
       return JSON.stringify(output, null, 2);
     } catch {
+      // Fallback for non-serializable objects or objects with circular refs
       return '[Unserializable Object]';
     }
   }
+  // For other primitives (number, boolean, symbol, bigint), String() is safe.
+  // This addresses the new error at line 27 if 'output' was an unhandled object type.
   return String(output);
 }
 
