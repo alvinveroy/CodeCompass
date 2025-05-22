@@ -1217,8 +1217,8 @@ export async function runAgentLoop(
           agentState.steps.map((mapStep: AgentStep): string => { // Explicitly type mapStep and callback return type
             // mapStep.tool is already string.
             // stringifyStepOutput returns string.
-            // The substring operation on a string (or fallback string) returns a string.
-            // Explicit String() calls are for maximum safety with the linter.
+            // The linter struggles with the type flow from mapStep.output (unknown) through stringifyStepOutput here.
+            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions -- stringifyStepOutput ensures string, linter struggles with unknown input type flow
             return `Used ${String(mapStep.tool)} and found: ${String((stringifyStepOutput(mapStep.output) || 'No output').substring(0, 200))}...`;
           }).join("\n\n");
       }
