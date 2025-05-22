@@ -35,9 +35,27 @@ export function broadenQuery(query: string): string {
 
 export function focusQueryBasedOnResults(query: string, results: DetailedQdrantSearchResult[]): string {
   if (results.length === 0) return query;
-  const contentSamples = results.slice(0, 3).map(r =>
-    r.payload?.content?.substring(0, 200) || ''
-  ).join(' ');
+
+  const contentSamples = results.slice(0, 3).map(r => {
+    let sampleText = '';
+    if (r.payload) {
+      switch (r.payload.dataType) {
+        case 'file_chunk':
+          sampleText = r.payload.file_content_chunk;
+          break;
+        case 'diff_chunk':
+          sampleText = r.payload.diff_content_chunk;
+          break;
+        case 'commit_info':
+          // For commit_info, commit_message is a good candidate for keywords.
+          // You could also concatenate other fields if desired.
+          sampleText = r.payload.commit_message;
+          break;
+      }
+    }
+    return sampleText.substring(0, 200); // Extract substring after selecting the text
+  }).join(' ');
+
   const potentialKeywords = extractKeywords(contentSamples);
   const keywordsToAdd = potentialKeywords.slice(0, 2).join(' ');
   if (keywordsToAdd) {
@@ -49,16 +67,32 @@ export function focusQueryBasedOnResults(query: string, results: DetailedQdrantS
 export function tweakQuery(query: string, results: DetailedQdrantSearchResult[]): string {
   if (!results || results.length === 0) return query;
   const topResult = results[0];
-  const filepath = topResult?.payload?.filepath || '';
-  const fileTypeMatch = filepath.match(/\.([a-zA-Z0-9]+)$/);
-  const fileType = fileTypeMatch ? fileTypeMatch[1] : '';
-  const pathParts = filepath.split(/[/\\]/);
-  const directory = pathParts.length > 1 ? pathParts[0] : '';
-  if (fileType && !query.toLowerCase().includes(fileType.toLowerCase())) {
-    return `${query} ${fileType}`;
+  let filepath = '';
+
+  if (topResult?.payload) {
+    // Filepath is present in FileChunkPayload and DiffChunkPayload
+    if (topResult.payload.dataType === 'file_chunk' || topResult.payload.dataType === 'diff_chunk') {
+      filepath = topResult.payload.filepath;
+    }
+    // CommitInfoPayload does not have a 'filepath' field directly associated with it in this context.
+    // If tweaking based on commit info is desired, different logic would be needed.
   }
-  if (directory && !query.toLowerCase().includes(directory.toLowerCase())) {
-    return `${query} in ${directory}`;
+
+  if (filepath) { // Only proceed if a filepath was found
+    const fileTypeMatch = filepath.match(/\.([a-zA-Z0-9]+)$/);
+    const fileType = fileTypeMatch ? fileTypeMatch[1] : '';
+    const pathParts = filepath.split(/[/\\]/);
+    const directory = pathParts.length > 1 ? pathParts[0] : ''; // Takes the first part as directory
+
+    if (fileType && !query.toLowerCase().includes(fileType.toLowerCase())) {
+      return `${query} ${fileType}`;
+    }
+    // Check directory only if it's not a common root-like name (e.g. 'src', 'lib')
+    // to avoid overly broad terms unless they are specific.
+    // This is a heuristic and can be adjusted.
+    if (directory && directory.length > 1 && !['src', 'lib', 'app', 'test', 'tests', 'doc', 'docs'].includes(directory.toLowerCase()) && !query.toLowerCase().includes(directory.toLowerCase())) {
+      return `${query} in ${directory}`;
+    }
   }
   return query;
 }
