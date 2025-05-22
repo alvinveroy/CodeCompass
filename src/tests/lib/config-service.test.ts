@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vite
 import fs from 'fs'; // Use actual fs for mocking its methods
 import path from 'path';
 // Import specific parts of winston that the test needs to interact with directly
-import { transports as winstonTransports, createLogger as _winstonCreateLogger, type Format, type TransformableInfo } from 'winston'; // Import named exports
+import { transports as winstonTransports, createLogger as _winstonCreateLogger } from 'winston'; // Import named exports
+import type { Format, TransformableInfo } from 'logform'; // Import types from logform
 
 // Import the class directly for testing.
 import { ConfigService as _ConfigService } from '../../lib/config-service'; // Import ConfigService class itself
