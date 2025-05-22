@@ -69,11 +69,11 @@ describe('Utils Module', () => {
     // Import the original config service to get its true default values for resetting retry logic.
     // We only need MAX_RETRIES and RETRY_DELAY from the original for resetting.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { configService: actualOriginalConfigService } = await vi.importActual('../lib/config-service') as any; 
-    const typedActualOriginalConfigService: PartialOriginalConfig = actualOriginalConfigService;
+    const { configService: actualOriginalConfigServiceUntyped } = await vi.importActual('../lib/config-service') as any; 
+    const originalInstance = actualOriginalConfigServiceUntyped as PartialOriginalConfig;
     originalDefaultRetryValues = {
-      MAX_RETRIES: typedActualOriginalConfigService.MAX_RETRIES,
-      RETRY_DELAY: typedActualOriginalConfigService.RETRY_DELAY,
+      MAX_RETRIES: originalInstance.MAX_RETRIES,
+      RETRY_DELAY: originalInstance.RETRY_DELAY,
     };
     
     // Assign the top-level imported mock to our test-scoped variable.
