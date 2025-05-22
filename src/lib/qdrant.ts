@@ -1,6 +1,5 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
-import axios from "axios"; // Import axios
 import { withRetry } from "../utils/retry-utils";
 
 let qdrantClientInstance: QdrantClient | null = null;
