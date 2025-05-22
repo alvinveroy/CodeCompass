@@ -210,7 +210,7 @@ describe('Agent', () => {
         runAgentLoopSUT_local = ActualAgentModule.runAgentLoop;
 
         // General setup for LLM provider mock for this describe block. Tests can override.
-         
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
         vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any /* eslint-disable-line @typescript-eslint/no-explicit-any */], refinedQuery: 'refined', relevanceScore: 0.8 });
