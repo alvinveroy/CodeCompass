@@ -138,7 +138,7 @@ describe('Agent', () => {
 
     (getLLMProvider as Mock).mockResolvedValue(mockLLMProviderInstance);
      
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("Default LLM response");
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
