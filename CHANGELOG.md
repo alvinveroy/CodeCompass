@@ -12,6 +12,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Dynamically importing `ConfigService` within the "Default Configuration" and "Logger Configuration" test suites after `vi.resetModules()` and environment variable cleanup, guaranteeing a fresh service instance for these tests. (cd97d8c)
 
 ## [Unreleased]
+### Added
+- **Unified Agent Orchestration (`agent_query`):**
+    - Introduced `agent_query` as the primary, user-facing tool, replacing multiple granular tools.
+    - The agent now orchestrates a sequence of internal "capabilities" to fulfill complex user requests, enabling multi-step reasoning and task execution.
+    - Implemented robust JSON-based communication between the LLM orchestrator and internal capabilities, including Zod schema validation for capability parameters.
+- **Internal Agent Capabilities:**
+    - Refactored existing tool functionalities into a suite of internal capabilities, including:
+        - `capability_searchCodeSnippets`
+        - `capability_getRepositoryOverview`
+        - `capability_getChangelog`
+        - `capability_fetchMoreSearchResults`
+        - `capability_getFullFileContent`
+        - `capability_listDirectory`
+        - `capability_getAdjacentFileChunks`
+        - `capability_generateSuggestionWithContext`
+        - `capability_analyzeCodeProblemWithContext`
+- **Enhanced Agent State Management:**
+    - `AgentState` now comprehensively tracks the multi-step execution within `agent_query`, including detailed steps (capability calls, inputs, outputs, reasoning) and accumulated context from successful capability executions.
+    - Full agent state is persisted to the session for better context continuity and debugging.
+
+### Changed
+- **Agent System Prompt:** Significantly revised the agent's system prompt to guide the LLM in its new role as an orchestrator, instructing it on how to plan, select, and invoke internal capabilities.
+- **Tool Registry:** Simplified the `toolRegistry` to expose only the `agent_query` tool to the LLM for initiating tasks.
+- **Core Agent Logic (`src/lib/agent.ts`):**
+    - `runAgentLoop` now primarily initiates the LLM to call `agent_query`.
+    - `executeToolCall` now dispatches `agent_query` to the new `runAgentQueryOrchestrator` function.
+    - `runAgentQueryOrchestrator` manages the step-by-step execution of capabilities based on LLM planning.
+- **Type Safety in Query Refinement:** Updated `src/lib/query-refinement.ts` (`focusQueryBasedOnResults`, `tweakQuery`) to correctly and type-safely access fields from the new Qdrant payload union types (`FileChunkPayload`, `CommitInfoPayload`, `DiffChunkPayload`).
+
+### Removed
+- Direct registration and exposure of granular agent tools (e.g., `search_code`, `get_repository_context`, `generate_suggestion`, etc.) from the `toolRegistry`. These functionalities are now internal capabilities orchestrated by `agent_query`.
 
 ## [1.5.0] - 2025-05-27
 ### Added
