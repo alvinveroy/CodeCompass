@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Dynamically importing `ConfigService` within the "Default Configuration" and "Logger Configuration" test suites after `vi.resetModules()` and environment variable cleanup, guaranteeing a fresh service instance for these tests. (cd97d8c)
 
 ## [Unreleased]
-### Added
+### Changed
 - **Background Indexing with Progress Reporting (Git Commit ID: [Will be filled by user after commit]):**
     - Implemented detailed status tracking for repository indexing within `src/lib/repository.ts`. This includes states like 'initializing', 'listing_files', 'indexing_file_content', 'completed', 'error', along with progress metrics (files/commits indexed, overall percentage).
     - Introduced `getGlobalIndexingStatus()` in `src/lib/repository.ts` to expose the current indexing status.
@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Updated the `/api/indexing-status` HTTP endpoint and the `get_indexing_status` MCP tool in `src/lib/server.ts` to use `getGlobalIndexingStatus()` for accurate progress reporting, removing local status variables.
     - The `/api/repository/notify-update` endpoint now checks the global indexing status before initiating a new indexing process to prevent concurrent indexing runs.
 ### Added
++- **Git Hooks and .gitignore Management (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
++    - Added `src/scripts/update-gitignore.ts` to programmatically manage `.gitignore`, including entries for `CHANGELOG.md` and `RETROSPECTION.md`.
++    - Added `src/scripts/install-git-hooks.ts` to facilitate the installation of client-side Git hooks.
++    - Provided a `post-commit` hook template in `src/templates/hooks/post-commit` that notifies the CodeCompass server to re-index the repository upon new commits.
++    - Added `setup:gitignore` and `setup:hooks` scripts to `package.json` for easy execution of these setup tasks.
 - **Unified Agent Orchestration (`agent_query`):**
     - Introduced `agent_query` as the primary, user-facing tool, replacing multiple granular tools.
     - The agent now orchestrates a sequence of internal "capabilities" to fulfill complex user requests, enabling multi-step reasoning and task execution.

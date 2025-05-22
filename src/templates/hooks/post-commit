@@ -1,0 +1,19 @@
+#!/bin/sh
+
+REPO_PATH=$(git rev-parse --show-toplevel)
+SERVER_URL="http://localhost:3001/api/repository/notify-update"
+
+printf "CodeCompass Hook: Notifying server of commit in %s...\n" "$REPO_PATH"
+
+if command -v curl > /dev/null; then
+  curl -s -X POST \
+    -H "Content-Type: application/json" \
+    -d "{\"repoPath\": \"$REPO_PATH\"}" \
+    "$SERVER_URL" > /dev/null 2>&1 &
+  
+  printf "CodeCompass Hook: Notification sent to %s (in background).\n" "$SERVER_URL"
+else
+  printf "CodeCompass Hook: curl command not found. Cannot send update notification.\n"
+fi
+
+exit 0
