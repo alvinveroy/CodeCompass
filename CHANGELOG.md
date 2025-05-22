@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 +    - Added `src/scripts/install-git-hooks.ts` to facilitate the installation of client-side Git hooks.
 +    - Provided a `post-commit` hook template in `src/templates/hooks/post-commit` that notifies the CodeCompass server to re-index the repository upon new commits.
 +    - Added `setup:gitignore` and `setup:hooks` scripts to `package.json` for easy execution of these setup tasks.
+- **Build and Configuration Fixes (Git Commit ID: e0b8ec0):**
+    - Corrected `src/lib/config-service.ts`: Removed `HTTP_PORT` from `ModelConfigFile` interface and from the persisted `model-config.json` file to prevent unintended persistence of this server-specific setting.
+    - Fixed `src/lib/server.ts`: Changed the `get_changelog` tool registration to use `server.addTool` with the correct schema (`z.object({})`) and handler return type (`{ type: "text" as const, ... }`) to resolve MCP SDK compatibility issues.
+    - Ensured `fs-extra` is listed in `dependencies` in `package.json` for `install-git-hooks.ts` script.
 - **Unified Agent Orchestration (`agent_query`):**
     - Introduced `agent_query` as the primary, user-facing tool, replacing multiple granular tools.
     - The agent now orchestrates a sequence of internal "capabilities" to fulfill complex user requests, enabling multi-step reasoning and task execution.

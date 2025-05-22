@@ -134,7 +134,7 @@
 - Ensure developers are aware of the need to use `git rm --cached <file>` if a file was tracked before being added to `.gitignore`. This could be part of project setup documentation.
 - Consider adding more comprehensive automated tests for utility scripts like `update-gitignore.ts` to cover various scenarios of initial `.gitignore` file states.
 
-# Retrospection for Build/Config Fixes & Tool Registration (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+# Retrospection for Build/Config Fixes & Tool Registration (Git Commit ID: e0b8ec0)
 
 ## What went well?
 - The specific instructions for correcting `src/lib/config-service.ts` (removing `HTTP_PORT` from persistence) and `src/lib/server.ts` (fixing `get_changelog` tool registration) were clear and actionable.
