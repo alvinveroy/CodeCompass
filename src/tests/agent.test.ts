@@ -163,7 +163,6 @@ describe('Agent', () => {
      
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
-    // eslint-disable-next-line @typescript-eslint/require-await -- This mock is for a synchronous function, so no await is needed or correct.
     (getOrCreateSession as Mock).mockReset().mockImplementation((sessionIdParam?: string, _repoPath?: string) => {
       return { id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} };
     });
