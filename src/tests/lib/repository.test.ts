@@ -66,9 +66,8 @@ vi.mock('util', async (importOriginal) => {
   return {
     __esModule: true,
     ...actualUtil,
-     
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    promisify: (fnToPromisify: (...args: any[]) => any) => { 
+    promisify: (fnToPromisify: (...args: any[]) => any) => {
       if (fnToPromisify && (typeof fnToPromisify.name === 'string' && fnToPromisify.name === 'exec' || fnToPromisify === actualChildProcessExecMockInstance)) {
         return internalMockedPromisifiedExec;
       }
@@ -217,7 +216,7 @@ describe('Repository Utilities', () => {
       const MAX_DIFF_LENGTH_FROM_SUT = 10000;
       const longDiff = 'a'.repeat(MAX_DIFF_LENGTH_FROM_SUT + 1);
       // Remove: execMock.mockImplementationOnce(...)
-      vi.mocked(importedMockExecAsyncFn).mockResolvedValueOnce({ stdout: longDiff, stderr: '' });
+      vi.mocked(importedMockExecAsyncFn).mockResolvedValueOnce({ stdout: longDiff, stderr: '' } as { stdout: string; stderr: string });
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       // Add assertion for importedMockExecAsyncFn call
@@ -278,11 +277,11 @@ describe('Repository Utilities', () => {
         ];
         vi.mocked(git.log).mockResolvedValue(mockCommits as unknown as import('isomorphic-git').ReadCommitResult[]); 
 
-        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => {  
-            await Promise.resolve(); 
-            if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
-            if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
-            if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
+        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => {
+            await Promise.resolve();
+            if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult;
+            if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult;
+            if (oid === 'commit1_oid') return { oid: 'commit1_oid', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult;
             return { oid: 'unknown', commit: { tree: 'unknown_tree', parent: [], author: {}, committer: {}, message: 'Unknown' } } as unknown as import('isomorphic-git').ReadCommitResult; 
         });
 
