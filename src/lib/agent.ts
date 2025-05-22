@@ -1214,10 +1214,10 @@ export async function runAgentLoop(
         // Provide a fallback response
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
-          agentState.steps.map((mapStep: AgentStep) => { // Renamed s to mapStep to avoid lint error if outer scope has 's'
-            const toolName = mapStep.tool;
+          agentState.steps.map((mapStep: AgentStep) => { // Explicitly type mapStep
+            const toolName: string = mapStep.tool; // Explicitly type toolName
             const outputString: string = stringifyStepOutput(mapStep.output); // Use helper, explicitly type
-            const safePreviewText = (outputString || 'No output').substring(0, 200);
+            const safePreviewText: string = (outputString || 'No output').substring(0, 200); // Explicitly type safePreviewText
             return `Used ${toolName} and found: ${safePreviewText}...`; 
           }).join("\n\n");
       }
