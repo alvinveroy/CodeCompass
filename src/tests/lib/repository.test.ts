@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockedFunction } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { type ExecException } from 'child_process'; // For type annotation
 
 // 1. Mock 'child_process' and replace 'exec' with a vi.fn() created IN THE FACTORY.
@@ -199,7 +199,6 @@ describe('Repository Utilities', () => {
         // This mock will be passed directly to getRepositoryDiff
         mockInjectedValidator = vi.fn();
         vi.mocked(importedMockExecAsyncFn).mockReset(); // Reset our new async mock for execAsync
-        // eslint-disable-next-line @typescript-eslint/require-await -- Linter false positive: mockResolvedValue is correct for async mock
         mockInjectedValidator.mockResolvedValue(true); // Default to valid
         setupGitLogWithTwoCommits();
     });
