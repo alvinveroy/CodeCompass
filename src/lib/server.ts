@@ -1025,12 +1025,42 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       
       const recentQueries = getRecentQueries(session.id);
       
-      const context = results.map(r => ({
-        filepath: r.payload.filepath,
-        snippet: r.payload.content.slice(0, configService.MAX_SNIPPET_LENGTH),
-        last_modified: r.payload.last_modified,
-        relevance: r.score,
-      }));
+      const context = results
+      .map(r => {
+        if (r.payload?.dataType === 'file_chunk') {
+          const payload = r.payload as FileChunkPayload;
+          return {
+            type: 'file_chunk' as const,
+            filepath: payload.filepath,
+            snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+            last_modified: payload.last_modified,
+            relevance: r.score,
+          };
+        } else if (r.payload?.dataType === 'commit_info') {
+          const payload = r.payload as CommitInfoPayload;
+          return {
+            type: 'commit_info' as const,
+            commit_oid: payload.commit_oid,
+            message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH), // Snippet of commit message
+            author: payload.commit_author_name,
+            date: payload.commit_date,
+            relevance: r.score,
+          };
+        } else if (r.payload?.dataType === 'diff_chunk') {
+          const payload = r.payload as DiffChunkPayload;
+          return {
+            type: 'diff_chunk' as const,
+            commit_oid: payload.commit_oid,
+            filepath: payload.filepath,
+            snippet: payload.diff_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH), // Snippet of diff
+            change_type: payload.change_type,
+            relevance: r.score,
+          };
+        }
+        logger.warn(`get_repository_context: Encountered result with unknown payload type or missing dataType: ID ${r.id}`);
+        return null;
+      })
+      .filter(item => item !== null) as Array<{type: string; relevance: number; [key: string]: any}>; // Type for prompt construction
       
       const summaryPrompt = `
 **Context**:
@@ -1039,11 +1069,20 @@ Files: ${files.join(", ")}
 Recent Changes: ${_diff}
 ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 
-**Relevant Snippets**:
-${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})\n${c.snippet}`).join("\n\n")}
+**Relevant Information Snippets**:
+${context.map(c => {
+  if (c.type === 'file_chunk') {
+    return `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})\nSnippet:\n${c.snippet}`;
+  } else if (c.type === 'commit_info') {
+    return `Commit: ${c.commit_oid} (Author: ${c.author}, Date: ${c.date}, Relevance: ${c.relevance.toFixed(2)})\nMessage Snippet:\n${c.message}`;
+  } else if (c.type === 'diff_chunk') {
+    return `Diff: ${c.filepath} in commit ${c.commit_oid} (Type: ${c.change_type}, Relevance: ${c.relevance.toFixed(2)})\nDiff Snippet:\n${c.snippet}`;
+  }
+  return '';
+}).join("\n\n")}
 
 **Instruction**:
-Provide a concise summary of the context for "${queryStrCtx}" based on the repository files and recent changes. Highlight key information relevant to the query, referencing specific files or snippets where applicable.
+Provide a concise summary of the context for "${queryStrCtx}" based on the repository files, commit history, diffs, and recent changes. Highlight key information relevant to the query, referencing specific files, commits, or snippets where applicable.
       `;
       
       const llmProvider = await getLLMProvider();
@@ -1058,16 +1097,37 @@ ${refinedQuery !== queryStrCtx ? `\n> Query refined to: "${refinedQuery}"` : ''}
 ## Summary
 ${summary}
 
-## Relevant Files
-${context.map(c => `
-### ${c.filepath}
+## Relevant Information Used for Summary
+${context.map(c => {
+  if (c.type === 'file_chunk') {
+    return `
+### File: ${c.filepath}
 - Last modified: ${c.last_modified}
 - Relevance: ${c.relevance.toFixed(2)}
-
 \`\`\`
 ${c.snippet}
+\`\`\``;
+  } else if (c.type === 'commit_info') {
+    return `
+### Commit: ${c.commit_oid}
+- Author: ${c.author}, Date: ${c.date}
+- Relevance: ${c.relevance.toFixed(2)}
+Message Snippet:
 \`\`\`
-`).join('\n')}
+${c.message}
+\`\`\``;
+  } else if (c.type === 'diff_chunk') {
+    return `
+### Diff: ${c.filepath} (Commit: ${c.commit_oid})
+- Change Type: ${c.change_type}
+- Relevance: ${c.relevance.toFixed(2)}
+Diff Snippet:
+\`\`\`
+${c.snippet}
+\`\`\``;
+  }
+  return '';
+}).join('\n')}
 
 ## Recent Changes
 \`\`\`
