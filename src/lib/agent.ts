@@ -45,29 +45,36 @@ export type FormattedSearchResult = z.infer<typeof FormattedSearchResultSchema>;
 const CapabilitySearchCodeSnippetsParamsSchema = z.object({
   query: z.string().describe("The search query string."),
 });
+export type CapabilitySearchCodeSnippetsParams = z.infer<typeof CapabilitySearchCodeSnippetsParamsSchema>;
 
 const CapabilityGetRepositoryOverviewParamsSchema = z.object({
   query: z.string().describe("The query string to find relevant context and snippets."),
 });
+export type CapabilityGetRepositoryOverviewParams = z.infer<typeof CapabilityGetRepositoryOverviewParamsSchema>;
 
 const CapabilityGetChangelogParamsSchema = z.object({}).describe("No parameters needed."); // Empty object for no params
+export type CapabilityGetChangelogParams = z.infer<typeof CapabilityGetChangelogParamsSchema>;
 
 const CapabilityFetchMoreSearchResultsParamsSchema = z.object({
   query: z.string().describe("The original or refined query string for which more results are needed."),
 });
+export type CapabilityFetchMoreSearchResultsParams = z.infer<typeof CapabilityFetchMoreSearchResultsParamsSchema>;
 
 const CapabilityGetFullFileContentParamsSchema = z.object({
   filepath: z.string().describe("The path to the file within the repository."),
 });
+export type CapabilityGetFullFileContentParams = z.infer<typeof CapabilityGetFullFileContentParamsSchema>;
 
 const CapabilityListDirectoryParamsSchema = z.object({
   dirPath: z.string().describe("The path to the directory within the repository."),
 });
+export type CapabilityListDirectoryParams = z.infer<typeof CapabilityListDirectoryParamsSchema>;
 
 const CapabilityGetAdjacentFileChunksParamsSchema = z.object({
   filepath: z.string().describe("The path to the chunked file."),
   currentChunkIndex: z.number().int().min(0).describe("The 0-based index of the current chunk."),
 });
+export type CapabilityGetAdjacentFileChunksParams = z.infer<typeof CapabilityGetAdjacentFileChunksParamsSchema>;
 
 const CapabilityGenerateSuggestionWithContextParamsSchema = z.object({
   query: z.string().describe("The user's original query or goal for the suggestion."),
@@ -77,11 +84,13 @@ const CapabilityGenerateSuggestionWithContextParamsSchema = z.object({
   recentQueriesStrings: z.array(z.string()).describe("A list of recent related queries, if any."),
   relevantSnippets: z.array(FormattedSearchResultSchema).describe("An array of relevant code snippets and their metadata."),
 });
+export type CapabilityGenerateSuggestionWithContextParams = z.infer<typeof CapabilityGenerateSuggestionWithContextParamsSchema>;
 
 const CapabilityAnalyzeCodeProblemWithContextParamsSchema = z.object({
   problemQuery: z.string().describe("The user's description of the code problem."),
   relevantSnippets: z.array(FormattedSearchResultSchema).describe("An array of code snippets relevant to the problem."),
 });
+export type CapabilityAnalyzeCodeProblemWithContextParams = z.infer<typeof CapabilityAnalyzeCodeProblemWithContextParamsSchema>;
 
 // Define a type for the list of available capabilities to pass to the prompt
 interface CapabilityDefinition {
