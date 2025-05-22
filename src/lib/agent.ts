@@ -27,6 +27,62 @@ const CapabilityCallSchema = z.object({
 });
 export type ParsedCapabilityCall = z.infer<typeof CapabilityCallSchema>;
 
+// Add this schema definition near the other Zod schemas at the top of the file,
+// or just before `capabilityDefinitions` array.
+const FormattedSearchResultSchema = z.object({
+  filepath: z.string(),
+  snippet: z.string(),
+  last_modified: z.string().optional(),
+  relevance: z.number().optional(),
+  is_chunked: z.boolean().optional(),
+  original_filepath: z.string().optional(),
+  chunk_index: z.number().int().optional(),
+  total_chunks: z.number().int().optional(),
+});
+export type FormattedSearchResult = z.infer<typeof FormattedSearchResultSchema>;
+
+// Define Parameter Schemas for Each Capability
+const CapabilitySearchCodeSnippetsParamsSchema = z.object({
+  query: z.string().describe("The search query string."),
+});
+
+const CapabilityGetRepositoryOverviewParamsSchema = z.object({
+  query: z.string().describe("The query string to find relevant context and snippets."),
+});
+
+const CapabilityGetChangelogParamsSchema = z.object({}).describe("No parameters needed."); // Empty object for no params
+
+const CapabilityFetchMoreSearchResultsParamsSchema = z.object({
+  query: z.string().describe("The original or refined query string for which more results are needed."),
+});
+
+const CapabilityGetFullFileContentParamsSchema = z.object({
+  filepath: z.string().describe("The path to the file within the repository."),
+});
+
+const CapabilityListDirectoryParamsSchema = z.object({
+  dirPath: z.string().describe("The path to the directory within the repository."),
+});
+
+const CapabilityGetAdjacentFileChunksParamsSchema = z.object({
+  filepath: z.string().describe("The path to the chunked file."),
+  currentChunkIndex: z.number().int().min(0).describe("The 0-based index of the current chunk."),
+});
+
+const CapabilityGenerateSuggestionWithContextParamsSchema = z.object({
+  query: z.string().describe("The user's original query or goal for the suggestion."),
+  repoPathName: z.string().describe("The name of the repository (e.g., basename)."),
+  filesContextString: z.string().describe("A string summarizing the relevant files or file list."),
+  diffSummary: z.string().describe("A summary of recent repository changes (git diff)."),
+  recentQueriesStrings: z.array(z.string()).describe("A list of recent related queries, if any."),
+  relevantSnippets: z.array(FormattedSearchResultSchema).describe("An array of relevant code snippets and their metadata."),
+});
+
+const CapabilityAnalyzeCodeProblemWithContextParamsSchema = z.object({
+  problemQuery: z.string().describe("The user's description of the code problem."),
+  relevantSnippets: z.array(FormattedSearchResultSchema).describe("An array of code snippets relevant to the problem."),
+});
+
 // Define a type for the list of available capabilities to pass to the prompt
 interface CapabilityDefinition {
   name: keyof typeof capabilities; // Ensures name is a valid capability function
@@ -316,19 +372,18 @@ async function runAgentQueryOrchestrator(
 
   // Define available capabilities for the orchestrator's prompt
   // This list needs to be maintained and schemas defined for each capability's parameters.
-  // For brevity, parameter schemas are simplified here. Replace with actual Zod schemas.
   const capabilityDefinitions: CapabilityDefinition[] = [
-    { name: "capability_searchCodeSnippets", description: "Searches for code snippets in the repository based on a query string.", parameters_schema: z.object({ query: z.string() }) },
-    { name: "capability_getRepositoryOverview", description: "Gets an overview of the repository including recent changes (diff summary) and relevant code snippets for a query.", parameters_schema: z.object({ query: z.string() }) },
-    { name: "capability_getChangelog", description: "Retrieves the project's CHANGELOG.md file.", parameters_schema: z.object({}) },
-    { name: "capability_fetchMoreSearchResults", description: "Fetches more search results for a given query, typically used if initial results are insufficient.", parameters_schema: z.object({ query: z.string() }) },
-    { name: "capability_getFullFileContent", description: "Retrieves the full content of a specified file.", parameters_schema: z.object({ filepath: z.string() }) },
-    { name: "capability_listDirectory", description: "Lists the contents (files and subdirectories) of a specified directory.", parameters_schema: z.object({ dirPath: z.string() }) },
-    { name: "capability_getAdjacentFileChunks", description: "Retrieves code chunks adjacent to a previously identified chunk of a file.", parameters_schema: z.object({ filepath: z.string(), currentChunkIndex: z.number() }) },
+    { name: "capability_searchCodeSnippets", description: "Searches for code snippets in the repository based on a query string.", parameters_schema: CapabilitySearchCodeSnippetsParamsSchema },
+    { name: "capability_getRepositoryOverview", description: "Gets an overview of the repository including recent changes (diff summary) and relevant code snippets for a query.", parameters_schema: CapabilityGetRepositoryOverviewParamsSchema },
+    { name: "capability_getChangelog", description: "Retrieves the project's CHANGELOG.md file.", parameters_schema: CapabilityGetChangelogParamsSchema },
+    { name: "capability_fetchMoreSearchResults", description: "Fetches more search results for a given query, typically used if initial results are insufficient.", parameters_schema: CapabilityFetchMoreSearchResultsParamsSchema },
+    { name: "capability_getFullFileContent", description: "Retrieves the full content of a specified file.", parameters_schema: CapabilityGetFullFileContentParamsSchema },
+    { name: "capability_listDirectory", description: "Lists the contents (files and subdirectories) of a specified directory.", parameters_schema: CapabilityListDirectoryParamsSchema },
+    { name: "capability_getAdjacentFileChunks", description: "Retrieves code chunks adjacent to a previously identified chunk of a file.", parameters_schema: CapabilityGetAdjacentFileChunksParamsSchema },
     // LLM-dependent capabilities - orchestrator should gather context first, then LLM synthesizes.
     // Or, these could be called by the orchestrator if the LLM explicitly plans to use them for final synthesis.
-    { name: "capability_generateSuggestionWithContext", description: "Generates a code suggestion based on a query and extensive provided context (files, diff, snippets). Call this after gathering sufficient context.", parameters_schema: z.object({ query: z.string(), repoPathName: z.string(), filesContextString: z.string(), diffSummary: z.string(), recentQueriesStrings: z.array(z.string()), relevantSnippets: z.array(z.any()) }) }, // z.any() for relevantSnippets for brevity
-    { name: "capability_analyzeCodeProblemWithContext", description: "Analyzes a code problem based on a query and provided relevant code snippets. Call this after gathering snippets.", parameters_schema: z.object({ problemQuery: z.string(), relevantSnippets: z.array(z.any()) }) },
+    { name: "capability_generateSuggestionWithContext", description: "Generates a code suggestion based on a query and extensive provided context (files, diff, snippets). Call this after gathering sufficient context.", parameters_schema: CapabilityGenerateSuggestionWithContextParamsSchema },
+    { name: "capability_analyzeCodeProblemWithContext", description: "Analyzes a code problem based on a query and provided relevant code snippets. Call this after gathering snippets.", parameters_schema: CapabilityAnalyzeCodeProblemWithContextParamsSchema },
   ];
 
   const orchestratorSystemPrompt = generateAgentSystemPrompt(capabilityDefinitions);
@@ -397,31 +452,59 @@ async function runAgentQueryOrchestrator(
       const capabilityFunc = capabilities[capabilityName];
 
       if (typeof capabilityFunc === 'function') {
-        try {
-          logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: parsedCapability.parameters });
-          // TODO: Validate parsedCapability.parameters against the specific capability's Zod schema
-          // For now, passing as is.
-          const capabilityResult = await capabilityFunc(capabilityContext, parsedCapability.parameters as any); // Use 'as any' for now
-
+        const capabilityDef = capabilityDefinitions.find(cd => cd.name === capabilityName);
+        if (!capabilityDef) {
+          // This case should ideally not be hit if capabilityName is derived from `keyof typeof capabilities`
+          // and capabilityDefinitions is comprehensive.
+          logger.error(`Orchestrator: Capability definition not found for known capability "${capabilityName}"`);
+          currentPromptContent += `\n\nInternal Error: Capability definition missing for "${capabilityName}". Please report this.`;
           agentState.steps.push({
-            tool: capabilityName, // 'tool' field now refers to capability
-            input: parsedCapability.parameters,
-            output: capabilityResult,
-            reasoning: parsedCapability.reasoning || llmResponseText // Fallback to full LLM response if reasoning not in JSON
+              tool: "internal_error",
+              input: { capability_name: capabilityName },
+              output: { error: `Capability definition for "${capabilityName}" not found internally.` },
+              reasoning: "Internal error during capability definition lookup."
           });
-          // Update context for the next LLM prompt
-          currentPromptContent += `\n\nExecuted Capability: ${capabilityName}\nParameters: ${JSON.stringify(parsedCapability.parameters)}\nResults: ${stringifyStepOutput(capabilityResult)}\n\nWhat is your next step or final answer?`;
+        } else {
+          // Validate parameters
+          const validationResult = capabilityDef.parameters_schema.safeParse(parsedCapability.parameters);
 
-        } catch (capError) {
-          const cErr = capError instanceof Error ? capError : new Error(String(capError));
-          logger.error(`Orchestrator: Error executing capability ${capabilityName}: ${cErr.message}`, { stack: cErr.stack });
-          currentPromptContent += `\n\nError executing capability ${capabilityName}: ${cErr.message}. Please try a different approach or provide a response with the information you have.`;
-          agentState.steps.push({
-            tool: capabilityName,
-            input: parsedCapability.parameters,
-            output: { error: `Failed to execute: ${cErr.message}` },
-            reasoning: parsedCapability.reasoning || "Attempted to call capability."
-          });
+          if (!validationResult.success) {
+            logger.warn(`Orchestrator: Invalid parameters for capability ${capabilityName}. Errors:`, { errors: validationResult.error.issues, providedParams: parsedCapability.parameters });
+            currentPromptContent += `\n\nError: Invalid parameters provided for capability "${capabilityName}".
+Expected schema: ${JSON.stringify(capabilityDef.parameters_schema.openapi("Parameters").schema, null, 2)}
+Errors: ${validationResult.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}
+Please correct the parameters and try again.`;
+            agentState.steps.push({
+              tool: capabilityName,
+              input: parsedCapability.parameters,
+              output: { error: "Invalid parameters", details: validationResult.error.issues },
+              reasoning: parsedCapability.reasoning || "Attempted to call capability with invalid parameters."
+            });
+          } else {
+            // Parameters are valid, proceed with execution
+            try {
+              logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: validationResult.data });
+              const capabilityResult = await capabilityFunc(capabilityContext, validationResult.data as any); // Use validated data. 'as any' because capabilityFunc expects specific param types not easily inferred here.
+
+              agentState.steps.push({
+                tool: capabilityName,
+                input: validationResult.data, // Log validated and potentially transformed data
+                output: capabilityResult,
+                reasoning: parsedCapability.reasoning || llmResponseText
+              });
+              currentPromptContent += `\n\nExecuted Capability: ${capabilityName}\nParameters: ${JSON.stringify(validationResult.data)}\nResults: ${stringifyStepOutput(capabilityResult)}\n\nWhat is your next step or final answer?`;
+            } catch (capError) {
+              const cErr = capError instanceof Error ? capError : new Error(String(capError));
+              logger.error(`Orchestrator: Error executing capability ${capabilityName}: ${cErr.message}`, { stack: cErr.stack });
+              currentPromptContent += `\n\nError executing capability ${capabilityName}: ${cErr.message}. Please try a different approach or provide a response with the information you have.`;
+              agentState.steps.push({
+                tool: capabilityName,
+                input: validationResult.data,
+                output: { error: `Failed to execute: ${cErr.message}` },
+                reasoning: parsedCapability.reasoning || "Attempted to call capability, but execution failed."
+              });
+            }
+          }
         }
       } else {
         logger.warn(`Orchestrator: LLM tried to call unknown capability "${capabilityName}"`);
