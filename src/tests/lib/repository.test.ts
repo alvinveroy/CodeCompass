@@ -287,7 +287,7 @@ describe('Repository Utilities', () => {
 
         // vi.mocked(git.diffTrees) no longer needed here as SUT uses git.walk for diffing.
 
-        // eslint-disable-next-line @typescript-eslint/require-await
+         
         vi.mocked(git.walk).mockImplementation(async ({ fs: _nodeFsAlias, dir: _dir, gitdir: _gitdir, trees, map }) => {
             // The `trees` argument will be an array of mocked Walker-like objects from our `git.TREE` mock.
             // We can inspect `trees[0]._id` and `trees[1]._id` if needed to simulate specific diffs.

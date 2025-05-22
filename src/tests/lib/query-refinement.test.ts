@@ -149,12 +149,12 @@ describe('Query Refinement Tests', () => {
       const result = actualRefineQuery("original", [], 0.1, {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockBroaden_Injected).toHaveBeenCalledWith("original");
       expect(result).toBe('mock_broadened_by_INJECTED_helper');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockFocus_Injected).not.toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockTweak_Injected).not.toHaveBeenCalled();
     });
 
@@ -163,12 +163,12 @@ describe('Query Refinement Tests', () => {
       const result = actualRefineQuery("original", results, 0.5, {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockFocus_Injected).toHaveBeenCalledWith("original", results);
       expect(result).toBe('mock_focused_by_INJECTED_helper');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockBroaden_Injected).not.toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockTweak_Injected).not.toHaveBeenCalled();
     });
 
@@ -177,12 +177,12 @@ describe('Query Refinement Tests', () => {
       const result = actualRefineQuery("original", results, 0.75, {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockTweak_Injected).toHaveBeenCalledWith("original", results);
       expect(result).toBe('mock_tweaked_by_INJECTED_helper');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockBroaden_Injected).not.toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockFocus_Injected).not.toHaveBeenCalled();
     });
   });
