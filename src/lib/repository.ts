@@ -51,6 +51,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
 
 // Index Repository
 export async function indexRepository(qdrantClient: QdrantClient, repoPath: string, llmProvider: LLMProvider): Promise<void> {
+  logger.info(`[DEBUG] indexRepository: Starting for repoPath: ${repoPath}`); // Example debug log
   const isGitRepo = await validateGitRepository(repoPath);
   if (!isGitRepo) {
     logger.warn(`Skipping repository indexing: ${repoPath} is not a valid Git repository`);
@@ -150,6 +151,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
   let errorCount = 0;
 
   for (const filepath of filteredFiles) {
+    logger.info(`[DEBUG] indexRepository: Processing file: ${filepath}`); // Example debug log
     try {
       const fullPath = path.join(repoPath, filepath);
       const content = await fs.readFile(fullPath, "utf8");
@@ -225,6 +227,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     });
     // Increment errorCount or handle as a separate category of error
   }
+  logger.info(`[DEBUG] indexRepository: Finished for repoPath: ${repoPath}`); // Example debug log
   
   logger.info(`Indexing complete: ${successCount} files indexed successfully, ${errorCount} errors`);
 }
