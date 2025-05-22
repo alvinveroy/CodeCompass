@@ -524,6 +524,7 @@ Please correct the parameters and try again.`;
               });
             }
           }
+        } // Closes 'if (typeof capabilityFunc === 'function')'
         else {
           // This case should ideally not be hit if all entries in 'capabilities' are functions.
           logger.warn(`Orchestrator: Capability "${capabilityName}" found but is not a function.`);
