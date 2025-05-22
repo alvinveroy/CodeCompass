@@ -28,7 +28,6 @@ interface OriginalModuleType {
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
   const originalModule = await vi.importActual('../lib/config-service') as OriginalModuleType; // More specific cast
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const originalInstance: PartialOriginalConfig = originalModule.configService;
 
   const mockConfigServiceValues: MockableConfigService = {
@@ -69,7 +68,7 @@ describe('Utils Module', () => {
     // Import the original config service to get its true default values for resetting retry logic.
     // We only need MAX_RETRIES and RETRY_DELAY from the original for resetting.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { configService: actualOriginalConfigService } = await vi.importActual('../lib/config-service') as any;
+    const { configService: actualOriginalConfigService } = await vi.importActual('../lib/config-service') as any; 
     const typedActualOriginalConfigService: PartialOriginalConfig = actualOriginalConfigService;
     originalDefaultRetryValues = {
       MAX_RETRIES: typedActualOriginalConfigService.MAX_RETRIES,
@@ -87,9 +86,7 @@ describe('Utils Module', () => {
     
     // Reset the properties of the *actual mocked instance* before each test
     // using the correctly typed testSubjectMockedConfigService.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     testSubjectMockedConfigService.MAX_RETRIES = originalDefaultRetryValues.MAX_RETRIES;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     testSubjectMockedConfigService.RETRY_DELAY = originalDefaultRetryValues.RETRY_DELAY;
     
     // Ensure logger and its methods exist before trying to clear mocks

@@ -71,7 +71,6 @@ describe('Query Refinement Tests', () => {
         mockQdrantClientInstance, 'initial query', [], undefined, 2, 0.75,
         mockRefineQuery_Injected
       );
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(1);
       // Ensure results are cast or match DetailedQdrantSearchResult for this assertion
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
@@ -91,7 +90,6 @@ describe('Query Refinement Tests', () => {
         mockRefineQuery_Injected
       );
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3);
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(relevanceScore).toBe(0.8);
@@ -114,7 +112,6 @@ describe('Query Refinement Tests', () => {
             mockQdrantClientInstance, 'query for no results', [], undefined, 2, 0.7,
             mockRefineQuery_Injected // Pass the mock
         );
-        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3);
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
