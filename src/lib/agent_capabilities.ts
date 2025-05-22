@@ -17,6 +17,7 @@ import {
 import { searchWithRefinement } from "./query-refinement"; // Assuming this is where it is
 import { processSnippet, getProcessedDiff as getAgentProcessedDiff } from "./agent"; // Import existing helpers from agent.ts
                                                                // We might move these later if it makes sense.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- CommitInfoPayload and DiffChunkPayload are used for payload type discrimination
 import { DetailedQdrantSearchResult, FileChunkPayload, CommitInfoPayload, DiffChunkPayload } from "./types"; // Import specific payload types
 import fs from "fs/promises"; // For getChangelog, getFullFileContent, listDirectory
 import path from "path"; // For getChangelog, getFullFileContent, listDirectory

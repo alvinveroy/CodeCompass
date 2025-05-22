@@ -664,8 +664,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         
         return {
           content: [{
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: "text" as const,
+            type: "text",
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
           }],
         };
@@ -674,8 +673,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         logger.error("Failed to read changelog", { message: errorMessage });
         return {
           content: [{
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: "text" as const,
+            type: "text",
             text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
           }],
         };
@@ -704,8 +702,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         // Return an error structure consistent with other tools
         return {
           content: [{
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: "text" as const,
+            type: "text",
             text: `# Error Getting Session History\n\n${errorMsg}`,
           }],
         };
@@ -800,8 +797,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         if (r.payload?.dataType === 'file_chunk') {
           const payload = r.payload as FileChunkPayload;
           return {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: 'file_chunk' as const,
+            type: 'file_chunk',
             filepath: payload.filepath,
             snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
             last_modified: payload.last_modified,
@@ -811,8 +807,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         } else if (r.payload?.dataType === 'commit_info') {
           const payload = r.payload as CommitInfoPayload;
           return {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: 'commit_info' as const,
+            type: 'commit_info',
             commit_oid: payload.commit_oid,
             message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH),
             author: payload.commit_author_name,
@@ -823,8 +818,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         } else if (r.payload?.dataType === 'diff_chunk') {
           const payload = r.payload as DiffChunkPayload;
           return {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: 'diff_chunk' as const,
+            type: 'diff_chunk',
             commit_oid: payload.commit_oid,
             filepath: payload.filepath,
             snippet: payload.diff_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
@@ -836,7 +830,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         logger.warn(`generate_suggestion: Encountered result with unknown payload type or missing dataType: ID ${r.id}`);
         return null; 
       })
-      .filter(item => item !== null) as Array<{type: string; relevance: number; note: string; [key: string]: any}>;
+      .filter(item => item !== null) as Array<{type: string; relevance: number; note: string; [key: string]: unknown}>;
       
       if (context.length < 2 && relevantResults.length > 0) {
         const additionalContext = relevantResults
@@ -892,7 +886,6 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
           })
           .filter(item => item !== null); // Ensure no nulls from mapping
         
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         context.push(...additionalContext as Array<{type: string; relevance: number; note: string; [key: string]: unknown}>); // Cast as it's a mix
       }
 
@@ -1039,8 +1032,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         if (r.payload?.dataType === 'file_chunk') {
           const payload = r.payload as FileChunkPayload;
           return {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: 'file_chunk' as const,
+            type: 'file_chunk',
             filepath: payload.filepath,
             snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
             last_modified: payload.last_modified,
@@ -1049,8 +1041,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         } else if (r.payload?.dataType === 'commit_info') {
           const payload = r.payload as CommitInfoPayload;
           return {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: 'commit_info' as const,
+            type: 'commit_info',
             commit_oid: payload.commit_oid,
             message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH), // Snippet of commit message
             author: payload.commit_author_name,
@@ -1060,8 +1051,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         } else if (r.payload?.dataType === 'diff_chunk') {
           const payload = r.payload as DiffChunkPayload;
           return {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-            type: 'diff_chunk' as const,
+            type: 'diff_chunk',
             commit_oid: payload.commit_oid,
             filepath: payload.filepath,
             snippet: payload.diff_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH), // Snippet of diff
@@ -1072,8 +1062,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         logger.warn(`get_repository_context: Encountered result with unknown payload type or missing dataType: ID ${r.id}`);
         return null;
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .filter(item => item !== null) as Array<{type: string; relevance: number; [key: string]: any}>; // Type for prompt construction
+      .filter(item => item !== null) as Array<{type: string; relevance: number; [key: string]: unknown}>; // Type for prompt construction
       
       const summaryPrompt = `
 **Context**:
