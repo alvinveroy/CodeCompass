@@ -5,13 +5,27 @@ import { exec } from "child_process"; // Import exec
 import { promisify } from "util"; // To promisify exec
 import { v4 as uuidv4 } from "uuid";
 import { QdrantClient } from "@qdrant/js-client-rest";
+import { LLMProvider } from './llm-provider'; // Assuming path, adjust if necessary
+import {
+  QdrantPoint,
+  FileChunkPayload,
+  CommitInfoPayload,
+  DiffChunkPayload,
+} from './types';
+import { preprocessText, chunkText } from '../utils/text-utils';
+import * as Diff from 'diff';
+// import { Buffer } from 'buffer'; // Buffer is global in Node.js
 import { configService, logger } from "./config-service";
-import { generateEmbedding } from "./ollama";
+// import { generateEmbedding } from "./ollama"; // We will use llmProvider.generateEmbedding() instead.
 import nodeFs from 'fs'; // Standard fs for isomorphic-git functions requiring it
+import { batchUpsertVectors } from './qdrant';
 
 export interface CommitChange {
   path: string;
   type: 'equal' | 'modify' | 'add' | 'delete' | 'typechange';
+  oldOid?: string | null; // OID of the blob before the change
+  newOid?: string | null; // OID of the blob after the change
+  diffText?: string;    // Textual diff for 'modify', 'add', 'delete'
 }
 
 export interface CommitDetail {
@@ -19,6 +33,7 @@ export interface CommitDetail {
   message: string;
   author: { name: string; email: string; timestamp: number; timezoneOffset: number };
   committer: { name: string; email: string; timestamp: number; timezoneOffset: number };
+  parents: string[]; // Add parent OIDs
   changedFiles: CommitChange[];
 }
 
@@ -36,7 +51,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
 }
 
 // Index Repository
-export async function indexRepository(qdrantClient: QdrantClient, repoPath: string): Promise<void> {
+export async function indexRepository(qdrantClient: QdrantClient, repoPath: string, llmProvider: LLMProvider): Promise<void> {
   const isGitRepo = await validateGitRepository(repoPath);
   if (!isGitRepo) {
     logger.warn(`Skipping repository indexing: ${repoPath} is not a valid Git repository`);
@@ -71,7 +86,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     logger.debug(`Starting scroll operation to fetch all indexed filepaths from collection: ${configService.COLLECTION_NAME}`);
     do {
       const scrollResult = await qdrantClient.scroll(configService.COLLECTION_NAME, {
-        with_payload: ['filepath'],
+        with_payload: true, // Fetch the whole payload to check dataType
         with_vector: false,
         limit: scrollLimit,
         offset: nextOffset,
@@ -82,7 +97,17 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       }
 
       for (const point of scrollResult.points) {
-        const indexedFilepath = point.payload?.filepath as string;
+        const payload = point.payload as any; // Cast to any initially, then type check
+        let indexedFilepath: string | undefined = undefined;
+
+        if (payload && payload.dataType === 'file_chunk') {
+          indexedFilepath = (payload as FileChunkPayload).filepath;
+        } else if (payload && payload.filepath) {
+          // Handle legacy format if necessary, or log a warning
+          // For now, we assume new format or only care about 'file_chunk' for this stale check
+          logger.debug(`Point ID ${point.id} is not of dataType 'file_chunk' or has an unexpected payload structure. Skipping stale check for this point based on filepath.`);
+          // continue; // Or handle differently if other types need stale checking based on filepath
+        }
         // Ensure point.id is correctly typed; uuidv4 generates strings.
         const pointId = point.id; 
 
@@ -93,7 +118,12 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
           }
         } else {
           // This case could indicate an issue with how data is being indexed or a point without a filepath.
-          logger.warn(`Found point in Qdrant (ID: ${pointId}) without a 'filepath' in its payload. Skipping stale check for this point.`);
+          // If a point is not a file_chunk, it's okay if it doesn't have a filepath for *this specific* stale check.
+          if (!(payload && payload.dataType === 'file_chunk')) {
+             logger.debug(`Point ID ${pointId} is not a file_chunk payload. Skipping stale filepath check.`);
+          } else {
+            logger.warn(`Found file_chunk point in Qdrant (ID: ${pointId}) without a 'filepath' in its payload. Skipping stale check for this point.`);
+          }
         }
       }
       // Handle different types for next_page_offset to ensure type safety.
@@ -142,58 +172,51 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
         continue;
       }
 
-      // Check if file content is large enough to be chunked
-      if (content.length > CHUNK_SIZE) {
-        logger.info(`File ${filepath} is large, attempting to chunk.`);
-        const chunks: string[] = [];
-        for (let i = 0; i < content.length; i += CHUNK_SIZE - CHUNK_OVERLAP) {
-          chunks.push(content.substring(i, i + CHUNK_SIZE));
+      // Add new chunking logic using chunkText and new payload structure:
+      const processedContent = preprocessText(content); // Preprocess before chunking
+      const contentChunks = chunkText(
+        processedContent,
+        configService.FILE_INDEXING_CHUNK_SIZE_CHARS,
+        configService.FILE_INDEXING_CHUNK_OVERLAP_CHARS
+      );
+
+      if (contentChunks.length > 0) {
+        logger.info(`Indexing ${filepath} in ${contentChunks.length} chunks.`);
+        const pointsToUpsert: QdrantPoint[] = [];
+        for (let i = 0; i < contentChunks.length; i++) {
+          const chunkContent = contentChunks[i];
+          if (!chunkContent.trim()) {
+            logger.debug(`Skipping empty chunk ${i + 1}/${contentChunks.length} for ${filepath}`);
+            continue;
+          }
+
+          // Embed the preprocessed chunk
+          const embedding = await llmProvider.generateEmbedding(chunkContent); // Use llmProvider
+          const pointId = `file:${preprocessText(filepath)}:chunk:${i}`; // Deterministic ID
+
+          const payload: FileChunkPayload = {
+            dataType: 'file_chunk',
+            filepath,
+            file_content_chunk: chunkContent,
+            last_modified,
+            chunk_index: i,
+            total_chunks: contentChunks.length,
+            repositoryPath: repoPath, // Optional: add repoPath if useful for multi-repo scenarios
+          };
+          pointsToUpsert.push({ id: pointId, vector: embedding, payload });
         }
 
-        if (chunks.length > 0) {
-          logger.info(`Indexing ${filepath} in ${chunks.length} chunks.`);
-          for (let i = 0; i < chunks.length; i++) {
-            const chunkContent = chunks[i];
-            if (!chunkContent.trim()) continue; // Skip empty chunks
-
-            const embedding = await generateEmbedding(chunkContent);
-            // Consider a more deterministic ID if needed for updates, e.g., hash(filepath + chunk_index)
-            const pointId = uuidv4(); 
-            const payload = {
-              filepath,
-              content: chunkContent,
-              last_modified,
-              is_chunked: true,
-              chunk_index: i,
-              total_chunks: chunks.length,
-            };
-            logger.info(`Upserting chunk ${i + 1}/${chunks.length} for ${filepath} (ID: ${pointId})`);
-            await qdrantClient.upsert(configService.COLLECTION_NAME, {
-              points: [{ id: pointId, vector: embedding, payload }],
-            });
-          }
-          logger.info(`Successfully indexed ${chunks.length} chunks for ${filepath}`);
+        if (pointsToUpsert.length > 0) {
+          await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, pointsToUpsert, configService.QDRANT_BATCH_UPSERT_SIZE);
+          logger.info(`Successfully indexed ${pointsToUpsert.length} chunks for ${filepath}`);
           successCount++;
         } else {
-          logger.warn(`File ${filepath} was marked for chunking but produced 0 chunks.`);
-          errorCount++; // Or handle as appropriate
+           logger.warn(`File ${filepath} produced 0 valid chunks after processing.`);
+           // errorCount++; // Or handle as appropriate
         }
       } else {
-        // File is not large enough for chunking, index as a whole
-        const embedding = await generateEmbedding(content);
-        const pointId = uuidv4();
-        const payload = {
-          filepath,
-          content,
-          last_modified,
-          is_chunked: false,
-        };
-        logger.info(`Upserting whole file ${filepath} (ID: ${pointId})`);
-        await qdrantClient.upsert(configService.COLLECTION_NAME, {
-          points: [{ id: pointId, vector: embedding, payload }],
-        });
-        logger.info(`Indexed whole file: ${filepath}`);
-        successCount++;
+        logger.warn(`File ${filepath} was processed but produced 0 chunks (original content length: ${content.length}).`);
+        // errorCount++; // Or handle as appropriate
       }
     } catch (error: unknown) {
       logger.error(`Failed to index ${filepath}`, {
@@ -201,6 +224,17 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       });
       errorCount++;
     }
+  }
+
+  try {
+    logger.info(`Starting indexing of commit history and diffs for ${repoPath}`);
+    await indexCommitsAndDiffs(qdrantClient, repoPath, llmProvider, filteredFiles);
+  } catch (commitIndexError) {
+    logger.error(`Failed to index commit history and diffs for ${repoPath}`, {
+      message: commitIndexError instanceof Error ? commitIndexError.message : String(commitIndexError),
+      stack: commitIndexError instanceof Error ? commitIndexError.stack : undefined,
+    });
+    // Increment errorCount or handle as a separate category of error
   }
   
   logger.info(`Indexing complete: ${successCount} files indexed successfully, ${errorCount} errors`);
@@ -322,6 +356,7 @@ export async function getCommitHistoryWithChanges(
         oid: commitEntry.oid,
       });
 
+      const parentOids = commitData.commit.parent || []; // Ensure parents is always an array
       const changedFiles: CommitChange[] = [];
 
       if (commitData.commit.parent && commitData.commit.parent.length > 0) {
@@ -479,4 +514,118 @@ export async function getCommitHistoryWithChanges(
     // Depending on desired behavior, you might want to re-throw or return empty array
     throw err; // Or return [];
   }
+}
+
+async function indexCommitsAndDiffs(
+  qdrantClient: QdrantClient,
+  repoPath: string,
+  llmProvider: LLMProvider,
+  // allRepoFiles: string[] // Potentially useful context, currently unused
+): Promise<void> {
+  logger.info(`Indexing commit history and diffs for repository: ${repoPath}`);
+
+  const historyOptions: { count?: number } = {};
+  if (configService.COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING > 0) {
+    historyOptions.count = configService.COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING;
+  }
+
+  const commits = await getCommitHistoryWithChanges(repoPath, historyOptions);
+  if (!commits || commits.length === 0) {
+    logger.info(`No commit history found or processed for ${repoPath}. Skipping commit/diff indexing.`);
+    return;
+  }
+  
+  const pointsToUpsert: QdrantPoint[] = [];
+
+  for (const commit of commits) {
+    // 1. Index Commit Info
+    const changedFilesSummary = commit.changedFiles.map(
+      (cf) => `${cf.type.charAt(0).toUpperCase()}: ${cf.path}`
+    );
+    // Prepare text for embedding commit information
+    const commitDate = new Date(commit.author.timestamp * 1000).toISOString();
+    const commitTextToEmbed = preprocessText(
+      `Commit: ${commit.oid}\nAuthor: ${commit.author.name} <${commit.author.email}>\nDate: ${commitDate}\nMessage: ${commit.message}\nParents: ${commit.parents.join(', ')}\nChanges: ${changedFilesSummary.join('; ')}`
+    );
+    
+    try {
+      const commitVector = await llmProvider.generateEmbedding(commitTextToEmbed);
+      const commitPayload: CommitInfoPayload = {
+        dataType: 'commit_info',
+        commit_oid: commit.oid,
+        commit_message: commit.message,
+        commit_author_name: commit.author.name,
+        commit_author_email: commit.author.email,
+        commit_date: commitDate,
+        changed_files_summary: changedFilesSummary,
+        parent_oids: commit.parents,
+        repositoryPath: repoPath, // Optional
+      };
+      pointsToUpsert.push({
+        id: `commit:${commit.oid}`, // Deterministic ID
+        vector: commitVector,
+        payload: commitPayload,
+      });
+    } catch (embedError) {
+        logger.error(`Failed to generate embedding for commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
+        continue; // Skip this commit if embedding fails
+    }
+
+
+    // 2. Index Diffs for each changed file in the commit
+    for (const changedFile of commit.changedFiles) {
+      if (changedFile.diffText && (changedFile.type === 'add' || changedFile.type === 'modify' || changedFile.type === 'delete')) {
+        const processedDiffText = preprocessText(changedFile.diffText);
+        const diffChunks = chunkText(
+          processedDiffText,
+          configService.DIFF_CHUNK_SIZE_CHARS,
+          configService.DIFF_CHUNK_OVERLAP_CHARS
+        );
+
+        for (let i = 0; i < diffChunks.length; i++) {
+          const diffChunk = diffChunks[i];
+          if (!diffChunk.trim()) continue;
+
+          // Text to embed for diff could include commit context for better searchability
+          const diffContextualText = preprocessText(`Diff for ${changedFile.path} in commit ${commit.oid} (type: ${changedFile.type}):\n${diffChunk}`);
+          
+          try {
+            const diffVector = await llmProvider.generateEmbedding(diffContextualText);
+            const diffPayload: DiffChunkPayload = {
+              dataType: 'diff_chunk',
+              commit_oid: commit.oid,
+              filepath: changedFile.path,
+              diff_content_chunk: diffChunk,
+              chunk_index: i,
+              total_chunks: diffChunks.length,
+              change_type: changedFile.type as 'modify' | 'add' | 'delete' | 'typechange', // Ensure type compatibility
+              repositoryPath: repoPath, // Optional
+            };
+            pointsToUpsert.push({
+              id: `diff:${commit.oid}:${preprocessText(changedFile.path)}:chunk:${i}`, // Deterministic ID
+              vector: diffVector,
+              payload: diffPayload,
+            });
+          } catch (embedError) {
+              logger.error(`Failed to generate embedding for diff chunk of ${changedFile.path} in commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
+              // Continue to next chunk/file
+          }
+        }
+      }
+    }
+    
+    // Batch upsert periodically
+    if (pointsToUpsert.length >= configService.QDRANT_BATCH_UPSERT_SIZE) {
+        logger.info(`Upserting batch of ${pointsToUpsert.length} commit/diff points...`);
+        await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, pointsToUpsert, configService.QDRANT_BATCH_UPSERT_SIZE);
+        pointsToUpsert.length = 0; // Clear the array
+    }
+  }
+
+  // Upsert any remaining points
+  if (pointsToUpsert.length > 0) {
+    logger.info(`Upserting final batch of ${pointsToUpsert.length} commit/diff points...`);
+    await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, pointsToUpsert, configService.QDRANT_BATCH_UPSERT_SIZE);
+  }
+  logger.info(`Finished indexing ${commits.length} commits and their diffs for ${repoPath}`);
 }
