@@ -62,7 +62,7 @@ vi.mock('util', async (importOriginal) => {
   const internalMockedPromisifiedExec = vi.fn(); 
   
   // Store it on a temporary global to retrieve it in the test file after imports.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   (globalThis as any).__test__mockedPromisifiedExec = internalMockedPromisifiedExec;
 
   return {
@@ -104,7 +104,7 @@ import { logger } from '../../lib/config-service'; // configService is mocked, o
 import { access as mockedFsAccessImported, readFile as mockedFsReadFileImported, readdir as mockedFsReadDirImported, stat as mockedFsStatImported } from 'fs/promises';
 
 // Retrieve the mock function via the globalThis workaround
-const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as Mock; // eslint-disable-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as Mock; // eslint-disable-line @typescript-eslint/no-unsafe-member-access
 
 // Import named mocks from isomorphic-git
 import * as git from 'isomorphic-git'; // Import as namespace

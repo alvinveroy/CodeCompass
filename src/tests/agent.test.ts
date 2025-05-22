@@ -161,7 +161,7 @@ describe('Agent', () => {
     // Use 'as any' to resolve the stubborn TS2345 error for the mock.
     // This is acceptable in tests where the precise generic of Dirent isn't crucial.
     // Using the top-level createMockDirent
-    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent<Buffer>[]); 
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent<Buffer>[]);
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -216,6 +216,7 @@ describe('Agent', () => {
       // 1. Verification call in runAgentLoop
       // 2. Agent reasoning call (should return TOOL_CALL string)
       // 3. Final response call (if loop ends or max steps reached)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       mockLLMProviderInstance.generateText
         .mockReset() // Clear any beforeEach general setup for this specific test sequence
         .mockResolvedValueOnce("LLM Verification OK") // For currentProvider.generateText("Test message")

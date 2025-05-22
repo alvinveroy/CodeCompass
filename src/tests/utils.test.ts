@@ -14,7 +14,7 @@ interface MockableConfigService {
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
   const originalModule = await vi.importActual('../lib/config-service');
-  const originalInstance = (originalModule as typeof import('../lib/config-service')).configService;
+  const originalInstance = (originalModule as any).configService;
 
   const mockConfigServiceValues: MockableConfigService = {
     MAX_RETRIES: originalInstance.MAX_RETRIES,
@@ -69,7 +69,9 @@ describe('Utils Module', () => {
     
     // Reset the properties of the *actual mocked instance* before each test
     // using the correctly typed testSubjectMockedConfigService.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
     testSubjectMockedConfigService.MAX_RETRIES = originalDefaultRetryValues.MAX_RETRIES;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
     testSubjectMockedConfigService.RETRY_DELAY = originalDefaultRetryValues.RETRY_DELAY;
     
     // Ensure logger and its methods exist before trying to clear mocks

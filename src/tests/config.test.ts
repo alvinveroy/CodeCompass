@@ -125,7 +125,7 @@ describe('Config Module', () => {
       // This ensures that ConfigService does not load from actual config files during these tests.
       vi.doMock('fs', async () => {
         // Explicitly type actualFs to match the 'fs' module's structure
-        const actualFs = await vi.importActual('fs') as typeof import('fs');
+        const actualFs = await vi.importActual('fs') as typeof fs;
         return {
           ...actualFs, // Delegate all other fs calls to the actual module
           existsSync: vi.fn((pathToCheck: string) => {
