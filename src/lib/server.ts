@@ -901,13 +901,13 @@ ${context.map(c => {
       let itemDetails = '';
       if (c.type === 'file_chunk') {
             // Assert to expected primitive types or string
-            const fc = c as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            const fc = c as unknown as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
             itemDetails = `File: ${fc.filepath} (Last modified: ${String(fc.last_modified ?? 'N/A')}, Relevance: ${fc.relevance.toFixed(2)}${fc.note ? `, Note: ${String(fc.note)}` : ''})\nSnippet:\n${String(fc.snippet ?? '')}`;
           } else if (c.type === 'commit_info') {
-            const ci = c as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
+            const ci = c as unknown as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
             itemDetails = `Commit: ${ci.commit_oid} (Author: ${String(ci.author ?? 'N/A')}, Date: ${String(ci.date ?? 'N/A')}, Relevance: ${ci.relevance.toFixed(2)}${ci.note ? `, Note: ${String(ci.note)}` : ''})\nMessage Snippet:\n${String(ci.message ?? '')}`;
           } else if (c.type === 'diff_chunk') {
-            const dc = c as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            const dc = c as unknown as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
             itemDetails = `Diff: ${dc.filepath} in commit ${dc.commit_oid} (Type: ${String(dc.change_type ?? 'N/A')}, Relevance: ${dc.relevance.toFixed(2)}${dc.note ? `, Note: ${String(dc.note)}` : ''})\nDiff Snippet:\n${String(dc.snippet ?? '')}`;
           }
       return itemDetails;
@@ -936,7 +936,7 @@ ${suggestion}
 ## Context Used
 ${context.map(c => {
       if (c.type === 'file_chunk') {
-            const fc = c as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            const fc = c as unknown as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
             return `
 ### File: ${fc.filepath}
 - Last modified: ${String(fc.last_modified ?? 'N/A')}
@@ -946,7 +946,7 @@ ${fc.note ? `- Note: ${String(fc.note)}` : ''}
 ${String(fc.snippet ?? '')}
 \`\`\``;
           } else if (c.type === 'commit_info') {
-            const ci = c as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
+            const ci = c as unknown as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
             return `
 ### Commit: ${ci.commit_oid}
 - Author: ${String(ci.author ?? 'N/A')}, Date: ${String(ci.date ?? 'N/A')}
@@ -957,7 +957,7 @@ Message Snippet:
 ${String(ci.message ?? '')}
 \`\`\``;
           } else if (c.type === 'diff_chunk') {
-            const dc = c as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            const dc = c as unknown as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
             return `
 ### Diff: ${dc.filepath} (Commit: ${String(dc.commit_oid)})
 - Change Type: ${String(dc.change_type ?? 'N/A')}
@@ -1083,13 +1083,13 @@ ${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
 ${context.map(c => {
   let itemDetails = '';
   if (c.type === 'file_chunk') {
-            const fc = c as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            const fc = c as unknown as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
             itemDetails = `File: ${fc.filepath} (Last modified: ${String(fc.last_modified ?? 'N/A')}, Relevance: ${fc.relevance.toFixed(2)}${fc.note ? `, Note: ${String(fc.note)}` : ''})\nSnippet:\n${String(fc.snippet ?? '')}`;
           } else if (c.type === 'commit_info') {
-            const ci = c as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
+            const ci = c as unknown as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
             itemDetails = `Commit: ${ci.commit_oid} (Author: ${String(ci.author ?? 'N/A')}, Date: ${String(ci.date ?? 'N/A')}, Relevance: ${ci.relevance.toFixed(2)}${ci.note ? `, Note: ${String(ci.note)}` : ''})\nMessage Snippet:\n${String(ci.message ?? '')}`;
           } else if (c.type === 'diff_chunk') {
-            const dc = c as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            const dc = c as unknown as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
             itemDetails = `Diff: ${dc.filepath} in commit ${dc.commit_oid} (Type: ${String(dc.change_type ?? 'N/A')}, Relevance: ${dc.relevance.toFixed(2)}${dc.note ? `, Note: ${String(dc.note)}` : ''})\nDiff Snippet:\n${String(dc.snippet ?? '')}`;
           }
   return itemDetails;
@@ -1114,7 +1114,7 @@ ${summary}
 ## Relevant Information Used for Summary
 ${context.map(c => {
   if (c.type === 'file_chunk') {
-            const fc = c as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            const fc = c as unknown as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
             return `
 ### File: ${fc.filepath}
 - Last modified: ${String(fc.last_modified ?? 'N/A')}
@@ -1124,7 +1124,7 @@ ${fc.note ? `- Note: ${String(fc.note)}` : ''}
 ${String(fc.snippet ?? '')}
 \`\`\``;
           } else if (c.type === 'commit_info') {
-            const ci = c as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
+            const ci = c as unknown as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
             return `
 ### Commit: ${ci.commit_oid}
 - Author: ${String(ci.author ?? 'N/A')}, Date: ${String(ci.date ?? 'N/A')}
@@ -1135,7 +1135,7 @@ Message Snippet:
 ${String(ci.message ?? '')}
 \`\`\``;
           } else if (c.type === 'diff_chunk') {
-            const dc = c as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            const dc = c as unknown as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
             return `
 ### Diff: ${dc.filepath} (Commit: ${String(dc.commit_oid)})
 - Change Type: ${String(dc.change_type ?? 'N/A')}
