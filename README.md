@@ -9,8 +9,14 @@ CodeCompass helps developers tackle legacy or existing codebases by giving AI co
 ## Features
 
 - **Codebase Analysis**: Maps your repository's structure and dependencies, now with support for indexing very large files through automated chunking.
-- **Smart AI Context**: Uses Agentic RAG, enhanced with detailed `git diff` information (summarized if large) and dynamic summarization of extensive file lists or code snippets, to make AI suggestions fit your code perfectly.
-- **Intelligent Agent Interactions**: The AI agent can proactively request additional, specific context—such as full file contents, directory listings, or code surrounding a particular chunk—and can ask for more processing time for complex queries.
+- **Smart AI Context with Agentic RAG**: Utilizes a sophisticated Retrieval Augmented Generation (RAG) approach. The central `agent_query` tool intelligently orchestrates internal capabilities to gather comprehensive context. This includes analyzing `git diff` information (summarized if large), dynamically summarizing extensive file lists or code snippets, and more, ensuring AI suggestions are highly relevant.
+- **Intelligent Agent Orchestration**: The core `agent_query` tool allows the AI to plan and execute multi-step tasks. It can proactively use a suite of internal capabilities to:
+  - Search code (`capability_searchCodeSnippets`)
+  - Retrieve full file content (`capability_getFullFileContent`), with summarization for large files.
+  - List directory contents (`capability_listDirectory`).
+  - Fetch adjacent code chunks (`capability_getAdjacentFileChunks`).
+  - Analyze repository overviews including diffs and relevant snippets (`capability_getRepositoryOverview`).
+  - Request more search results (`capability_fetchMoreSearchResults`) or more processing time if a query is complex.
 - **Flexible Setup**: Runs locally with Ollama or connects to cloud AI like DeepSeek.
 - **Highly Configurable**: Offers extensive environment variables to fine-tune indexing parameters, agent behavior (like loop steps and refinement iterations), context processing limits, and specific LLM models for tasks like summarization.
 
@@ -300,7 +306,7 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
 ## Usage
 
 With CodeCompass set up, use natural language prompts in Cursor or other AI tools to vibe code—interact with your codebase intuitively. The Agentic RAG feature, powered by Qdrant and Ollama/DeepSeek, ensures your AI understands your code’s context for precise results. Here are some examples:
-
+Your primary interaction will be through a natural language query, which invokes the powerful `agent_query` tool. This tool then orchestrates various internal capabilities to understand and respond to your request. Here are some examples of how you might prompt the system:
 - “Hey CodeCompass, find any unused functions in my codebase.”
 - “Can CodeCompass suggest modern JavaScript updates for this old module?”
 - “Show me how my repo’s architecture fits together, CodeCompass.”
