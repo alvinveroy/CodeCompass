@@ -71,8 +71,7 @@ describe('Query Refinement Tests', () => {
         mockQdrantClientInstance, 'initial query', [], undefined, 2, 0.75,
         mockRefineQuery_Injected
       );
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(mockQdrantClientInstance.search)).toHaveBeenCalledTimes(1);
       // Ensure results are cast or match DetailedQdrantSearchResult for this assertion
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(refinedQuery).toBe('initial query');
@@ -91,8 +90,7 @@ describe('Query Refinement Tests', () => {
         mockRefineQuery_Injected
       );
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3);
+      expect(vi.mocked(mockQdrantClientInstance.search)).toHaveBeenCalledTimes(3);
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(relevanceScore).toBe(0.8);
       expect(refinedQuery).toBe('original query broadened by INJECTED mockRefineQuery focused by INJECTED mockRefineQuery');
@@ -117,8 +115,7 @@ describe('Query Refinement Tests', () => {
             mockQdrantClientInstance, 'query for no results', [], undefined, 2, 0.7,
             mockRefineQuery_Injected // Pass the mock
         );
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3);
+        expect(vi.mocked(mockQdrantClientInstance.search)).toHaveBeenCalledTimes(3);
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
         expect(refinedQuery).toBe('query for no results broadened by INJECTED mockRefineQuery broadened by INJECTED mockRefineQuery');
@@ -150,12 +147,12 @@ describe('Query Refinement Tests', () => {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
        
-      expect(mockBroaden_Injected).toHaveBeenCalledWith("original");
+      expect(vi.mocked(mockBroaden_Injected)).toHaveBeenCalledWith("original");
       expect(result).toBe('mock_broadened_by_INJECTED_helper');
        
-      expect(mockFocus_Injected).not.toHaveBeenCalled();
+      expect(vi.mocked(mockFocus_Injected)).not.toHaveBeenCalled();
        
-      expect(mockTweak_Injected).not.toHaveBeenCalled();
+      expect(vi.mocked(mockTweak_Injected)).not.toHaveBeenCalled();
     });
 
     it('should call focusQueryBasedOnResults (injected) for mediocre relevance (0.3 <= relevance < 0.7)', () => {
@@ -164,12 +161,12 @@ describe('Query Refinement Tests', () => {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
        
-      expect(mockFocus_Injected).toHaveBeenCalledWith("original", results);
+      expect(vi.mocked(mockFocus_Injected)).toHaveBeenCalledWith("original", results);
       expect(result).toBe('mock_focused_by_INJECTED_helper');
        
-      expect(mockBroaden_Injected).not.toHaveBeenCalled();
+      expect(vi.mocked(mockBroaden_Injected)).not.toHaveBeenCalled();
        
-      expect(mockTweak_Injected).not.toHaveBeenCalled();
+      expect(vi.mocked(mockTweak_Injected)).not.toHaveBeenCalled();
     });
 
     it('should call tweakQuery (injected) for decent relevance (>=0.7)', () => {
@@ -178,12 +175,12 @@ describe('Query Refinement Tests', () => {
         broaden: mockBroaden_Injected, focus: mockFocus_Injected, tweak: mockTweak_Injected
       });
        
-      expect(mockTweak_Injected).toHaveBeenCalledWith("original", results);
+      expect(vi.mocked(mockTweak_Injected)).toHaveBeenCalledWith("original", results);
       expect(result).toBe('mock_tweaked_by_INJECTED_helper');
        
-      expect(mockBroaden_Injected).not.toHaveBeenCalled();
+      expect(vi.mocked(mockBroaden_Injected)).not.toHaveBeenCalled();
        
-      expect(mockFocus_Injected).not.toHaveBeenCalled();
+      expect(vi.mocked(mockFocus_Injected)).not.toHaveBeenCalled();
     });
   });
 });

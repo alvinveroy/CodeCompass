@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vite
 import fs from 'fs'; // Use actual fs for mocking its methods
 import path from 'path';
 // Import specific parts of winston that the test needs to interact with directly
-import { transports as winstonTransports, createLogger as _winstonCreateLogger } from 'winston'; // Import named exports
+import { transports as winstonTransports, createLogger as _winstonCreateLogger, type Format, type TransformableInfo } from 'winston'; // Import named exports
 
 // Import the class directly for testing.
 import { ConfigService as _ConfigService } from '../../lib/config-service'; // Import ConfigService class itself
@@ -38,20 +38,17 @@ vi.mock('winston', () => {
       // Define mocks for winston.format properties that ConfigService uses
       // ConfigService uses: combine, timestamp, printf, colorize, splat, simple, json
       const mockFormat = {
-         
-        combine: vi.fn((..._args: unknown[]) => ({ // combine should return a format object
+        combine: vi.fn((..._args: Format[]): Format => ({ // combine should return a format object
           // Simulate a basic format object structure.
-          // The actual transformation logic isn't critical for most ConfigService tests,
-          // just that createLogger receives a valid format object.
-          _isFormat: true,
-          transform: vi.fn(info => info)
-        })),
-        timestamp: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => ({...info, timestamp: new Date().toISOString()})) })),
-        printf: vi.fn(template => ({ _isFormat: true, transform: vi.fn(info => template(info)) })),
-        colorize: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
-        splat: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
-        simple: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
-        json: vi.fn(() => ({ _isFormat: true, transform: vi.fn(info => info) })),
+          _isFormat: true, // Custom property to identify it as a mock format object
+          transform: vi.fn((info: TransformableInfo) => info) as unknown as Format['transform'],
+        } as Format)),
+        timestamp: vi.fn((): Format => ({ _isFormat: true, transform: vi.fn((info: TransformableInfo) => ({...info, timestamp: new Date().toISOString()})) as unknown as Format['transform'] } as Format)),
+        printf: vi.fn((template: (info: TransformableInfo) => string): Format => ({ _isFormat: true, transform: vi.fn((info: TransformableInfo) => template(info)) as unknown as Format['transform'] } as Format)),
+        colorize: vi.fn((): Format => ({ _isFormat: true, transform: vi.fn((info: TransformableInfo) => info) as unknown as Format['transform'] } as Format)),
+        splat: vi.fn((): Format => ({ _isFormat: true, transform: vi.fn((info: TransformableInfo) => info) as unknown as Format['transform'] } as Format)),
+        simple: vi.fn((): Format => ({ _isFormat: true, transform: vi.fn((info: TransformableInfo) => info) as unknown as Format['transform'] } as Format)),
+        json: vi.fn((): Format => ({ _isFormat: true, transform: vi.fn((info: TransformableInfo) => info) as unknown as Format['transform'] } as Format)),
         // Add any other winston.format properties if ConfigService starts using them
       };
       

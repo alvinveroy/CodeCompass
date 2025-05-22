@@ -215,8 +215,7 @@ describe('Agent', () => {
          
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any], refinedQuery: 'refined', relevanceScore: 0.8 });
+        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts', last_modified: '2023-01-01'}} as unknown as import('../lib/types').DetailedQdrantSearchResult], refinedQuery: 'refined', relevanceScore: 0.8 });
     });
 
     afterEach(() => {

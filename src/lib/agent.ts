@@ -1078,12 +1078,12 @@ export async function runAgentLoop(
       
       // Add context from previous steps if available
       if (agentState.steps.length > 0) {
-        const contextStr = agentState.steps.map(step => {
-          const outputStr = stringifyStepOutput(step.output); // Use helper
+        const contextStr = agentState.steps.map(s => { // Changed step to s to avoid conflict with outer scope variable if any
+          const outputStr = stringifyStepOutput(s.output); // Use helper
            
           // Reason: stringifyStepOutput ensures outputStr is a string, making this template literal safe.
           // The linter may not fully trace the type through the helper in all contexts for 'unknown' inputs.
-          return `Previous tool: ${step.tool}\nResults: ${outputStr}`;
+          return `Previous tool: ${s.tool}\nResults: ${outputStr}`;
         }).join('\n\n');
       
         userPrompt += `\n\nContext from previous steps:\n${contextStr}`;
@@ -1214,9 +1214,9 @@ export async function runAgentLoop(
         // Provide a fallback response
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
-          agentState.steps.map((s: AgentStep) => {
-            const toolName = s.tool;
-            const outputString = stringifyStepOutput(s.output); // Use helper
+          agentState.steps.map((mapStep: AgentStep) => { // Renamed s to mapStep to avoid lint error if outer scope has 's'
+            const toolName = mapStep.tool;
+            const outputString = stringifyStepOutput(mapStep.output); // Use helper
             const safePreviewText = (outputString || 'No output').substring(0, 200);
             return `Used ${toolName} and found: ${safePreviewText}...`;
           }).join("\n\n");
