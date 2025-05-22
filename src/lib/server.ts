@@ -447,7 +447,7 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 
     // Setup Express HTTP server for status and notifications
     const expressApp = express();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access --- Justification: express.json() is a standard Express middleware and expressApp.use is a standard method.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --- Justification: express.json() is a standard Express middleware and expressApp.use is a standard method.
     expressApp.use(express.json()); // Middleware to parse JSON bodies
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --- Justification: expressApp.get is a standard Express method.
