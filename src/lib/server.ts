@@ -664,7 +664,6 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         
         return {
           content: [{
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: "text" as const,
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
           }],
@@ -674,7 +673,6 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         logger.error("Failed to read changelog", { message: errorMessage });
         return {
           content: [{
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
             type: "text" as const,
             text: `# Error Reading Changelog\n\nFailed to read the changelog file. Current version is ${VERSION}.`,
           }],
