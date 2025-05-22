@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, type Mock } from 'vitest';
 import { Dirent } from 'fs'; // Import Dirent directly from 'fs'
-import path from 'path';
+// import path from 'path'; // DELETE THIS LINE
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 // 2. Mock external dependencies of agent.ts FIRST
@@ -39,7 +39,7 @@ vi.mock('fs/promises', () => {
   const accessMock = vi.fn();
   const statMock = vi.fn();
   // Define a mock Dirent structure that fsPromises.readdir would resolve with
-  const mockDirent = (name: string, isDir: boolean, _basePath = '/test/repo/some/path'): Dirent => { // _basePath unused
+  const _mockDirent = (name: string, isDir: boolean, _basePath = '/test/repo/some/path'): Dirent => { // _basePath unused
     const dirent = new Dirent();
     // Override properties needed for the mock
     (dirent as any).name = name;
@@ -75,12 +75,12 @@ vi.mock('fs/promises', () => {
 
 // Import mocked dependencies
 import { getLLMProvider } from '../lib/llm-provider';
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from '../lib/state'; // Corrected: removed _getRelevantResults
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, /* getRelevantResults */ } from '../lib/state'; // Corrected: removed _getRelevantResults
 import { searchWithRefinement } from '../lib/query-refinement';
-import { logger, configService } from '../lib/config-service'; // Corrected: import logger, configService
-import { validateGitRepository, getRepositoryDiff, getCommitHistoryWithChanges } from '../lib/repository'; // Corrected: removed _getCommitHistoryWithChanges
+// import { logger, configService } from '../lib/config-service'; // Corrected: import logger, configService
+import { validateGitRepository, getRepositoryDiff, /* getCommitHistoryWithChanges */ } from '../lib/repository'; // Corrected: removed _getCommitHistoryWithChanges
 import git from 'isomorphic-git';
-import { readFile, readdir, stat, access } from 'fs/promises'; // Corrected: import stat, access
+import { readFile, readdir, /* stat, access */ } from 'fs/promises'; // Corrected: import stat, access
 
 // For testing the *original* parseToolCalls and executeToolCall:
 let ActualAgentModule: typeof import('../lib/agent');
@@ -113,9 +113,9 @@ describe('Agent', () => {
       (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     }
 
-    (validateGitRepository as Mock).mockReset().mockResolvedValue(true);
+    (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; });
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
-    (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [], refinedQuery: 'refined query', relevanceScore: 0 });
+    (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
     (getOrCreateSession as Mock).mockReset().mockImplementation((sessionIdParam, _repoPath) => ({ id: sessionIdParam || 'default-test-session', queries: [], suggestions: [], context: {} }));
     (addQuery as Mock).mockReset();
@@ -155,7 +155,7 @@ describe('Agent', () => {
     // The cast to `Dirent[]` should be sufficient if createMockDirent returns valid Dirent-like objects.
     // Use 'as any' to resolve the stubborn TS2345 error for the mock.
     // This is acceptable in tests where the precise generic of Dirent isn't crucial.
-    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as any); 
+    vi.mocked(readdir).mockReset().mockResolvedValue([_mockDirent('entry1', false)] as Dirent[]); 
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -223,6 +223,7 @@ describe('Agent', () => {
       await runAgentLoopSUT_local('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
       // Verify that the LLM was called for reasoning and final response
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // Verification, Reasoning, Final Response
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool')); 

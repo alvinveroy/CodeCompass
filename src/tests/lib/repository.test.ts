@@ -62,16 +62,18 @@ vi.mock('util', async (importOriginal) => {
   const internalMockedPromisifiedExec = vi.fn(); 
   
   // Store it on a temporary global to retrieve it in the test file after imports.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).__test__mockedPromisifiedExec = internalMockedPromisifiedExec;
 
   return {
     __esModule: true,
     ...actualUtil,
-    promisify: (fnToPromisify: any) => {
-      if (fnToPromisify && (fnToPromisify.name === 'exec' || fnToPromisify === actualChildProcessExecMockInstance)) {
+    promisify: (fnToPromisify: (...args: any[]) => any) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (fnToPromisify && (typeof fnToPromisify.name === 'string' && fnToPromisify.name === 'exec' || fnToPromisify === actualChildProcessExecMockInstance)) {
         return internalMockedPromisifiedExec;
       }
-      return actualUtil.promisify(fnToPromisify);
+      return actualUtil.promisify(fnToPromisify as any);
     },
   };
 });
@@ -103,37 +105,33 @@ import { logger } from '../../lib/config-service'; // configService is mocked, o
 import { access as mockedFsAccessImported, readFile as mockedFsReadFileImported, readdir as mockedFsReadDirImported, stat as mockedFsStatImported } from 'fs/promises';
 
 // Retrieve the mock function via the globalThis workaround
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as Mock;
 
 // Import named mocks from isomorphic-git
 import * as git from 'isomorphic-git'; // Import as namespace
-import path from 'path';
+// import path from 'path'; // DELETE THIS LINE
 // import { QdrantClient } from '@qdrant/js-client-rest'; // _QdrantClient if used
 
 
 describe('Repository Utilities', () => {
   const repoPath = '/test/diff/repo';
   // Use the imported actualChildProcessExecMock as the execMock reference
-  const execMock = actualChildProcessExecMockInstance as MockedFunction<typeof actualChildProcessExecMockInstance>; 
+  const _execMock = actualChildProcessExecMockInstance as MockedFunction<typeof actualChildProcessExecMockInstance>; 
   
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(git.log).mockResolvedValue([ 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { oid: 'commit2_oid', commit: { message: 'Second', author: {} as any, committer: {} as any, parent: ['commit1_oid'], tree: 'tree2' } }, 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } } 
-    ] as any); 
+      { oid: 'commit2_oid', commit: { message: 'Second', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: ['commit1_oid'], tree: 'tree2' } }, 
+      { oid: 'commit1_oid', commit: { message: 'First', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: [], tree: 'tree1' } } 
+    ] as unknown as import('isomorphic-git').ReadCommitResult[]); 
   };
   
   // Renamed for clarity
   const setupGitLogWithSingleCommit = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(git.log).mockResolvedValue([ 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { oid: 'commit1_oid', commit: { message: 'First', author: {} as any, committer: {} as any, parent: [], tree: 'tree1' } } 
-    ] as any); 
+      { oid: 'commit1_oid', commit: { message: 'First', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: [], tree: 'tree1' } } 
+    ] as unknown as import('isomorphic-git').ReadCommitResult[]); 
   };
 
   beforeEach(() => {

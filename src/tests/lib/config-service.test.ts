@@ -5,7 +5,7 @@ import path from 'path';
 import { transports as winstonTransports, createLogger as _winstonCreateLogger } from 'winston'; // Import named exports
 
 // Import the class directly for testing.
-import { ConfigService as ActualConfigService, ConfigService as _ConfigService } from '../../lib/config-service'; // Import ConfigService class itself
+import { ConfigService as _ConfigService } from '../../lib/config-service'; // Import ConfigService class itself
 // import fsActual from 'fs'; // Not strictly needed if we define the mock structure directly
 
 // Mock the entire fs module
@@ -86,7 +86,7 @@ describe('ConfigService', () => {
     const { ConfigService: ImportedConfigServiceClass } = await import('../../lib/config-service.js');
     // Reset the private static instance variable
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (ImportedConfigServiceClass as any).instance = undefined;
+    ((ImportedConfigServiceClass as any) as { instance?: any }).instance = undefined;
     // Call the public static getter to create/get the new instance
     return ImportedConfigServiceClass.getInstance();
   };
@@ -129,7 +129,7 @@ describe('ConfigService', () => {
     // Get the MOCK_LOGGER_INSTANCE that the factory for winston mock returns
     // This relies on the factory structure: vi.mock('winston', () => { const MOCK_LOGGER_INSTANCE = {...}; return { createLogger: vi.fn().mockReturnValue(MOCK_LOGGER_INSTANCE), ... } })
     // Access the mock logger instance directly from the mock setup
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     const loggerInstanceFromMockFactory = (_winstonMockedModule as any).default.createLogger() as import('winston').Logger;
 
 
@@ -222,8 +222,7 @@ describe('ConfigService', () => {
 
   it('should derive SUMMARIZATION_MODEL from SUGGESTION_MODEL if not set', async () => {
     // Ensure SUMMARIZATION_MODEL is not in env or file for this specific test
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUMMARIZATION_MODEL', undefined as any); 
+    vi.stubEnv('SUMMARIZATION_MODEL', undefined as string | undefined); 
     vi.stubEnv('SUGGESTION_MODEL', 'test_suggestion_model');
     // fs.existsSync will default to only MOCK_CONFIG_DIR existing from beforeEach, so no model-config.json
     // fs.readFileSync will default to '{}'
@@ -241,23 +240,15 @@ describe('ConfigService', () => {
 
   it('should persist model configuration when setSuggestionModel is called', async () => {
     // Ensure env vars for derived models are clear for this specific test
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUMMARIZATION_MODEL', undefined as any); 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('REFINEMENT_MODEL', undefined as any); 
+    vi.stubEnv('SUMMARIZATION_MODEL', undefined as string | undefined); 
+    vi.stubEnv('REFINEMENT_MODEL', undefined as string | undefined); 
     // Also clear any potential top-level model env vars that might interfere with defaults
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUGGESTION_MODEL', undefined as any); 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUGGESTION_PROVIDER', undefined as any); 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('EMBEDDING_PROVIDER', undefined as any); 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('OPENAI_API_KEY', undefined as any); 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('GEMINI_API_KEY', undefined as any); 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('CLAUDE_API_KEY', undefined as any); 
+    vi.stubEnv('SUGGESTION_MODEL', undefined as string | undefined); 
+    vi.stubEnv('SUGGESTION_PROVIDER', undefined as string | undefined); 
+    vi.stubEnv('EMBEDDING_PROVIDER', undefined as string | undefined); 
+    vi.stubEnv('OPENAI_API_KEY', undefined as string | undefined); 
+    vi.stubEnv('GEMINI_API_KEY', undefined as string | undefined); 
+    vi.stubEnv('CLAUDE_API_KEY', undefined as string | undefined); 
 
 
     // Setup fs mocks: .codecompass dir exists, but model-config.json does not yet.
@@ -316,7 +307,7 @@ describe('ConfigService', () => {
     const writtenArgs = vi.mocked(fs.writeFileSync).mock.calls[0];
     expect(writtenArgs[0]).toBe(MOCK_DEEPSEEK_CONFIG_FILE);
     
-    const writtenData = JSON.parse(writtenArgs[1] as string);
+    const writtenData = JSON.parse(writtenArgs[1] as string) as Record<string, unknown>;
     expect(writtenData).toHaveProperty('DEEPSEEK_API_KEY', newApiKey);
     expect(writtenData).toHaveProperty('DEEPSEEK_API_URL', service.DEEPSEEK_API_URL); // Use the getter
     expect(writtenData).toHaveProperty('timestamp');
@@ -327,8 +318,7 @@ describe('ConfigService', () => {
 
   it('should handle malformed model-config.json gracefully', async () => {
     // Ensure SUGGESTION_MODEL is not set in env for this specific test
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUGGESTION_MODEL', undefined as any); 
+    vi.stubEnv('SUGGESTION_MODEL', undefined as string | undefined); 
     // Specific fs setup for this test
     vi.mocked(fs.existsSync).mockImplementation((p) => 
       String(p) === MOCK_CONFIG_DIR || String(p) === MOCK_MODEL_CONFIG_FILE // model-config.json "exists"
@@ -348,7 +338,7 @@ describe('ConfigService', () => {
     const loggerInstance = _service.logger; // Access the logger from the service instance itself
 
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(loggerInstance!.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load model config'));
+    expect(loggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load model config'));
     expect(_service.SUGGESTION_MODEL).toBe('llama3.1:8b'); // Should fall back to default
   });
 
@@ -357,10 +347,9 @@ describe('ConfigService', () => {
     vi.stubEnv('SUGGESTION_PROVIDER', 'test_provider_global');
     vi.stubEnv('SUGGESTION_MODEL', 'test_model_global');
     // Ensure other potentially interfering env vars are clear if necessary
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('OLLAMA_HOST', undefined as any); // Example, if it affects global state indirectly
+    vi.stubEnv('OLLAMA_HOST', undefined as string | undefined); // Example, if it affects global state indirectly
 
-    const service = await createServiceInstance();
+    const _service_global_state = await createServiceInstance();
     // initializeGlobalState is called in constructor
     expect(global.CURRENT_SUGGESTION_PROVIDER).toBe('test_provider_global');
     expect(global.CURRENT_SUGGESTION_MODEL).toBe('test_model_global');
@@ -368,13 +357,12 @@ describe('ConfigService', () => {
 
   it('reloadConfigsFromFile should re-read environment and file configs', async () => {
     // Initial setup: no env var, no file for SUGGESTION_MODEL
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.stubEnv('SUGGESTION_MODEL', undefined as any); 
+    vi.stubEnv('SUGGESTION_MODEL', undefined as string | undefined); 
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p) === MOCK_CONFIG_DIR); // Only .codecompass dir
     vi.mocked(fs.readFileSync).mockReturnValue('{}'); // No config files initially
 
-    const service = await createServiceInstance();
-    expect(service.SUGGESTION_MODEL).toBe('llama3.1:8b'); // Initial default
+    const service_reload = await createServiceInstance();
+    expect(service_reload.SUGGESTION_MODEL).toBe('llama3.1:8b'); // Initial default
 
     // NOW, change env and file mocks for the reload
     vi.stubEnv('SUGGESTION_MODEL', 'env_reloaded_model_should_be_overridden_by_file');
@@ -387,9 +375,9 @@ describe('ConfigService', () => {
       return '{}';
     });
 
-    service.reloadConfigsFromFile();
+    service_reload.reloadConfigsFromFile();
     
-    expect(service.SUGGESTION_MODEL).toBe('file_reloaded_model'); // File should take precedence
+    expect(service_reload.SUGGESTION_MODEL).toBe('file_reloaded_model'); // File should take precedence
     expect(global.CURRENT_SUGGESTION_MODEL).toBe('file_reloaded_model'); // Global state should also update
   });
 

@@ -124,7 +124,7 @@ describe('Config Module', () => {
       // Mock 'fs' specifically for this suite.
       // This ensures that ConfigService does not load from actual config files during these tests.
       vi.doMock('fs', async () => {
-        const actualFs = await vi.importActual('fs') as typeof fs; // Import actual fs to delegate calls
+        const actualFs = await vi.importActual('fs') as typeof import('fs'); // Import actual fs to delegate calls
         return {
           ...actualFs, // Delegate all other fs calls to the actual module
           existsSync: vi.fn((pathToCheck: string) => {
@@ -135,15 +135,15 @@ describe('Config Module', () => {
             // For other paths (like LOG_DIR check), use actual existsSync
             return actualFs.existsSync(pathToCheck);
           }),
-          readFileSync: vi.fn((pathToCheck: string, options: any) => {
+          readFileSync: vi.fn((pathToCheck: string, options?: fs.WriteFileOptions) => {
             // This should ideally not be called for config files if existsSync is false
             if (typeof pathToCheck === 'string' && (pathToCheck.endsWith('model-config.json') || pathToCheck.endsWith('deepseek-config.json'))) {
               const e = new Error(`ENOENT: no such file or directory, open '${pathToCheck}' (mocked)`);
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (e as any).code = 'ENOENT';
+              (e as import('child_process').ExecException & { code?: string | number }).code = 'ENOENT';
               throw e;
             }
-            return actualFs.readFileSync(pathToCheck, options);
+            return actualFs.readFileSync(pathToCheck, options as fs.WriteFileOptions);
           }),
           // Let mkdirSync pass through for LOG_DIR creation by ConfigService constructor
           // If this causes issues in a restricted test environment, mock it as vi.fn()

@@ -1055,9 +1055,21 @@ export async function runAgentLoop(
       
       // Add context from previous steps if available
       if (agentState.steps.length > 0) {
-        const contextStr = agentState.steps.map(step => 
-          `Previous tool: ${step.tool}\nResults: ${JSON.stringify(step.output, null, 2)}`
-        ).join('\n\n');
+        const contextStr = agentState.steps.map(step => {
+          let outputStr: string;
+          if (typeof step.output === 'string') {
+            outputStr = step.output;
+          } else if (typeof step.output === 'object' && step.output !== null) {
+            try {
+              outputStr = JSON.stringify(step.output, null, 2);
+            } catch {
+              outputStr = '[Unserializable Object]';
+            }
+          } else {
+            outputStr = String(step.output);
+          }
+          return `Previous tool: ${step.tool}\nResults: ${outputStr}`;
+        }).join('\n\n');
         
         userPrompt += `\n\nContext from previous steps:\n${contextStr}`;
       }
@@ -1188,16 +1200,16 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
           agentState.steps.map((s: AgentStep) => {
-            const toolName = s.tool; // s.tool is already a string
+            const toolName = s.tool;
             let outputString: string;
             if (typeof s.output === 'object' && s.output !== null) {
               try {
-                outputString = JSON.stringify(s.output);
+                outputString = JSON.stringify(s.output, null, 2); // Added null, 2 for readability
               } catch {
-                outputString = String(s.output); // Fallback for non-serializable objects
+                outputString = '[Unserializable Object]';
               }
             } else {
-              outputString = String(s.output); // Handles primitives, null, undefined
+              outputString = String(s.output);
             }
             const safePreviewText = (outputString || 'No output').substring(0, 200);
             return `Used ${toolName} and found: ${safePreviewText}...`;
