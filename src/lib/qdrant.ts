@@ -1,6 +1,8 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
 import { withRetry } from "../utils/retry-utils";
+
+let qdrantClientInstance: QdrantClient | null = null;
 // preprocessText, generateEmbedding, trackQueryRefinement are used by query-refinement.ts
 // DetailedQdrantSearchResult will be imported in files using searchWithRefinement
 
@@ -25,7 +27,16 @@ export async function initializeQdrant(): Promise<QdrantClient> {
       logger.info(`Created collection: ${collectionName}`);
     }
   });
+  qdrantClientInstance = client;
   return client;
+}
+
+export function getQdrantClient(): QdrantClient {
+  if (!qdrantClientInstance) {
+    logger.error("Qdrant client has not been initialized. Call initializeQdrant() first.");
+    throw new Error("Qdrant client is not initialized.");
+  }
+  return qdrantClientInstance;
 }
 
 // Add batch processing for vector operations
