@@ -103,7 +103,7 @@ The following helper functions are used by `refineQuery` and are also exported f
 -   **Modifications**:
     -   Examines the `payload` of the top search result.
     -   If the `dataType` is `file_chunk` or `diff_chunk`, it extracts the `filepath`.
-    -   If a `filepath` is found, it may append the file type (extension) or the top-level directory from the path to the query if not already present. Directory addition has heuristics to avoid common, less specific directory names like 'src' or 'lib' unless they are more unique.
+    -   If a `filepath` is found, it may append the file type (extension) or the top-level directory from the path to the query if not already present. Directory addition has heuristics to avoid common, less specific directory names like 'src' or 'lib' unless they are more unique. `CommitInfoPayload` does not directly contribute a `filepath` for this tweaking logic.
 
 ### `extractKeywords(text: string): string[]`
 
@@ -124,5 +124,5 @@ The following helper functions are used by `refineQuery` and are also exported f
 -   `@qdrant/js-client-rest`: The Qdrant client library.
 -   `./config-service`: Provides configuration values (e.g., `COLLECTION_NAME`, `MAX_REFINEMENT_ITERATIONS`, `QDRANT_SEARCH_LIMIT_DEFAULT`) and the `logger`.
 -   `../utils/text-utils`: For `preprocessText`.
--   `./ollama`: For `generateEmbedding`. (Note: `src/lib/query-refinement.ts` directly imports and uses `generateEmbedding` from `ollama.ts`).
+-   `./ollama`: For `generateEmbedding`.
 -   `./types`: For `DetailedQdrantSearchResult` and Qdrant payload types (`FileChunkPayload`, `CommitInfoPayload`, `DiffChunkPayload` used implicitly via `DetailedQdrantSearchResult`).
