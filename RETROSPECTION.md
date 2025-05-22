@@ -255,6 +255,22 @@
 - If time permits in the future, a brief investigation into ESLint's parser options or rule configurations for `@typescript-eslint/parser` related to Express types could be beneficial to see if these `eslint-disable` comments can be eliminated without sacrificing linting quality elsewhere.
 - Ensure all `async` functions in the codebase are reviewed for actual use of `await` to prevent unnecessary `async` declarations.
 
+# Retrospection for no-misused-promises ESLint Fix (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The ESLint error message `@typescript-eslint/no-misused-promises` was clear and pointed to the exact location of the issue.
+- The fix was straightforward: identifying an unnecessary `async` keyword on a synchronous callback.
+
+## What could be improved?
+- Ensuring that `async` is only used on functions that genuinely perform `await` operations or are intended to return a Promise can prevent this class of error. A quick scan for `async` functions without `await` during development could be beneficial.
+
+## What did we learn?
+- The `no-misused-promises` ESLint rule is effective in catching cases where `async` functions are used in contexts expecting synchronous, void-returning functions (like many event listener callbacks or simple Node.js callbacks).
+- Understanding that `async` functions always return a Promise is key to diagnosing this rule's violations.
+
+## Action Items / Follow-ups
+- Briefly review other simple callbacks in the codebase to ensure `async` is not used unnecessarily, particularly for those passed to Node.js core modules or external libraries that expect void-returning functions.
+
 # Retrospection for Final ESLint Pass (no-misused-promises & Cleanup) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?

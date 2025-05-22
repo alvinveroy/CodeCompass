@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **ESLint Error (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved `@typescript-eslint/no-misused-promises` error in `src/lib/server.ts` for the `httpServer.listen` callback by ensuring the callback is synchronous, as it does not perform any `await` operations and `listen` expects a void-returning function.
 - **ESLint Errors & Code Quality (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved `@typescript-eslint/require-await` error in `src/lib/server.ts` by ensuring the `get_session_history` tool handler is synchronous.
     - Addressed `@typescript-eslint/no-unsafe-assignment` and `@typescript-eslint/no-unsafe-call` errors for `expressApp.use(express.json())` in `src/lib/server.ts` by adding a targeted `eslint-disable-next-line` comment, justified by the standard and type-safe nature of this Express middleware usage.
