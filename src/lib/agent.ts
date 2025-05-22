@@ -1215,10 +1215,11 @@ export async function runAgentLoop(
         agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
           "Here's what I found so far: " +
           agentState.steps.map((mapStep: AgentStep): string => { // Explicitly type mapStep and callback return type
-            const toolName: string = mapStep.tool; // Explicitly type toolName
-            const outputString: string = stringifyStepOutput(mapStep.output); // Use helper, explicitly type
-            const safePreviewText: string = (outputString || 'No output').substring(0, 200); // Explicitly type safePreviewText
-            return `Used ${String(toolName)} and found: ${String(safePreviewText)}...`;
+            // mapStep.tool is already string.
+            // stringifyStepOutput returns string.
+            // The substring operation on a string (or fallback string) returns a string.
+            // Explicit String() calls are for maximum safety with the linter.
+            return `Used ${String(mapStep.tool)} and found: ${String((stringifyStepOutput(mapStep.output) || 'No output').substring(0, 200))}...`;
           }).join("\n\n");
       }
     }
