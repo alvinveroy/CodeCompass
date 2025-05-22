@@ -139,7 +139,6 @@ describe('Config Module', () => {
               const e = new Error(`ENOENT: no such file or directory, open '${pathToCheck}' (mocked)`);
               const errorWithCode = e as Error & { code?: string | number };
               errorWithCode.code = 'ENOENT';
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-return
               throw e;
             }
             return actualFs.readFileSync(pathToCheck, options as fs.WriteFileOptions);

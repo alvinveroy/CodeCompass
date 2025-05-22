@@ -28,6 +28,7 @@ function stringifyStepOutput(output: unknown): string {
   }
   // For other primitives (number, boolean, symbol, bigint), String() is safe.
   // This addresses the new error at line 27 if 'output' was an unhandled object type.
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
   return String(output);
 }
 
@@ -1079,6 +1080,7 @@ export async function runAgentLoop(
       if (agentState.steps.length > 0) {
         const contextStr = agentState.steps.map(step => {
           const outputStr = stringifyStepOutput(step.output); // Use helper
+          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
           return `Previous tool: ${step.tool}\nResults: ${outputStr}`;
         }).join('\n\n');
       

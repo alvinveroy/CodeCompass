@@ -213,6 +213,7 @@ describe('Agent', () => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any /* eslint-disable-line @typescript-eslint/no-explicit-any */], refinedQuery: 'refined', relevanceScore: 0.8 });
     });
 
@@ -244,14 +245,13 @@ describe('Agent', () => {
 
       // Verify that the LLM was called for reasoning and final response
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // Verification, Reasoning, Final Response
-      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool')); 
-      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code')); 
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool'));
+      expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code'));
 
       // Verify that searchWithRefinement (a dependency of executeToolCall for "search_code") was called
-       
-      expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']); 
+      expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']);
       
-      expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.')); 
+      expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.'));
     });
   });
   

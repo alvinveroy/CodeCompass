@@ -27,9 +27,8 @@ interface OriginalModuleType {
 
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const originalModule = await vi.importActual('../lib/config-service') as OriginalModuleType; // More specific cast
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const originalInstance: PartialOriginalConfig = originalModule.configService;
 
   const mockConfigServiceValues: MockableConfigService = {
@@ -64,7 +63,7 @@ import { configService as configServiceInstanceFromMockFactory } from '../lib/co
 describe('Utils Module', () => {
   // This variable will hold the correctly typed reference to our mocked configService.
   let testSubjectMockedConfigService: MockableConfigService;
-  let _originalDefaultRetryValues: { MAX_RETRIES: number; RETRY_DELAY: number; };
+  let originalDefaultRetryValues: { MAX_RETRIES: number; RETRY_DELAY: number; };
 
   beforeEach(async () => {
     // Import the original config service to get its true default values for resetting retry logic.
@@ -72,7 +71,7 @@ describe('Utils Module', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { configService: actualOriginalConfigService } = await vi.importActual('../lib/config-service') as any;
     const typedActualOriginalConfigService: PartialOriginalConfig = actualOriginalConfigService;
-    _originalDefaultRetryValues = {
+    originalDefaultRetryValues = {
       MAX_RETRIES: typedActualOriginalConfigService.MAX_RETRIES,
       RETRY_DELAY: typedActualOriginalConfigService.RETRY_DELAY,
     };
@@ -89,9 +88,9 @@ describe('Utils Module', () => {
     // Reset the properties of the *actual mocked instance* before each test
     // using the correctly typed testSubjectMockedConfigService.
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    testSubjectMockedConfigService.MAX_RETRIES = typedActualOriginalConfigService.MAX_RETRIES;
+    testSubjectMockedConfigService.MAX_RETRIES = originalDefaultRetryValues.MAX_RETRIES;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    testSubjectMockedConfigService.RETRY_DELAY = typedActualOriginalConfigService.RETRY_DELAY;
+    testSubjectMockedConfigService.RETRY_DELAY = originalDefaultRetryValues.RETRY_DELAY;
     
     // Ensure logger and its methods exist before trying to clear mocks
     if (testSubjectMockedConfigService.logger) {
@@ -178,7 +177,7 @@ describe('Utils Module', () => {
       });
       
       await expect(withRetry(fn)).rejects.toThrow('fail');
-      expect(fn).toHaveBeenCalledTimes(4); 
+      expect(fn).toHaveBeenCalledTimes(4);
       
     });
 
