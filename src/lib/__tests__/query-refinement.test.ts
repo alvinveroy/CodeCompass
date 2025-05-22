@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" /> 
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type MockedFunction } from 'vitest'; // Explicitly import MockedFunction
 import { QdrantClient, type Schemas } from '@qdrant/js-client-rest';
 import type { DetailedQdrantSearchResult } from '../types';
 import type { RefineQueryFunc } from '../query-refinement';
@@ -47,7 +47,7 @@ describe('Query Refinement Tests', () => {
 
   describe('searchWithRefinement', () => {
     // Use vi.MockedFunction<TheFunctionType>
-    let mockRefineQuery_Injected: vi.MockedFunction<RefineQueryFunc>;
+    let mockRefineQuery_Injected: MockedFunction<RefineQueryFunc>; // Use imported MockedFunction
 
     beforeEach(() => {
       mockRefineQuery_Injected = vi.fn((query, _results, relevance) => {
@@ -131,9 +131,9 @@ describe('Query Refinement Tests', () => {
 
   describe('refineQuery (original logic with injected helpers)', () => {
     // Use vi.MockedFunction for these as well
-    let mockBroaden_Injected: vi.MockedFunction<(query: string) => string>;
-    let mockFocus_Injected: vi.MockedFunction<(query: string, results: DetailedQdrantSearchResult[]) => string>;
-    let mockTweak_Injected: vi.MockedFunction<(query: string, results: DetailedQdrantSearchResult[]) => string>;
+    let mockBroaden_Injected: MockedFunction<(query: string) => string>;
+    let mockFocus_Injected: MockedFunction<(query: string, results: DetailedQdrantSearchResult[]) => string>;
+    let mockTweak_Injected: MockedFunction<(query: string, results: DetailedQdrantSearchResult[]) => string>;
 
     beforeEach(() => {
       mockBroaden_Injected = vi.fn().mockReturnValue('mock_broadened_by_INJECTED_helper');

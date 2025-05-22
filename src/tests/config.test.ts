@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-// configService will be dynamically imported within test suites as needed
+import type { ConfigService as ConfigServiceType } from '../lib/config-service'; // Import the type
 
 import * as fs from 'fs'; // Import fs for mocking
 
@@ -21,10 +21,10 @@ describe('Config Module', () => {
     // These globals are set by ConfigService.initializeGlobalState()
     // Resetting them ensures a clean slate for each test's ConfigService instantiation.
     const g = globalThis as NodeJS.Global & typeof globalThis & { [key: string]: unknown };
-    g.CURRENT_LLM_PROVIDER = undefined;
-    g.CURRENT_SUGGESTION_PROVIDER = undefined;
-    g.CURRENT_EMBEDDING_PROVIDER = undefined;
-    g.CURRENT_SUGGESTION_MODEL = undefined;
+    g.CURRENT_LLM_PROVIDER = undefined; // Assign undefined directly
+    g.CURRENT_SUGGESTION_PROVIDER = undefined; // Assign undefined directly
+    g.CURRENT_EMBEDDING_PROVIDER = undefined; // Assign undefined directly
+    g.CURRENT_SUGGESTION_MODEL = undefined; // Assign undefined directly
     
     vi.resetModules(); // This is key for re-importing and re-instantiating ConfigService
   });
@@ -37,7 +37,7 @@ describe('Config Module', () => {
   });
 
   describe('Default Configuration', () => {
-    let currentConfigService: InstanceType<typeof import('../lib/config-service').ConfigService>;
+    let currentConfigService: ConfigServiceType; // Use the imported type
 
     beforeEach(async () => {
       // Dynamically import configService to ensure a fresh instance for each test
@@ -78,7 +78,7 @@ describe('Config Module', () => {
   });
 
   describe('Logger Configuration', () => {
-    let currentConfigService: InstanceType<typeof import('../lib/config-service').ConfigService>;
+    let currentConfigService: ConfigServiceType; // Use the imported type
 
     beforeEach(async () => {
       // Dynamically import for a fresh instance

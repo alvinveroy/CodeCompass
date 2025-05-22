@@ -73,12 +73,12 @@ vi.mock('fs/promises', () => {
 
 // Import mocked dependencies
 import { getLLMProvider } from '../lib/llm-provider';
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, _getRelevantResults as _getRelevantResults_unused } from '../lib/state';
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from '../lib/state'; // Corrected: removed _getRelevantResults
 import { searchWithRefinement } from '../lib/query-refinement';
-import { _logger as _mockedLoggerFromAgentPerspective_unused, _configService as _agentTestConfig_unused } from '../lib/config-service';
-import { validateGitRepository, getRepositoryDiff, _getCommitHistoryWithChanges as _getCommitHistoryWithChanges_unused } from '../lib/repository';
+import { logger, configService } from '../lib/config-service'; // Corrected: import logger, configService
+import { validateGitRepository, getRepositoryDiff, getCommitHistoryWithChanges } from '../lib/repository'; // Corrected: removed _getCommitHistoryWithChanges
 import git from 'isomorphic-git';
-import { readFile, readdir, _stat as _stat_unused, _access as _access_unused } from 'fs/promises';
+import { readFile, readdir, stat, access } from 'fs/promises'; // Corrected: import stat, access
 
 // For testing the *original* parseToolCalls and executeToolCall:
 let ActualAgentModule: typeof import('../lib/agent');
@@ -106,10 +106,10 @@ describe('Agent', () => {
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
     // Clear logger mocks (assuming logger is imported from config-service which is mocked)
-    const { logger: _agentLogger_unused } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service'); 
-    // if (_agentLogger_unused && typeof (_agentLogger_unused.info as Mock).mockClear === 'function') { // Check if logger and its methods are mocks
-    //   (Object.values(_agentLogger_unused) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
-    // }
+    const { logger: agentLogger } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service'); 
+    if (agentLogger && typeof (agentLogger.info as Mock).mockClear === 'function') { // Check if logger and its methods are mocks
+      (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
+    }
 
     (validateGitRepository as Mock).mockReset().mockResolvedValue(true);
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
@@ -122,7 +122,7 @@ describe('Agent', () => {
     (getRecentQueries as Mock).mockReset().mockReturnValue([]);
     vi.mocked(readFile).mockReset().mockResolvedValue('Default file content from generic mock');
     // Define a helper for creating mock Dirent objects if not done in the mock factory
-    const createMockDirent = (name: string, isDir: boolean, basePath = '/test/repo/some/path'): Dirent => ({
+    const createMockDirent = (name: string, isDir: boolean, basePath = '/test/repo/some/path'): Dirent => ({ // Dirent type is from 'fs'
         name,
         isFile: () => !isDir,
         isDirectory: () => isDir,
@@ -134,7 +134,7 @@ describe('Agent', () => {
         path: basePath,
         parentPath: path.dirname(basePath),
     });
-    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as Dirent[]);
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent[]); // Cast to unknown first
   });
   afterEach(() => { vi.restoreAllMocks(); });
 

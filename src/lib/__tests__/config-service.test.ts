@@ -107,10 +107,12 @@ describe('ConfigService', () => {
     }
     process.env.HOME = MOCK_HOME_DIR;
     // Clear global state potentially set by ConfigService
-    delete (globalThis as NodeJS.Global & typeof globalThis).CURRENT_LLM_PROVIDER;
-    delete (globalThis as NodeJS.Global & typeof globalThis).CURRENT_SUGGESTION_PROVIDER;
-    delete (globalThis as NodeJS.Global & typeof globalThis).CURRENT_EMBEDDING_PROVIDER;
-    delete (globalThis as NodeJS.Global & typeof globalThis).CURRENT_SUGGESTION_MODEL;
+    // Assign undefined instead of using delete
+    const g = globalThis as NodeJS.Global & typeof globalThis & { [key: string]: unknown };
+    g.CURRENT_LLM_PROVIDER = undefined;
+    g.CURRENT_SUGGESTION_PROVIDER = undefined;
+    g.CURRENT_EMBEDDING_PROVIDER = undefined;
+    g.CURRENT_SUGGESTION_MODEL = undefined;
     
     const fsMock = fs;
     // Default: only .codecompass dir exists, config files don't unless specified by a test
