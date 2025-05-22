@@ -85,8 +85,7 @@ describe('ConfigService', () => {
     // Import the ConfigService class directly for instance manipulation
     const { ConfigService: ImportedConfigServiceClass } = await import('../../lib/config-service.js');
     // Reset the private static instance variable
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((ImportedConfigServiceClass as any) as { instance?: any }).instance = undefined;
+    ((ImportedConfigServiceClass as any) as { instance?: any }).instance = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
     // Call the public static getter to create/get the new instance
     return ImportedConfigServiceClass.getInstance();
   };

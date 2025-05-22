@@ -14,7 +14,7 @@ interface MockableConfigService {
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
   const originalModule = await vi.importActual('../lib/config-service');
-  const originalInstance = (originalModule as { configService: { MAX_RETRIES: number; RETRY_DELAY: number; OLLAMA_HOST: string; [key: string]: unknown } }).configService;
+  const originalInstance = (originalModule as typeof import('../lib/config-service')).configService;
 
   const mockConfigServiceValues: MockableConfigService = {
     MAX_RETRIES: originalInstance.MAX_RETRIES,
@@ -53,7 +53,7 @@ describe('Utils Module', () => {
   beforeEach(async () => {
     // Import the original config service to get its true default values for resetting retry logic.
     // We only need MAX_RETRIES and RETRY_DELAY from the original for resetting.
-    const { configService: actualOriginalConfigService } = await vi.importActual('../lib/config-service') as { configService: { MAX_RETRIES: number, RETRY_DELAY: number } };
+    const { configService: actualOriginalConfigService } = await vi.importActual('../lib/config-service') as any;
     originalDefaultRetryValues = {
       MAX_RETRIES: actualOriginalConfigService.MAX_RETRIES,
       RETRY_DELAY: actualOriginalConfigService.RETRY_DELAY,

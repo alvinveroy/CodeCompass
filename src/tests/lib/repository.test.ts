@@ -104,8 +104,7 @@ import { logger } from '../../lib/config-service'; // configService is mocked, o
 import { access as mockedFsAccessImported, readFile as mockedFsReadFileImported, readdir as mockedFsReadDirImported, stat as mockedFsStatImported } from 'fs/promises';
 
 // Retrieve the mock function via the globalThis workaround
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as Mock;
+const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as Mock; // eslint-disable-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
 
 // Import named mocks from isomorphic-git
 import * as git from 'isomorphic-git'; // Import as namespace
@@ -120,7 +119,9 @@ describe('Repository Utilities', () => {
   // Renamed for clarity, used in the inner beforeEach
   const setupGitLogWithTwoCommits = () => {
     vi.mocked(git.log).mockResolvedValue([
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       { oid: 'commit2_oid', commit: { message: 'Second', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: ['commit1_oid'], tree: 'tree2' } }, // eslint-disable-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       { oid: 'commit1_oid', commit: { message: 'First', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: [], tree: 'tree1' } } // eslint-disable-line @typescript-eslint/no-explicit-any
     ] as unknown as import('isomorphic-git').ReadCommitResult[]);
   };
@@ -128,6 +129,7 @@ describe('Repository Utilities', () => {
   // Renamed for clarity
   const setupGitLogWithSingleCommit = () => {
     vi.mocked(git.log).mockResolvedValue([
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       { oid: 'commit1_oid', commit: { message: 'First', author: { name: 'Test' } as any, committer: { name: 'Test' } as any, parent: [], tree: 'tree1' } } // eslint-disable-line @typescript-eslint/no-explicit-any
     ] as unknown as import('isomorphic-git').ReadCommitResult[]);
   };

@@ -44,19 +44,12 @@ vi.mock('../lib/config-service', async (importOriginal) => {
     // Ensure all readonly properties from the actual ConfigService class are here if accessed
 
     // Mocked Getters that read from process.env
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     get SUGGESTION_MODEL(): string { return String(process.env.SUGGESTION_MODEL ?? 'llama3.1:8b'); },
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     get SUGGESTION_PROVIDER(): string { return String(process.env.SUGGESTION_PROVIDER ?? 'ollama'); },
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     get EMBEDDING_PROVIDER(): string { return String(process.env.EMBEDDING_PROVIDER ?? 'ollama'); },
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     get DEEPSEEK_API_KEY(): string { return String(process.env.DEEPSEEK_API_KEY ?? ''); },
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     get DEEPSEEK_API_URL(): string { return String(process.env.DEEPSEEK_API_URL ?? 'https://api.deepseek.com/chat/completions'); },
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     get DEEPSEEK_MODEL(): string { return String(process.env.DEEPSEEK_MODEL ?? 'deepseek-coder'); }, // Added DEEPSEEK_MODEL getter
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     get LLM_PROVIDER(): string { return String(process.env.LLM_PROVIDER ?? 'ollama'); },
     // Add other getters if they are accessed by the code under test
 
@@ -164,17 +157,13 @@ describe('LLM Provider', () => {
       expect(result).toBe(true);
       
       // Verify that configService methods were called with correct arguments
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.setSuggestionModel).toHaveBeenCalledWith('deepseek-coder');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.setSuggestionProvider).toHaveBeenCalledWith('deepseek');
       
       // Verify the DeepSeek connection was tested
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
       
       // Verify model persistence was called via configService
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.persistModelConfiguration).toHaveBeenCalled();
     });
     
@@ -189,17 +178,13 @@ describe('LLM Provider', () => {
       expect(result).toBe(true);
       
       // Verify that configService methods were called with correct arguments
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.setSuggestionModel).toHaveBeenCalledWith('llama3.1:8b');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.setSuggestionProvider).toHaveBeenCalledWith('ollama');
       
       // Verify the Ollama connection was tested
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(ollama.checkOllama).toHaveBeenCalled();
       
       // Verify model persistence was called via configService
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.persistModelConfiguration).toHaveBeenCalled();
     });
   });

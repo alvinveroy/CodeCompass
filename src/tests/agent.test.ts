@@ -6,7 +6,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 // Near the top of the file, after imports but before the first describe block:
 const createMockDirent = (name: string, isDir: boolean): Dirent => {
   const dirent = new Dirent();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
   const mockDirent = dirent as any;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   mockDirent.name = name;
@@ -65,7 +65,7 @@ vi.mock('fs/promises', () => {
   // Define a mock Dirent structure that fsPromises.readdir would resolve with
   const _mockDirent_fs_promises = (name: string, isDir: boolean, _basePath = '/test/repo/some/path'): Dirent => { // _basePath unused
     const dirent = new Dirent();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     const mockDirent = dirent as any;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     mockDirent.name = name;
@@ -202,7 +202,7 @@ describe('Agent', () => {
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any], refinedQuery: 'refined', relevanceScore: 0.8 });
+        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any /* eslint-disable-line @typescript-eslint/no-explicit-any */], refinedQuery: 'refined', relevanceScore: 0.8 });
     });
 
     afterEach(() => {
