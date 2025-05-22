@@ -38,8 +38,16 @@ vi.mock('../lib/config-service', async () => {
   };
 });
 
+// Import the mocked configService *after* vi.mock.
+// This `configServiceInstanceFromMockFactory` is the instance that `withRetry` (the SUT) will use,
+// and it's the one we want to manipulate in our tests.
+// It will be typed as the original ConfigService by TypeScript's static analysis,
+// but at runtime, it IS our MockableConfigService.
+import { configService as configServiceInstanceFromMockFactory } from '../lib/config-service';
+
 describe('Utils Module', () => {
-  let mockedConfigService: MockableConfigService;
+  // This variable will hold the correctly typed reference to our mocked configService.
+  let testSubjectMockedConfigService: MockableConfigService;
   let originalDefaultRetryValues: { MAX_RETRIES: number; RETRY_DELAY: number; };
 
   beforeEach(async () => {
@@ -130,8 +138,8 @@ describe('Utils Module', () => {
     });
 
     it('should respect the configured MAX_RETRIES when no retry count is provided', async () => {
-      // Modify the properties of the *mocked* configService instance
-      mockedConfigService.MAX_RETRIES = 4;
+      // Modify the properties of the correctly typed mocked configService instance
+      testSubjectMockedConfigService.MAX_RETRIES = 4;
       
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
       
@@ -148,8 +156,8 @@ describe('Utils Module', () => {
     });
 
     it('should use the provided retry delay between attempts', async () => {
-      // Modify the properties of the *mocked* configService instance
-      mockedConfigService.RETRY_DELAY = 1000;
+      // Modify the properties of the correctly typed mocked configService instance
+      testSubjectMockedConfigService.RETRY_DELAY = 1000;
       
       // Spy on setTimeout
       const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation((callback: () => void) => {
