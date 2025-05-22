@@ -6,16 +6,16 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 // Near the top of the file, after imports but before the first describe block:
 const createMockDirent = (name: string, isDir: boolean): Dirent => {
   const dirent = new Dirent();
-  // Override properties needed for the mock
-  // Cast to any for mock property assignments on a real Dirent object
-  (dirent as any).name = name;
-  (dirent as any).isFile = () => !isDir;
-  (dirent as any).isDirectory = () => isDir;
-  (dirent as any).isBlockDevice = () => false;
-  (dirent as any).isCharacterDevice = () => false;
-  (dirent as any).isSymbolicLink = () => false;
-  (dirent as any).isFIFO = () => false;
-  (dirent as any).isSocket = () => false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mockDirent = dirent as any;
+  mockDirent.name = name;
+  mockDirent.isFile = () => !isDir;
+  mockDirent.isDirectory = () => isDir;
+  mockDirent.isBlockDevice = () => false;
+  mockDirent.isCharacterDevice = () => false;
+  mockDirent.isSymbolicLink = () => false;
+  mockDirent.isFIFO = () => false;
+  mockDirent.isSocket = () => false;
   return dirent;
 };
 
@@ -55,17 +55,18 @@ vi.mock('fs/promises', () => {
   const accessMock = vi.fn();
   const statMock = vi.fn();
   // Define a mock Dirent structure that fsPromises.readdir would resolve with
-  const _mockDirent = (name: string, isDir: boolean, _basePath = '/test/repo/some/path'): Dirent => { // _basePath unused
+  const _mockDirent_fs_promises = (name: string, isDir: boolean, _basePath = '/test/repo/some/path'): Dirent => { // _basePath unused
     const dirent = new Dirent();
-    // Override properties needed for the mock
-    (dirent as any).name = name;
-    (dirent as any).isFile = () => !isDir;
-    (dirent as any).isDirectory = () => isDir;
-    (dirent as any).isBlockDevice = () => false;
-    (dirent as any).isCharacterDevice = () => false;
-    (dirent as any).isSymbolicLink = () => false;
-    (dirent as any).isFIFO = () => false;
-    (dirent as any).isSocket = () => false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockDirent = dirent as any;
+    mockDirent.name = name;
+    mockDirent.isFile = () => !isDir;
+    mockDirent.isDirectory = () => isDir;
+    mockDirent.isBlockDevice = () => false;
+    mockDirent.isCharacterDevice = () => false;
+    mockDirent.isSymbolicLink = () => false;
+    mockDirent.isFIFO = () => false;
+    mockDirent.isSocket = () => false;
     // Standard fs.Dirent does not have 'path' or 'parentPath' properties.
     return dirent;
   };
@@ -129,7 +130,7 @@ describe('Agent', () => {
       (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     }
 
-    (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; });
+    (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; }); // require-await fix
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
@@ -139,38 +140,11 @@ describe('Agent', () => {
     (updateContext as Mock).mockReset();
     (getRecentQueries as Mock).mockReset().mockReturnValue([]);
     vi.mocked(readFile).mockReset().mockResolvedValue('Default file content from generic mock');
-    // Define a helper for creating mock Dirent objects if not done in the mock factory
-    // The key is that the object structurally matches what fs.Dirent provides.
-    // Node's readdir with withFileTypes: true returns Dirent objects.
-    // The generic type for Dirent defaults to string for path properties.
-    // If a specific part of the code expects Dirent<Buffer>, that's where the conflict arises.
-    // For mocking, we often don't need the exact Buffer type for path.
-    const createMockDirent = (name: string, isDir: boolean, _basePath = '/test/repo/some/path'): Dirent => { // _basePath unused
-        const dirent = new Dirent(); // Create a real Dirent instance
-        // Override properties needed for the mock
-        // Object.defineProperty is used to make properties configurable and writable if needed,
-        // but direct assignment should work for simple mocks if Dirent properties are writable.
-        // For simplicity, we'll assume direct assignment works or cast.
-        (dirent as any).name = name;
-        (dirent as any).isFile = () => !isDir;
-        (dirent as any).isDirectory = () => isDir;
-        (dirent as any).isBlockDevice = () => false;
-        (dirent as any).isCharacterDevice = () => false;
-        (dirent as any).isSymbolicLink = () => false;
-        (dirent as any).isFIFO = () => false;
-        (dirent as any).isSocket = () => false;
-        // The 'path' property is not standard on Dirent from 'fs', it's usually inferred or constructed.
-        // If your code relies on a 'path' or 'parentPath' property on Dirent objects *returned by readdir*,
-        // that's a custom extension not part of Node's fs.Dirent.
-        // For standard Dirent, only name and type methods are guaranteed.
-        // Let's remove custom path/parentPath from the mock Dirent itself if not strictly needed by SUT.
-        return dirent;
-    };
-    
     // Mock readdir to resolve with an array of these mock Dirent objects.
     // The cast to `Dirent[]` should be sufficient if createMockDirent returns valid Dirent-like objects.
     // Use 'as any' to resolve the stubborn TS2345 error for the mock.
     // This is acceptable in tests where the precise generic of Dirent isn't crucial.
+    // Using the top-level createMockDirent
     vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent<Buffer>[]); 
   });
   afterEach(() => { vi.restoreAllMocks(); });
@@ -192,7 +166,7 @@ describe('Agent', () => {
       await expect(ActualAgentModule.executeToolCall(
         { tool: 'generate_suggestion', parameters: { query: 'test' } },
         mockQdrantClientInstance, repoPath, false
-      )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available');
+      )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available'); // This line was correct
     });
   });
   
@@ -208,9 +182,11 @@ describe('Agent', () => {
         runAgentLoopSUT_local = ActualAgentModule.runAgentLoop;
 
         // General setup for LLM provider mock for this describe block. Tests can override.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("LLM Verification OK");
         // Ensure dependencies of executeToolCall are reset/mocked as needed for each test
-        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any], refinedQuery: 'refined', relevanceScore: 0.8 } as any);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        vi.mocked(searchWithRefinement).mockClear().mockResolvedValue({ results: [{id: 'search-res-1', score: 0.8, payload: {content: 'mock snippet', filepath: 'file.ts'}} as any], refinedQuery: 'refined', relevanceScore: 0.8 });
     });
 
     afterEach(() => {
@@ -239,18 +215,13 @@ describe('Agent', () => {
       await runAgentLoopSUT_local('query with tool', 'session2', mockQdrantClient, repoPath, true);
 
       // Verify that the LLM was called for reasoning and final response
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockLLMProviderInstance.generateText).toHaveBeenCalledTimes(3); // Verification, Reasoning, Final Response
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(2, expect.stringContaining('User query: query with tool')); 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockLLMProviderInstance.generateText).toHaveBeenNthCalledWith(3, expect.stringContaining('Tool: search_code')); 
 
       // Verify that searchWithRefinement (a dependency of executeToolCall for "search_code") was called
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(searchWithRefinement).toHaveBeenCalledWith(mockQdrantClient, "tool query", ['file1.ts', 'file2.js']); 
       
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response after tool.')); 
     });
   });

@@ -13,8 +13,8 @@ interface MockableConfigService {
 
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
-  const originalModule = await vi.importActual('../lib/config-service') as { configService: { MAX_RETRIES: number; RETRY_DELAY: number; OLLAMA_HOST: string; [key: string]: unknown }; logger: unknown }; // This type assertion might be complex. Simplify if possible or accept if necessary for the mock.
-  const originalInstance = originalModule.configService;
+  const originalModule = await vi.importActual('../lib/config-service');
+  const originalInstance = (originalModule as { configService: { MAX_RETRIES: number; RETRY_DELAY: number; OLLAMA_HOST: string; [key: string]: unknown } }).configService;
 
   const mockConfigServiceValues: MockableConfigService = {
     MAX_RETRIES: originalInstance.MAX_RETRIES,
@@ -54,7 +54,7 @@ describe('Utils Module', () => {
     // Dynamically import the mocked service to get the instance created by the mock factory.
     // This instance (mockedConfigService) will conform to MockableConfigService.
     const mockedModule = await import('../lib/config-service.js');
-    mockedConfigService = mockedModule.configService as unknown as MockableConfigService;
+    mockedConfigService = mockedModule.configService as MockableConfigService;
 
     vi.useFakeTimers();
     // Reset the properties of the *actual mocked instance* before each test

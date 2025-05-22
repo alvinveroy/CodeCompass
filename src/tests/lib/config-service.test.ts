@@ -129,7 +129,7 @@ describe('ConfigService', () => {
     // Get the MOCK_LOGGER_INSTANCE that the factory for winston mock returns
     // This relies on the factory structure: vi.mock('winston', () => { const MOCK_LOGGER_INSTANCE = {...}; return { createLogger: vi.fn().mockReturnValue(MOCK_LOGGER_INSTANCE), ... } })
     // Access the mock logger instance directly from the mock setup
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     const loggerInstanceFromMockFactory = (_winstonMockedModule as any).default.createLogger() as import('winston').Logger;
 
 
@@ -172,7 +172,6 @@ describe('ConfigService', () => {
     vi.stubEnv('OLLAMA_HOST', 'invalid-url-format');
     const service = await createServiceInstance();
     expect(service.OLLAMA_HOST).toBe('http://127.0.0.1:11434');
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(service.logger.warn).toHaveBeenCalledWith(expect.stringContaining('OLLAMA_HOST environment variable "invalid-url-format" is not a valid URL'));
   });
   
@@ -337,7 +336,6 @@ describe('ConfigService', () => {
     // This should be the instance returned by the mocked createLogger
     const loggerInstance = _service.logger; // Access the logger from the service instance itself
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(loggerInstance.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load model config'));
     expect(_service.SUGGESTION_MODEL).toBe('llama3.1:8b'); // Should fall back to default
   });
@@ -423,7 +421,6 @@ describe('ConfigService', () => {
 
     // Check that the service's logger was called with the expected error message.
     // The logger instance on `service` is the MOCK_LOGGER_INSTANCE.
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(service.logger.error).toHaveBeenCalledWith(
       expect.stringContaining('Failed to create user-specific log directory: Permission denied for user log dir. Falling back to local logs dir.')
     );

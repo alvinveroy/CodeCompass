@@ -73,7 +73,7 @@ describe('Query Refinement Tests', () => {
         mockRefineQuery_Injected
       );
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(1);
+      expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(1); 
       // Ensure results are cast or match DetailedQdrantSearchResult for this assertion
       expect((results[0] as Schemas['ScoredPoint']).score).toBe(0.8);
       expect(refinedQuery).toBe('initial query');
@@ -82,14 +82,10 @@ describe('Query Refinement Tests', () => {
     });
 
     it('should refine query up to maxRefinements (using injected mock)', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(mockQdrantClientInstance.search)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .mockResolvedValueOnce(dummySearchResults(0.2) as any) 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .mockResolvedValueOnce(dummySearchResults(0.5) as any) 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .mockResolvedValueOnce(dummySearchResults(0.8) as any); 
+        .mockResolvedValueOnce(dummySearchResults(0.2) as unknown as Schemas['ScoredPoint'][]) 
+        .mockResolvedValueOnce(dummySearchResults(0.5) as unknown as Schemas['ScoredPoint'][]) 
+        .mockResolvedValueOnce(dummySearchResults(0.8) as unknown as Schemas['ScoredPoint'][]); 
 
       const { results, relevanceScore, refinedQuery } = await searchWithRefinement(
         mockQdrantClientInstance, 'original query', [], undefined, 2, 0.75,
@@ -105,8 +101,8 @@ describe('Query Refinement Tests', () => {
       // Ensure the results passed to the mock match DetailedQdrantSearchResult[] if that's what RefineQueryFunc expects
       // The dummySearchResults creates Schemas['ScoredPoint'][], which might be compatible or need casting/adjusting
       // For the mock call assertion, if RefineQueryFunc expects DetailedQdrantSearchResult[], you might need to cast:
-      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(1, 'original query', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.2);
-      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(2, 'original query broadened by INJECTED mockRefineQuery', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.5);
+      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(1, 'original query', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.2); // Cast is okay for test
+      expect(mockRefineQuery_Injected).toHaveBeenNthCalledWith(2, 'original query broadened by INJECTED mockRefineQuery', expect.any(Array) as unknown as DetailedQdrantSearchResult[], 0.5); // Cast is okay for test
     });
     
     it('should handle empty search results gracefully (using injected mock)', async () => {
@@ -120,11 +116,10 @@ describe('Query Refinement Tests', () => {
             mockRefineQuery_Injected // Pass the mock
         );
         // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3);
+        expect(mockQdrantClientInstance.search).toHaveBeenCalledTimes(3); 
         expect(results).toEqual([]);
         expect(relevanceScore).toBe(0);
         expect(refinedQuery).toBe('query for no results broadened by INJECTED mockRefineQuery broadened by INJECTED mockRefineQuery');
-        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Completed search with 2 refinements`)); 
         expect(mockRefineQuery_Injected).toHaveBeenCalledTimes(2);
     });

@@ -124,7 +124,7 @@ describe('Config Module', () => {
       // Mock 'fs' specifically for this suite.
       // This ensures that ConfigService does not load from actual config files during these tests.
       vi.doMock('fs', async () => {
-        const actualFs = await vi.importActual('fs') as typeof import('fs'); // Import actual fs to delegate calls
+        const actualFs = await vi.importActual('fs'); // Import actual fs to delegate calls
         return {
           ...actualFs, // Delegate all other fs calls to the actual module
           existsSync: vi.fn((pathToCheck: string) => {
@@ -139,7 +139,6 @@ describe('Config Module', () => {
             // This should ideally not be called for config files if existsSync is false
             if (typeof pathToCheck === 'string' && (pathToCheck.endsWith('model-config.json') || pathToCheck.endsWith('deepseek-config.json'))) {
               const e = new Error(`ENOENT: no such file or directory, open '${pathToCheck}' (mocked)`);
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const errorWithCode = e as Error & { code?: string | number }; // Cast to a type that definitely has a writable code
               errorWithCode.code = 'ENOENT';
               throw e;

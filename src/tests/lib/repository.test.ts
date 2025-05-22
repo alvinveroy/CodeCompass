@@ -62,18 +62,17 @@ vi.mock('util', async (importOriginal) => {
   const internalMockedPromisifiedExec = vi.fn(); 
   
   // Store it on a temporary global to retrieve it in the test file after imports.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
   (globalThis as any).__test__mockedPromisifiedExec = internalMockedPromisifiedExec;
 
   return {
     __esModule: true,
     ...actualUtil,
-    promisify: (fnToPromisify: (...args: any[]) => any) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    promisify: (fnToPromisify: (...args: any[]) => any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (fnToPromisify && (typeof fnToPromisify.name === 'string' && fnToPromisify.name === 'exec' || fnToPromisify === actualChildProcessExecMockInstance)) {
         return internalMockedPromisifiedExec;
       }
-      return actualUtil.promisify(fnToPromisify as any);
+      return actualUtil.promisify(fnToPromisify as (...args: never[]) => unknown);
     },
   };
 });
@@ -105,7 +104,7 @@ import { logger } from '../../lib/config-service'; // configService is mocked, o
 import { access as mockedFsAccessImported, readFile as mockedFsReadFileImported, readdir as mockedFsReadDirImported, stat as mockedFsStatImported } from 'fs/promises';
 
 // Retrieve the mock function via the globalThis workaround
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
 const importedMockExecAsyncFn = (globalThis as any).__test__mockedPromisifiedExec as Mock;
 
 // Import named mocks from isomorphic-git
@@ -220,7 +219,7 @@ describe('Repository Utilities', () => {
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       // Add assertion for importedMockExecAsyncFn call
-      expect(importedMockExecAsyncFn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: repoPath })); // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+      expect(importedMockExecAsyncFn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: repoPath }));
       expect(result).toBe('a'.repeat(MAX_DIFF_LENGTH_FROM_SUT) + "\n... (diff truncated)");
       expect(result).toContain('... (diff truncated)');
     });
@@ -236,9 +235,8 @@ describe('Repository Utilities', () => {
       const result = await repositoryFunctions.getRepositoryDiff(repoPath, mockInjectedValidator);
       expect(mockInjectedValidator).toHaveBeenCalledWith(repoPath);
       // Add assertion for importedMockExecAsyncFn call
-      expect(importedMockExecAsyncFn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: repoPath })); // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+      expect(importedMockExecAsyncFn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: repoPath }));
       expect(result).toBe(`Failed to retrieve diff for ${repoPath}: Git command failed`);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(logger.error).toHaveBeenCalledWith(
         `Error retrieving git diff for ${repoPath}: Git command failed`,
         expect.objectContaining({
@@ -278,7 +276,7 @@ describe('Repository Utilities', () => {
         ];
         vi.mocked(git.log).mockResolvedValue(mockCommits as unknown as import('isomorphic-git').ReadCommitResult[]); 
 
-        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => { 
+        vi.mocked(git.readCommit).mockImplementation(async ({ oid }: { oid: string }) => {
             await Promise.resolve(); // Add a no-op await
             if (oid === 'commit2') return { oid: 'commit2', commit: { tree: 'tree2_oid', parent: ['commit1_oid'], author: mockCommits[0].commit.author, committer: mockCommits[0].commit.committer, message: mockCommits[0].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 
             if (oid === 'commit1') return { oid: 'commit1', commit: { tree: 'tree1_oid', parent: [], author: mockCommits[1].commit.author, committer: mockCommits[1].commit.committer, message: mockCommits[1].commit.message } } as unknown as import('isomorphic-git').ReadCommitResult; 

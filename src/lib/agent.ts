@@ -1066,9 +1066,9 @@ export async function runAgentLoop(
               outputStr = '[Unserializable Object]';
             }
           } else {
-            outputStr = String(step.output);
+            outputStr = String(step.output); // Handles null, undefined, primitives
           }
-          return `Previous tool: ${step.tool}\nResults: ${outputStr}`;
+          return `Previous tool: ${step.tool}\nResults: ${outputStr}`; // Ensure outputStr is used here
         }).join('\n\n');
         
         userPrompt += `\n\nContext from previous steps:\n${contextStr}`;
