@@ -21,14 +21,14 @@ interface PartialOriginalConfig {
 
 vi.mock('../lib/config-service', async () => {
   // Import the original module to get default values *inside the factory*
-  const originalModule = await vi.importActual('../lib/config-service'); // More specific cast
-   
-  const originalInstance: PartialOriginalConfig = originalModule.configService;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const originalModule = await vi.importActual('../lib/config-service') as any;
+  const originalInstanceFromActual = originalModule.configService as PartialOriginalConfig;
 
   const mockConfigServiceValues: MockableConfigService = {
-    MAX_RETRIES: originalInstance.MAX_RETRIES,
-    RETRY_DELAY: originalInstance.RETRY_DELAY,
-    OLLAMA_HOST: originalInstance.OLLAMA_HOST,
+    MAX_RETRIES: originalInstanceFromActual.MAX_RETRIES,
+    RETRY_DELAY: originalInstanceFromActual.RETRY_DELAY,
+    OLLAMA_HOST: originalInstanceFromActual.OLLAMA_HOST,
     logger: {
       warn: vi.fn(),
       error: vi.fn(),
@@ -60,15 +60,18 @@ describe('Utils Module', () => {
   let originalDefaultRetryValues: { MAX_RETRIES: number; RETRY_DELAY: number; };
 
   beforeEach(async () => {
-    // Cast the result of vi.importActual to `any` first, as its precise type can be elusive.
+    // Step 1: Get the actual module, casting to `any` because its precise type here is elusive.
+    // The `eslint-disable` is justified because `vi.importActual` in a mocked context
+    // doesn't always give TypeScript enough info for a precise type.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const originalModule = await vi.importActual('../lib/config-service') as any; 
+    const originalModuleFromActualImport = await vi.importActual('../lib/config-service') as any;
     
-    // Now, access `configService` and cast it to the specific partial type we need.
-    // This explicitly tells TypeScript the shape of `originalModule.configService`.
-    const originalInstance = originalModule.configService as PartialOriginalConfig;
+    // Step 2: Access the 'configService' property and explicitly cast it to 'PartialOriginalConfig'.
+    // This is where we tell TypeScript the shape we expect for this specific property.
+    // This assertion is necessary and correct.
+    const originalInstance = originalModuleFromActualImport.configService as PartialOriginalConfig;
 
-    // The rest of the assignments should now work correctly if PartialOriginalConfig is accurate.
+    // Step 3: Use the now correctly-typed 'originalInstance'
     originalDefaultRetryValues = {
       MAX_RETRIES: originalInstance.MAX_RETRIES,
       RETRY_DELAY: originalInstance.RETRY_DELAY,
@@ -78,7 +81,7 @@ describe('Utils Module', () => {
     // This is the crucial part: we cast the statically imported `configServiceInstanceFromMockFactory`
     // (which TS thinks is the original ConfigService) to our `MockableConfigService` type.
     // This is safe because our vi.mock factory ensures it *is* a MockableConfigService at runtime.
-     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     testSubjectMockedConfigService = configServiceInstanceFromMockFactory as unknown as MockableConfigService;
 
     vi.useFakeTimers();
