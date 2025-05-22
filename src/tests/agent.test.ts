@@ -210,7 +210,7 @@ describe('Agent', () => {
     // We will control their behavior by mocking their dependencies or the LLM responses.
     let runAgentLoopSUT_local: typeof ActualAgentModule.runAgentLoop; // SUT for this block
 
-    beforeEach(async () => {
+    beforeEach(() => {
         // Assign SUT for this block
         runAgentLoopSUT_local = ActualAgentModule.runAgentLoop;
 

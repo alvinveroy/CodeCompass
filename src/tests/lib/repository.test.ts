@@ -195,11 +195,10 @@ describe('Repository Utilities', () => {
 
     // Setup mocks specifically for tests that expect validateGitRepository to pass
     // This beforeEach establishes the common "happy path" for validateGitRepository and git.log
-    beforeEach(async () => {
+    beforeEach(() => {
         // This mock will be passed directly to getRepositoryDiff
         mockInjectedValidator = vi.fn();
         vi.mocked(importedMockExecAsyncFn).mockReset(); // Reset our new async mock for execAsync
-        // eslint-disable-next-line @typescript-eslint/require-await -- mockResolvedValue is correct for an async mock function.
         mockInjectedValidator.mockResolvedValue(true); // Default to valid
         setupGitLogWithTwoCommits();
     });

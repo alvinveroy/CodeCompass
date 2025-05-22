@@ -1225,7 +1225,8 @@ export async function runAgentLoop(
     
     // Append note if terminated due to absolute max steps, regardless of how finalResponse was set
     if (terminatedDueToAbsoluteMax) {
-        agentState.finalResponse = (agentState.finalResponse || "Processing was terminated.") +
+        const currentFinalResponse = agentState.finalResponse ?? "Processing was terminated.";
+        agentState.finalResponse = currentFinalResponse +
         "\n[Note: The agent utilized the maximum allowed processing steps.]";
     }
     
