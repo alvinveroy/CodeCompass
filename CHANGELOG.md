@@ -22,8 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 +- **Documentation Updates (Git Commit ID: 2a22fba):**
 +    - Added documentation for `src/lib/agent-service.ts` in `docs/source-files/src_lib_agent-service.md`, detailing its role in processing queries via Qdrant search and LLM synthesis.
-+- **Documentation Updates (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
-+    - Created `docs/source-files/src_lib_agent_capabilities.md` to document each internal capability function, its parameters, purpose, and dependencies.
++- **Documentation Updates (Git Commit ID: e10a3a4):**
++    - Updated `docs/source-files/src_lib_query-refinement.md` to accurately describe how query refinement helpers (`focusQueryBasedOnResults`, `tweakQuery`) interact with the new typed Qdrant payloads (`FileChunkPayload`, `CommitInfoPayload`, `DiffChunkPayload`).
 +- **Git Hooks and .gitignore Management (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
 +    - Added `src/scripts/update-gitignore.ts` to programmatically manage `.gitignore`, including entries for `CHANGELOG.md` and `RETROSPECTION.md`.
 +    - Added `src/scripts/install-git-hooks.ts` to facilitate the installation of client-side Git hooks.
