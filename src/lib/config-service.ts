@@ -15,6 +15,7 @@ interface ModelConfigFile {
   // Add other provider-specific keys here as needed
   SUMMARIZATION_MODEL?: string; // New
   REFINEMENT_MODEL?: string;   // New
+  HTTP_PORT?: number; // Added for Express server port
 }
 
 class ConfigService {
@@ -59,6 +60,7 @@ class ConfigService {
   private _diffLinesOfContext: number;
   private _maxFileContentLengthForCapability: number;
   private _maxDirListingEntriesForCapability: number;
+  private _httpPort: number; // Added
 
 
   private _useMixedProviders: boolean;
@@ -90,6 +92,8 @@ class ConfigService {
   public readonly DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY = 10000;
   public readonly DEFAULT_EMBEDDING_DIMENSION = 768; // For nomic-embed-text
   public readonly DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY = 50;
+
+  public readonly DEFAULT_HTTP_PORT = 3001; // Added
 
 
   public readonly DEEPSEEK_RPM_LIMIT_DEFAULT = 60; // Default RPM for DeepSeek
@@ -231,6 +235,7 @@ class ConfigService {
     this._diffLinesOfContext = parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this.DEFAULT_DIFF_LINES_OF_CONTEXT;
     this._maxFileContentLengthForCapability = parseInt(process.env.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY;
     this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
+    this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Added
 
     // For _summarizationModel and _refinementModel, we'll set them properly in loadConfigurationsFromFile
     // and reloadConfigsFromFile after _suggestionModel is definitively set.
@@ -341,6 +346,11 @@ class ConfigService {
     if (modelConfig.CLAUDE_API_KEY) {
       this._claudeApiKey = modelConfig.CLAUDE_API_KEY;
     }
+
+    // HTTP_PORT: file > env > default
+    if (modelConfig.HTTP_PORT !== undefined) { // Check for undefined explicitly for numbers
+      this._httpPort = modelConfig.HTTP_PORT;
+    }
     
     // Ensure process.env reflects the final state. This is crucial for any part of the code
     // or external libraries that might still read from process.env directly.
@@ -382,6 +392,7 @@ class ConfigService {
     process.env.DIFF_LINES_OF_CONTEXT = String(this._diffLinesOfContext);
     process.env.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY = String(this._maxFileContentLengthForCapability);
     process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY = String(this._maxDirListingEntriesForCapability);
+    process.env.HTTP_PORT = String(this._httpPort); // Added
   }
   
   public reloadConfigsFromFile(_forceSet = true): void {
@@ -416,6 +427,7 @@ class ConfigService {
     this._diffLinesOfContext = parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this.DEFAULT_DIFF_LINES_OF_CONTEXT;
     this._maxFileContentLengthForCapability = parseInt(process.env.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY;
     this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
+    this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Added
     
     // Initialize from env, file loading will override if present, then derive.
     this._summarizationModel = process.env.SUMMARIZATION_MODEL || "";
@@ -474,6 +486,7 @@ class ConfigService {
   get DIFF_LINES_OF_CONTEXT(): number { return parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this._diffLinesOfContext; }
   get MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY(): number { return this._maxFileContentLengthForCapability; }
   get MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY(): number { return this._maxDirListingEntriesForCapability; }
+  get HTTP_PORT(): number { return parseInt(process.env.HTTP_PORT || '', 10) || this._httpPort; } // Added getter
 
   // Method to get all relevant config for a provider (example for OpenAI)
   public getConfig(): { [key: string]: string | number | boolean | undefined } {
@@ -579,6 +592,7 @@ class ConfigService {
         CLAUDE_API_KEY: this.CLAUDE_API_KEY,
         SUMMARIZATION_MODEL: this.SUMMARIZATION_MODEL, // New
         REFINEMENT_MODEL: this.REFINEMENT_MODEL,     // New
+        HTTP_PORT: this.HTTP_PORT, // Added
       };
       // Remove undefined keys before saving
       Object.keys(configToSave).forEach(keyStr => {

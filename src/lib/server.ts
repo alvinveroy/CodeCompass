@@ -499,10 +499,7 @@ ${indexingError ? `- Error: ${indexingError}` : ''}
       res.status(202).json({ message: 'Re-indexing process initiated.' });
     });
 
-    const httpPort = configService.HTTP_PORT || 3001; // Default to 3001 if not set
-    if (!configService.HTTP_PORT) {
-      logger.warn(`HTTP_PORT not found in configuration. Defaulting to ${httpPort}. Please set HTTP_PORT in your config.`);
-    }
+    const httpPort = configService.HTTP_PORT; // Read from configService
     const httpServer = http.createServer(expressApp);
     httpServer.listen(httpPort, () => {
       logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
