@@ -111,12 +111,22 @@ export async function batchUpsertVectors(
       logger.debug(`Batch upserted ${batch.length} points (total processed: ${Math.min(i + batchSize, points.length)})`);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      let detailedErrorMessage = err.message;
-      if (axios.isAxiosError(error) && error.response) {
-        detailedErrorMessage = `Status: ${error.response.status} - ${error.response.statusText}. Data: ${JSON.stringify(error.response.data)}`;
+      let detailedErrorMessage = `Original error message: ${err.message}`;
+      let errorDetailsPayload: Record<string, unknown> = { 
+        collectionName, 
+        batchStartIndex: i, 
+        batchSize 
+      };
+
+      // Attempt to extract more details if the error object has common fields from HTTP client errors
+      if (typeof error === 'object' && error !== null) {
+        if ('status' in error) errorDetailsPayload.qdrantErrorStatus = error.status;
+        if ('data' in error) errorDetailsPayload.qdrantErrorData = error.data; // Common for some clients
+        if ('response' in error && typeof (error as {response:unknown}).response === 'object' && (error as {response:object}).response !== null) {
+             errorDetailsPayload.qdrantErrorResponse = (error as {response:object}).response; // If response is an object
+        }
       }
-      logger.error(`Failed to batch upsert points: ${detailedErrorMessage}`, { collectionName, batchStartIndex: i, batchSize });
-      // Depending on requirements, you might want to re-throw or handle partial failures
+      logger.error(`Failed to batch upsert points. ${detailedErrorMessage}`, errorDetailsPayload);
       throw new Error(`Failed to batch upsert points: ${detailedErrorMessage}`);
     }
   }
