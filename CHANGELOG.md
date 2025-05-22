@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Updated the `/api/indexing-status` HTTP endpoint and the `get_indexing_status` MCP tool in `src/lib/server.ts` to use `getGlobalIndexingStatus()` for accurate progress reporting, removing local status variables.
     - The `/api/repository/notify-update` endpoint now checks the global indexing status before initiating a new indexing process to prevent concurrent indexing runs.
 ### Added
++- **Documentation Updates (Git Commit ID: 2a22fba):**
++    - Added documentation for `src/lib/agent-service.ts` in `docs/source-files/src_lib_agent-service.md`, detailing its role in processing queries via Qdrant search and LLM synthesis.
 +- **Git Hooks and .gitignore Management (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
 +    - Added `src/scripts/update-gitignore.ts` to programmatically manage `.gitignore`, including entries for `CHANGELOG.md` and `RETROSPECTION.md`.
 +    - Added `src/scripts/install-git-hooks.ts` to facilitate the installation of client-side Git hooks.
