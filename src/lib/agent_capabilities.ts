@@ -148,10 +148,15 @@ export async function capability_getRepositoryOverview(
       originalFilepath = payload.filepath;
       chunkIndex = payload.chunk_index;
       totalChunks = payload.total_chunks;
-    } else if (payload) {
-      logger.warn(`capability_getRepositoryOverview: Unexpected payload type ${payload.dataType} for result ID ${r.id}`);
-      filepathDisplay = (payload as { filepath?: string }).filepath || `Unknown path (ID: ${r.id})`;
-      snippetContent = `Non-standard content (type: ${payload.dataType})`;
+    } else if (payload && typeof payload === 'object' && 'dataType' in payload) { // Check if payload is an object and has dataType
+      const unknownPayload = payload as { dataType?: string; filepath?: string }; // Use a broader type for safe access
+      logger.warn(`capability_getRepositoryOverview: Received payload with unhandled dataType '${unknownPayload.dataType || 'undefined'}' or unexpected structure for result ID ${r.id}`);
+      filepathDisplay = unknownPayload.filepath || `Unknown path (ID: ${r.id})`;
+      snippetContent = `Non-standard content (type: ${unknownPayload.dataType || 'unknown_structure'})`;
+    } else if (payload) { // Payload exists but is not an object or doesn't have dataType
+      logger.warn(`capability_getRepositoryOverview: Received malformed or unexpected payload structure for result ID ${r.id}`, { payload });
+      filepathDisplay = (payload as { filepath?: string }).filepath || `Unknown path (ID: ${r.id})`; // Keep existing fallback for filepath
+      snippetContent = `Malformed payload (ID: ${r.id})`;
     }
 
     const processedSnippetContent = await processSnippet(
@@ -386,19 +391,21 @@ export async function capability_getAdjacentFileChunks(
                                                               // Or, we can cast if confident, but better to check dataType if it could be mixed.
                                                               // Given the filter, it *should* be FileChunkPayload.
         if (pointPayload.dataType === 'file_chunk') { // Explicit check for safety
+          const fileChunkPayload = pointPayload as FileChunkPayload; // Cast to specific type
           adjacentChunksResult.push({
-            filepath: pointPayload.filepath,
-            chunk_index: pointPayload.chunk_index,
-            snippet: pointPayload.file_content_chunk,
+            filepath: fileChunkPayload.filepath,
+            chunk_index: fileChunkPayload.chunk_index,
+            snippet: fileChunkPayload.file_content_chunk,
           });
         } else {
           // This case should ideally not be hit due to the Qdrant filter
-          logger.warn(`capability_getAdjacentFileChunks: Expected file_chunk, got ${pointPayload.dataType} for ${filepath} chunk ${targetIndex}`);
+          const actualDataType = (pointPayload && typeof pointPayload === 'object' && 'dataType' in pointPayload) ? (pointPayload as {dataType: string}).dataType : 'unknown';
+          logger.warn(`capability_getAdjacentFileChunks: Expected file_chunk, got ${actualDataType} for ${filepath} chunk ${targetIndex}`);
           adjacentChunksResult.push({
             filepath: filepath,
             chunk_index: targetIndex,
             snippet: "",
-            note: `Chunk ${targetIndex} for file ${filepath} had unexpected data type ${pointPayload.dataType}.`
+            note: `Chunk ${targetIndex} for file ${filepath} had unexpected data type ${actualDataType}.`
           });
         }
       } else {

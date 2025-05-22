@@ -7,6 +7,8 @@ interface MockableConfigService {
   MAX_RETRIES: number;
   RETRY_DELAY: number;
   OLLAMA_HOST: string; // Assuming this is used or needed by the SUT directly or indirectly
+  MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY: number;
+  MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY: number;
   // Add other properties from the actual ConfigService if they are accessed by withRetry
   logger: { warn: Mock; error: Mock; info: Mock; debug: Mock };
 }
@@ -16,6 +18,8 @@ interface PartialOriginalConfig {
   MAX_RETRIES: number;
   RETRY_DELAY: number;
   OLLAMA_HOST: string;
+  MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY: number;
+  MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY: number;
   // Add other properties if accessed from originalInstance
 }
 
@@ -29,6 +33,8 @@ vi.mock('../lib/config-service', async () => {
     MAX_RETRIES: originalInstanceFromActual.MAX_RETRIES,
     RETRY_DELAY: originalInstanceFromActual.RETRY_DELAY,
     OLLAMA_HOST: originalInstanceFromActual.OLLAMA_HOST,
+    MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY: originalInstanceFromActual.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || 10000,
+    MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY: originalInstanceFromActual.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || 50,
     logger: {
       warn: vi.fn(),
       error: vi.fn(),

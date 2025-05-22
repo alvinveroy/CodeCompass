@@ -41,7 +41,13 @@ vi.mock('../lib/config-service', async (importOriginal) => {
     LOG_DIR: actualInstance.LOG_DIR,
     DEEPSEEK_RPM_LIMIT_DEFAULT: actualInstance.DEEPSEEK_RPM_LIMIT_DEFAULT,
     AGENT_QUERY_TIMEOUT_DEFAULT: actualInstance.AGENT_QUERY_TIMEOUT_DEFAULT,
-    // Ensure all readonly properties from the actual ConfigService class are here if accessed
+    DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY: actualInstance.DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || 10000,
+    DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY: actualInstance.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || 50,
+    // Ensure all readonly properties from the actual ConfigService class are here if accessed (getters will handle the actual values)
+    // For direct value properties in the mock:
+    MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY: actualInstance.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || 10000,
+    MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY: actualInstance.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || 50,
+
 
     // Mocked Getters that read from process.env
      

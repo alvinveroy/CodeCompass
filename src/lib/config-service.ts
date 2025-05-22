@@ -56,6 +56,8 @@ class ConfigService {
   private _qdrantBatchUpsertSize: number;
   private _agentMaxContextItems: number;
   private _diffLinesOfContext: number;
+  private _maxFileContentLengthForCapability: number;
+  private _maxDirListingEntriesForCapability: number;
 
 
   private _useMixedProviders: boolean;
@@ -84,6 +86,8 @@ class ConfigService {
   public readonly DEFAULT_QDRANT_BATCH_UPSERT_SIZE = 100;
   public readonly DEFAULT_AGENT_MAX_CONTEXT_ITEMS = 10;
   public readonly DEFAULT_DIFF_LINES_OF_CONTEXT = 3;
+  public readonly DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY = 10000;
+  public readonly DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY = 50;
 
 
   public readonly DEEPSEEK_RPM_LIMIT_DEFAULT = 60; // Default RPM for DeepSeek
@@ -222,6 +226,8 @@ class ConfigService {
     this._qdrantBatchUpsertSize = parseInt(process.env.QDRANT_BATCH_UPSERT_SIZE || '', 10) || this.DEFAULT_QDRANT_BATCH_UPSERT_SIZE;
     this._agentMaxContextItems = parseInt(process.env.AGENT_MAX_CONTEXT_ITEMS || '', 10) || this.DEFAULT_AGENT_MAX_CONTEXT_ITEMS;
     this._diffLinesOfContext = parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this.DEFAULT_DIFF_LINES_OF_CONTEXT;
+    this._maxFileContentLengthForCapability = parseInt(process.env.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY;
+    this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
 
     // For _summarizationModel and _refinementModel, we'll set them properly in loadConfigurationsFromFile
     // and reloadConfigsFromFile after _suggestionModel is definitively set.
@@ -370,6 +376,8 @@ class ConfigService {
     process.env.QDRANT_BATCH_UPSERT_SIZE = String(this._qdrantBatchUpsertSize);
     process.env.AGENT_MAX_CONTEXT_ITEMS = String(this._agentMaxContextItems);
     process.env.DIFF_LINES_OF_CONTEXT = String(this._diffLinesOfContext);
+    process.env.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY = String(this._maxFileContentLengthForCapability);
+    process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY = String(this._maxDirListingEntriesForCapability);
   }
   
   public reloadConfigsFromFile(_forceSet = true): void {
@@ -401,6 +409,8 @@ class ConfigService {
     this._qdrantBatchUpsertSize = parseInt(process.env.QDRANT_BATCH_UPSERT_SIZE || '', 10) || this.DEFAULT_QDRANT_BATCH_UPSERT_SIZE;
     this._agentMaxContextItems = parseInt(process.env.AGENT_MAX_CONTEXT_ITEMS || '', 10) || this.DEFAULT_AGENT_MAX_CONTEXT_ITEMS;
     this._diffLinesOfContext = parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this.DEFAULT_DIFF_LINES_OF_CONTEXT;
+    this._maxFileContentLengthForCapability = parseInt(process.env.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY;
+    this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
     
     // Initialize from env, file loading will override if present, then derive.
     this._summarizationModel = process.env.SUMMARIZATION_MODEL || "";
@@ -456,6 +466,8 @@ class ConfigService {
   get QDRANT_BATCH_UPSERT_SIZE(): number { return parseInt(process.env.QDRANT_BATCH_UPSERT_SIZE || '', 10) || this._qdrantBatchUpsertSize; }
   get AGENT_MAX_CONTEXT_ITEMS(): number { return parseInt(process.env.AGENT_MAX_CONTEXT_ITEMS || '', 10) || this._agentMaxContextItems; }
   get DIFF_LINES_OF_CONTEXT(): number { return parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this._diffLinesOfContext; }
+  get MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY(): number { return this._maxFileContentLengthForCapability; }
+  get MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY(): number { return this._maxDirListingEntriesForCapability; }
 
   // Method to get all relevant config for a provider (example for OpenAI)
   public getConfig(): { [key: string]: string | number | boolean | undefined } {
