@@ -42,69 +42,24 @@ export interface Tool {
 
 // Tool registry with descriptions for the agent
 export const toolRegistry: Tool[] = [
-  {
-    name: "search_code",
-    description: "Search for code in the repository based on a query. Returns relevant code snippets with file paths and summaries.",
-    parameters: {
-      query: "string - The search query to find relevant code",
-      sessionId: "string (optional) - Session ID to maintain context across requests"
-    },
-    requiresModel: false
-  },
-  {
-    name: "get_repository_context",
-    description: "Get comprehensive context about the repository based on a query. Returns relevant files, code snippets, and recent changes.",
-    parameters: {
-      query: "string - The query to find relevant repository context",
-      sessionId: "string (optional) - Session ID to maintain context across requests"
-    },
-    requiresModel: false
-  },
-  {
-    name: "generate_suggestion",
-    description: "Generate a code suggestion based on a query and repository context. Returns a detailed code suggestion with explanation.",
-    parameters: {
-      query: "string - The query describing what suggestion is needed",
-      sessionId: "string (optional) - Session ID to maintain context across requests"
-    },
-    requiresModel: true
-  },
-  {
-    name: "get_changelog",
-    description: "Get the project's changelog to understand recent updates and changes.",
-    parameters: {},
-    requiresModel: false
-  },
-  {
-    name: "analyze_code_problem",
-    description: "Analyze a code problem in depth, providing root cause analysis and implementation plan.",
-    parameters: {
-      query: "string - Description of the code problem to analyze",
-      sessionId: "string (optional) - Session ID to maintain context across requests"
-    },
-    requiresModel: true
-  },
-  {
-    name: "request_additional_context",
-    description: "Request additional or different types of context when current information is insufficient. Use this to get more search results, full file content, or list files in a directory.",
-    parameters: {
-      context_type: "string - Type of context needed. Enum: ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS']", // Added ADJACENT_FILE_CHUNKS
-      query_or_path: "string - The original search query (for MORE_SEARCH_RESULTS), the full file path (for FULL_FILE_CONTENT or ADJACENT_FILE_CHUNKS), or the directory path (for DIRECTORY_LISTING)",
-      // Add chunk_index as a new parameter description
-      chunk_index: "integer (optional) - The 0-indexed number of the current chunk, required if context_type is ADJACENT_FILE_CHUNKS.",
-      reasoning: "string (optional) - Brief explanation of why this additional context is needed and how it will help answer the user's query.",
-      sessionId: "string (optional) - Session ID to maintain context across requests"
-    },
-    requiresModel: false // The tool itself doesn't require an LLM, though its sub-operations might (e.g., summarization)
-  },
-  {
-    name: "request_more_processing_steps",
-    description: "Requests additional processing steps if the current task requires more iterations than initially allocated. Use this if you are making progress but need more turns to complete the objective. This does not guarantee more steps, but signals intent.",
-    parameters: {
-      reasoning: "string - A brief explanation of why more processing steps are needed."
-    },
-    requiresModel: false // This tool itself doesn't call an LLM directly
-  }
+      // All previous tools (search_code, get_repository_context, generate_suggestion,
+      // get_changelog, analyze_code_problem, request_additional_context,
+      // request_more_processing_steps) should be REMOVED from this array.
+
+      // Add a placeholder for the new agent_query tool.
+      // We will define its parameters more formally in Phase 2.
+      {
+        name: "agent_query",
+        description: "Processes the user's complex query about the codebase. Analyzes the query, formulates a plan using available internal capabilities (like code search, file reading, history analysis), executes the plan step-by-step, and synthesizes the information to provide a comprehensive answer to the user's original request.",
+        parameters: {
+          user_query: "string - The user's detailed question or task regarding the codebase.",
+          session_id: "string (optional) - The session ID for maintaining context across interactions."
+          // We might add other parameters like 'max_iterations' or 'preferred_focus' later.
+        },
+        requiresModel: true // The agent's planning and synthesis steps require an LLM.
+      }
+      // Add other essential, non-capability tools if any (e.g., a "final_answer" tool if your agent framework uses one explicitly)
+      // For now, we assume agent_query is the sole entry point.
 ];
 
 // Helper function to get processed diff (summarized or truncated if necessary)
