@@ -1,6 +1,7 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { logger } from "./config-service";
-import { getLLMProvider } from "./llm-provider"; // For LLM-dependent capabilities
+import { configService, logger } from "./config-service"; // Added configService
+// getLLMProvider is not used, so the lint warning was correct. Let's remove it.
+// import { getLLMProvider } from "./llm-provider";
 import {
   FormattedSearchResult,
   CapabilitySearchCodeSnippetsParams,
@@ -13,6 +14,13 @@ import {
   CapabilityGenerateSuggestionWithContextParams,
   CapabilityAnalyzeCodeProblemWithContextParams
 } from "./agent"; // Import types from agent.ts
+import { searchWithRefinement } from "./query-refinement"; // Assuming this is where it is
+import { processSnippet, getProcessedDiff as getAgentProcessedDiff } from "./agent"; // Import existing helpers from agent.ts
+                                                               // We might move these later if it makes sense.
+import { DetailedQdrantSearchResult, FileChunkPayload, CommitInfoPayload, DiffChunkPayload } from "./types"; // Import specific payload types
+import fs from "fs/promises"; // For getChangelog, getFullFileContent, listDirectory
+import path from "path"; // For getChangelog, getFullFileContent, listDirectory
+import { getLLMProvider as getProviderForLLMDependentCaps } from "./llm-provider"; // Alias for LLM-dependent caps
 
 // Define the context that will be passed to all capability functions
 export interface CapabilityContext {
@@ -21,152 +29,462 @@ export interface CapabilityContext {
   suggestionModelAvailable: boolean;
 }
 
-// Stub implementations for each capability
-// TODO: Replace 'any' with actual return types and implement logic.
-
+// capability_searchCodeSnippets
 export async function capability_searchCodeSnippets(
   context: CapabilityContext,
   params: CapabilitySearchCodeSnippetsParams
-): Promise<FormattedSearchResult[]> { // Example return type
+): Promise<FormattedSearchResult[]> {
+  const { qdrantClient, suggestionModelAvailable } = context; // repoPath not directly used if files list is empty
+  const { query } = params;
+
   logger.info(`Executing capability_searchCodeSnippets with query: ${params.query}`);
-  // TODO: Implement actual search logic using context.qdrantClient
-  // Example:
-  // const { searchWithRefinement } = await import("./query-refinement"); // Dynamic import if needed
-  // const searchResults = await searchWithRefinement(context.qdrantClient, params.query);
-  // return searchResults.results.map(r => ({ /* map to FormattedSearchResult */ }));
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_searchCodeSnippets not implemented. Params: ${JSON.stringify(params)}`);
-  // return [];
+
+  // Assuming validateGitRepository and git.listFiles are handled by the orchestrator
+  // or are not strictly needed for the capability if files list is passed or search is global.
+  // For now, let's assume searchWithRefinement can handle an empty files array if repo context isn't pre-filtered.
+  const { results: qdrantResults } = await searchWithRefinement(
+    qdrantClient,
+    query,
+    [] // Pass empty array for files, or orchestrator needs to provide this.
+  );
+
+  const formattedResultsPromises = qdrantResults.map(async (r: DetailedQdrantSearchResult) => {
+    const payload = r.payload;
+    let filepathDisplay = "N/A";
+    let snippetContent = "Content not available";
+    let isChunked = false;
+    let originalFilepath: string | undefined = undefined;
+    let chunkIndex: number | undefined = undefined;
+    let totalChunks: number | undefined = undefined;
+    let lastModified: string | undefined = undefined;
+
+    if (payload?.dataType === 'file_chunk') {
+      const fcPayload = payload as FileChunkPayload;
+      filepathDisplay = fcPayload.filepath;
+      snippetContent = fcPayload.file_content_chunk;
+      isChunked = true;
+      originalFilepath = fcPayload.filepath;
+      chunkIndex = fcPayload.chunk_index;
+      totalChunks = fcPayload.total_chunks;
+      lastModified = fcPayload.last_modified;
+      if (isChunked) {
+        filepathDisplay = `${fcPayload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
+      }
+    } else if (payload) {
+      // Handle other types or log a warning if only file_chunk is expected here
+      logger.warn(`capability_searchCodeSnippets: Received non-file_chunk payload type: ${payload.dataType} for result ID ${r.id}`);
+      // Provide default/fallback values for FormattedSearchResult
+      filepathDisplay = (payload as { filepath?: string }).filepath || `Unknown path (ID: ${r.id})`;
+      snippetContent = `Non-file content (type: ${payload.dataType})`;
+    }
+
+    const processedSnippetContent = await processSnippet(
+      snippetContent,
+      query,
+      filepathDisplay,
+      suggestionModelAvailable
+    );
+
+    return {
+      filepath: filepathDisplay,
+      snippet: processedSnippetContent,
+      last_modified: lastModified,
+      relevance: r.score,
+      is_chunked: isChunked,
+      original_filepath: originalFilepath,
+      chunk_index: chunkIndex,
+      total_chunks: totalChunks,
+    };
+  });
+  return Promise.all(formattedResultsPromises);
 }
 
+// capability_getRepositoryOverview
 export async function capability_getRepositoryOverview(
   context: CapabilityContext,
   params: CapabilityGetRepositoryOverviewParams
-): Promise<any> { // TODO: Define actual return type (e.g., { overview: string, diffSummary: string, relevantSnippets: FormattedSearchResult[] })
+): Promise<{ refinedQuery: string; diffSummary: string; searchResults: FormattedSearchResult[] }> {
+  const { qdrantClient, repoPath, suggestionModelAvailable } = context;
+  const { query } = params;
   logger.info(`Executing capability_getRepositoryOverview with query: ${params.query}`);
-  // TODO: Implement logic to get repo overview, diff, and snippets
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_getRepositoryOverview not implemented. Params: ${JSON.stringify(params)}`);
-  // return { overview: "Repo overview...", diffSummary: "Diff summary...", relevantSnippets: [] };
+
+  const processedDiff = await getAgentProcessedDiff(repoPath, suggestionModelAvailable);
+
+  const { results: qdrantResults, refinedQuery } = await searchWithRefinement(
+    qdrantClient,
+    query,
+    [] // Assuming files list is not passed or handled by orchestrator
+  );
+
+  const searchResultsPromises = qdrantResults.map(async (r: DetailedQdrantSearchResult) => {
+    const payload = r.payload;
+    let filepathDisplay = "N/A";
+    let snippetContent = "Content not available";
+    let isChunked = false;
+    let originalFilepath: string | undefined = undefined;
+    let chunkIndex: number | undefined = undefined;
+    let totalChunks: number | undefined = undefined;
+    let lastModified: string | undefined = undefined;
+
+    // Populate based on payload type
+    if (payload?.dataType === 'file_chunk') {
+      const fcPayload = payload as FileChunkPayload;
+      filepathDisplay = fcPayload.filepath;
+      snippetContent = fcPayload.file_content_chunk;
+      isChunked = true;
+      originalFilepath = fcPayload.filepath;
+      chunkIndex = fcPayload.chunk_index;
+      totalChunks = fcPayload.total_chunks;
+      lastModified = fcPayload.last_modified;
+      if (isChunked) {
+        filepathDisplay = `${fcPayload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
+      }
+    } else if (payload?.dataType === 'commit_info') {
+      const ciPayload = payload as CommitInfoPayload;
+      filepathDisplay = `Commit: ${ciPayload.commit_oid.substring(0, 7)}`;
+      snippetContent = `Message: ${ciPayload.commit_message}`;
+      lastModified = ciPayload.commit_date;
+    } else if (payload?.dataType === 'diff_chunk') {
+      const dcPayload = payload as DiffChunkPayload;
+      filepathDisplay = `Diff: ${dcPayload.filepath} (Commit: ${dcPayload.commit_oid.substring(0,7)})`;
+      snippetContent = dcPayload.diff_content_chunk;
+      isChunked = true;
+      originalFilepath = dcPayload.filepath;
+      chunkIndex = dcPayload.chunk_index;
+      totalChunks = dcPayload.total_chunks;
+    } else if (payload) {
+      logger.warn(`capability_getRepositoryOverview: Unexpected payload type ${payload.dataType} for result ID ${r.id}`);
+      filepathDisplay = (payload as { filepath?: string }).filepath || `Unknown path (ID: ${r.id})`;
+      snippetContent = `Non-standard content (type: ${payload.dataType})`;
+    }
+
+    const processedSnippetContent = await processSnippet(
+      snippetContent,
+      query,
+      filepathDisplay,
+      suggestionModelAvailable
+    );
+
+    return {
+      filepath: filepathDisplay,
+      snippet: processedSnippetContent,
+      last_modified: lastModified,
+      relevance: r.score,
+      is_chunked: isChunked,
+      original_filepath: originalFilepath,
+      chunk_index: chunkIndex,
+      total_chunks: totalChunks,
+    };
+  });
+  const searchResults = await Promise.all(searchResultsPromises);
+
+  return {
+    refinedQuery,
+    diffSummary: processedDiff,
+    searchResults,
+  };
 }
 
+// capability_getChangelog
 export async function capability_getChangelog(
   context: CapabilityContext,
   _params: CapabilityGetChangelogParams // No parameters
-): Promise<string> { // Example return type: changelog content as string
+): Promise<{ changelog: string; error?: string }> { // Return type matches previous refactor
+  const { repoPath } = context;
   logger.info("Executing capability_getChangelog");
-  // TODO: Implement logic to read CHANGELOG.md from context.repoPath
-  // Example:
-  // import fs from "fs/promises";
-  // import path from "path";
-  // try {
-  //   const changelogPath = path.join(context.repoPath, "CHANGELOG.md");
-  //   return await fs.readFile(changelogPath, "utf-8");
-  // } catch (error) {
-  //   logger.error("Failed to read CHANGELOG.md", error);
-  //   return "Could not retrieve changelog.";
-  // }
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_getChangelog not implemented.`);
-  // return "Changelog content...";
+  try {
+    const changelogPath = path.join(repoPath, 'CHANGELOG.md');
+    const changelogContent = await fs.readFile(changelogPath, 'utf8');
+    return {
+      changelog: changelogContent.substring(0, configService.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || 2000) // Use a config value
+    };
+  } catch (_error) {
+    if ((_error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+         return { changelog: "No changelog found" };
+    }
+    return {
+      changelog: "No changelog available",
+      error: "Failed to read changelog"
+    };
+  }
 }
 
+// capability_fetchMoreSearchResults (similar to capability_searchCodeSnippets)
 export async function capability_fetchMoreSearchResults(
   context: CapabilityContext,
   params: CapabilityFetchMoreSearchResultsParams
-): Promise<FormattedSearchResult[]> { // Example return type
+): Promise<FormattedSearchResult[]> {
+  const { qdrantClient, suggestionModelAvailable } = context; // repoPath not directly used if files list is empty
+  const { query } = params;
   logger.info(`Executing capability_fetchMoreSearchResults with query: ${params.query}`);
-  // TODO: Implement logic to fetch more search results, possibly with different limit/offset
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_fetchMoreSearchResults not implemented. Params: ${JSON.stringify(params)}`);
-  // return [];
+
+  const moreResultsLimit = configService.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS;
+
+  const { results: qdrantResults } = await searchWithRefinement(
+    qdrantClient,
+    query,
+    [], // Assuming files list is not passed or handled by orchestrator
+    moreResultsLimit
+  );
+
+  const formattedResultsPromises = qdrantResults.map(async (r: DetailedQdrantSearchResult) => {
+    const payload = r.payload;
+    let filepathDisplay = "N/A";
+    let snippetContent = "Content not available";
+    let isChunked = false;
+    let originalFilepath: string | undefined = undefined;
+    let chunkIndex: number | undefined = undefined;
+    let totalChunks: number | undefined = undefined;
+    let lastModified: string | undefined = undefined;
+
+    if (payload?.dataType === 'file_chunk') {
+      const fcPayload = payload as FileChunkPayload;
+      filepathDisplay = fcPayload.filepath;
+      snippetContent = fcPayload.file_content_chunk;
+      isChunked = true;
+      originalFilepath = fcPayload.filepath;
+      chunkIndex = fcPayload.chunk_index;
+      totalChunks = fcPayload.total_chunks;
+      lastModified = fcPayload.last_modified;
+      if (isChunked) {
+        filepathDisplay = `${fcPayload.filepath} (Chunk ${(chunkIndex ?? 0) + 1}/${totalChunks ?? 'N/A'})`;
+      }
+    } else if (payload) {
+      logger.warn(`capability_fetchMoreSearchResults: Received non-file_chunk payload type: ${payload.dataType} for result ID ${r.id}`);
+      filepathDisplay = (payload as { filepath?: string }).filepath || `Unknown path (ID: ${r.id})`;
+      snippetContent = `Non-file content (type: ${payload.dataType})`;
+    }
+
+    const processedSnippetContent = await processSnippet(
+      snippetContent,
+      query,
+      filepathDisplay,
+      suggestionModelAvailable
+    );
+
+    return {
+      filepath: filepathDisplay,
+      snippet: processedSnippetContent,
+      last_modified: lastModified,
+      relevance: r.score,
+      is_chunked: isChunked,
+      original_filepath: originalFilepath,
+      chunk_index: chunkIndex,
+      total_chunks: totalChunks,
+    };
+  });
+  return Promise.all(formattedResultsPromises);
 }
 
+// capability_getFullFileContent
 export async function capability_getFullFileContent(
   context: CapabilityContext,
   params: CapabilityGetFullFileContentParams
-): Promise<string> { // Example return type: file content as string
+): Promise<{ filepath: string; content: string }> { // Return type matches previous refactor
+  const { repoPath, suggestionModelAvailable } = context;
+  const { filepath } = params;
   logger.info(`Executing capability_getFullFileContent for path: ${params.filepath}`);
-  // TODO: Implement logic to read file content from context.repoPath + params.filepath
-  // Example:
-  // import fs from "fs/promises";
-  // import path from "path";
-  // try {
-  //   const fullPath = path.join(context.repoPath, params.filepath);
-  //   return await fs.readFile(fullPath, "utf-8");
-  // } catch (error) {
-  //   logger.error(`Failed to read file: ${params.filepath}`, error);
-  //   return `Could not retrieve file content for ${params.filepath}.`;
-  // }
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_getFullFileContent not implemented. Params: ${JSON.stringify(params)}`);
-  // return "File content...";
+
+  const targetFilePath = path.resolve(repoPath, filepath);
+  if (!targetFilePath.startsWith(path.resolve(repoPath))) {
+    throw new Error(`Access denied: Path "${filepath}" is outside the repository.`);
+  }
+  try {
+    let fileContent = await fs.readFile(targetFilePath, 'utf8');
+    const MAX_CONTENT_LENGTH = configService.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || 10000; // Use a config value
+
+    if (fileContent.length > MAX_CONTENT_LENGTH) {
+      if (suggestionModelAvailable) {
+        try {
+          const llmProvider = await getProviderForLLMDependentCaps();
+          const summaryPrompt = `The user requested the full content of "${filepath}". The content is too long (${fileContent.length} characters). Summarize it concisely, focusing on its main purpose, key functions/classes, and overall structure. Keep the summary informative yet brief.\n\nFile Content (partial):\n${fileContent.substring(0, MAX_CONTENT_LENGTH * 2)}`; // Provide more for summary context
+          fileContent = `Summary of ${filepath}:\n${await llmProvider.generateText(summaryPrompt)}`;
+          logger.info(`Summarized large file content for ${filepath}`);
+        } catch (summaryError) {
+          const sErr = summaryError instanceof Error ? summaryError : new Error(String(summaryError));
+          logger.warn(`Failed to summarize full file content for ${filepath}. Using truncated content. Error: ${sErr.message}`);
+          fileContent = `Content of ${filepath} is too large. Summary attempt failed. Truncated content:\n${fileContent.substring(0, MAX_CONTENT_LENGTH)}...`;
+        }
+      } else {
+        logger.warn(`Suggestion model not available to summarize large file ${filepath}. Using truncated content.`);
+        fileContent = `Content of ${filepath} is too large. Full content omitted as suggestion model is offline. Truncated content:\n${fileContent.substring(0, MAX_CONTENT_LENGTH)}...`;
+      }
+    }
+    return { filepath, content: fileContent };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Failed to read file "${filepath}": ${err.message}`);
+    throw new Error(`Failed to read file "${filepath}": ${err.message}`);
+  }
 }
 
+// capability_listDirectory
 export async function capability_listDirectory(
   context: CapabilityContext,
   params: CapabilityListDirectoryParams
-): Promise<string[]> { // Example return type: list of file/dir names
+): Promise<{ path: string; listing: Array<{ name: string; type: 'directory' | 'file' }>; note?: string }> { // Return type matches previous refactor
+  const { repoPath } = context;
+  const { dirPath } = params;
   logger.info(`Executing capability_listDirectory for path: ${params.dirPath}`);
-  // TODO: Implement logic to list directory contents from context.repoPath + params.dirPath
-  // Example:
-  // import fs from "fs/promises";
-  // import path from "path";
-  // try {
-  //   const fullPath = path.join(context.repoPath, params.dirPath);
-  //   return await fs.readdir(fullPath);
-  // } catch (error) {
-  //   logger.error(`Failed to list directory: ${params.dirPath}`, error);
-  //   return [`Could not list directory contents for ${params.dirPath}.`];
-  // }
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_listDirectory not implemented. Params: ${JSON.stringify(params)}`);
-  // return ["file1.ts", "subdir/"];
+
+  const targetDirPath = path.resolve(repoPath, dirPath);
+  if (!targetDirPath.startsWith(path.resolve(repoPath))) {
+    throw new Error(`Access denied: Path "${dirPath}" is outside the repository.`);
+  }
+  try {
+    const entries = await fs.readdir(targetDirPath, { withFileTypes: true });
+    const listing = entries.map(entry => ({
+      name: entry.name,
+      type: entry.isDirectory() ? 'directory' : 'file' as 'directory' | 'file'
+    }));
+    const MAX_DIR_ENTRIES = configService.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || 50; // Use a config value
+    if (listing.length > MAX_DIR_ENTRIES) {
+      return {
+        path: dirPath,
+        listing: listing.slice(0, MAX_DIR_ENTRIES),
+        note: `Listing truncated. Showing first ${MAX_DIR_ENTRIES} of ${listing.length} entries.`
+      };
+    }
+    return { path: dirPath, listing };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Failed to list directory "${dirPath}": ${err.message}`);
+    throw new Error(`Failed to list directory "${dirPath}": ${err.message}`);
+  }
 }
 
+// capability_getAdjacentFileChunks
+export interface AdjacentChunkInfo { // This was defined in agent.ts, moved here for co-location
+  filepath: string;
+  chunk_index: number;
+  snippet: string;
+  note?: string;
+}
 export async function capability_getAdjacentFileChunks(
   context: CapabilityContext,
   params: CapabilityGetAdjacentFileChunksParams
-): Promise<FormattedSearchResult[]> { // Example return type
-  logger.info(`Executing capability_getAdjacentFileChunks for file: ${params.filepath}, chunk: ${params.currentChunkIndex}`);
-  // TODO: Implement logic to retrieve adjacent chunks for the given file and chunk index
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_getAdjacentFileChunks not implemented. Params: ${JSON.stringify(params)}`);
-  // return [];
+): Promise<{ filepath: string; requested_chunk_index: number; retrieved_chunks: AdjacentChunkInfo[] }> { // Return type matches previous refactor
+  const { qdrantClient } = context;
+  const { filepath, currentChunkIndex } = params;
+  logger.info(`Executing capability_getAdjacentFileChunks for file: "${filepath}", current chunk: ${currentChunkIndex}`);
+
+  const adjacentChunksResult: AdjacentChunkInfo[] = [];
+  const chunksToFetchIndices = [currentChunkIndex - 1, currentChunkIndex + 1].filter(idx => idx >= 0);
+
+  for (const targetIndex of chunksToFetchIndices) {
+    try {
+      const scrollResponse = await qdrantClient.scroll(configService.COLLECTION_NAME, {
+        filter: {
+          must: [
+            { key: "payload.dataType", match: { value: "file_chunk" } }, // Ensure we only get file_chunks
+            { key: "payload.filepath", match: { value: filepath } },
+            { key: "payload.chunk_index", match: { value: targetIndex } }
+          ]
+        },
+        limit: 1,
+        with_payload: true,
+        with_vector: false,
+      });
+
+      if (scrollResponse.points.length > 0 && scrollResponse.points[0].payload) {
+        const payload = scrollResponse.points[0].payload as FileChunkPayload; // Cast to FileChunkPayload
+        adjacentChunksResult.push({
+          filepath: payload.filepath,
+          chunk_index: payload.chunk_index,
+          snippet: payload.file_content_chunk,
+        });
+      } else {
+         adjacentChunksResult.push({
+          filepath: filepath,
+          chunk_index: targetIndex,
+          snippet: "",
+          note: `Chunk ${targetIndex} not found for file ${filepath}.`
+         });
+      }
+    } catch (searchError) {
+      const sErr = searchError instanceof Error ? searchError : new Error(String(searchError));
+      logger.warn(`Failed to fetch chunk ${targetIndex} for ${filepath}: ${sErr.message}`);
+      adjacentChunksResult.push({
+        filepath: filepath,
+        chunk_index: targetIndex,
+        snippet: "",
+        note: `Error fetching chunk ${targetIndex} for file ${filepath}: ${sErr.message}`
+      });
+    }
+  }
+  return {
+    filepath: filepath,
+    requested_chunk_index: currentChunkIndex,
+    retrieved_chunks: adjacentChunksResult
+  };
 }
 
+// capability_generateSuggestionWithContext
 export async function capability_generateSuggestionWithContext(
-  context: CapabilityContext,
+  context: CapabilityContext, // _context was used, now context is used for suggestionModelAvailable
   params: CapabilityGenerateSuggestionWithContextParams
-): Promise<string> { // Example return type: suggestion string
+): Promise<{ suggestion: string }> { // Return type matches previous refactor
+  const { query, repoPathName, filesContextString, diffSummary, recentQueriesStrings, relevantSnippets } = params;
   logger.info(`Executing capability_generateSuggestionWithContext for query: ${params.query}`);
+
   if (!context.suggestionModelAvailable) {
-    return "Suggestion generation capability requires an LLM, which is currently not available.";
+    return { suggestion: "Suggestion generation capability requires an LLM, which is currently not available." };
   }
-  // TODO: Implement logic to call LLM with provided context to generate a suggestion
-  // Example:
-  // const llmProvider = await getLLMProvider();
-  // const prompt = `User query: ${params.query}\nRepo: ${params.repoPathName}\nFiles context: ${params.filesContextString}\nDiff: ${params.diffSummary}\nRecent queries: ${params.recentQueriesStrings.join(", ")}\nSnippets: ${JSON.stringify(params.relevantSnippets)}\n\nProvide a suggestion:`;
-  // return await llmProvider.generateText(prompt);
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_generateSuggestionWithContext not implemented. Params: ${JSON.stringify(params)}`);
-  // return "Generated suggestion...";
+
+  const prompt = `
+**Context**:
+Repository: ${repoPathName}
+Files: ${filesContextString}
+Recent Changes: ${diffSummary ? diffSummary.substring(0, 1000) : "Not available"}${diffSummary && diffSummary.length > 1000 ? "..." : ""}
+${recentQueriesStrings.length > 0 ? `Recent Queries: ${recentQueriesStrings.join(", ")}` : ''}
+
+**Relevant Snippets**:
+${relevantSnippets.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified || 'N/A'}, Relevance: ${(c.relevance || 0).toFixed(2)})${c.is_chunked ? ` [Chunk ${(c.chunk_index ?? 0) + 1}/${c.total_chunks ?? 'N/A'} of ${c.original_filepath}]` : ''}\n${(c.snippet || "").substring(0, 500)}${(c.snippet || "").length > 500 ? "..." : ""}`).join("\n\n")}
+
+**Instruction**:
+Based on the provided context and snippets, generate a detailed code suggestion for "${query}". Include:
+- A suggested code implementation or improvement.
+- An explanation of how it addresses the query.
+- References to the provided snippets or context where applicable.
+      `;
+  const llmProvider = await getProviderForLLMDependentCaps();
+  const suggestion = await llmProvider.generateText(prompt);
+  return { suggestion: suggestion || "No suggestion generated." };
 }
 
+// capability_analyzeCodeProblemWithContext
 export async function capability_analyzeCodeProblemWithContext(
-  context: CapabilityContext,
+  context: CapabilityContext, // _context was used, now context is used
   params: CapabilityAnalyzeCodeProblemWithContextParams
-): Promise<string> { // Example return type: analysis string
+): Promise<{ analysis: string }> { // Return type matches previous refactor
+  const { problemQuery, relevantSnippets } = params;
   logger.info(`Executing capability_analyzeCodeProblemWithContext for problem: ${params.problemQuery}`);
+
   if (!context.suggestionModelAvailable) {
-    return "Code problem analysis capability requires an LLM, which is currently not available.";
+    return { analysis: "Code problem analysis capability requires an LLM, which is currently not available." };
   }
-  // TODO: Implement logic to call LLM with provided context to analyze a code problem
-  // Example:
-  // const llmProvider = await getLLMProvider();
-  // const prompt = `Problem: ${params.problemQuery}\nRelevant snippets: ${JSON.stringify(params.relevantSnippets)}\n\nProvide an analysis:`;
-  // return await llmProvider.generateText(prompt);
-  await Promise.resolve(); // Placeholder
-  throw new Error(`capability_analyzeCodeProblemWithContext not implemented. Params: ${JSON.stringify(params)}`);
-  // return "Problem analysis...";
+
+  const analysisPrompt = `
+**Code Problem Analysis**
+
+Problem: ${problemQuery}
+
+**Relevant Code**:
+${relevantSnippets.map(c => `File: ${c.filepath}${c.is_chunked ? ` [Chunk ${(c.chunk_index ?? 0) + 1}/${c.total_chunks ?? 'N/A'} of ${c.original_filepath}]` : ''}\n\`\`\`\n${(c.snippet || "").substring(0, 500)}${(c.snippet || "").length > 500 ? "..." : ""}\n\`\`\``).join("\n\n")}
+
+**Instructions**:
+1. Analyze the problem described above.
+2. Identify potential causes based on the code snippets.
+3. List possible solutions.
+4. Recommend the best approach.
+
+Structure your analysis with these sections:
+- Problem Understanding
+- Root Cause Analysis
+- Potential Solutions
+- Recommended Approach
+      `;
+  const llmProvider = await getProviderForLLMDependentCaps();
+  const analysis = await llmProvider.generateText(analysisPrompt);
+  return { analysis };
 }
