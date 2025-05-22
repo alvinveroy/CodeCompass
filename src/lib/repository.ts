@@ -16,6 +16,7 @@ import * as Diff from 'diff';
 // import { Buffer } from 'buffer'; // Buffer is global in Node.js
 import { configService, logger } from "./config-service";
 // import { generateEmbedding } from "./ollama"; // We will use llmProvider.generateEmbedding() instead.
+import { v5 as uuidv5 } from 'uuid'; // Import uuidv5
 import nodeFs from 'fs'; // Standard fs for isomorphic-git functions requiring it
 import { batchUpsertVectors } from './qdrant';
 
@@ -35,6 +36,9 @@ export interface CommitDetail {
   parents: string[]; // Add parent OIDs
   changedFiles: CommitChange[];
 }
+
+// Define a namespace for UUID generation (this can be any valid UUID)
+const CODECOMPASS_NAMESPACE = 'f1a2b3c4-d5e6-7890-1234-567890abcdef';
 
 export async function validateGitRepository(repoPath: string): Promise<boolean> {
   try {
@@ -182,7 +186,9 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
 
           // Embed the preprocessed chunk
           const embedding = await llmProvider.generateEmbedding(chunkContent); // Use llmProvider
-          const pointId = `file:${preprocessText(filepath)}:chunk:${i}`; // Deterministic ID
+          // Generate UUID for pointId
+          const idContentFileChunk = `file:${repoPath}:${filepath}:chunk:${i}`;
+          const pointId = uuidv5(idContentFileChunk, CODECOMPASS_NAMESPACE);
 
           const payload: FileChunkPayload = {
             dataType: 'file_chunk',
@@ -574,7 +580,8 @@ async function indexCommitsAndDiffs(
         repositoryPath: repoPath, // Optional
       };
       pointsToUpsert.push({
-        id: `commit:${commit.oid}`, // Deterministic ID
+        // Generate UUID for commit pointId
+        id: uuidv5(`commit:${repoPath}:${commit.oid}`, CODECOMPASS_NAMESPACE),
         vector: commitVector,
         payload: commitPayload,
       });
@@ -614,7 +621,8 @@ async function indexCommitsAndDiffs(
               repositoryPath: repoPath, // Optional
             };
             pointsToUpsert.push({
-              id: `diff:${commit.oid}:${preprocessText(changedFile.path)}:chunk:${i}`, // Deterministic ID
+              // Generate UUID for diff chunk pointId
+              id: uuidv5(`diff:${repoPath}:${commit.oid}:${changedFile.path}:chunk:${i}`, CODECOMPASS_NAMESPACE),
               vector: diffVector,
               payload: diffPayload,
             });
