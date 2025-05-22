@@ -23,18 +23,13 @@ import {
 import { z } from "zod";
 import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant } from "./qdrant";
-import { searchWithRefinement } from "./query-refinement";
-import { validateGitRepository, indexRepository, getRepositoryDiff } from "./repository";
+import { searchWithRefinement } from "./query-refinement"; // Keep this
+import { validateGitRepository, indexRepository, getRepositoryDiff, getGlobalIndexingStatus } from "./repository";
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
 import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 
-// Global state for indexing
-let indexingStatus: 'idle' | 'in-progress' | 'completed' | 'failed' = 'idle';
-let indexingProgress = 0; // Percentage 0-100
-let indexingError: string | null = null;
-let indexingLastUpdatedAt = new Date();
 
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
   if (typeof params === 'object' && params !== null) {
@@ -128,26 +123,16 @@ export async function startServer(repoPath: string): Promise<void> {
     const qdrantClient = await initializeQdrant();
     // const llmProvider = await getLLMProvider(); // Already initialized a few lines above
     
-    // Start initial indexing in the background
-    indexingStatus = 'in-progress';
-    indexingProgress = 0;
-    indexingError = null;
-    indexingLastUpdatedAt = new Date();
     logger.info(`Initial indexing process started for ${repoPath} in the background.`);
-
     indexRepository(qdrantClient, repoPath, llmProvider)
       .then(() => {
-        indexingStatus = 'completed';
-        indexingProgress = 100;
-        indexingLastUpdatedAt = new Date();
         logger.info(`Initial indexing process completed successfully for ${repoPath}.`);
+        // Status is managed by indexRepository itself
       })
       .catch((error: unknown) => {
-        indexingStatus = 'failed';
-        indexingProgress = 100; // Consider if progress should be 0 or last known on failure
-        indexingError = error instanceof Error ? error.message : String(error);
-        indexingLastUpdatedAt = new Date();
-        logger.error(`Initial indexing process failed for ${repoPath}: ${indexingError}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`Initial indexing process failed for ${repoPath}: ${errorMessage}`);
+        // Status is managed by indexRepository itself
       });
 
     // Prompts will be registered using server.prompt() later
@@ -347,14 +332,22 @@ export async function startServer(repoPath: string): Promise<void> {
       z.object({}), // No parameters
       async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
         logger.info("Tool 'get_indexing_status' execution started.");
+        const currentStatus = getGlobalIndexingStatus();
         return {
           content: [{
             type: "text",
             text: `# Indexing Status
-- Status: ${indexingStatus}
-- Progress: ${indexingProgress}%
-- Last Updated: ${indexingLastUpdatedAt.toISOString()}
-${indexingError ? `- Error: ${indexingError}` : ''}
+- Status: ${currentStatus.status}
+- Progress: ${currentStatus.overallProgress}%
+- Message: ${currentStatus.message}
+- Last Updated: ${currentStatus.lastUpdatedAt}
+${currentStatus.currentFile ? `- Current File: ${currentStatus.currentFile}` : ''}
+${currentStatus.currentCommit ? `- Current Commit: ${currentStatus.currentCommit}` : ''}
+${currentStatus.totalFilesToIndex ? `- Total Files: ${currentStatus.totalFilesToIndex}` : ''}
+${currentStatus.filesIndexed ? `- Files Indexed: ${currentStatus.filesIndexed}` : ''}
+${currentStatus.totalCommitsToIndex ? `- Total Commits: ${currentStatus.totalCommitsToIndex}` : ''}
+${currentStatus.commitsIndexed ? `- Commits Indexed: ${currentStatus.commitsIndexed}` : ''}
+${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
             `,
           }],
         };
@@ -457,43 +450,30 @@ ${indexingError ? `- Error: ${indexingError}` : ''}
     expressApp.use(express.json()); // Middleware to parse JSON bodies
 
     expressApp.get('/api/indexing-status', (_req, res) => {
-      res.json({
-        status: indexingStatus,
-        progress: indexingProgress,
-        error: indexingError,
-        lastUpdatedAt: indexingLastUpdatedAt.toISOString(),
-      });
+      const currentStatus = getGlobalIndexingStatus();
+      res.json(currentStatus);
     });
 
     expressApp.post('/api/repository/notify-update', (_req, res) => {
       logger.info('Received notification to update repository via /api/repository/notify-update.');
       
-      if (indexingStatus === 'in-progress') {
+      const currentStatus = getGlobalIndexingStatus();
+      if (['initializing', 'validating_repo', 'listing_files', 'cleaning_stale_entries', 'indexing_file_content', 'indexing_commits_diffs'].includes(currentStatus.status)) {
         logger.warn('Re-indexing request received, but indexing is already in progress.');
         return res.status(409).json({ message: 'Indexing already in progress.' });
       }
 
       logger.info(`Triggering re-indexing for repository: ${repoPath}`);
-      indexingStatus = 'in-progress';
-      indexingProgress = 0;
-      indexingError = null;
-      indexingLastUpdatedAt = new Date();
-
       // Re-use qdrantClient, repoPath, llmProvider from the outer scope
       indexRepository(qdrantClient, repoPath, llmProvider)
         .then(() => {
-          indexingStatus = 'completed';
-          indexingProgress = 100;
-          indexingLastUpdatedAt = new Date();
           logger.info(`Repository re-indexing completed successfully for ${repoPath}.`);
+          // Status managed by indexRepository
         })
         .catch((error: unknown) => {
-          indexingStatus = 'failed';
-          // Consider if progress should be 0 or last known on failure
-          indexingProgress = 100; 
-          indexingError = error instanceof Error ? error.message : String(error);
-          indexingLastUpdatedAt = new Date();
-          logger.error(`Repository re-indexing failed for ${repoPath}: ${indexingError}`);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.error(`Repository re-indexing failed for ${repoPath}: ${errorMessage}`);
+          // Status managed by indexRepository
         });
       
       res.status(202).json({ message: 'Re-indexing process initiated.' });

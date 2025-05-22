@@ -20,6 +20,27 @@ import { v4 as uuidv4 } from 'uuid'; // Import uuidv4
 import nodeFs from 'fs'; // Standard fs for isomorphic-git functions requiring it
 import { batchUpsertVectors } from './qdrant';
 
+export interface IndexingStatusReport {
+  status: 'idle' | 'initializing' | 'validating_repo' | 'listing_files' | 'cleaning_stale_entries' | 'indexing_file_content' | 'indexing_commits_diffs' | 'completed' | 'error';
+  message: string;
+  totalFilesToIndex?: number;
+  filesIndexed?: number;
+  totalCommitsToIndex?: number;
+  commitsIndexed?: number;
+  currentFile?: string;
+  currentCommit?: string;
+  errorDetails?: string;
+  overallProgress?: number;
+  lastUpdatedAt: string;
+}
+
+let currentIndexingStatus: IndexingStatusReport = {
+  status: 'idle',
+  message: 'Indexing not started.',
+  overallProgress: 0,
+  lastUpdatedAt: new Date().toISOString(),
+};
+
 export interface CommitChange {
   path: string;
   type: 'equal' | 'modify' | 'add' | 'delete' | 'typechange';
@@ -37,6 +58,10 @@ export interface CommitDetail {
   changedFiles: CommitChange[];
 }
 
+export function getGlobalIndexingStatus(): IndexingStatusReport {
+  return { ...currentIndexingStatus, lastUpdatedAt: new Date().toISOString() };
+}
+
 export async function validateGitRepository(repoPath: string): Promise<boolean> {
   try {
     const gitdir = path.join(repoPath, ".git");
@@ -52,12 +77,30 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
 
 // Index Repository
 export async function indexRepository(qdrantClient: QdrantClient, repoPath: string, llmProvider: LLMProvider): Promise<void> {
-  logger.info(`[DEBUG] indexRepository: Starting for repoPath: ${repoPath}`); // Example debug log
+  currentIndexingStatus = {
+    status: 'initializing',
+    message: `Starting repository indexing for: ${repoPath}`,
+    overallProgress: 0,
+    lastUpdatedAt: new Date().toISOString(),
+  };
+  logger.info(currentIndexingStatus.message);
+
   const isGitRepo = await validateGitRepository(repoPath);
   if (!isGitRepo) {
     logger.warn(`Skipping repository indexing: ${repoPath} is not a valid Git repository`);
+    currentIndexingStatus = {
+      status: 'error',
+      message: `Repository path ${repoPath} is not a valid Git repository.`,
+      errorDetails: `Validation failed for ${repoPath}.`,
+      overallProgress: 0,
+      lastUpdatedAt: new Date().toISOString(),
+    };
     return;
   }
+  currentIndexingStatus.status = 'validating_repo';
+  currentIndexingStatus.message = 'Repository validated. Listing files...';
+  currentIndexingStatus.overallProgress = 5;
+  currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
 
   const files = await git.listFiles({ fs: nodeFs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
   logger.info(`Found ${files.length} files in repository`);
@@ -67,6 +110,11 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     return;
   }
 
+  currentIndexingStatus.status = 'listing_files';
+  currentIndexingStatus.message = `Found ${files.length} total files. Filtering for code files...`;
+  currentIndexingStatus.overallProgress = 7;
+  currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+
   const codeExtensions = ['.ts', '.js', '.tsx', '.jsx', '.json', '.md', '.html', '.css', '.scss', '.py', '.java', '.c', '.cpp', '.go', '.rs', '.php', '.rb'];
   const filteredFiles = files.filter(file => {
     const ext = path.extname(file).toLowerCase();
@@ -74,9 +122,22 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
   });
   
   logger.info(`Filtered to ${filteredFiles.length} code files for indexing`);
+  currentIndexingStatus.message = `Found ${filteredFiles.length} code files to process.`;
+  currentIndexingStatus.totalFilesToIndex = filteredFiles.length;
+  currentIndexingStatus.filesIndexed = 0;
+  currentIndexingStatus.overallProgress = 10;
+  currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+
+  if (filteredFiles.length === 0) {
+    logger.warn("No code files found to index after filtering.");
+  }
 
   // Clean up stale entries from Qdrant
   try {
+    currentIndexingStatus.status = 'cleaning_stale_entries';
+    currentIndexingStatus.message = 'Checking for and removing stale entries from Qdrant index...';
+    currentIndexingStatus.overallProgress = 15;
+    currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
     logger.info("Checking for stale entries in Qdrant index...");
     const currentFilePathsInRepo = new Set(filteredFiles);
     const pointsToDelete: (string | number)[] = []; // Qdrant point IDs can be string or number
@@ -145,11 +206,22 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
       stack: error instanceof Error ? error.stack : undefined
     });
     // Depending on policy, you might choose to re-throw or handle more gracefully.
-    // For now, logging and continuing.
+    currentIndexingStatus.status = 'error';
+    currentIndexingStatus.message = 'Error during stale entry cleanup in Qdrant.';
+    currentIndexingStatus.errorDetails = error instanceof Error ? error.message : String(error);
+    currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+    // Continue with indexing current files despite stale cleanup error
   }
 
   let successCount = 0;
   let errorCount = 0;
+
+  if (filteredFiles.length > 0) {
+    currentIndexingStatus.message = 'Stale entry cleanup complete. Starting file content indexing.';
+    currentIndexingStatus.status = 'indexing_file_content';
+    currentIndexingStatus.overallProgress = 20;
+    currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+  }
 
   for (const filepath of filteredFiles) {
     logger.info(`[DEBUG] indexRepository: Processing file: ${filepath}`); // Example debug log
@@ -162,6 +234,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
         logger.info(`Skipping ${filepath}: empty file`);
         continue;
       }
+      currentIndexingStatus.currentFile = filepath;
 
       // Add new chunking logic using chunkText and new payload structure:
       const processedContent = preprocessText(content); // Preprocess before chunking
@@ -202,6 +275,12 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
           const simplePointsFileChunks = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
           await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsFileChunks, configService.QDRANT_BATCH_UPSERT_SIZE);
           logger.info(`Successfully indexed ${pointsToUpsert.length} chunks for ${filepath}`);
+          if (currentIndexingStatus.filesIndexed !== undefined && currentIndexingStatus.totalFilesToIndex && currentIndexingStatus.totalFilesToIndex > 0) {
+            currentIndexingStatus.filesIndexed++;
+            const fileProgressContribution = 50; // Assuming file indexing is 50% of total work (20% to 70%)
+            currentIndexingStatus.overallProgress = 20 + Math.round((currentIndexingStatus.filesIndexed / currentIndexingStatus.totalFilesToIndex) * fileProgressContribution);
+            currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+          }
           successCount++;
         } else {
            logger.warn(`File ${filepath} produced 0 valid chunks after processing.`);
@@ -220,19 +299,39 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     }
   }
 
+  currentIndexingStatus.status = 'indexing_commits_diffs';
+  currentIndexingStatus.message = 'File content indexing complete. Starting commit and diff indexing.';
+  currentIndexingStatus.currentFile = undefined;
+  currentIndexingStatus.overallProgress = 70; // Files done, moving to commits
+  currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+
   try {
     logger.info(`Starting indexing of commit history and diffs for ${repoPath}`);
     await indexCommitsAndDiffs(qdrantClient, repoPath, llmProvider);
   } catch (commitIndexError) {
+    currentIndexingStatus.status = 'error';
+    currentIndexingStatus.message = 'Failed to index commit history and diffs.';
+    currentIndexingStatus.errorDetails = commitIndexError instanceof Error ? commitIndexError.message : String(commitIndexError);
+    currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
     logger.error(`Failed to index commit history and diffs for ${repoPath}`, {
       message: commitIndexError instanceof Error ? commitIndexError.message : String(commitIndexError),
       stack: commitIndexError instanceof Error ? commitIndexError.stack : undefined,
     });
     // Increment errorCount or handle as a separate category of error
   }
-  logger.info(`[DEBUG] indexRepository: Finished for repoPath: ${repoPath}`); // Example debug log
-  
-  logger.info(`Indexing complete: ${successCount} files indexed successfully, ${errorCount} errors`);
+
+  if (currentIndexingStatus.status !== 'error') {
+    currentIndexingStatus.status = 'completed';
+    currentIndexingStatus.message = `Repository indexing complete. ${successCount} files indexed. ${errorCount} errors during file indexing.`;
+    currentIndexingStatus.overallProgress = 100;
+    currentIndexingStatus.currentCommit = undefined;
+    currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+    logger.info(currentIndexingStatus.message);
+  } else {
+    logger.error(`Indexing finished with an error state: ${currentIndexingStatus.message} - ${currentIndexingStatus.errorDetails}`);
+  }
+  logger.info(`[DEBUG] indexRepository: Finished for repoPath: ${repoPath}`);
+
 }
 
 // Get Repository Diff
@@ -537,6 +636,11 @@ async function indexCommitsAndDiffs(
   // allRepoFiles: string[] // Potentially useful context, currently unused
 ): Promise<void> {
   logger.info(`Indexing commit history and diffs for repository: ${repoPath}`);
+  currentIndexingStatus.message = 'Fetching commit history...';
+  currentIndexingStatus.totalCommitsToIndex = 0;
+  currentIndexingStatus.commitsIndexed = 0;
+  currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+
 
   const historyOptions: { count?: number } = {};
   if (configService.COMMIT_HISTORY_MAX_COUNT_FOR_INDEXING > 0) {
@@ -548,11 +652,16 @@ async function indexCommitsAndDiffs(
     logger.info(`No commit history found or processed for ${repoPath}. Skipping commit/diff indexing.`);
     return;
   }
+  currentIndexingStatus.totalCommitsToIndex = commits.length;
+  currentIndexingStatus.message = `Found ${commits.length} commits to process for diffs and history.`;
+  currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
   
   const pointsToUpsert: QdrantPoint[] = [];
 
   for (const commit of commits) {
     // 1. Index Commit Info
+    currentIndexingStatus.currentCommit = commit.oid;
+    currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
     const changedFilesSummary = commit.changedFiles.map(
       (cf) => `${cf.type.charAt(0).toUpperCase()}: ${cf.path}`
     );
@@ -655,6 +764,12 @@ async function indexCommitsAndDiffs(
         pointsToUpsert.length = 0; // Clear the array
     }
   }
+  if (currentIndexingStatus.commitsIndexed !== undefined && currentIndexingStatus.totalCommitsToIndex && currentIndexingStatus.totalCommitsToIndex > 0) {
+    currentIndexingStatus.commitsIndexed++;
+    const commitProgressContribution = 25; // Commits are 70% to 95%
+    currentIndexingStatus.overallProgress = 70 + Math.round((currentIndexingStatus.commitsIndexed / currentIndexingStatus.totalCommitsToIndex) * commitProgressContribution);
+    currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+  }
 
   // Upsert any remaining points
   if (pointsToUpsert.length > 0) {
@@ -662,5 +777,10 @@ async function indexCommitsAndDiffs(
     const simplePointsFinalBatch = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
     await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsFinalBatch, configService.QDRANT_BATCH_UPSERT_SIZE);
   }
+
+  currentIndexingStatus.message = `Commit and diff indexing phase complete. Finalizing...`;
+  currentIndexingStatus.currentCommit = undefined;
+  currentIndexingStatus.overallProgress = Math.min(99, currentIndexingStatus.overallProgress || 95); // Cap at 99 before final completion
+  currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
   logger.info(`Finished indexing ${commits.length} commits and their diffs for ${repoPath}`);
 }

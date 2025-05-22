@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Background Indexing with Progress Reporting (Git Commit ID: [Will be filled by user after commit]):**
+    - Implemented detailed status tracking for repository indexing within `src/lib/repository.ts`. This includes states like 'initializing', 'listing_files', 'indexing_file_content', 'completed', 'error', along with progress metrics (files/commits indexed, overall percentage).
+    - Introduced `getGlobalIndexingStatus()` in `src/lib/repository.ts` to expose the current indexing status.
+    - Modified `src/lib/server.ts` to run `indexRepository` asynchronously in the background upon server startup.
+    - Updated the `/api/indexing-status` HTTP endpoint and the `get_indexing_status` MCP tool in `src/lib/server.ts` to use `getGlobalIndexingStatus()` for accurate progress reporting, removing local status variables.
+    - The `/api/repository/notify-update` endpoint now checks the global indexing status before initiating a new indexing process to prevent concurrent indexing runs.
+### Added
 - **Unified Agent Orchestration (`agent_query`):**
     - Introduced `agent_query` as the primary, user-facing tool, replacing multiple granular tools.
     - The agent now orchestrates a sequence of internal "capabilities" to fulfill complex user requests, enabling multi-step reasoning and task execution.
