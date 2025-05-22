@@ -494,14 +494,14 @@ Please correct the parameters and try again.`;
               try {
                 logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: validationResult.data });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment
-                const capabilityResult = await capabilityFunc(capabilityContext, validationResult.data as any); // validationResult.data is type-checked by Zod against the specific capability's schema
+                const capabilityResult = await capabilityFunc(capabilityContext, validationResult.data as any);
 
                 agentState.steps.push({
                   tool: capabilityName,
                 input: validationResult.data, // Log validated and potentially transformed data
                 output: capabilityResult,
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                reasoning: parsedCapability.reasoning || llmResponseText // Fallback to full LLM response if reasoning not in JSON
+                reasoning: parsedCapability.reasoning || llmResponseText
               });
 
               // NEW: Add significant results to agentState.context
