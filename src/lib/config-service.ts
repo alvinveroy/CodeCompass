@@ -346,10 +346,7 @@ class ConfigService {
       this._claudeApiKey = modelConfig.CLAUDE_API_KEY;
     }
 
-    // HTTP_PORT: file > env > default
-    if (modelConfig.HTTP_PORT !== undefined) { // Check for undefined explicitly for numbers
-      this._httpPort = modelConfig.HTTP_PORT;
-    }
+    // HTTP_PORT is managed by env/defaults, not model-config.json
     
     // Ensure process.env reflects the final state. This is crucial for any part of the code
     // or external libraries that might still read from process.env directly.

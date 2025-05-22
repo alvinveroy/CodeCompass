@@ -154,3 +154,23 @@
 - Review other persisted configurations to ensure only user-intended settings are saved to configuration files.
 - When encountering SDK-related errors, double-check the specific SDK version's documentation for the exact method signatures and parameter requirements.
 - Ensure that tests for configuration persistence cover all fields intended to be saved and explicitly exclude those that should not.
+
+# Retrospection for Build Error Fixes (ConfigService & Server Tool Registration) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The TypeScript error messages were specific and pointed directly to the problematic code sections.
+- The previous refactoring correctly identified that `HTTP_PORT` should not be part of `ModelConfigFile`, which simplified this fix.
+- Understanding of the MCP SDK's `server.tool()` signature helped in correcting the `get_changelog` tool registration.
+
+## What could be improved?
+- **Configuration Loading Logic:** The `loadConfigurationsFromFile` method in `ConfigService` should be carefully reviewed whenever the structure of configuration files or the properties managed by them change. A mismatch between the interface (`ModelConfigFile`) and the loading logic caused the error.
+- **SDK Method Signatures:** When switching between SDK methods (like attempting to use `addTool` instead of `tool`), it's crucial to verify the method's existence and signature in the specific SDK version being used. Assumptions can lead to build errors.
+
+## What did we learn?
+- Maintaining consistency between data structure definitions (interfaces like `ModelConfigFile`) and the code that interacts with them (loading/saving logic) is essential to prevent type errors.
+- Server operational parameters (like `HTTP_PORT`) are best managed separately from user-facing model configuration files.
+- Always refer to the specific SDK documentation or type definitions when using its API to ensure correct method usage.
+
+## Action Items / Follow-ups
+- Perform a quick review of `ConfigService` to ensure that all properties read from configuration files are actually defined in their respective interfaces.
+- Double-check other tool registrations in `server.ts` to confirm they adhere to the correct `server.tool()` signature for the installed SDK version.

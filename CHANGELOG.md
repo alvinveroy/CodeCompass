@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Dynamically importing `ConfigService` within the "Default Configuration" and "Logger Configuration" test suites after `vi.resetModules()` and environment variable cleanup, guaranteeing a fresh service instance for these tests. (cd97d8c)
 
 ## [Unreleased]
+### Fixed
+- **Build Errors (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved TypeScript errors in `src/lib/config-service.ts` (TS2339: Property 'HTTP_PORT' does not exist on type 'Partial<ModelConfigFile>') by removing the attempt to load `HTTP_PORT` from `model-config.json`. `HTTP_PORT` is correctly managed via environment variables or defaults.
+    - Fixed TypeScript error in `src/lib/server.ts` (TS2339: Property 'addTool' does not exist on type 'McpServer') by reverting the `get_changelog` tool registration to use `server.tool()` with the correct 4-argument signature.
 ### Changed
 - **Build Process and Developer Experience (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Refined the `src/scripts/update-gitignore.ts` script to more robustly handle newline characters when appending entries, ensuring a cleaner `.gitignore` file. This script already included `CHANGELOG.md` and `RETROSPECTION.md` in its list of ensured ignores.
