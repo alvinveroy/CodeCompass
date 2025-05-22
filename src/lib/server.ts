@@ -329,7 +329,7 @@ export async function startServer(repoPath: string): Promise<void> {
     server.tool(
       "get_indexing_status",
       "Retrieves the current status of repository indexing. Provides information on whether indexing is idle, in-progress, completed, or failed, along with progress percentage and any error messages.",
-      z.object({}), // No parameters
+      {}, // No parameters, represented by an empty ZodRawShape
       async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
         logger.info("Tool 'get_indexing_status' execution started.");
         const currentStatus = getGlobalIndexingStatus();
