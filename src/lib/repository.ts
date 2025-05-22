@@ -210,6 +210,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
         // errorCount++; // Or handle as appropriate
       }
     } catch (error: unknown) {
+      logger.error(`[DEBUG] indexRepository: Error processing file ${filepath}`, { /* ... */ }); // Ensure errors in loops are logged
       logger.error(`Failed to index ${filepath}`, {
         message: error instanceof Error ? error.message : String(error)
       });
