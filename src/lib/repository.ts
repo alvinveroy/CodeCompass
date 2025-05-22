@@ -392,27 +392,35 @@ export async function getCommitHistoryWithChanges(
             // const mode2 = entry2 ? await entry2.mode() : null; // mode2 not used in current logic
 
             if (type1 === 'blob' || type2 === 'blob') { // Only consider file changes
+              let changeEntry: CommitChange | null = null;
+
               if (!entry1 && entry2) { // File added
-                changedFiles.push({ path: filepath, type: 'add' });
+                changeEntry = { path: filepath, type: 'add', oldOid: null, newOid: oid2 };
               } else if (entry1 && !entry2) { // File deleted
-                changedFiles.push({ path: filepath, type: 'delete' });
+                changeEntry = { path: filepath, type: 'delete', oldOid: oid1, newOid: null };
               } else if (entry1 && entry2) { // File potentially modified or typechanged
                 if (oid1 !== oid2) {
-                  changedFiles.push({ path: filepath, type: 'modify' });
-                } else {
-                  // OIDs are the same. Could be a mode change or typechange if types differ.
-                  // For simplicity, if OIDs are same, we consider it 'equal' for content.
-                  // `git diffTrees` might report 'typechange' if modes imply different types (e.g. blob vs symlink)
-                  // but here we primarily focus on content changes (OID difference).
-                  // If type1 and type2 (both blobs) differ in mode, it's a mode change.
-                  // If type1 is blob and type2 is symlink (or vice-versa) with same path, it's a typechange.
-                  // The current logic only pushes 'modify' if OIDs differ.
-                  // To capture typechange more explicitly:
-                  if (type1 !== type2) {
-                     changedFiles.push({ path: filepath, type: 'typechange' });
-                  }
-                  // Note: Mode-only changes are not captured by this logic if OIDs are identical.
+                  changeEntry = { path: filepath, type: 'modify', oldOid: oid1, newOid: oid2 };
+                } else if (type1 !== type2) {
+                  // OIDs are same, but types differ (e.g. blob to symlink)
+                  changeEntry = { path: filepath, type: 'typechange', oldOid: oid1, newOid: oid2 };
                 }
+                // Mode-only changes are not captured if OIDs are identical and types are same.
+              }
+
+              if (changeEntry) {
+                if (changeEntry.type === 'add' || changeEntry.type === 'modify' || changeEntry.type === 'delete') {
+                  try {
+                    const contentA = changeEntry.oldOid ? Buffer.from((await git.readBlob({ fs: nodeFs, dir: repoPath, gitdir, oid: changeEntry.oldOid })).blob).toString('utf8') : '';
+                    const contentB = changeEntry.newOid ? Buffer.from((await git.readBlob({ fs: nodeFs, dir: repoPath, gitdir, oid: changeEntry.newOid })).blob).toString('utf8') : '';
+                    // Using configService for diff context lines
+                    changeEntry.diffText = Diff.createPatch(filepath, contentA, contentB, '', '', { context: configService.DIFF_LINES_OF_CONTEXT });
+                  } catch (diffError) {
+                    logger.warn(`Could not generate diff for ${filepath} in commit ${commitEntry.oid}`, { error: diffError instanceof Error ? diffError.message : String(diffError) });
+                    // Keep the changeEntry without diffText if diff generation fails
+                  }
+                }
+                changedFiles.push(changeEntry);
               }
             }
             return null;
@@ -461,7 +469,16 @@ export async function getCommitHistoryWithChanges(
             // For an initial commit, all files in its tree are 'add'.
             // The `entry` here will be from the commit's tree.
             if (entry && await entry.type() === 'blob') { // Ensure it's a file
-              changedFiles.push({ path: filepath, type: 'add' });
+              const oid = await entry.oid();
+              const changeEntry: CommitChange = { path: filepath, type: 'add', oldOid: null, newOid: oid };
+              try {
+                const contentB = Buffer.from((await git.readBlob({ fs: nodeFs, dir: repoPath, gitdir, oid })).blob).toString('utf8');
+                // For 'add' in initial commit, diff is against an empty file.
+                changeEntry.diffText = Diff.createPatch(filepath, '', contentB, '', '', { context: configService.DIFF_LINES_OF_CONTEXT });
+              } catch (diffError) {
+                 logger.warn(`Could not generate diff for added file ${filepath} in initial commit ${commitEntry.oid}`, { error: diffError instanceof Error ? diffError.message : String(diffError) });
+              }
+              changedFiles.push(changeEntry);
             }
             return null;
           },
@@ -504,6 +521,7 @@ export async function getCommitHistoryWithChanges(
         author: commitEntry.commit.author,
         committer: commitEntry.commit.committer,
         changedFiles,
+        parents: parentOids, // Add this line
       });
     }
     logger.info(`Retrieved ${detailedCommits.length} commits with changes for ${repoPath}`);
