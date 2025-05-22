@@ -254,3 +254,21 @@
 ## Action Items / Follow-ups
 - If time permits in the future, a brief investigation into ESLint's parser options or rule configurations for `@typescript-eslint/parser` related to Express types could be beneficial to see if these `eslint-disable` comments can be eliminated without sacrificing linting quality elsewhere.
 - Ensure all `async` functions in the codebase are reviewed for actual use of `await` to prevent unnecessary `async` declarations.
+
+# Retrospection for Final ESLint Fixes (Server Express Middleware & require-await) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The remaining ESLint errors were few and highly localized, making them easier to address.
+- The `require-await` rule correctly identified a potentially unnecessary `async` keyword on the `get_session_history` handler.
+- The previous strategy of using `eslint-disable` for standard library patterns that ESLint misinterprets (like Express middleware) proved effective.
+
+## What could be improved?
+- **ESLint Configuration for Express:** The fact that `express.json()` and its use with `app.use()` triggers `no-unsafe-*` rules points to a persistent, albeit minor, friction point with ESLint's understanding of Express types. While `eslint-disable` is a practical solution, a more ideal setup would have ESLint correctly recognizing these patterns. This might involve tweaking ESLint's TypeScript parser settings or specific rule configurations for `@types/express`.
+
+## What did we learn?
+- Synchronous functions should not be marked `async`. The `require-await` rule is a good safeguard for this.
+- For widely-used libraries like Express.js, when TypeScript is satisfied with the types and the code follows standard practices, `eslint-disable` comments for `no-unsafe-*` rules can be a necessary measure if ESLint's type analysis is overly aggressive or slightly misaligned with the library's typings. The key is to provide clear justification.
+
+## Action Items / Follow-ups
+- If time permits in the future, a brief investigation into ESLint's parser options or rule configurations for `@typescript-eslint/parser` related to Express types could be beneficial to see if these `eslint-disable` comments can be eliminated without sacrificing linting quality elsewhere.
+- Ensure all `async` functions in the codebase are reviewed for actual use of `await` to prevent unnecessary `async` declarations.
