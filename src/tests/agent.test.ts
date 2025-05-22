@@ -158,7 +158,7 @@ describe('Agent', () => {
     //   (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     // }
 
-    (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; });
+    vi.mocked(validateGitRepository).mockReset().mockResolvedValue(true);
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
      
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
