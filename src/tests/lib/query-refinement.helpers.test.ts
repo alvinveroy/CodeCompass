@@ -98,8 +98,10 @@ describe('Query Refinement Helper Utilities', () => {
       // Top 2 might be "function", "processuser" or similar.
       // The exact output depends on the keyword extraction logic and order.
       // Let's check for inclusion of original query and some new keywords.
-      expect(focused).toContain("find user");
-      expect(focused).toMatch(/function|processuser|class|userprofile/); 
+      // If extractKeywords returns them in order of appearance and unique:
+      // "function", "processuser", "user", "usertype", "class", "userprofile", "extends", "baseprofile"
+      // Top 2: "function processuser"
+      expect(focused).toBe("find user function processuser");
     });
 
     it('should not change query if no content in results', () => {
@@ -122,18 +124,18 @@ describe('Query Refinement Helper Utilities', () => {
 
   describe('tweakQuery (direct test)', () => {
     it('should add file type if not present in query', () => {
-      const query = "search login function";
-      const results = [{ id: 'id_tweak1', score: 0.8, payload: { dataType: 'file_chunk', filepath: "src/auth/login.ts", file_content_chunk: "content", chunk_index:0, total_chunks:1, last_modified:"date" } }] as DetailedQdrantSearchResult[];
-      const tweaked = queryRefinementHelpers.tweakQuery(query, results);
+      const query_addFileType = "search login function";
+      const results_addFileType = [{ id: 't1', score: 0.9, payload: { dataType: 'file_chunk', filepath: "src/auth/login.ts", file_content_chunk: "...", chunk_index:0, total_chunks:1, last_modified:"date" } }] as DetailedQdrantSearchResult[];
+      const tweaked = queryRefinementHelpers.tweakQuery(query_addFileType, results_addFileType);
       expect(tweaked).toBeDefined();
       expect(typeof tweaked).toBe('string');
       expect(tweaked).toBe("search login function ts");
     });
 
     it('should add directory if file type present but directory not', () => {
-      const query = "search login.ts function";
-      const results = [{ id: 'id_tweak2', score: 0.8, payload: { dataType: 'file_chunk', filepath: "src/auth/login.ts", file_content_chunk: "content", chunk_index:0, total_chunks:1, last_modified:"date" } }] as DetailedQdrantSearchResult[];
-      const tweaked = queryRefinementHelpers.tweakQuery(query, results);
+      const query_addDir = "search login.ts function";
+      const results_addDir = [{ id: 't2', score: 0.9, payload: { dataType: 'file_chunk', filepath: "src/auth/login.ts", file_content_chunk: "...", chunk_index:0, total_chunks:1, last_modified:"date" } }] as DetailedQdrantSearchResult[];
+      const tweaked = queryRefinementHelpers.tweakQuery(query_addDir, results_addDir);
       expect(tweaked).toBeDefined();
       expect(typeof tweaked).toBe('string');
       expect(tweaked).toBe("search login.ts function in src");
