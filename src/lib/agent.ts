@@ -8,6 +8,31 @@ import { AgentState, AgentStep, ParsedToolCall } from "./types"; // Added Parsed
 import git from "isomorphic-git";
 import fs from "fs/promises";
 import path from "path";
+import { z } from "zod";
+import * as capabilities from "./agent_capabilities"; // Import all capabilities
+
+// Define Zod schema for agent_query tool's parameters
+const AgentQueryToolParamsSchema = z.object({
+  user_query: z.string().describe("The user's detailed question or task regarding the codebase."),
+  session_id: z.string().optional().describe("The session ID for maintaining context.")
+});
+export type AgentQueryToolParams = z.infer<typeof AgentQueryToolParamsSchema>;
+
+// Define Zod schema for parsing capability calls from LLM output
+// This is what the orchestrator LLM should output.
+const CapabilityCallSchema = z.object({
+  capability: z.string().describe("The name of the internal capability to call."),
+  parameters: z.record(z.unknown()).describe("The parameters for the capability."),
+  reasoning: z.string().optional().describe("The reasoning for choosing this capability and parameters.")
+});
+export type ParsedCapabilityCall = z.infer<typeof CapabilityCallSchema>;
+
+// Define a type for the list of available capabilities to pass to the prompt
+interface CapabilityDefinition {
+  name: keyof typeof capabilities; // Ensures name is a valid capability function
+  description: string;
+  parameters_schema: z.ZodType<unknown>; // Zod schema for parameters
+}
 
 // Helper function for robust stringification of unknown step output
 function stringifyStepOutput(output: unknown): string {
@@ -42,24 +67,15 @@ export interface Tool {
 
 // Tool registry with descriptions for the agent
 export const toolRegistry: Tool[] = [
-      // All previous tools (search_code, get_repository_context, generate_suggestion,
-      // get_changelog, analyze_code_problem, request_additional_context,
-      // request_more_processing_steps) should be REMOVED from this array.
-
-      // Add a placeholder for the new agent_query tool.
-      // We will define its parameters more formally in Phase 2.
       {
         name: "agent_query",
         description: "Processes the user's complex query about the codebase. Analyzes the query, formulates a plan using available internal capabilities (like code search, file reading, history analysis), executes the plan step-by-step, and synthesizes the information to provide a comprehensive answer to the user's original request.",
-        parameters: {
+        parameters: { // This matches AgentQueryToolParamsSchema structure for documentation
           user_query: "string - The user's detailed question or task regarding the codebase.",
           session_id: "string (optional) - The session ID for maintaining context across interactions."
-          // We might add other parameters like 'max_iterations' or 'preferred_focus' later.
         },
         requiresModel: true // The agent's planning and synthesis steps require an LLM.
       }
-      // Add other essential, non-capability tools if any (e.g., a "final_answer" tool if your agent framework uses one explicitly)
-      // For now, we assume agent_query is the sole entry point.
 ];
 
 // Helper function to get processed diff (summarized or truncated if necessary)
@@ -152,88 +168,61 @@ export function createAgentState(sessionId: string, query: string): AgentState {
 
 // Generate the agent system prompt
 // Exported for testing
-export function generateAgentSystemPrompt(availableTools: Tool[]): string {
-  return `You are CodeCompass Agent, an AI assistant that helps developers understand and work with codebases.
-You will be provided with context from the repository, which may include search results, file content, and summaries of recent changes (diffs).
-If a diff is very large, a summary will be given. Use all provided information to inform your responses and plans.
+export function generateAgentSystemPrompt(
+  availableCapabilities: CapabilityDefinition[] // Changed parameter
+): string {
+  return `You are CodeCompass Orchestrator, an AI assistant that helps developers by understanding their queries about a codebase and breaking them down into a series of steps using available internal capabilities.
+Your goal is to gather information piece by piece and then synthesize it to provide a comprehensive answer to the original user query.
 
-You have access to the following tools:
+You have access to the following internal capabilities:
 
-${availableTools.map(tool => `
-Tool: ${tool.name}
-Description: ${tool.description}
-Parameters: ${JSON.stringify(tool.parameters, null, 2)}
+${availableCapabilities.map(cap => `
+Capability: ${cap.name}
+Description: ${cap.description}
+Parameters (JSON Schema): ${JSON.stringify(cap.parameters_schema.openapi("Parameters").schema, null, 2)}
 `).join('\n')}
 
-When responding to user queries, follow these steps:
-1. Analyze the user's query to understand their intent
-2. Decide which tool(s) would be most helpful to answer the query
-3. For each tool you decide to use:
-   - Explain your reasoning for choosing this tool
-   - Specify the exact parameters to use
-   - Format your tool call as: TOOL_CALL: {"tool": "tool_name", "parameters": {...}}
-4. After receiving tool results, analyze them and decide if you need additional information
-5. If you need more information, repeat steps 2-4
-6. Once you have all necessary information, provide a comprehensive response to the user
+When responding to the user's main query, follow these steps:
+1. Analyze the user's query to understand their intent and what information is needed.
+2. Formulate a plan. Think step-by-step.
+3. Choose the most appropriate capability to execute next to gather a piece of information for your plan.
+4. Explain your reasoning for choosing this capability and specify the exact parameters to use.
+5. Format your chosen capability call as a JSON object:
+   {"capability": "capability_name", "parameters": {...parameters_object...}, "reasoning": "Your reasoning here..."}
+   This JSON object should be the *only* content in your response if you are calling a capability.
+6. After receiving the results from the capability, analyze them.
+7. Decide if you have enough information to answer the user's original query.
+   - If yes, provide a comprehensive final answer to the user. Do NOT use the JSON capability call format for the final answer. Just provide the answer as plain text.
+   - If no, repeat from step 3, choosing the next best capability.
+8. If you believe you are making progress on a complex task but require more processing steps than initially allocated, you can output a special JSON object:
+   {"capability": "request_more_processing_time", "parameters": {"reasoning": "Your reason for needing more time..."}, "reasoning": "Need more iterations."}
+   This may allow you additional interactions. Use this judiciously.
 
 Important guidelines:
-- Break down complex queries into multiple tool calls
-- Accumulate context across steps
-- Be concise in your reasoning
-- Only use tools that are relevant to the query
-- Format tool calls exactly as specified above
-- If you are making good progress on a complex task but require more turns to fully address the user's query, 
-  you can use the 'request_more_processing_steps' tool. Provide a brief 'reasoning'. 
-  This may allow you additional interactions, up to a system-defined absolute maximum. Use this judiciously.
+- Break down complex queries into multiple capability calls.
+- Accumulate context from the results of each capability call.
+- Be concise in your reasoning for choosing a capability.
+- Only use capabilities that are relevant to gathering information for the user's query.
+- Ensure parameters match the schema for the chosen capability.
+- If a capability requires context gathered by previous capabilities (e.g., 'capability_generateSuggestionWithContext' needs 'relevantSnippets'), ensure you have gathered that context first.
+- If after using available capabilities you still lack sufficient information, clearly state in your final answer that it's based on limited information and specify what was lacking.
+- Do not hallucinate. If you cannot answer confidently, explain what's missing.
 
-CRITICAL CONTEXT ASSESSMENT:
-1. Before formulating a response or deciding on next steps, meticulously review all provided context (search results, code snippets, repository information, diffs).
-2. Assess if this context is sufficient and relevant to fully address the user's query. Consider the query's specificity, breadth, and implied goals.
-3. Identify any gaps or areas where the context might be lacking.
+Example of choosing a capability:
+User Query: "Find functions related to user authentication in 'src/auth.ts'"
 
-HANDLING INSUFFICIENT CONTEXT:
-- If initial search results for a broad or complex query are sparse, of low relevance, or clearly incomplete:
-    - Consider re-using the 'search_code' or 'get_repository_context' tools with a refined, broadened, or more targeted query. Explain your reasoning for the new query.
-- If you believe specific information is missing that could be obtained (e.g., full file content, details about a specific module, wider search results):
-    - Use the 'request_additional_context' tool. Specify the 'context_type' (e.g., 'MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS'), 
-      provide the relevant 'query_or_path' (which is the filepath for 'FULL_FILE_CONTENT' and 'ADJACENT_FILE_CHUNKS'), 
-      and for 'ADJACENT_FILE_CHUNKS' also provide 'chunk_index' (integer, the 0-indexed number of the chunk you currently have).
-      Explain your 'reasoning'.
-    - Example: If you need the full content of 'src/utils/auth.ts', use TOOL_CALL: {"tool": "request_additional_context", "parameters": {"context_type": "FULL_FILE_CONTENT", "query_or_path": "src/utils/auth.ts", "reasoning": "Need to see the full implementation of authentication helpers."}}
-    - Example for ADJACENT_FILE_CHUNKS: If you have chunk 2 of 'src/utils/parser.ts' and need surrounding context:
-      TOOL_CALL: {"tool": "request_additional_context", "parameters": {"context_type": "ADJACENT_FILE_CHUNKS", "query_or_path": "src/utils/parser.ts", "chunk_index": 2, "reasoning": "The current chunk seems incomplete, need to see adjacent code."}}
-    - If after using available tools (including 'request_additional_context') you still lack sufficient information, clearly state in your response that the answer is based on limited information and specify what was lacking.
-- Do not hallucinate or provide speculative answers beyond the available context. If you cannot answer confidently, explain what's missing.
+Your thought process:
+1. The user wants to find functions in a specific file related to a topic.
+2. First, I should get the content of 'src/auth.ts'.
+3. Then, I can analyze that content for "user authentication" functions. (Or, if a search capability is very good, I might try searching directly).
+Let's start by getting the file content.
 
-## Example 1: Simple Code Search
+Your output (JSON only):
+{"capability": "capability_getFullFileContent", "parameters": {"filepath": "src/auth.ts"}, "reasoning": "Need to retrieve the content of 'src/auth.ts' to analyze it for authentication functions."}
 
-User query: "Find all files that handle authentication"
-
-I'll use the search_code tool to find relevant code related to authentication.
-
-TOOL_CALL: {"tool": "search_code", "parameters": {"query": "authentication login user session"}}
-
-## Example 2: Understanding Repository Structure
-
-User query: "Give me an overview of this repository"
-
-I'll use get_repository_context to understand the overall structure and purpose of the repository.
-
-TOOL_CALL: {"tool": "get_repository_context", "parameters": {"query": "repository structure overview main components"}}
-
-## Example 3: Multi-step Query
-
-User query: "How does error handling work in the API routes?"
-
-First, I'll search for API routes to understand their structure.
-
-TOOL_CALL: {"tool": "search_code", "parameters": {"query": "API routes endpoints"}}
-
-Now that I understand the API structure, I'll specifically look for error handling patterns.
-
-TOOL_CALL: {"tool": "search_code", "parameters": {"query": "error handling try catch API routes"}}
-
-Based on both searches, I can provide a comprehensive explanation of error handling in the API routes.
+After getting the file content, you might then decide you have enough information to answer, or you might use another capability (e.g., a hypothetical 'analyze_code_for_topic' if it existed, or simply use your own intelligence to parse the retrieved content for the final answer).
+If providing the final answer, your output would be plain text, e.g.:
+"In 'src/auth.ts', the following functions appear related to user authentication: \`loginUser()\`, \`verifyToken()\`, ..."
 `;
 }
 
@@ -289,6 +278,196 @@ export function parseToolCalls(output: string): ParsedToolCall[] {
   return results;
 }
 
+// Add this new function:
+export function parseCapabilityCall(llmOutput: string): ParsedCapabilityCall | null {
+  try {
+    // Assuming the LLM outputs *only* the JSON object for a capability call.
+    const trimmedOutput = llmOutput.trim();
+    // Basic check to see if it looks like a JSON object
+    if (trimmedOutput.startsWith("{") && trimmedOutput.endsWith("}")) {
+      const parsedJson = JSON.parse(trimmedOutput);
+      const validationResult = CapabilityCallSchema.safeParse(parsedJson);
+      if (validationResult.success) {
+        logger.debug("Successfully parsed capability call", { data: validationResult.data });
+        return validationResult.data;
+      } else {
+        logger.warn("Parsed JSON does not match CapabilityCallSchema", { errors: validationResult.error.issues, json: parsedJson });
+      }
+    }
+  } catch (error) {
+    const _err = error instanceof Error ? error : new Error(String(error));
+    logger.warn("Failed to parse LLM output as a capability call JSON", { output: llmOutput, error: _err.message });
+  }
+  return null; // Return null if not a valid capability call
+}
+
+// Add this new async function:
+async function runAgentQueryOrchestrator(
+  params: AgentQueryToolParams,
+  qdrantClient: QdrantClient,
+  repoPath: string,
+  suggestionModelAvailable: boolean // This indicates if LLM-dependent capabilities can be used
+): Promise<string> { // Returns the final synthesized answer string
+  const { user_query, session_id } = params;
+  logger.info(`Agent Query Orchestrator started for user query: "${user_query}" (Session: ${session_id || 'new'})`);
+
+  const session = getOrCreateSession(session_id, repoPath);
+  const agentState: AgentState = createAgentState(session.id, user_query); // createAgentState might need adjustment if it sets up a plan
+
+  // Define available capabilities for the orchestrator's prompt
+  // This list needs to be maintained and schemas defined for each capability's parameters.
+  // For brevity, parameter schemas are simplified here. Replace with actual Zod schemas.
+  const capabilityDefinitions: CapabilityDefinition[] = [
+    { name: "capability_searchCodeSnippets", description: "Searches for code snippets in the repository based on a query string.", parameters_schema: z.object({ query: z.string() }) },
+    { name: "capability_getRepositoryOverview", description: "Gets an overview of the repository including recent changes (diff summary) and relevant code snippets for a query.", parameters_schema: z.object({ query: z.string() }) },
+    { name: "capability_getChangelog", description: "Retrieves the project's CHANGELOG.md file.", parameters_schema: z.object({}) },
+    { name: "capability_fetchMoreSearchResults", description: "Fetches more search results for a given query, typically used if initial results are insufficient.", parameters_schema: z.object({ query: z.string() }) },
+    { name: "capability_getFullFileContent", description: "Retrieves the full content of a specified file.", parameters_schema: z.object({ filepath: z.string() }) },
+    { name: "capability_listDirectory", description: "Lists the contents (files and subdirectories) of a specified directory.", parameters_schema: z.object({ dirPath: z.string() }) },
+    { name: "capability_getAdjacentFileChunks", description: "Retrieves code chunks adjacent to a previously identified chunk of a file.", parameters_schema: z.object({ filepath: z.string(), currentChunkIndex: z.number() }) },
+    // LLM-dependent capabilities - orchestrator should gather context first, then LLM synthesizes.
+    // Or, these could be called by the orchestrator if the LLM explicitly plans to use them for final synthesis.
+    { name: "capability_generateSuggestionWithContext", description: "Generates a code suggestion based on a query and extensive provided context (files, diff, snippets). Call this after gathering sufficient context.", parameters_schema: z.object({ query: z.string(), repoPathName: z.string(), filesContextString: z.string(), diffSummary: z.string(), recentQueriesStrings: z.array(z.string()), relevantSnippets: z.array(z.any()) }) }, // z.any() for relevantSnippets for brevity
+    { name: "capability_analyzeCodeProblemWithContext", description: "Analyzes a code problem based on a query and provided relevant code snippets. Call this after gathering snippets.", parameters_schema: z.object({ problemQuery: z.string(), relevantSnippets: z.array(z.any()) }) },
+  ];
+
+  const orchestratorSystemPrompt = generateAgentSystemPrompt(capabilityDefinitions);
+  let currentPromptContent = `Original User Query: ${user_query}\n\nAnalyze this query and formulate a plan. Then, choose your first capability call or provide a direct answer if no capabilities are needed.`;
+
+  let orchestratorSteps = 0;
+  const maxOrchestratorSteps = configService.AGENT_ABSOLUTE_MAX_STEPS; // Use absolute max for the orchestrator's internal loop
+
+  const capabilityContext: capabilities.CapabilityContext = {
+    qdrantClient,
+    repoPath,
+    suggestionModelAvailable,
+  };
+
+  while (orchestratorSteps < maxOrchestratorSteps && !agentState.isComplete) {
+    orchestratorSteps++;
+    logger.info(`Orchestrator Step ${orchestratorSteps}/${maxOrchestratorSteps} for query: "${user_query}"`);
+
+    const fullPrompt = `${orchestratorSystemPrompt}\n\n${currentPromptContent}`;
+    const llmProvider = await getLLMProvider(); // Get provider inside loop if it can change, or outside if static
+    
+    logger.debug(`Orchestrator (step ${orchestratorSteps}) sending prompt to LLM. Length: ${fullPrompt.length}`);
+    // logger.silly("Orchestrator prompt content:", { prompt: fullPrompt }); // Potentially very verbose
+
+    let llmResponseText: string;
+    try {
+        const timeoutPromise = new Promise<string>((_, reject) => {
+          setTimeout(() => reject(new Error("Orchestrator LLM call timed out")), configService.AGENT_QUERY_TIMEOUT);
+        });
+        llmResponseText = await Promise.race([
+          llmProvider.generateText(fullPrompt),
+          timeoutPromise
+        ]);
+        logger.debug(`Orchestrator (step ${orchestratorSteps}) LLM response received. Length: ${llmResponseText.length}`);
+    } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        logger.error(`Orchestrator LLM call failed or timed out: ${err.message}`);
+        agentState.finalResponse = `Error during orchestration: LLM call failed. ${err.message}`;
+        agentState.isComplete = true;
+        break;
+    }
+
+    const parsedCapability = parseCapabilityCall(llmResponseText);
+
+    if (parsedCapability) {
+      if (parsedCapability.capability === "request_more_processing_time") {
+        // This special capability doesn't actually exist in agent_capabilities.ts
+        // It's a signal from the LLM. The loop condition already uses absolute max.
+        // We could potentially extend a softer limit here if we had one.
+        logger.info("Orchestrator: LLM requested more processing time.", { reasoning: parsedCapability.parameters.reasoning });
+        currentPromptContent += `\n\nThought: Processing time extension acknowledged. Current step ${orchestratorSteps}/${maxOrchestratorSteps}. Continue planning.`;
+        // Add a step to agentState to record this request
+        agentState.steps.push({
+            tool: "internal_request_more_time", // Use a distinct name
+            input: parsedCapability.parameters,
+            output: { status: "Acknowledged, loop continues up to absolute max steps." },
+            reasoning: parsedCapability.reasoning || "LLM requested more processing time."
+        });
+        if (orchestratorSteps >= maxOrchestratorSteps -1) { // -1 because step will increment
+             logger.warn("Orchestrator: LLM requested more time, but already at absolute max steps. Will terminate after this.");
+        }
+        continue; // Continue to the next iteration, allowing LLM to make another decision
+      }
+
+      const capabilityName = parsedCapability.capability as keyof typeof capabilities;
+      const capabilityFunc = capabilities[capabilityName];
+
+      if (typeof capabilityFunc === 'function') {
+        try {
+          logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: parsedCapability.parameters });
+          // TODO: Validate parsedCapability.parameters against the specific capability's Zod schema
+          // For now, passing as is.
+          const capabilityResult = await capabilityFunc(capabilityContext, parsedCapability.parameters as any); // Use 'as any' for now
+
+          agentState.steps.push({
+            tool: capabilityName, // 'tool' field now refers to capability
+            input: parsedCapability.parameters,
+            output: capabilityResult,
+            reasoning: parsedCapability.reasoning || llmResponseText // Fallback to full LLM response if reasoning not in JSON
+          });
+          // Update context for the next LLM prompt
+          currentPromptContent += `\n\nExecuted Capability: ${capabilityName}\nParameters: ${JSON.stringify(parsedCapability.parameters)}\nResults: ${stringifyStepOutput(capabilityResult)}\n\nWhat is your next step or final answer?`;
+
+        } catch (capError) {
+          const cErr = capError instanceof Error ? capError : new Error(String(capError));
+          logger.error(`Orchestrator: Error executing capability ${capabilityName}: ${cErr.message}`, { stack: cErr.stack });
+          currentPromptContent += `\n\nError executing capability ${capabilityName}: ${cErr.message}. Please try a different approach or provide a response with the information you have.`;
+          agentState.steps.push({
+            tool: capabilityName,
+            input: parsedCapability.parameters,
+            output: { error: `Failed to execute: ${cErr.message}` },
+            reasoning: parsedCapability.reasoning || "Attempted to call capability."
+          });
+        }
+      } else {
+        logger.warn(`Orchestrator: LLM tried to call unknown capability "${capabilityName}"`);
+        currentPromptContent += `\n\nError: You tried to call an unknown capability: "${capabilityName}". Please choose from the available capabilities.`;
+        agentState.steps.push({
+            tool: "unknown_capability_call",
+            input: { capability_name: capabilityName, parameters: parsedCapability.parameters },
+            output: { error: `Capability "${capabilityName}" not found.` },
+            reasoning: parsedCapability.reasoning || "LLM attempted to call an unknown capability."
+        });
+      }
+    } else {
+      // Not a capability call, assume it's the final answer
+      logger.info("Orchestrator: LLM provided a final answer.");
+      agentState.finalResponse = llmResponseText;
+      agentState.isComplete = true;
+    }
+  } // End of while loop
+
+  if (!agentState.isComplete) {
+    logger.warn(`Orchestrator reached max steps (${maxOrchestratorSteps}) without a final answer. Synthesizing a fallback response.`);
+    // Ask LLM to synthesize based on current state if no explicit final answer was given
+    const fallbackPrompt = `${orchestratorSystemPrompt}\n\n${currentPromptContent}\n\nYou have reached the maximum number of steps. Please provide your final answer to the user based on the information collected so far.`;
+    const llmProvider = await getLLMProvider();
+    try {
+        agentState.finalResponse = await Promise.race([
+            llmProvider.generateText(fallbackPrompt),
+            new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Fallback response generation timed out")), configService.AGENT_QUERY_TIMEOUT / 2)) // Shorter timeout
+        ]);
+    } catch (fallbackError) {
+        const fbErr = fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError));
+        logger.error(`Orchestrator: Fallback response generation failed: ${fbErr.message}`);
+        agentState.finalResponse = "The agent reached its processing limit and could not generate a final summary. Please try rephrasing your query or contact support if this persists.";
+    }
+    agentState.isComplete = true;
+  }
+
+  // Persist final state to session (optional, depending on how session state is used later)
+  // For now, addSuggestion handles adding the final response.
+  // updateContext(session.id, repoPath, undefined, agentState); // If we want to save full agent state
+
+  addSuggestion(session.id, user_query, agentState.finalResponse || "No final response generated.");
+  logger.info(`Orchestrator finished. Final response for session ${session.id} added.`);
+  return agentState.finalResponse || "No final response was generated by the orchestrator.";
+}
+
 // Execute a tool call
 export async function executeToolCall(
   toolCall: { tool: string; parameters: unknown },
@@ -297,660 +476,50 @@ export async function executeToolCall(
   suggestionModelAvailable: boolean
 ): Promise<unknown> {
   const { tool, parameters } = toolCall;
-  
-  // Type assertion for parameters
-  const typedParams = parameters as Record<string, unknown>;
-  
-  // Find the tool in the registry
   const toolInfo = toolRegistry.find(t => t.name === tool);
-  
-  // Check if the tool requires the suggestion model
-  // This check must happen *after* confirming toolInfo exists.
-  if (toolInfo && toolInfo.requiresModel && !suggestionModelAvailable) {
-    logger.warn(`Attempt to use model-dependent tool '${tool}' when model is unavailable. ToolInfo: ${JSON.stringify(toolInfo)}, suggestionModelAvailable: ${suggestionModelAvailable}`);
-    throw new Error(`Tool ${tool} requires the suggestion model which is not available`);
-  }
-  
-  // If toolInfo is still not found after the above, it's a fundamental issue.
+
   if (!toolInfo) {
+    logger.error(`Tool not found: ${tool}`);
     throw new Error(`Tool not found: ${tool}`);
   }
-  
-  // Execute the appropriate tool
+
+  // This check is important as agent_query (and thus orchestration) requires an LLM.
+  if (toolInfo.requiresModel && !suggestionModelAvailable) {
+    logger.warn(`Attempt to use model-dependent tool '${tool}' when model is unavailable.`);
+    throw new Error(`Tool ${tool} requires the suggestion model which is not available`);
+  }
+
   switch (tool) {
-    case "search_code": {
-      const queryParam = typedParams.query;
-      if (typeof queryParam !== 'string') {
-        throw new Error(`Parameter 'query' for tool '${tool}' must be a string. Received: ${typeof queryParam}`);
+    case "agent_query": {
+      // Validate parameters for agent_query
+      const validationResult = AgentQueryToolParamsSchema.safeParse(parameters);
+      if (!validationResult.success) {
+        logger.error("Invalid parameters for agent_query tool", { errors: validationResult.error.issues, params: parameters });
+        throw new Error(`Invalid parameters for agent_query: ${validationResult.error.message}`);
       }
-      const query: string = queryParam;
-
-      const sessionIdParam = typedParams.sessionId;
-      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
-        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
-      }
-      const sessionId: string | undefined = sessionIdParam;
-      
-      // Get or create session
-      const session = getOrCreateSession(sessionId, repoPath);
-      
-      const isGitRepo = await validateGitRepository(repoPath);
-      const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
-        : [];
-      
-      // Update context in session
-      updateContext(session.id, repoPath, files);
-      
-      // Use iterative query refinement
-      const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
-        qdrantClient, 
-        query, 
-        files
+      // Call the orchestrator
+      return await runAgentQueryOrchestrator(
+        validationResult.data,
+        qdrantClient,
+        repoPath,
+        suggestionModelAvailable
       );
-      
-      // Add query to session
-      addQuery(session.id, query, results, relevanceScore);
-      
-      // Format results for the agent - map becomes async
-      const formattedResultsPromises = results.map(async r => {
-        const payload = r.payload;
-        let filepathDisplay = payload.filepath;
-
-        // Safely access optional properties
-        if (payload.is_chunked) {
-          filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
-        }
-
-        const processedSnippet = await processSnippet(
-          payload.content, 
-          query, // Pass the current tool's query
-          filepathDisplay, 
-          suggestionModelAvailable
-        );
-
-        return {
-          filepath: filepathDisplay,
-          snippet: processedSnippet, // Use processed snippet
-          last_modified: payload.last_modified,
-          relevance: r.score,
-          is_chunked: !!payload.is_chunked,
-        };
-      });
-      const formattedResults = await Promise.all(formattedResultsPromises);
-      
-      return {
-        sessionId: session.id,
-        refinedQuery,
-        relevanceScore,
-        results: formattedResults
-      };
     }
-    
-    case "get_repository_context": {
-      const queryParam = typedParams.query;
-      if (typeof queryParam !== 'string') {
-        throw new Error(`Parameter 'query' for tool '${tool}' must be a string. Received: ${typeof queryParam}`);
-      }
-      const query: string = queryParam;
+    // Cases for old tools (search_code, get_repository_context, etc.) should be removed
+    // as they are no longer directly callable tools.
+    // If they are still present, ensure they throw an error indicating they are refactored.
+    case "search_code": // Example of how to mark old tools
+    case "get_repository_context":
+    case "generate_suggestion":
+    case "get_changelog":
+    case "analyze_code_problem":
+    case "request_additional_context":
+    case "request_more_processing_steps":
+      logger.error(`Attempted to call refactored tool '${tool}' directly.`);
+      throw new Error(`Tool '${tool}' is an internal capability and cannot be called directly. Use 'agent_query'.`);
 
-      const sessionIdParam = typedParams.sessionId;
-      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
-        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
-      }
-      const sessionId: string | undefined = sessionIdParam;
-      
-      // Get or create session
-      const session = getOrCreateSession(sessionId, repoPath);
-      
-      const isGitRepo = await validateGitRepository(repoPath);
-      const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
-        : [];
-      
-      // Use the new helper function to get the processed diff
-      const processedDiff = await getProcessedDiff(repoPath, suggestionModelAvailable);
-      
-      // Update context in session
-      updateContext(session.id, repoPath, files);
-      
-      // Use iterative query refinement
-      const { results, refinedQuery } = await searchWithRefinement(
-        qdrantClient, 
-        query, 
-        files
-      );
-      
-      // Get recent queries from session to provide context
-      const recentQueries = getRecentQueries(session.id);
-      
-      const contextPromises = results.map(async r => {
-        const payload = r.payload;
-        let filepathDisplay = payload.filepath;
-
-        if (payload.is_chunked) {
-          filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
-        }
-        
-        const processedSnippet = await processSnippet(
-          payload.content,
-          query, // Pass the current tool's query
-          filepathDisplay,
-          suggestionModelAvailable
-        );
-
-        return {
-          filepath: filepathDisplay,
-          snippet: processedSnippet, // Use processed snippet
-          last_modified: payload.last_modified,
-          relevance: r.score,
-          is_chunked: !!payload.is_chunked,
-          // Store original path for potential re-assembly logic later if needed
-          original_filepath: payload.filepath,
-          chunk_index: payload.chunk_index,
-          total_chunks: payload.total_chunks,
-        };
-      });
-      const context = await Promise.all(contextPromises);
-      
-      // Add query to session
-      addQuery(session.id, query, results);
-      
-      return {
-        sessionId: session.id,
-        refinedQuery,
-        recentQueries,
-        diff: processedDiff, // Use the processed (potentially summarized or truncated) diff
-        results: context // This now contains processed snippets
-      };
-    }
-    
-    case "generate_suggestion": {
-      const queryParam = typedParams.query;
-      if (typeof queryParam !== 'string') {
-        throw new Error(`Parameter 'query' for tool '${tool}' must be a string. Received: ${typeof queryParam}`);
-      }
-      const query: string = queryParam;
-
-      const sessionIdParam = typedParams.sessionId;
-      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
-        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
-      }
-      const sessionId: string | undefined = sessionIdParam;
-      
-      // Get or create session
-      const session = getOrCreateSession(sessionId, repoPath);
-      
-      // First, use search_code internally to get relevant context
-      const isGitRepo = await validateGitRepository(repoPath);
-      const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
-        : [];
-      
-      // Use the new helper function to get the processed diff
-      const processedDiff = await getProcessedDiff(repoPath, suggestionModelAvailable);
-      
-      // Update context in session
-      updateContext(session.id, repoPath, files);
-      
-      // Get recent queries from session to provide context
-      const recentQueries = getRecentQueries(session.id);
-      const _relevantResults = getRelevantResults(session.id);
-      
-      // Use iterative query refinement for better search results
-      const { results } = await searchWithRefinement(
-        qdrantClient, 
-        query, 
-        files
-      );
-      
-      // Prepare file list for context
-      let filesContextString = "";
-      const maxFilesToShowWithoutSummary = configService.MAX_FILES_FOR_SUGGESTION_CONTEXT_NO_SUMMARY;
-
-      if (files.length > maxFilesToShowWithoutSummary && suggestionModelAvailable) {
-        try {
-          const llmProvider = await getLLMProvider(); // Moved here as it's needed for summarization
-          const filesToSummarize = files.slice(0, 100); // Limit number of files sent for summarization to avoid overly long prompts
-          const fileListPrompt = `The user query is: "${query}". Based on this query, identify the most relevant files from the following list. Provide a concise summary or list of up to ${maxFilesToShowWithoutSummary} most important file paths. If many files seem equally relevant, you can state "Several relevant files found including [example1], [example2], etc."\n\nFile list:\n${filesToSummarize.join("\n")}`;
-          filesContextString = await llmProvider.generateText(fileListPrompt);
-          logger.info(`Summarized file list for generate_suggestion context. Query: "${query}", Original count: ${files.length}, Summarized: "${filesContextString}"`);
-        } catch (summaryError) {
-          const sErr = summaryError instanceof Error ? summaryError : new Error(String(summaryError));
-          logger.warn(`Failed to summarize file list for generate_suggestion. Error: ${sErr.message}. Falling back to truncated list.`);
-          filesContextString = `${files.slice(0, maxFilesToShowWithoutSummary).join(", ")}${files.length > maxFilesToShowWithoutSummary ? "..." : ""}`;
-        }
-      } else if (files.length > 0) {
-        filesContextString = `${files.slice(0, maxFilesToShowWithoutSummary).join(", ")}${files.length > maxFilesToShowWithoutSummary ? "..." : ""}`;
-      } else {
-        filesContextString = "No files found in repository for context.";
-      }
-      
-      // Map search results to context - map becomes async
-      const contextPromises = results.map(async r => {
-        const payload = r.payload;
-        let filepathDisplay = payload.filepath;
-
-        if (payload.is_chunked) {
-          filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
-        }
-
-        const processedSnippet = await processSnippet(
-          payload.content,
-          query, // Pass the current tool's query
-          filepathDisplay,
-          suggestionModelAvailable
-        );
-
-        return {
-          filepath: filepathDisplay, // This will be the display path including chunk info
-          original_filepath: payload.filepath,
-          snippet: processedSnippet, // Use processed snippet
-          last_modified: payload.last_modified,
-          relevance: r.score,
-          is_chunked: !!payload.is_chunked,
-          chunk_index: payload.chunk_index,
-          total_chunks: payload.total_chunks,
-        };
-      });
-      const context = await Promise.all(contextPromises);
-      
-      const prompt = `
-**Context**:
-Repository: ${repoPath}
-Files: ${filesContextString}
-Recent Changes: ${processedDiff ? (processedDiff || "").substring(0, 1000) : "Not available"}${(processedDiff || "").length > 1000 ? "..." : ""} 
-${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
-
-**Relevant Snippets**:
-${context.map(c => `File: ${c.filepath} (Last modified: ${c.last_modified}, Relevance: ${c.relevance.toFixed(2)})${c.is_chunked ? ` [Chunk ${(c.chunk_index ?? 0) + 1}/${c.total_chunks ?? 'N/A'} of ${c.original_filepath}]` : ''}\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}`).join("\n\n")}
-
-**Instruction**:
-Based on the provided context and snippets, generate a detailed code suggestion for "${query}". Include:
-- A suggested code implementation or improvement.
-- An explanation of how it addresses the query.
-- References to the provided snippets or context where applicable.
-      `;
-      
-      // Get the current LLM provider
-      const llmProvider = await getLLMProvider();
-      
-      // Generate suggestion with the current provider
-      const suggestion = await llmProvider.generateText(prompt);
-      
-      // Add suggestion to session
-      addSuggestion(session.id, query, suggestion);
-      
-      return {
-        sessionId: session.id,
-        suggestion: suggestion || "No suggestion generated.", // Assuming 'suggestion' is defined after llmProvider.generateText(prompt)
-        context: context.slice(0, 3) // Return only top 3 context items to avoid overwhelming the agent
-      };
-    }
-    
-    case "get_changelog": {
-      try {
-        const changelogPath = path.join(repoPath, 'CHANGELOG.md');
-        try {
-          const changelog = await fs.readFile(changelogPath, 'utf8');
-          return {
-            changelog: changelog.substring(0, 2000) // Limit size
-          };
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (_error) {
-          return {
-            changelog: "No changelog found"
-          };
-        }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (_error) {
-        return {
-          error: "Failed to read changelog",
-          changelog: "No changelog available"
-        };
-      }
-    }
-    
-    case "analyze_code_problem": {
-      const queryParam = typedParams.query;
-      if (typeof queryParam !== 'string') {
-        throw new Error(`Parameter 'query' for tool '${tool}' must be a string. Received: ${typeof queryParam}`);
-      }
-      const query: string = queryParam;
-
-      const sessionIdParam = typedParams.sessionId;
-      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
-        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
-      }
-      const sessionId: string | undefined = sessionIdParam;
-      
-      // Get or create session
-      const session = getOrCreateSession(sessionId, repoPath);
-      
-      // Step 1: Get repository context
-      const isGitRepo = await validateGitRepository(repoPath);
-      const files = isGitRepo
-        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
-        : [];
-      const _diff = await getRepositoryDiff(repoPath);
-      
-      // Use iterative query refinement to find relevant code
-      const { results: contextResults } = await searchWithRefinement(
-        qdrantClient, 
-        query, 
-        files
-      );
-      
-      const contextPromises = contextResults.map(async r => { // contextResults from searchWithRefinement
-        const payload = r.payload;
-        let filepathDisplay = payload.filepath;
-
-        if (payload.is_chunked) {
-          filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
-        }
-
-        const processedSnippet = await processSnippet(
-          payload.content,
-          query, // Pass the current tool's query
-          filepathDisplay,
-          suggestionModelAvailable
-        );
-
-        return {
-          filepath: filepathDisplay,
-          original_filepath: payload.filepath,
-          snippet: processedSnippet, // Use processed snippet
-          last_modified: payload.last_modified,
-          relevance: r.score,
-          is_chunked: !!payload.is_chunked,
-          chunk_index: payload.chunk_index,
-          total_chunks: payload.total_chunks,
-        };
-      });
-      const context = await Promise.all(contextPromises);
-      
-      // Step 2: Analyze the problem
-      const analysisPrompt = `
-**Code Problem Analysis**
-
-Problem: ${query}
-
-**Relevant Code**:
-${context.map(c => `File: ${c.filepath}${c.is_chunked ? ` [Chunk ${(c.chunk_index ?? 0) + 1}/${c.total_chunks ?? 'N/A'} of ${c.original_filepath}]` : ''}\n\`\`\`\n${c.snippet.substring(0, 500)}${c.snippet.length > 500 ? "..." : ""}\n\`\`\``).join("\n\n")}
-
-**Instructions**:
-1. Analyze the problem described above.
-2. Identify potential causes based on the code snippets.
-3. List possible solutions.
-4. Recommend the best approach.
-
-Structure your analysis with these sections:
-- Problem Understanding
-- Root Cause Analysis
-- Potential Solutions
-- Recommended Approach
-      `;
-      
-      // Get the current LLM provider
-      const llmProvider = await getLLMProvider();
-      
-      // Generate analysis with the current provider
-      const analysis = await llmProvider.generateText(analysisPrompt);
-      
-      // Add to session
-      addQuery(session.id, query, contextResults);
-      addSuggestion(session.id, analysisPrompt, analysis);
-      
-      return {
-        sessionId: session.id,
-        analysis, // Assuming 'analysis' is defined after llmProvider.generateText(analysisPrompt)
-        context: context.slice(0, 3) // Return only top 3 context items
-      };
-    }
-    
-    case "request_additional_context": {
-      const contextTypeParam = typedParams.context_type;
-      const queryOrPathParam = typedParams.query_or_path;
-      const reasoningParamRaw = typedParams.reasoning; // Optional
-      const sessionIdParam = typedParams.sessionId;
-      // Add chunkIndexParam
-      const chunkIndexParam = typedParams.chunk_index;
-
-      if (typeof contextTypeParam !== 'string' || !['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS'].includes(contextTypeParam)) {
-        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-        throw new Error(`Parameter 'context_type' for tool '${tool}' must be one of ['MORE_SEARCH_RESULTS', 'FULL_FILE_CONTENT', 'DIRECTORY_LISTING', 'ADJACENT_FILE_CHUNKS']. Received: ${contextTypeParam}`);
-      }
-      if (typeof queryOrPathParam !== 'string') {
-        throw new Error(`Parameter 'query_or_path' for tool '${tool}' must be a string. Received: ${typeof queryOrPathParam}`);
-      }
-      // Add validation for chunk_index if context_type is ADJACENT_FILE_CHUNKS
-      if (contextTypeParam === 'ADJACENT_FILE_CHUNKS') {
-        if (typeof queryOrPathParam !== 'string' || !queryOrPathParam) { // queryOrPathParam is used as filepath here
-            throw new Error(`Parameter 'query_or_path' (as filepath) for tool '${tool}' with context_type 'ADJACENT_FILE_CHUNKS' must be a non-empty string. Received: ${typeof queryOrPathParam}`);
-        }
-        if (typeof chunkIndexParam !== 'number' || chunkIndexParam < 0) {
-            throw new Error(`Parameter 'chunk_index' for tool '${tool}' with context_type 'ADJACENT_FILE_CHUNKS' must be a non-negative integer. Received: ${typeof chunkIndexParam}`);
-        }
-      }
-      let reasoningParamStr: string | undefined = undefined;
-      if (typeof reasoningParamRaw === 'string') {
-        reasoningParamStr = reasoningParamRaw;
-      } else if (reasoningParamRaw !== undefined) {
-        logger.warn(`Optional parameter 'reasoning' for tool '${tool}' was provided but not as a string. Received: ${typeof reasoningParamRaw}. Ignoring.`);
-      }
-      if (sessionIdParam !== undefined && typeof sessionIdParam !== 'string') {
-        throw new Error(`Parameter 'sessionId' for tool '${tool}' must be a string if provided. Received: ${typeof sessionIdParam}`);
-      }
-      const sessionId: string | undefined = sessionIdParam;
-      // Get or create session (consistent with other tools)
-      const session = getOrCreateSession(sessionId, repoPath);
-
-      logger.info(`Executing request_additional_context: type='${contextTypeParam}', query_or_path='${String(queryOrPathParam)}', reasoning='${reasoningParamStr || 'N/A'}'`);
-
-      switch (contextTypeParam) {
-        case 'MORE_SEARCH_RESULTS': {
-          logger.info(`Executing MORE_SEARCH_RESULTS for query: "${queryOrPathParam}"`);
-          const files = await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
-          // Use a higher limit for "more" results, e.g., 2x the default or a configured "more_results_limit"
-          const moreResultsLimit = configService.REQUEST_ADDITIONAL_CONTEXT_MAX_SEARCH_RESULTS; 
-          const { results, refinedQuery, relevanceScore } = await searchWithRefinement(
-            qdrantClient,
-            queryOrPathParam, // This is the original query
-            files,
-            moreResultsLimit // Pass the increased limit as the customLimit argument
-            // maxRefinements and relevanceThreshold will use their default values
-          );
-          addQuery(session.id, queryOrPathParam, results, relevanceScore); // Log this specific request
-
-          const formattedResultsPromises = results.map(async r => {
-            const payload = r.payload;
-            let filepathDisplay = payload.filepath;
-            if (payload.is_chunked) {
-              filepathDisplay = `${payload.filepath} (Chunk ${(payload.chunk_index ?? 0) + 1}/${payload.total_chunks ?? 'N/A'})`;
-            }
-            const processedSnippet = await processSnippet(
-              payload.content,
-              queryOrPathParam,
-              filepathDisplay,
-              suggestionModelAvailable
-            );
-            return {
-              filepath: filepathDisplay,
-              snippet: processedSnippet,
-              last_modified: payload.last_modified,
-              relevance: r.score,
-              is_chunked: !!payload.is_chunked,
-            };
-          });
-          const formattedResults = await Promise.all(formattedResultsPromises);
-          return { 
-            sessionId: session.id, 
-            status: `Retrieved more search results for query "${queryOrPathParam}".`,
-            refinedQuery,
-            relevanceScore,
-            results: formattedResults 
-          };
-        }
-        case 'FULL_FILE_CONTENT': {
-          logger.info(`Executing FULL_FILE_CONTENT for path: "${queryOrPathParam}"`);
-          const targetFilePath = path.resolve(repoPath, queryOrPathParam); // Ensure path is absolute and within repo
-          if (!targetFilePath.startsWith(path.resolve(repoPath))) {
-            throw new Error(`Access denied: Path "${queryOrPathParam}" is outside the repository.`);
-          }
-          try {
-            let fileContent = await fs.readFile(targetFilePath, 'utf8');
-            const MAX_CONTENT_LENGTH = configService.MAX_SNIPPET_LENGTH_FOR_CONTEXT_NO_SUMMARY * 5; // Example: 5x snippet length for "full"
-
-            if (fileContent.length > MAX_CONTENT_LENGTH) {
-              if (suggestionModelAvailable) {
-                try {
-                  const llmProvider = await getLLMProvider();
-                  const summaryPrompt = `The user requested the full content of "${queryOrPathParam}". The content is too long (${fileContent.length} characters). Summarize it concisely, focusing on its main purpose, key functions/classes, and overall structure. Keep the summary informative yet brief.\n\nFile Content (partial):\n${fileContent.substring(0, MAX_CONTENT_LENGTH * 2)}`; // Provide more for summary
-                  fileContent = `Summary of ${queryOrPathParam}:\n${await llmProvider.generateText(summaryPrompt)}`;
-                  logger.info(`Summarized large file content for ${queryOrPathParam}`);
-                } catch (summaryError) {
-                  const sErr = summaryError instanceof Error ? summaryError : new Error(String(summaryError));
-                  logger.warn(`Failed to summarize full file content for ${queryOrPathParam}. Using truncated content. Error: ${sErr.message}`);
-                  fileContent = `Content of ${queryOrPathParam} is too large. Summary attempt failed. Truncated content:\n${fileContent.substring(0, MAX_CONTENT_LENGTH)}...`;
-                }
-              } else {
-                logger.warn(`Suggestion model not available to summarize large file ${queryOrPathParam}. Using truncated content.`);
-                fileContent = `Content of ${queryOrPathParam} is too large. Full content omitted as suggestion model is offline. Truncated content:\n${fileContent.substring(0, MAX_CONTENT_LENGTH)}...`;
-              }
-            }
-            return { sessionId: session.id, status: `Retrieved content for path "${queryOrPathParam}".`, filepath: queryOrPathParam, content: fileContent };
-          } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            logger.error(`Failed to read file "${queryOrPathParam}": ${err.message}`);
-            throw new Error(`Failed to read file "${queryOrPathParam}": ${err.message}`);
-          }
-        }
-        case 'DIRECTORY_LISTING': {
-          logger.info(`Executing DIRECTORY_LISTING for path: "${queryOrPathParam}"`);
-          const targetDirPath = path.resolve(repoPath, queryOrPathParam); // Ensure path is absolute and within repo
-          if (!targetDirPath.startsWith(path.resolve(repoPath))) {
-            throw new Error(`Access denied: Path "${queryOrPathParam}" is outside the repository.`);
-          }
-          try {
-            const entries = await fs.readdir(targetDirPath, { withFileTypes: true });
-            const listing = entries.map(entry => ({
-              name: entry.name,
-              type: entry.isDirectory() ? 'directory' : 'file'
-            }));
-            // Limit the number of entries returned to avoid overwhelming the context
-            const MAX_DIR_ENTRIES = 50; 
-            if (listing.length > MAX_DIR_ENTRIES) {
-                return { 
-                    sessionId: session.id, 
-                    status: `Retrieved directory listing for path "${queryOrPathParam}". Listing truncated.`, 
-                    path: queryOrPathParam, 
-                    listing: listing.slice(0, MAX_DIR_ENTRIES),
-                    note: `Listing truncated. Showing first ${MAX_DIR_ENTRIES} of ${listing.length} entries.`
-                };
-            }
-            return { sessionId: session.id, status: `Retrieved directory listing for path "${queryOrPathParam}".`, path: queryOrPathParam, listing };
-          } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            logger.error(`Failed to list directory "${queryOrPathParam}": ${err.message}`);
-            throw new Error(`Failed to list directory "${queryOrPathParam}": ${err.message}`);
-          }
-        }
-        case 'ADJACENT_FILE_CHUNKS': {
-          const filepath = queryOrPathParam; // query_or_path is the filepath for this type
-          const currentChunkIndex = chunkIndexParam as number;
-          logger.info(`Executing ADJACENT_FILE_CHUNKS for file: "${filepath}", current chunk: ${currentChunkIndex}`);
-
-          const adjacentChunksInfo: { chunk_index: number; content: string; note?: string }[] = [];
-          // Define how many adjacent chunks to fetch (e.g., 1 before, 1 after)
-          const chunksToFetchIndices = [currentChunkIndex - 1, currentChunkIndex + 1].filter(idx => idx >= 0);
-          
-          // Fetch total chunks for the file to avoid querying beyond the last chunk
-          // This might require a separate Qdrant query or an assumption.
-          // For simplicity, we'll try to fetch and handle if not found.
-          // A more robust way would be to get total_chunks if available from the initial search result.
-
-          for (const targetIndex of chunksToFetchIndices) {
-            try {
-              // We need to search Qdrant for a point with matching filepath and chunk_index
-              // This assumes Qdrant allows filtering effectively on these fields.
-              // A direct scroll/filter might be better than a vector search if no relevant vector is available.
-              const scrollResponse = await qdrantClient.scroll(configService.COLLECTION_NAME, {
-                filter: {
-                  must: [
-                    { key: "filepath", match: { value: filepath } },
-                    { key: "chunk_index", match: { value: targetIndex } }
-                  ]
-                },
-                limit: 1,
-                with_payload: true,
-                with_vector: false,
-              });
-
-              if (scrollResponse.points.length > 0 && scrollResponse.points[0].payload) {
-                const payload = scrollResponse.points[0].payload;
-                adjacentChunksInfo.push({
-                  chunk_index: payload.chunk_index as number,
-                  content: payload.content as string,
-                });
-              } else {
-                 adjacentChunksInfo.push({
-                  chunk_index: targetIndex,
-                  content: "", // Empty content
-                  note: `Chunk ${targetIndex} not found for file ${filepath}.`
-                 });
-              }
-            } catch (searchError) {
-              const sErr = searchError instanceof Error ? searchError : new Error(String(searchError));
-              logger.warn(`Failed to fetch chunk ${targetIndex} for ${filepath}: ${sErr.message}`);
-              adjacentChunksInfo.push({
-                chunk_index: targetIndex,
-                content: "",
-                note: `Error fetching chunk ${targetIndex} for file ${filepath}: ${sErr.message}`
-              });
-            }
-          }
-
-          if (adjacentChunksInfo.filter(c => c.content).length === 0) {
-            return { 
-              sessionId: session.id, 
-              status: `No adjacent chunks with content found for file "${filepath}", around chunk ${currentChunkIndex}.`,
-              filepath: filepath,
-              requested_chunk_index: currentChunkIndex,
-              retrieved_chunks: adjacentChunksInfo
-            };
-          }
-          
-          return {
-            sessionId: session.id,
-            status: `Retrieved adjacent chunk(s) for file "${filepath}", around chunk ${currentChunkIndex}.`,
-            filepath: filepath,
-            requested_chunk_index: currentChunkIndex,
-            retrieved_chunks: adjacentChunksInfo.map(c => ({
-                filepath: filepath, // Add filepath for clarity in results
-                chunk_index: c.chunk_index,
-                snippet: c.content, // Use 'snippet' to align with other search results
-                note: c.note
-            }))
-          };
-        }
-        default: // Should not happen due to earlier check
-          throw new Error(`Unsupported context_type: ${contextTypeParam}`);
-      }
-    }
-    case "request_more_processing_steps": {
-      const reasoningParam = typedParams.reasoning;
-      if (typeof reasoningParam !== 'string') {
-        throw new Error(`Parameter 'reasoning' for tool '${tool}' must be a string. Received: ${typeof reasoningParam}`);
-      }
-      logger.info(`Agent requested more processing steps. Reasoning: ${reasoningParam}`);
-      // The actual logic for extending steps is in the main loop.
-      // This tool call itself just acknowledges the request.
-      return { 
-        status: "Request for more processing steps acknowledged.",
-        note: "The agent loop may continue if within absolute limits." 
-      };
-    }
     default:
+      logger.error(`Tool execution not implemented: ${tool}`);
       throw new Error(`Tool execution not implemented: ${tool}`);
   }
 }
@@ -962,244 +531,81 @@ export async function runAgentLoop(
   qdrantClient: QdrantClient,
   repoPath: string,
   suggestionModelAvailable: boolean,
-  // maxSteps parameter is removed
-): Promise<string> {
-  logger.info(`Agent loop started for query: "${query}" (Session: ${sessionId || 'new'})`);
+): Promise<string> { // Returns the final formatted response string
+  logger.info(`Outer Agent Loop started for query: "${query}" (Session: ${sessionId || 'new'})`);
   
-  // Log the current provider and model being used by the agent, sourced from ConfigService
+  // Ensure provider is ready (existing logic from your file)
   logger.info(`Agent running with provider: ${configService.SUGGESTION_PROVIDER}, model: ${configService.SUGGESTION_MODEL}`);
-  
-  // Force refresh the provider to ensure we're using the latest settings
-  // NOTE: The following cache manipulation logic can interfere with Vitest's mocking.
-  // It's commented out for testing. In a real application, this kind of cache management
-  // should ideally be handled at application startup or through a more controlled mechanism.
-  // First clear any cached modules
-  // Object.keys(require.cache).forEach(key => {
-  //   if (key.includes('llm-provider') || key.includes('deepseek') || key.includes('ollama')) {
-  //     delete require.cache[key];
-  //   }
-  // });
-  
-  // Import the clearProviderCache function and use it
-  // const { clearProviderCache } = await import('./llm-provider.js');
-  // clearProviderCache();
-  
-  const currentProvider = await getLLMProvider();
+  const currentProvider = await getLLMProvider(); // Force refresh handled by getLLMProvider if needed
   const isConnected = await currentProvider.checkConnection();
   logger.info(`Agent confirmed provider: ${isConnected ? "connected" : "disconnected"}`);
-  
-  // Log the actual provider and model being used, from ConfigService
-  logger.info(`Agent using model: ${configService.SUGGESTION_MODEL}, provider: ${configService.SUGGESTION_PROVIDER}`);
-      
-  // Verify the provider is working with a test generation
+  if (!isConnected && suggestionModelAvailable) { // suggestionModelAvailable implies we expect a connection
+      logger.error(`Agent provider ${configService.SUGGESTION_PROVIDER} is not connected. Aborting.`);
+      return "Error: The AI suggestion provider is not connected. Please check your configuration and network.";
+  }
+  // Test generation (existing logic)
+  if (suggestionModelAvailable) {
+    try {
+        const _testResult = await currentProvider.generateText("Test message");
+        logger.info(`Agent verified provider ${configService.SUGGESTION_PROVIDER} is working`);
+    } catch (error: unknown) {
+        logger.error(`Agent failed to verify provider ${configService.SUGGESTION_PROVIDER}: ${error instanceof Error ? error.message : String(error)}`);
+        return `Error: Failed to verify the AI suggestion provider. ${error instanceof Error ? error.message : String(error)}`;
+    }
+  } else {
+     logger.info("Suggestion model is not available. Agent will operate in a limited mode if possible, or fail if agent_query requires it.");
+     // agent_query requires a model, so this path will likely lead to an error in executeToolCall if suggestionModelAvailable is false.
+  }
+
+  const session = getOrCreateSession(sessionId, repoPath);
+
+  // The outer loop's system prompt is now very simple, guiding towards agent_query.
+  // Or, we can assume the LLM will always pick agent_query if it's the only one.
+  // For robustness, let's provide a minimal system prompt.
+  const outerSystemPrompt = `You are a helpful assistant. To answer any user query about the codebase, you MUST use the "agent_query" tool.
+Tool: agent_query
+Description: ${toolRegistry[0].description}
+Parameters: ${JSON.stringify(toolRegistry[0].parameters, null, 2)}`;
+
+  const initialUserPromptForOuterLoop = `User query: ${query}\n\nPlease use the "agent_query" tool to process this query.`;
+  const agentPrompt = `${outerSystemPrompt}\n\n${initialUserPromptForOuterLoop}`;
+
+  let finalAnswer: string;
+
   try {
-    const _testResult = await currentProvider.generateText("Test message");
-    logger.info(`Agent verified provider ${configService.SUGGESTION_PROVIDER} is working`);
-  } catch (error: unknown) {
-    logger.error(`Agent failed to verify provider ${configService.SUGGESTION_PROVIDER}: ${error instanceof Error ? error.message : String(error)}`);
+    logger.info("Outer loop: Requesting LLM to invoke agent_query tool.");
+    const llmProvider = await getLLMProvider();
+    const llmOutput = await llmProvider.generateText(agentPrompt); // LLM should output a TOOL_CALL for agent_query
+
+    const toolCalls = parseToolCalls(llmOutput); // Existing parseToolCalls
+
+    if (toolCalls.length > 0 && toolCalls[0].tool === "agent_query") {
+      logger.info("Outer loop: LLM correctly chose agent_query. Executing...");
+      // Execute agent_query, which now contains the main orchestration logic
+      const orchestratorResponse = await executeToolCall(
+        toolCalls[0], // Assuming the first (and only) call is agent_query
+        qdrantClient,
+        repoPath,
+        suggestionModelAvailable
+      );
+      finalAnswer = typeof orchestratorResponse === 'string' ? orchestratorResponse : JSON.stringify(orchestratorResponse);
+    } else {
+      logger.warn("Outer loop: LLM did not call agent_query as expected. Output was:", { llmOutput });
+      finalAnswer = "The agent did not follow instructions to use the 'agent_query' tool. Raw LLM output: " + llmOutput;
+      addSuggestion(session.id, query, finalAnswer); // Log this unexpected response
+    }
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Error in outer agent loop: ${err.message}`, { stack: err.stack });
+    finalAnswer = `An error occurred while processing your request: ${err.message}`;
+    addSuggestion(session.id, query, finalAnswer); // Log error response
   }
   
-    // Get or create session
-    const session = getOrCreateSession(sessionId, repoPath);
-    
-    // Create agent state
-    const agentState: AgentState = createAgentState(session.id, query);
-    
-    // Filter tools based on suggestion model availability
-    const availableTools = toolRegistry.filter(tool => 
-      !tool.requiresModel || (tool.requiresModel && suggestionModelAvailable)
-    );
-    
-    // Generate system prompt
-    const systemPrompt = generateAgentSystemPrompt(availableTools);
-    
-    // Initial user prompt
-    let userPrompt = `User query: ${query}\n\nAnalyze this query and determine which tools to use to provide the best response.`;
+  const formattedResponse = `# CodeCompass Agent Response
 
-  let currentMaxSteps = configService.AGENT_DEFAULT_MAX_STEPS;
-  const absoluteMaxSteps = configService.AGENT_ABSOLUTE_MAX_STEPS;
-  let terminatedDueToAbsoluteMax = false;
-
-  for (let step = 0; step < currentMaxSteps; step++) { // Loop up to currentMaxSteps
-    // Check if absoluteMaxSteps has been reached due to extensions
-    if (step >= absoluteMaxSteps) {
-        logger.warn(`Agent loop reached absolute maximum steps (${absoluteMaxSteps}) and will terminate.`);
-        terminatedDueToAbsoluteMax = true;
-        break;
-    }
-    logger.info(`Agent step ${step + 1}/${currentMaxSteps} (Absolute Max: ${absoluteMaxSteps}) for query: ${query}`);
-    
-    // Generate agent reasoning and tool selection
-    const agentPrompt = `${systemPrompt}\n\n${userPrompt}`;
-      
-      // Add context from previous steps if available
-      if (agentState.steps.length > 0) {
-        const contextStr = agentState.steps.map((s: AgentStep) => { // Explicitly type 's'
-          const outputStr = stringifyStepOutput(s.output); // Use helper
-           
-          // Reason: stringifyStepOutput ensures outputStr is a string, making this template literal safe.
-          // The linter may not fully trace the type through the helper in all contexts for 'unknown' inputs.
-          return `Previous tool: ${s.tool}\nResults: ${outputStr}`;
-        }).join('\n\n');
-      
-        userPrompt += `\n\nContext from previous steps:\n${contextStr}`;
-      }
-      
-      // Get the current LLM provider
-      const llmProvider = await getLLMProvider();
-      
-      // Get agent reasoning with timeout handling
-      let agentOutput: string;
-      logger.info(`Agent (step ${step + 1}): Generating reasoning and tool selection...`);
-      try {
-        // Set a timeout promise
-        const timeoutPromise = new Promise<string>((_, reject) => {
-          setTimeout(() => reject(new Error("Agent reasoning timed out")), 60000); // 60 second timeout
-        });
-        
-        // Race the LLM generation against the timeout
-        agentOutput = await Promise.race([
-          llmProvider.generateText(agentPrompt),
-          timeoutPromise
-        ]);
-        logger.info(`Agent (step ${step + 1}): Reasoning and tool selection generated.`);
-      } catch (error) {
-        logger.warn(`Agent (step ${step + 1}): Reasoning timed out or failed: ${error instanceof Error ? error.message : String(error)}`);
-        // Provide a fallback response that continues the agent loop
-        agentOutput = "TOOL_CALL: " + JSON.stringify({
-          tool: "search_code",
-          parameters: { query: query, sessionId: session.id }
-        });
-      }
-      
-      // Check if the agent wants to make tool calls
-      const toolCalls = parseToolCalls(agentOutput);
-      
-      // If no tool calls, consider the agent's response as final
-      if (toolCalls.length === 0) {
-        agentState.finalResponse = agentOutput;
-        agentState.isComplete = true;
-        break;
-      }
-      
-      let extendedIteration = false;
-      // Execute each tool call
-      for (const toolCall of toolCalls) {
-        if (toolCall.tool === "request_more_processing_steps") {
-          if (currentMaxSteps < absoluteMaxSteps) {
-            logger.info("Agent requested more processing steps. Extending currentMaxSteps to absoluteMaxSteps.");
-            currentMaxSteps = absoluteMaxSteps;
-            extendedIteration = true; // Signal that this iteration was primarily for extension
-          } else {
-            logger.warn("Agent requested more processing steps, but already at or beyond absoluteMaxSteps.");
-          }
-          // Execute the tool to acknowledge, but its main effect is on currentMaxSteps
-        }
-        try {
-          logger.info(`Executing tool: ${toolCall.tool}`, { parameters: toolCall.parameters });
-          
-          // Execute tool call with timeout
-          const toolOutput = await Promise.race([
-            executeToolCall(
-              toolCall,
-              qdrantClient,
-              repoPath,
-              suggestionModelAvailable
-            ),
-            new Promise((_, reject) => {
-              setTimeout(() => reject(new Error(`Tool execution timed out: ${toolCall.tool}`)), 90000); // 90 second timeout
-            })
-          ]);
-          
-          // Add step to agent state
-          const newStep: AgentStep = {
-            tool: toolCall.tool,
-            input: toolCall.parameters, // No assertion needed, ParsedToolCall defines parameters as Record<string, unknown>
-            output: toolOutput,
-            reasoning: agentOutput
-          };
-          agentState.steps.push(newStep);
-
-          // Add context from tool output
-          agentState.context.push(toolOutput);
-          
-          // Update user prompt with tool results
-          // Only append tool results to userPrompt if it wasn't just an extension request
-          if (toolCall.tool !== "request_more_processing_steps" || !extendedIteration) {
-               userPrompt += `\n\nTool: ${toolCall.tool}\nResults: ${JSON.stringify(toolOutput, null, 2)}\n\nBased on these results, what's your next step? If you have enough information, provide a final response to the user.`;
-          } else if (extendedIteration && toolCalls.length === 1) {
-              // If the *only* tool call was to extend, prompt for next actual step
-              userPrompt += `\n\nTool: ${toolCall.tool}\nResults: ${JSON.stringify(toolOutput, null, 2)}\n\nProcessing steps extended. What is your next action?`;
-          }
-          
-         
-        } catch (_error: unknown) {
-          const _err = _error instanceof Error ? _error : new Error(String(_error));
-          logger.error(`Error executing tool ${toolCall.tool}`, { error: _err.message });
-          
-          // Add error to user prompt
-          userPrompt += `\n\nError executing tool ${toolCall.tool}: ${_err.message}\n\nPlease try a different approach or provide a response with the information you have.`;
-        }
-      }
-      
-      // Check if we've reached the maximum number of steps
-      if (step === currentMaxSteps - 1 && !agentState.isComplete) { // Check against currentMaxSteps
-        logger.info(`Reached max steps for this phase (${currentMaxSteps}). Generating final response.`);
-        const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nYou've reached the current maximum number of steps. Please provide your final response to the user based on the information collected so far.`;
-        const llmProvider = await getLLMProvider();
-        agentState.finalResponse = await llmProvider.generateText(finalPrompt);
-        agentState.isComplete = true;
-      }
-    }
-    
-    // If we somehow don't have a final response, generate one
-    // After the loop
-    if (!agentState.finalResponse) {
-      const finalPrompt = `${systemPrompt}\n\n${userPrompt}\n\nPlease provide your final response to the user based on the information collected so far.`;
-      const llmProvider = await getLLMProvider();
-      try {
-        // Set a timeout for final response generation
-        agentState.finalResponse = await Promise.race([
-          llmProvider.generateText(finalPrompt),
-          new Promise<string>((_, reject) => {
-            setTimeout(() => reject(new Error("Final response generation timed out")), 60000); // 60 second timeout
-          })
-        ]);
-      } catch (error) {
-        logger.warn(`Final response generation timed out: ${error instanceof Error ? error.message : String(error)}`);
-        // Provide a fallback response
-        agentState.finalResponse = "I apologize, but I couldn't complete the full analysis due to a timeout. " +
-          "Here's what I found so far: " +
-          agentState.steps.map((mapStep: AgentStep): string => { // Explicitly type mapStep and callback return type
-            const toolNameStr = String(mapStep.tool);
-            const outputRaw: unknown = mapStep.output;
-            const outputStringified: string = stringifyStepOutput(outputRaw);
-            const outputOrDefault: string = outputStringified || 'No output';
-            const outputSubstr: string = outputOrDefault.substring(0, 200);
-            // Final explicit cast to string for the part derived from unknown output
-            const outputPreviewStr = String(outputSubstr);
-
-            return `Used ${toolNameStr} and found: ${outputPreviewStr}...`;
-          }).join("\n\n");
-      }
-    }
-    
-    // Append note if terminated due to absolute max steps, regardless of how finalResponse was set
-    if (terminatedDueToAbsoluteMax) {
-        const currentFinalResponse = agentState.finalResponse ?? "Processing was terminated.";
-        agentState.finalResponse = currentFinalResponse +
-        "\n[Note: The agent utilized the maximum allowed processing steps.]";
-    }
-    
-    // Add the final response as a suggestion in the session
-    addSuggestion(session.id, query, agentState.finalResponse);
-    
-    // Format the final response
-    const formattedResponse = `# CodeCompass Agent Response
-
-${agentState.finalResponse}
+${finalAnswer}
 
 Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
-    
-    return formattedResponse;
+  
+  return formattedResponse;
 }
