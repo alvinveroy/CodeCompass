@@ -494,7 +494,7 @@ Please correct the parameters and try again.`;
               try {
                 logger.info(`Orchestrator executing capability: ${capabilityName}`, { params: validationResult.data });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-                const capabilityResult = await capabilityFunc(capabilityContext, validationResult.data as any);
+                const capabilityResult: unknown = await capabilityFunc(capabilityContext, validationResult.data as any);
 
                 agentState.steps.push({
                   tool: capabilityName,
