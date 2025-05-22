@@ -140,7 +140,8 @@ describe('Config Module', () => {
             if (typeof pathToCheck === 'string' && (pathToCheck.endsWith('model-config.json') || pathToCheck.endsWith('deepseek-config.json'))) {
               const e = new Error(`ENOENT: no such file or directory, open '${pathToCheck}' (mocked)`);
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (e as import('child_process').ExecException & { code?: string | number }).code = 'ENOENT';
+              const errorWithCode = e as Error & { code?: string | number }; // Cast to a type that definitely has a writable code
+              errorWithCode.code = 'ENOENT';
               throw e;
             }
             return actualFs.readFileSync(pathToCheck, options as fs.WriteFileOptions);

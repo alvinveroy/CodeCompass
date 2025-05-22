@@ -3,6 +3,22 @@ import { Dirent } from 'fs'; // Import Dirent directly from 'fs'
 // import path from 'path'; // DELETE THIS LINE
 import { QdrantClient } from '@qdrant/js-client-rest';
 
+// Near the top of the file, after imports but before the first describe block:
+const createMockDirent = (name: string, isDir: boolean): Dirent => {
+  const dirent = new Dirent();
+  // Override properties needed for the mock
+  // Cast to any for mock property assignments on a real Dirent object
+  (dirent as any).name = name;
+  (dirent as any).isFile = () => !isDir;
+  (dirent as any).isDirectory = () => isDir;
+  (dirent as any).isBlockDevice = () => false;
+  (dirent as any).isCharacterDevice = () => false;
+  (dirent as any).isSymbolicLink = () => false;
+  (dirent as any).isFIFO = () => false;
+  (dirent as any).isSocket = () => false;
+  return dirent;
+};
+
 // 2. Mock external dependencies of agent.ts FIRST
 vi.mock('../lib/config-service', () => {
   const loggerInstance = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
@@ -155,7 +171,7 @@ describe('Agent', () => {
     // The cast to `Dirent[]` should be sufficient if createMockDirent returns valid Dirent-like objects.
     // Use 'as any' to resolve the stubborn TS2345 error for the mock.
     // This is acceptable in tests where the precise generic of Dirent isn't crucial.
-    vi.mocked(readdir).mockReset().mockResolvedValue([_mockDirent('entry1', false)] as Dirent[]); 
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent[]); 
   });
   afterEach(() => { vi.restoreAllMocks(); });
 

@@ -304,7 +304,7 @@ describe('Repository Utilities', () => {
                 // This part needs to align with how the SUT calls git.TREE({ ref: treeOid })
                 // Our TREE mock sets _id to args.ref. So trees[0]._id will be 'tree1_oid', trees[1]._id will be 'tree2_oid'.
                 interface MockTree { _id: string; /* other properties */ } // Already defined in previous block, but repetition in search is ok if it matches
-                if ((trees[0] as MockTree)._id === 'tree1_oid' && (trees[1] as MockTree)._id === 'tree2_oid') { 
+                if ((trees[0] as unknown as MockTree)._id === 'tree1_oid' && (trees[1] as unknown as MockTree)._id === 'tree2_oid') { 
                     // Simulate one modified file
                     const mockEntryBefore = { type: () => 'blob', oid: () => 'blob_before_oid', mode: () => 0o100644 } as unknown as import('isomorphic-git').WalkerEntry;
                     const mockEntryAfter = { type: () => 'blob', oid: () => 'blob_after_oid', mode: () => 0o100644 } as unknown as import('isomorphic-git').WalkerEntry;
