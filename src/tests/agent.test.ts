@@ -171,7 +171,7 @@ describe('Agent', () => {
     // The cast to `Dirent[]` should be sufficient if createMockDirent returns valid Dirent-like objects.
     // Use 'as any' to resolve the stubborn TS2345 error for the mock.
     // This is acceptable in tests where the precise generic of Dirent isn't crucial.
-    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent[]); 
+    vi.mocked(readdir).mockReset().mockResolvedValue([createMockDirent('entry1', false)] as unknown as Dirent<Buffer>[]); 
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
