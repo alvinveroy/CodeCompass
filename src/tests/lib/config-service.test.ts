@@ -128,7 +128,7 @@ describe('ConfigService', () => {
     // Get the MOCK_LOGGER_INSTANCE that the factory for winston mock returns
     // This relies on the factory structure: vi.mock('winston', () => { const MOCK_LOGGER_INSTANCE = {...}; return { createLogger: vi.fn().mockReturnValue(MOCK_LOGGER_INSTANCE), ... } })
     // Access the mock logger instance directly from the mock setup
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     const loggerInstanceFromMockFactory = (_winstonMockedModule as any).default.createLogger() as import('winston').Logger;
 
 

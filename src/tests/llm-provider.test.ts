@@ -55,7 +55,7 @@ vi.mock('../lib/config-service', async (importOriginal) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     get DEEPSEEK_API_URL(): string { return String(process.env.DEEPSEEK_API_URL ?? 'https://api.deepseek.com/chat/completions'); },
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
-    get DEEPSEEK_MODEL(): string { return String(process.env.DEEPSEEK_MODEL ?? 'deepseek-coder'); }, // Added DEEPSEEK_MODEL getter
+    get DEEPSEEK_MODEL(): string { return String(process.env.DEEPSEEK_MODEL ?? 'deepseek-coder'); },
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     get LLM_PROVIDER(): string { return String(process.env.LLM_PROVIDER ?? 'ollama'); },
     // Add other getters if they are accessed by the code under test
@@ -164,17 +164,13 @@ describe('LLM Provider', () => {
       expect(result).toBe(true);
       
       // Verify that configService methods were called with correct arguments
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.setSuggestionModel).toHaveBeenCalledWith('deepseek-coder');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.setSuggestionProvider).toHaveBeenCalledWith('deepseek');
       
       // Verify the DeepSeek connection was tested
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(deepseek.testDeepSeekConnection).toHaveBeenCalled();
       
       // Verify model persistence was called via configService
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.persistModelConfiguration).toHaveBeenCalled();
     });
     
@@ -189,17 +185,13 @@ describe('LLM Provider', () => {
       expect(result).toBe(true);
       
       // Verify that configService methods were called with correct arguments
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.setSuggestionModel).toHaveBeenCalledWith('llama3.1:8b');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.setSuggestionProvider).toHaveBeenCalledWith('ollama');
       
       // Verify the Ollama connection was tested
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(ollama.checkOllama).toHaveBeenCalled();
       
       // Verify model persistence was called via configService
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(configService.persistModelConfiguration).toHaveBeenCalled();
     });
   });

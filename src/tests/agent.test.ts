@@ -137,6 +137,7 @@ describe('Agent', () => {
     vi.clearAllMocks(); // Clear all mocks from previous tests
 
     (getLLMProvider as Mock).mockResolvedValue(mockLLMProviderInstance);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default LLM response');
     mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
 
@@ -146,7 +147,17 @@ describe('Agent', () => {
       (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
     }
 
-    (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; }); // require-await fix
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    mockLLMProviderInstance.generateText.mockReset().mockResolvedValue("Default LLM response");
+    mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
+
+    // Clear logger mocks (assuming logger is imported from config-service which is mocked)
+    // const { logger: agentLogger } = await vi.importActual<typeof import('../lib/config-service')>('../lib/config-service'); // Duplicate removed
+    // if (agentLogger && typeof (agentLogger.info as Mock).mockClear === 'function') { 
+    //   (Object.values(agentLogger) as Mock[]).forEach(mockFn => mockFn.mockClear?.());
+    // }
+
+    (validateGitRepository as Mock).mockReset().mockImplementation(async () => { await Promise.resolve(); return true; });
     (getRepositoryDiff as Mock).mockReset().mockResolvedValue('Default diff content');
     (searchWithRefinement as Mock).mockReset().mockResolvedValue({ results: [] as import('../lib/types').DetailedQdrantSearchResult[], refinedQuery: 'refined query', relevanceScore: 0 });
     vi.mocked(git.listFiles).mockReset().mockResolvedValue(['file1.ts', 'file2.js']); // Use vi.mocked for default exports
@@ -165,6 +176,7 @@ describe('Agent', () => {
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
+  // describe('parseToolCalls (original)', () => { // This line was removed by user's change for line 201
   describe('parseToolCalls (original)', () => {
     it('should parse valid tool calls', () => {
       const output = `TOOL_CALL: {"tool":"search_code","parameters":{"query":"authentication"}}`;
@@ -182,7 +194,7 @@ describe('Agent', () => {
       await expect(ActualAgentModule.executeToolCall(
         { tool: 'generate_suggestion', parameters: { query: 'test' } },
         mockQdrantClientInstance, repoPath, false
-      )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available'); // This line was correct
+      )).rejects.toThrow('Tool generate_suggestion requires the suggestion model which is not available'); 
     });
   });
   
