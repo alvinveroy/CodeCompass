@@ -59,19 +59,26 @@ describe('Utils Module', () => {
       RETRY_DELAY: actualOriginalConfigService.RETRY_DELAY,
     };
     
-    // Dynamically import the mocked service to get the instance created by the mock factory.
-    // This instance (mockedConfigService) will conform to MockableConfigService.
-    const mockedModule = await import('../lib/config-service.js') as { configService: MockableConfigService; logger: MockableConfigService['logger'] };
-    mockedConfigService = mockedModule.configService;
+    // Assign the top-level imported mock to our test-scoped variable.
+    // This is the crucial part: we cast the statically imported `configServiceInstanceFromMockFactory`
+    // (which TS thinks is the original ConfigService) to our `MockableConfigService` type.
+    // This is safe because our vi.mock factory ensures it *is* a MockableConfigService at runtime.
+    testSubjectMockedConfigService = configServiceInstanceFromMockFactory as unknown as MockableConfigService;
 
     vi.useFakeTimers();
+    
     // Reset the properties of the *actual mocked instance* before each test
-    mockedConfigService.MAX_RETRIES = originalDefaultRetryValues.MAX_RETRIES;
-    mockedConfigService.RETRY_DELAY = originalDefaultRetryValues.RETRY_DELAY;
-    mockedConfigService.logger.warn.mockClear();
-    mockedConfigService.logger.error.mockClear();
-    mockedConfigService.logger.info.mockClear();
-    mockedConfigService.logger.debug.mockClear();
+    // using the correctly typed testSubjectMockedConfigService.
+    testSubjectMockedConfigService.MAX_RETRIES = originalDefaultRetryValues.MAX_RETRIES;
+    testSubjectMockedConfigService.RETRY_DELAY = originalDefaultRetryValues.RETRY_DELAY;
+    
+    // Ensure logger and its methods exist before trying to clear mocks
+    if (testSubjectMockedConfigService.logger) {
+        testSubjectMockedConfigService.logger.warn?.mockClear();
+        testSubjectMockedConfigService.logger.error?.mockClear();
+        testSubjectMockedConfigService.logger.info?.mockClear();
+        testSubjectMockedConfigService.logger.debug?.mockClear();
+    }
   });
 
   afterEach(() => {
