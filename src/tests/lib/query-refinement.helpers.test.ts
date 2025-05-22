@@ -138,7 +138,8 @@ describe('Query Refinement Helper Utilities', () => {
       const tweaked = queryRefinementHelpers.tweakQuery(query_addDir, results_addDir);
       expect(tweaked).toBeDefined();
       expect(typeof tweaked).toBe('string');
-      expect(tweaked).toBe("search login.ts function in src");
+      // Since 'src' is in the exclusion list, it should not be added.
+      expect(tweaked).toBe("search login.ts function");
     });
     
     it('should not change query if context already present or no context to add', () => {

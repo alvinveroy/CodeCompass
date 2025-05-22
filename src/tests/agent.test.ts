@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, type Mock } from 'vitest';
 import { Dirent } from 'fs'; // Import Dirent directly from 'fs'
+import { z } from 'zod'; // For the parameters_schema
+import type { CapabilityDefinition as AgentCapabilityDefinition } from '../lib/agent'; // Use 'type' import and alias if needed
 // import path from 'path'; // DELETE THIS LINE
 import { QdrantClient } from '@qdrant/js-client-rest';
 

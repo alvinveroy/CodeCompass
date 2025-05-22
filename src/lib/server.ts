@@ -27,7 +27,7 @@ import { validateGitRepository, indexRepository, getRepositoryDiff } from "./rep
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
 import { SuggestionPlanner } from "./suggestion-service";
 import { processAgentQuery } from './agent-service';
-import { AgentInitialQueryResponse } from "./types";
+// AgentInitialQueryResponse is already imported in the block below
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 

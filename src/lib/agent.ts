@@ -1,6 +1,6 @@
 import { logger, configService } from "./config-service";
 import { getLLMProvider } from "./llm-provider";
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults, addAgentSteps } from "./state";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { searchWithRefinement } from "./query-refinement"; // Changed import path
 import { validateGitRepository, getRepositoryDiff } from "./repository";

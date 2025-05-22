@@ -194,11 +194,12 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
             total_chunks: contentChunks.length,
             repositoryPath: repoPath, // Optional: add repoPath if useful for multi-repo scenarios
           };
-          pointsToUpsert.push({ id: pointId, vector: embedding, payload: payload as unknown as Record<string, unknown> });
+          pointsToUpsert.push({ id: pointId, vector: embedding, payload: payload });
         }
 
         if (pointsToUpsert.length > 0) {
-          await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, pointsToUpsert, configService.QDRANT_BATCH_UPSERT_SIZE);
+          const simplePointsFileChunks = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
+          await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsFileChunks, configService.QDRANT_BATCH_UPSERT_SIZE);
           logger.info(`Successfully indexed ${pointsToUpsert.length} chunks for ${filepath}`);
           successCount++;
         } else {
@@ -572,7 +573,7 @@ async function indexCommitsAndDiffs(
       pointsToUpsert.push({
         id: `commit:${commit.oid}`, // Deterministic ID
         vector: commitVector,
-        payload: commitPayload as unknown as Record<string, unknown>,
+        payload: commitPayload,
       });
     } catch (embedError) {
         logger.error(`Failed to generate embedding for commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
@@ -612,7 +613,7 @@ async function indexCommitsAndDiffs(
             pointsToUpsert.push({
               id: `diff:${commit.oid}:${preprocessText(changedFile.path)}:chunk:${i}`, // Deterministic ID
               vector: diffVector,
-              payload: diffPayload as unknown as Record<string, unknown>,
+              payload: diffPayload,
             });
           } catch (embedError) {
               logger.error(`Failed to generate embedding for diff chunk of ${changedFile.path} in commit ${commit.oid}`, { error: embedError instanceof Error ? embedError.message : String(embedError) });
@@ -625,7 +626,8 @@ async function indexCommitsAndDiffs(
     // Batch upsert periodically
     if (pointsToUpsert.length >= configService.QDRANT_BATCH_UPSERT_SIZE) {
         logger.info(`Upserting batch of ${pointsToUpsert.length} commit/diff points...`);
-        await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, pointsToUpsert, configService.QDRANT_BATCH_UPSERT_SIZE);
+        const simplePointsBatch1 = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
+        await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsBatch1, configService.QDRANT_BATCH_UPSERT_SIZE);
         pointsToUpsert.length = 0; // Clear the array
     }
   }
@@ -633,7 +635,8 @@ async function indexCommitsAndDiffs(
   // Upsert any remaining points
   if (pointsToUpsert.length > 0) {
     logger.info(`Upserting final batch of ${pointsToUpsert.length} commit/diff points...`);
-    await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, pointsToUpsert, configService.QDRANT_BATCH_UPSERT_SIZE);
+    const simplePointsFinalBatch = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
+    await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsFinalBatch, configService.QDRANT_BATCH_UPSERT_SIZE);
   }
   logger.info(`Finished indexing ${commits.length} commits and their diffs for ${repoPath}`);
 }

@@ -33,15 +33,18 @@ vi.mock('fs/promises', () => {
 // Mock 'isomorphic-git'
 // isomorphic-git exports named functions. We mock them directly.
 vi.mock('isomorphic-git', async (importOriginal) => {
-  const _actual = await importOriginal<typeof import('isomorphic-git')>(); 
+  const _actual = await importOriginal<typeof import('isomorphic-git')>();
   return {
-    // ..._actual, // Spread actual to keep other exports // This was causing issues with TREE mock
     resolveRef: vi.fn(),
     listFiles: vi.fn(),
     log: vi.fn(),
     readCommit: vi.fn(),
-    // diffTrees: vi.fn(), // No longer directly called by SUT's getCommitHistoryWithChanges
     walk: vi.fn(),
+    readBlob: vi.fn(async ({ oid }: { oid: string }) => { // Mock readBlob
+      // Return some consistent mock data based on oid if needed for specific diffs,
+      // otherwise, generic content is fine for `expect.any(String)`.
+      return Promise.resolve({ blob: Buffer.from(`mock file content for ${oid || 'unknown'}`) });
+    }),
     TREE: vi.fn((args?: { ref?: string; oid?: string }) => ({
       // Simulate Walker object structure expected by SUT's git.TREE({ ref: treeOid })
       // The mock TREE needs to return something that walk's `trees` parameter can use.
