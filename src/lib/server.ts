@@ -451,21 +451,21 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     expressApp.use(express.json()); // Middleware to parse JSON bodies
 
      
-    expressApp.get('/api/indexing-status', (_req: express.Request, res: express.Response) => {
+    expressApp.get('/api/indexing-status', (_req: express.Request, res: express.Response): void => {
       const currentStatus = getGlobalIndexingStatus();
        
       res.json(currentStatus);
     });
 
      
-    expressApp.post('/api/repository/notify-update', (_req: express.Request, res: express.Response) => {
+    expressApp.post('/api/repository/notify-update', (_req: express.Request, res: express.Response): void => {
       logger.info('Received notification to update repository via /api/repository/notify-update.');
       
       const currentStatus = getGlobalIndexingStatus();
       if (['initializing', 'validating_repo', 'listing_files', 'cleaning_stale_entries', 'indexing_file_content', 'indexing_commits_diffs'].includes(currentStatus.status)) {
         logger.warn('Re-indexing request received, but indexing is already in progress.');
-         
-        return res.status(409).json({ message: 'Indexing already in progress.' });
+        res.status(409).json({ message: 'Indexing already in progress.' });
+        return;
       }
 
       logger.info(`Triggering re-indexing for repository: ${repoPath}`);
