@@ -405,15 +405,9 @@ export async function capability_getAdjacentFileChunks(
          adjacentChunksResult.push({
           filepath: filepath,
           chunk_index: targetIndex,
-          snippet: payload.file_content_chunk,
-        });
-      } else {
-         adjacentChunksResult.push({
-          filepath: filepath,
-          chunk_index: targetIndex,
-          snippet: "",
+          snippet: "", // Correct: No payload to access here, so snippet is empty
           note: `Chunk ${targetIndex} not found for file ${filepath}.`
-         });
+        });
       }
     } catch (searchError) {
       const sErr = searchError instanceof Error ? searchError : new Error(String(searchError));

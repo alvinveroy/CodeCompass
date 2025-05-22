@@ -197,10 +197,17 @@ describe('Agent', () => {
     const repoPath = '/test/repo';
     it('should throw if tool requires model and model is unavailable', async () => {
       // Test the original function using ActualAgentModule
-      await expect(ActualAgentModule.executeToolCall(
-        { tool: 'generate_suggestion', parameters: { query: 'test' } },
-        mockQdrantClientInstance, repoPath, false
-      )).rejects.toThrow('Tool not found: generate_suggestion');
+      try {
+        await ActualAgentModule.executeToolCall(
+          { tool: 'agent_query', parameters: { user_query: 'test' } }, // agent_query requires a model
+          mockQdrantClientInstance, repoPath, false // suggestionModelAvailable = false
+        );
+        // If it doesn't throw, fail the test
+        expect(true).toBe(false); // Should not reach here
+      } catch (e) {
+        const errorResult = e instanceof Error ? e : new Error(String(e));
+        expect(errorResult.message).toContain('Tool agent_query requires the suggestion model which is not available');
+      }
     });
   });
   
@@ -278,7 +285,8 @@ describe('Agent', () => {
       // For now, assuming the orchestrator's first LLM call yields the final answer:
       expect(searchWithRefinement).not.toHaveBeenCalled();
       
-      expect(addSuggestion).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response from orchestrator.'));
+      const addSuggestionSpy = addSuggestion as Mock;
+      expect(addSuggestionSpy).toHaveBeenCalledWith('session2', 'query with tool', expect.stringContaining('Final response from orchestrator.'));
     });
   });
   
