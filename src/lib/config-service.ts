@@ -15,7 +15,6 @@ interface ModelConfigFile {
   // Add other provider-specific keys here as needed
   SUMMARIZATION_MODEL?: string; // New
   REFINEMENT_MODEL?: string;   // New
-  HTTP_PORT?: number; // Added for Express server port
 }
 
 class ConfigService {
@@ -592,7 +591,6 @@ class ConfigService {
         CLAUDE_API_KEY: this.CLAUDE_API_KEY,
         SUMMARIZATION_MODEL: this.SUMMARIZATION_MODEL, // New
         REFINEMENT_MODEL: this.REFINEMENT_MODEL,     // New
-        HTTP_PORT: this.HTTP_PORT, // Added
       };
       // Remove undefined keys before saving
       Object.keys(configToSave).forEach(keyStr => {

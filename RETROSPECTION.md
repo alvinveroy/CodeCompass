@@ -133,3 +133,24 @@
 ## Action Items / Follow-ups
 - Ensure developers are aware of the need to use `git rm --cached <file>` if a file was tracked before being added to `.gitignore`. This could be part of project setup documentation.
 - Consider adding more comprehensive automated tests for utility scripts like `update-gitignore.ts` to cover various scenarios of initial `.gitignore` file states.
+
+# Retrospection for Build/Config Fixes & Tool Registration (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The specific instructions for correcting `src/lib/config-service.ts` (removing `HTTP_PORT` from persistence) and `src/lib/server.ts` (fixing `get_changelog` tool registration) were clear and actionable.
+- The `fs-extra` dependency was correctly identified as needing to be in `dependencies` for the `install-git-hooks.ts` script, and it was already correctly placed.
+- The test `should persist model configuration when setSuggestionModel is called` in `src/tests/lib/config-service.test.ts` served as a good validation point for the `ConfigService` changes without needing modification itself.
+
+## What could be improved?
+- The issue with `HTTP_PORT` being persisted indicates a need for careful review of what settings are appropriate for user-level configuration files versus server operational parameters (which might be better suited for environment variables or internal defaults).
+- The `get_changelog` tool registration issue highlights the importance of closely following SDK documentation and type definitions, especially when multiple overloads or registration methods exist.
+
+## What did we learn?
+- Persisting server operational parameters (like `HTTP_PORT`) in user-facing configuration files can lead to unexpected behavior if not carefully managed. It's generally better to keep such settings separate.
+- SDKs often have subtle differences in method signatures or expected object structures; thorough testing and adherence to type definitions are crucial.
+- Maintaining a clear separation between user-configurable settings and internal/operational settings improves robustness.
+
+## Action Items / Follow-ups
+- Review other persisted configurations to ensure only user-intended settings are saved to configuration files.
+- When encountering SDK-related errors, double-check the specific SDK version's documentation for the exact method signatures and parameter requirements.
+- Ensure that tests for configuration persistence cover all fields intended to be saved and explicitly exclude those that should not.

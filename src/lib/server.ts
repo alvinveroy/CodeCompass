@@ -733,21 +733,19 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   });
 
   // Add get_changelog tool
-  server.tool(
-    "get_changelog",
-    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
-    {},
-    {
-      annotations: { title: "Get Changelog" }
-    },
-    async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+  server.addTool({
+    name: "get_changelog",
+    description: "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`.",
+    parameters: z.object({}),
+    annotations: { title: "Get Changelog" },
+    handler: async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
         const changelog = await fs.readFile(changelogPath, 'utf8'); 
         
         return {
           content: [{
-            type: "text",
+            type: "text" as const,
             text: `# CodeCompass Changelog (v${VERSION})\n\n${changelog}`,
           }],
         };
@@ -762,7 +760,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         };
       }
     }
-  );
+  });
   
   // Add reset_metrics tool - REMOVED
   // Add check_provider tool - REMOVED
