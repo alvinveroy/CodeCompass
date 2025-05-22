@@ -1,5 +1,6 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { configService, logger } from "./config-service";
+import axios from "axios"; // Import axios
 import { withRetry } from "../utils/retry-utils";
 
 let qdrantClientInstance: QdrantClient | null = null;
@@ -30,22 +31,50 @@ export async function initializeQdrant(): Promise<QdrantClient> {
   const qdrantHost = configService.QDRANT_HOST;
   const collectionName = configService.COLLECTION_NAME;
   logger.info(`Initializing Qdrant client for ${qdrantHost}`);
-  const client = new QdrantClient({ url: qdrantHost });
+  const client = new QdrantClient({ url: qdrantHost, timeout: configService.REQUEST_TIMEOUT }); // Added timeout
 
   await withRetry(async () => {
+    // Expected vector configuration
+    const expectedVectorSize = 768; // TODO: Make this configurable or dynamic based on EMBEDDING_MODEL
+    const expectedVectorDistance = "Cosine";
+
     const collections = await client.getCollections();
-    if (!collections.collections.some(c => c.name === collectionName)) {
-      // Determine vector size from embedding model if possible, or make it configurable
-      // For now, assuming 768 is a common default (e.g., nomic-embed-text)
-      // This should ideally come from configService or be dynamically determined
-      const vectorSize = 768; // TODO: Make this configurable or dynamic
-      logger.info(`Creating collection: ${collectionName} with vector size ${vectorSize}`);
+    const existingCollection = collections.collections.find(c => c.name === collectionName);
+
+    if (!existingCollection) {
+      logger.info(`Creating collection: ${collectionName} with vector size ${expectedVectorSize} and distance ${expectedVectorDistance}`);
       await client.createCollection(collectionName, {
-        vectors: { size: vectorSize, distance: "Cosine" }
+        vectors: { size: expectedVectorSize, distance: expectedVectorDistance }
       });
       logger.info(`Created collection: ${collectionName}`);
     } else {
-      logger.info(`Collection '${collectionName}' already exists.`);
+      logger.info(`Collection '${collectionName}' already exists. Verifying configuration...`);
+      const collectionInfo = await client.getCollection(collectionName);
+
+      let actualSize: number | undefined;
+      let actualDistance: string | undefined;
+
+      // Check if vectors config is a single, unnamed vector config
+      if (typeof collectionInfo.config.params.vectors === 'object' &&
+          collectionInfo.config.params.vectors !== null &&
+          'size' in collectionInfo.config.params.vectors &&
+          'distance' in collectionInfo.config.params.vectors &&
+          typeof (collectionInfo.config.params.vectors as { size: unknown }).size === 'number' &&
+          typeof (collectionInfo.config.params.vectors as { distance: unknown }).distance === 'string') {
+        actualSize = (collectionInfo.config.params.vectors as { size: number }).size;
+        actualDistance = (collectionInfo.config.params.vectors as { distance: string }).distance;
+      } else {
+        // This handles cases where vectors might be an object of named vectors, or an unexpected format
+        logger.error(`Collection '${collectionName}' exists but its vector configuration is unexpected. It might be using named vectors, which is not supported by the current simple upsert logic. Config: ${JSON.stringify(collectionInfo.config.params.vectors)}`);
+        throw new Error(`Collection '${collectionName}' has an incompatible vector configuration (e.g., named vectors or unexpected structure).`);
+      }
+
+      if (actualSize !== expectedVectorSize || actualDistance !== expectedVectorDistance) {
+        logger.error(`Collection '${collectionName}' exists but has a mismatched configuration. Expected: size=${expectedVectorSize}, distance=${expectedVectorDistance}. Actual: size=${actualSize}, distance=${actualDistance}. Please delete the collection in Qdrant and restart, or ensure your EMBEDDING_MODEL matches the existing collection's vector size.`);
+        throw new Error(`Collection '${collectionName}' has a mismatched vector configuration.`);
+      } else {
+        logger.info(`Collection '${collectionName}' configuration is compatible (size: ${actualSize}, distance: ${actualDistance}).`);
+      }
     }
   });
 
@@ -82,9 +111,13 @@ export async function batchUpsertVectors(
       logger.debug(`Batch upserted ${batch.length} points (total processed: ${Math.min(i + batchSize, points.length)})`);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      logger.error(`Failed to batch upsert points: ${err.message}`, { collectionName, batchStartIndex: i, batchSize });
+      let detailedErrorMessage = err.message;
+      if (axios.isAxiosError(error) && error.response) {
+        detailedErrorMessage = `Status: ${error.response.status} - ${error.response.statusText}. Data: ${JSON.stringify(error.response.data)}`;
+      }
+      logger.error(`Failed to batch upsert points: ${detailedErrorMessage}`, { collectionName, batchStartIndex: i, batchSize });
       // Depending on requirements, you might want to re-throw or handle partial failures
-      throw err; 
+      throw new Error(`Failed to batch upsert points: ${detailedErrorMessage}`);
     }
   }
   logger.info(`Successfully batch upserted ${points.length} points to collection '${collectionName}'`);
