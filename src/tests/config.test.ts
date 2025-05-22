@@ -124,30 +124,26 @@ describe('Config Module', () => {
       // Mock 'fs' specifically for this suite.
       // This ensures that ConfigService does not load from actual config files during these tests.
       vi.doMock('fs', async () => {
-        // Explicitly type actualFs to match the 'fs' module's structure
-        const actualFs = await vi.importActual('fs'); // Use the imported fs namespace
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+        const actualFs = await vi.importActual('fs') as typeof import('fs'); // Keep 'typeof import("fs")' for precision
         return {
-          ...actualFs, // Delegate all other fs calls to the actual module
+          ...actualFs,
           existsSync: vi.fn((pathToCheck: string) => {
-            // Simulate config files not existing
             if (typeof pathToCheck === 'string' && (pathToCheck.endsWith('model-config.json') || pathToCheck.endsWith('deepseek-config.json'))) {
               return false;
             }
-            // For other paths (like LOG_DIR check), use actual existsSync
-            return actualFs.existsSync(pathToCheck); // Now actualFs.existsSync is correctly typed
+            return actualFs.existsSync(pathToCheck);
           }),
           readFileSync: vi.fn((pathToCheck: string, options?: fs.WriteFileOptions) => {
-            // This should ideally not be called for config files if existsSync is false
             if (typeof pathToCheck === 'string' && (pathToCheck.endsWith('model-config.json') || pathToCheck.endsWith('deepseek-config.json'))) {
               const e = new Error(`ENOENT: no such file or directory, open '${pathToCheck}' (mocked)`);
               const errorWithCode = e as Error & { code?: string | number };
               errorWithCode.code = 'ENOENT';
-              throw e; 
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+              throw e;
             }
-            return actualFs.readFileSync(pathToCheck, options as fs.WriteFileOptions); // Now actualFs.readFileSync is correctly typed
+            return actualFs.readFileSync(pathToCheck, options as fs.WriteFileOptions);
           }),
-          // Let mkdirSync pass through for LOG_DIR creation by ConfigService constructor
-          // If this causes issues in a restricted test environment, mock it as vi.fn()
           mkdirSync: actualFs.mkdirSync,
         };
       });
