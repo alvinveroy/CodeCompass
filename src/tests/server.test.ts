@@ -398,8 +398,9 @@ describe('Server Startup and Port Handling', () => {
     // Add the new 'it' block here, starting around line 395 of your provided file content
     it('should handle EADDRINUSE, detect existing CodeCompass server, log status, and exit with 0', async () => {
       // Define the mock status for an existing server
+      const existingServerPingVersion = 'existing-ping-version'; // Version obtained from ping
       const mockExistingServerStatus: IndexingStatusReport = {
-        version: 'existing-test-version',
+        // No version property here, as IndexingStatusReport does not define it
         status: 'idle',
         message: 'Existing server idle',
         overallProgress: 100,
