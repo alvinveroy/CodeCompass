@@ -75,9 +75,11 @@ vi.mock('../lib/ollama', () => ({
   // summarizeSnippet: vi.fn().mockResolvedValue('Test summary') // Not directly used by startServer
 }));
 
+import type { QdrantClient } from '@qdrant/js-client-rest';
+
 vi.mock('../lib/qdrant', () => ({
-  initializeQdrant: vi.fn().mockResolvedValue({
-    search: vi.fn().mockResolvedValue([ /* ...mock search results if needed ... */ ]),
+  initializeQdrant: vi.fn<[], Promise<Partial<QdrantClient>>>().mockResolvedValue({
+    search: vi.fn().mockResolvedValue([]),
     getCollections: vi.fn().mockResolvedValue({ collections: [] })
   })
 }));
