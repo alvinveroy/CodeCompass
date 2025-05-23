@@ -325,7 +325,7 @@ import { Logger as WinstonLogger } from 'winston';
 // Type for the mocked logger instance where each method is a vi.Mock
 type MockedLogger = {
   [K in keyof WinstonLogger]: WinstonLogger[K] extends (...args: infer A) => infer R
-    ? vi.Mock<A, R>
+    ? Mock<A, R> // Changed from vi.Mock
     : WinstonLogger[K];
 };
 
@@ -342,7 +342,7 @@ type MockedConfigService = Pick<
   // Add any other relevant properties from ConfigService
 > & {
   logger: MockedLogger;
-  reloadConfigsFromFile: vi.Mock<[], void>; // Or Promise<void> if async
+  reloadConfigsFromFile: Mock<[], void>; // Changed from vi.Mock
   // Add other methods from ConfigService that are mocked and used by server.ts
 };
 
@@ -350,9 +350,12 @@ describe('Server Startup and Port Handling', () => {
   // Use the new mock-aware types
   let mcs: MockedConfigService; // mcs for mockedConfigService
   let ml: MockedLogger; // ml for mockedLogger
-  let mockedMcpServerConnect: MockInstance<any[], any>; // Typed the mock instance
+  let mockedMcpServerConnect: MockInstance; // Typed the mock instance
+  let originalNodeEnv: string | undefined;
 
   beforeEach(async () => {
+    originalNodeEnv = process.env.NODE_ENV; // Store original NODE_ENV
+    process.env.NODE_ENV = 'test'; // Set for tests
     vi.clearAllMocks(); 
 
     // Mock process.exit for each test
@@ -385,6 +388,7 @@ describe('Server Startup and Port Handling', () => {
   });
 
   afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv; // Restore original NODE_ENV
     // Restore any global mocks if necessary, though vi.clearAllMocks() handles most
     if (mockProcessExit) mockProcessExit.mockClear(); // mockProcessExit is defined in beforeEach
     mockConsoleInfo.mockClear();

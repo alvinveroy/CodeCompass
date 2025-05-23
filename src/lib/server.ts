@@ -583,11 +583,17 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     
     await server.connect(transport);
     
-    await new Promise<void>((resolve) => {
-      process.on('SIGINT', () => {
-        resolve();
+    if (process.env.NODE_ENV === 'test') {
+      logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");
+    } else {
+      // Original block
+      await new Promise<void>((resolve) => {
+        process.on('SIGINT', () => {
+          logger.info("SIGINT received, shutting down server.");
+          resolve();
+        });
       });
-    });
+    }
 
   } catch (error: unknown) {
     const err = error as Error;
