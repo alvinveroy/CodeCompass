@@ -298,6 +298,26 @@
 - Continue to ensure that `vi.mock` factories are correctly structuring the returned mock module, especially for modules with default and named exports under `NodeNext` resolution.
 
 ---
+# Retrospection for Linting Finalization & Build Stability (server.test.ts) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The iterative process eventually pinpointed the critical interaction: `eslint --fix` removing `no-unnecessary-type-assertion` disables, which then caused other type safety rules to fail.
+- Understanding this interaction is key to achieving a stable linting state for complex mock setups involving `await importOriginal()`.
+
+## What could be improved?
+- **ESLint Rule Interdependencies:** The way `no-unnecessary-type-assertion` (and its auto-fix) interacts with `no-unsafe-return` and `no-unsafe-assignment` can be non-obvious. This specific scenario (needing to *keep* a disable for `no-unnecessary-type-assertion` to satisfy *other* rules) is a nuanced edge case.
+- **Clarity of "Unnecessary":** An assertion might be "unnecessary" for `tsc`'s direct compilation pass but still provide crucial type information that ESLint's TypeScript parser relies on for its own rule evaluations.
+
+## What did we learn?
+- **Mandatory Disables for `importOriginal` Casts:** For `const actual = await importOriginal() as typeof import('...');` patterns, the `// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion` directive immediately preceding it is often *mandatory* for a clean ESLint pass, even if `tsc` builds without it. This is because the assertion helps ESLint's type-aware rules correctly interpret the type of `actual`.
+- **`eslint --fix` Caution:** Auto-fixers can sometimes resolve one issue in a way that creates another, especially with interdependent linting rules and type assertions.
+- The `unbound-method` and `no-unsafe-argument` rules remain common candidates for targeted disabling in test files due to their strictness with typical testing patterns.
+
+## Action Items / Follow-ups
+- Document this specific pattern: if `no-unsafe-return` or `no-unsafe-assignment` errors appear in mock factories after running `eslint --fix`, check if `eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion` was removed from `await importOriginal()` casts and restore it.
+- Consider this behavior if evaluating global changes to the `no-unnecessary-type-assertion` rule configuration.
+
+---
 
 # Retrospection for HTTP Server Port Conflict (EADDRINUSE) Handling (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 

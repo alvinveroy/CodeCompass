@@ -87,9 +87,10 @@ vi.mock('../lib/qdrant', () => ({
 }));
 
 vi.mock('../lib/repository', async (importOriginal) => {
-  const actual = await importOriginal();
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  const actual = await importOriginal() as typeof import('../lib/repository');
   return {
-    ...(actual as Record<string, unknown>), // Keep actual exports like IndexingStatusReport type
+    ...actual, // Keep actual exports like IndexingStatusReport type
     validateGitRepository: vi.fn().mockResolvedValue(true),
     indexRepository: vi.fn().mockResolvedValue(undefined),
     getRepositoryDiff: vi.fn().mockResolvedValue('+ test\n- test2'),
@@ -142,7 +143,8 @@ const mockHttpServerInstance = {
 } as unknown as httpModule.Server; // Cast to satisfy http.Server type
 
 vi.mock('http', async (importOriginal) => {
-  const actualHttpModule = await importOriginal(); // Ensure httpModule is imported as type
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  const actualHttpModule = await importOriginal() as typeof httpModule; // Ensure httpModule is imported as type
   const mockHttpMethods = {
     createServer: vi.fn(() => mockHttpServerInstance),
     Server: vi.fn(() => mockHttpServerInstance) as unknown as typeof httpModule.Server, // Mock constructor
@@ -173,26 +175,26 @@ vi.mock('../lib/version', () => ({
 import type { LLMProvider } from '../lib/llm-provider';
 // Mock for ../lib/llm-provider
 vi.mock('../lib/llm-provider', async (importOriginal) => {
-  const actual = await importOriginal();
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  const actual = await importOriginal() as typeof import('../lib/llm-provider');
   return {
     ...actual,
     getLLMProvider: vi.fn<() => Promise<Partial<LLMProvider>>>().mockResolvedValue({
       checkConnection: vi.fn().mockResolvedValue(true),
       generateText: vi.fn().mockResolvedValue('mock llm text'),
-      // Add other methods if server.ts uses them
     }),
-    switchSuggestionModel: vi.fn().mockResolvedValue(true), // If server.ts calls this directly
+    switchSuggestionModel: vi.fn().mockResolvedValue(true),
   };
 });
 
-// Mock fs/promises for server.ts if it uses it directly (e.g. for reading changelog)
+// Mock fs/promises
 import fs from 'fs'; // Or import type { PathOrFileDescriptor, ObjectEncodingOptions } from 'fs';
 vi.mock('fs/promises', async (importOriginal) => {
-  const actual = await importOriginal();
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  const actual = await importOriginal() as typeof import('fs/promises');
   return {
     ...actual,
     readFile: vi.fn<(path: fs.PathOrFileDescriptor, options?: fs.ObjectEncodingOptions | BufferEncoding | null) => Promise<string | Buffer>>().mockResolvedValue('mock file content'),
-    // Add other fs/promises functions if used
   };
 });
 
