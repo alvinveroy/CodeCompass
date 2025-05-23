@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Linting Finalization & Build Stability (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved all ESLint errors in `src/tests/server.test.ts` by:
+        - Restoring essential `as typeof import(...)` type assertions for `await importOriginal()` results in mock factories.
+        - Disabling `no-unnecessary-type-assertion` for these specific, necessary assertions to ensure both TypeScript compilation and ESLint type-checking succeed. This fixed cascading `no-unsafe-return` and `no-unsafe-assignment` errors.
+        - Correctly typing the `fs` parameter in the `isomorphic-git` mock factory to resolve `no-explicit-any`.
+        - Applying `eslint-disable-next-line` for `unbound-method` on `expect(...).toHaveBeenCalled()` assertions, and for `no-unsafe-argument` on `expect(...).toThrow(expect.objectContaining(...))` where these are common false positives or overly strict interpretations in tests.
 - **Unit Test Failure (server.test.ts - ECONNREFUSED Log Assertion) (Git Commit ID: 0b7a75e):**
     - Corrected a failing assertion in `src/tests/server.test.ts` for the "ECONNREFUSED" scenario. The `ml.error` assertion was updated from `expect.stringContaining('Connection refused on port')` to `expect.stringContaining('Ping error details: Error: Connection refused')` to accurately match the actual log message.
 - **Unit Test Failures & Build Errors (server.test.ts) (Git Commit ID: cdfb314):**
