@@ -260,6 +260,7 @@ describe('ConfigService', () => {
     const initialOpenAiApiKey = service.OPENAI_API_KEY;         
     const initialGeminiApiKey = service.GEMINI_API_KEY;         
     const initialClaudeApiKey = service.CLAUDE_API_KEY;         
+    const initialHttpPort = service.HTTP_PORT; // Capture the HTTP_PORT from the service instance
     // When setSuggestionModel is called, _suggestionModel is updated.
     // _summarizationModel and _refinementModel are getters that derive from _suggestionModel
     // if their specific env vars are not set.
@@ -276,6 +277,7 @@ describe('ConfigService', () => {
         OPENAI_API_KEY: initialOpenAiApiKey,            // Persisted from initial state
         GEMINI_API_KEY: initialGeminiApiKey,            // Persisted from initial state
         CLAUDE_API_KEY: initialClaudeApiKey,            // Persisted from initial state
+        HTTP_PORT: initialHttpPort,                     // Persisted from service state
         SUMMARIZATION_MODEL: 'new_persisted_model',     // Derived from the new suggestion model
         REFINEMENT_MODEL: 'new_persisted_model'         // Derived from the new suggestion model
     };

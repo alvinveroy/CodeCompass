@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Test Failure (`config-service.test.ts`):** (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+    - Corrected the test `ConfigService > should persist model configuration when setSuggestionModel is called` in `src/tests/lib/config-service.test.ts`.
+    - The test's expectation for the persisted JSON content in `model-config.json` was updated to include the `HTTP_PORT` field, aligning the test with the actual behavior of `ConfigService.persistModelConfiguration()`.
 - **HTTP Server Port Conflict (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Added error handling in `src/lib/server.ts` to detect if the configured `HTTP_PORT` is already in use (`EADDRINUSE`). The server will now log a specific error message and exit gracefully instead of crashing.
 - **ESLint Errors & Code Quality (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**

@@ -262,3 +262,23 @@
 - If separate annotations are strongly desired for tools, further investigate the MCP SDK's specific requirements or recommended patterns for the 5-argument `server.tool` overload, or check if annotations should be part of an options object for the 4th argument.
 - For now, maintain consistency by using the 4-argument `server.tool(name, description, paramsSchema, handler)` signature for new tools unless a clear need and verified pattern for other overloads arise.
 
+# Retrospection for config-service.test.ts Fix (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The failing test `ConfigService > should persist model configuration when setSuggestionModel is called` clearly indicated a mismatch between the expected and actual persisted JSON.
+- The root cause was identified: the test's `expectedJsonContent` was missing the `HTTP_PORT` field, which `ConfigService.persistModelConfiguration()` correctly includes.
+- The fix involved updating the test's expectation to align with the actual implementation, which is a standard approach for correcting such test failures.
+
+## What could be improved?
+- **Test Maintenance:** This incident re-emphasizes the importance of keeping unit tests synchronized with code changes. When the behavior of `persistModelConfiguration` was updated to include `HTTP_PORT`, the corresponding test should have been updated in the same changeset.
+- **Clarity of Test Data:** Ensuring that mock data and expected values in tests are meticulously maintained and clearly reflect the intended state can prevent confusion and speed up debugging.
+
+## What did we learn?
+- Unit tests serve as living documentation. When they fail due to outdated expectations, it signals a discrepancy between the documented behavior (the test) and the actual behavior (the code).
+- A systematic approach to updating tests alongside feature development or refactoring is crucial for maintaining a reliable test suite.
+- When a test fails on an assertion involving complex objects (like a JSON string), carefully diffing the expected and actual values is key to pinpointing the exact discrepancy.
+
+## Action Items / Follow-ups
+- Reinforce the practice of updating unit tests as an integral part of any pull request that modifies the behavior of the code under test.
+- When reviewing pull requests, pay attention to whether tests for modified components have also been updated.
+
