@@ -1,26 +1,24 @@
-# Retrospection for Test/Build Fixes (server.test.ts - Unhandled Errors, Mock Behavior & Assertions) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
-
-## What went well?
-+ Identifying that the main `catch` block in `startServer` was re-triggering the throwing `process.exit` mock was key to solving the unhandled errors.
-+ The TypeScript error for the `process.exit` mock signature was straightforward to fix.
-+ Recognizing that the `httpServer.listen` mock needed to execute its callback resolved the missing log assertion.
-
-## What could be improved?
-+ **Holistic Error Flow in Tests:** When mocking functions that terminate processes (like `process.exit`) to throw errors, it's crucial to consider how those errors propagate through the SUT, including its own error handling blocks (like main `try...catch`). The SUT's error handling might also need test-specific adjustments.
-+ **Mock Completeness for Callbacks:** Mocks for functions that accept callbacks (like `httpServer.listen`) must often be implemented to actually *invoke* those callbacks for dependent logic to execute and be testable.
-+ **Assertion Precision for Multiple Logs:** When a sequence of events produces multiple log calls of the same type (e.g., multiple `ml.error`), assertions need to be specific enough to target the correct log or verify all expected logs in order.
-
-## What did we learn?
-+ Modifying the SUT's main error handling for test environments (e.g., re-throwing instead of exiting) can be necessary to prevent test infrastructure from misinterpreting errors.
-+ Tests for functions that should terminate early (e.g., due to `process.exit`) must ensure that subsequent actions (like `McpServer.connect`) are indeed not performed. This is often verified by ensuring the `process.exit` mock effectively stops execution flow.
-+ The signature for `process.exit` in Node.js is `(code?: number) => never`.
-
-## Action Items / Follow-ups
-+ When tests report unhandled errors after a mock throws, investigate if the SUT's own error handling is re-triggering the throwing mock.
-+ Ensure mocks for functions with callbacks correctly simulate callback execution if downstream logic depends on it.
-+ For tests involving multiple similar log calls, use `toHaveBeenCalledWith(expect.stringContaining(...))` for each distinct expected log message to ensure all are present.
-
----
+# Retrospection for Test/Build Fixes (server.test.ts - Promise Rejection & Mock Signature) (Git Commit ID: 1c9d4fb)
+ 
+ ## What went well?
++ The test failures (`promise resolved "undefined" instead of rejecting`) clearly indicated that the `startServer` promise was not rejecting as expected when `process.exit` was called from asynchronous error handlers.
++ The TypeScript error for the `process.exit` mock signature (`TS2345`) was specific.
+ 
+ ## What could be improved?
++ **Async Error Propagation to Promises:** Calls to `process.exit` from asynchronous event handlers (like `httpServer.on('error')`) do not automatically cause the main promise of the function (`startServer`) to reject. This requires explicit error propagation mechanisms (e.g., rejecting a shared promise that the main function awaits or races against). This was overlooked initially.
++ **Mock Signature for `process.exit`:** The `process.exit` signature in Node.js is `(code?: number) => never`. The mock implementation needs to align with this, especially the `never` return type if strict function types are enforced.
+ 
+ ## What did we learn?
++ To test scenarios where an asynchronous event handler within a larger function should cause the entire function to fail (reject its promise), the event handler must explicitly signal this failure back to the main execution flow of the function.
++ When using `await expect(...).rejects.toThrow()`, the promise being awaited must actually reject. If it resolves, the assertion fails.
++ The `never` return type for `process.exit` is important for type correctness in mocks.
+ 
+ ## Action Items / Follow-ups
++ When testing functions with asynchronous error handlers that should lead to overall failure, ensure the error propagation path correctly rejects the main promise returned by the function.
++ Double-check mock signatures for built-in Node.js functions like `process.exit` against the official Node.js type definitions.
++ Remove assertions on `mockProcessExit` being called directly when the test relies on `startServer` re-throwing the error in test mode, as `process.exit` in the SUT's main catch block is now bypassed.
+ 
+ ---
 # Retrospection for Build/Test Fixes (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
