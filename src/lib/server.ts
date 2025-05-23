@@ -1,8 +1,10 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"; // Added ResourceTemplate
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 // Assuming these are correctly exported by the SDK, either from root or via defined subpaths.
 // If the SDK's "exports" map points these subpaths to .js files, add .js here.
 // If they are re-exported from the main SDK entry, use that.
+import { StreamableHttpServerTransport } from "@modelcontextprotocol/sdk/server/transport/http.js";
+import { SessionManager } from "@modelcontextprotocol/sdk/server/session.js";
+import { randomUUID } from "crypto";
 import express from 'express';
 import http from 'http';
 import axios from 'axios'; // Add this import
@@ -469,12 +471,28 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
       }
     );
 
-    const transport = new StdioServerTransport();
-
-    // Setup Express HTTP server for status and notifications
+    // Setup Express HTTP server for status, notifications, and MCP
     const expressApp = express();
      
     expressApp.use(express.json()); // Middleware to parse JSON bodies
+
+    // MCP Server Setup
+    const sessionManager = new SessionManager({
+      generateSessionId: randomUUID,
+      // You can add other session manager options here if needed
+    });
+
+    const mcpHttpTransport = new StreamableHttpServerTransport(server, sessionManager, {
+      // Transport options can be specified here, e.g., custom error handling
+      // onError: (error, requestInfo) => {
+      //   logger.error("MCP HTTP Transport Error", { error, requestInfo });
+      // }
+    });
+
+    // Mount MCP transport middleware
+    // This will handle requests to /mcp (or any other path you choose)
+    expressApp.use("/mcp", mcpHttpTransport.createExpressMiddleware());
+    logger.info(`MCP communication will be available at the /mcp endpoint.`);
 
      
     expressApp.get('/api/indexing-status', (_req: express.Request, res: express.Response): void => {
@@ -611,9 +629,11 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     const toolStubs = serverCapabilities.tools || {};
     logger.info(`CodeCompass server configured with tool stubs: ${Object.keys(toolStubs).join(', ')}`);
     
-    console.error(`CodeCompass v${VERSION} MCP Server running on stdio`);
+    // The console.error message now reflects that MCP is part of the HTTP server
+    console.error(`CodeCompass v${VERSION} HTTP Server running on port ${httpPort}, with MCP at /mcp`);
     
-    await server.connect(transport);
+    // server.connect(transport) is not needed for StreamableHttpServerTransport
+    // as it's integrated via Express middleware.
     
     if (process.env.NODE_ENV === 'test') {
       logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");
