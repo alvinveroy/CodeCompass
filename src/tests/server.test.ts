@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock } from 'vitest';
 import { normalizeToolParams, startServer } from '../lib/server'; // Import startServer
 import { IndexingStatusReport } from '../lib/repository'; // For mock status
 
@@ -104,13 +104,23 @@ vi.mock('isomorphic-git', async (importOriginal) => {
 vi.mock('http', async (importOriginal) => {
   const actualHttp = await importOriginal() as typeof http;
   const mockServer = {
-    listen: vi.fn(),
-    on: vi.fn(),
-    close: vi.fn(cb => { if (cb) cb(); }), // Mock close for cleanup
+    listen: vi.fn((_port: number, cb?: () => void) => { if (cb) cb(); return mockServer; }),
+    on: vi.fn().mockReturnThis(),
+    close: vi.fn((cb?: (err?: Error) => void) => { if (cb) cb(); return mockServer; }),
+    // Add other common http.Server properties to satisfy TypeScript and SUT expectations
+    setTimeout: vi.fn().mockReturnThis(),
+    address: vi.fn(() => ({ port: 3001, family: 'IPv4', address: '127.0.0.1' })),
+    // Add other necessary properties if TS still complains or SUT uses them.
   };
+  const createServerMockFn = vi.fn(() => mockServer);
+
   return {
     ...actualHttp, // Keep actual exports like IncomingMessage, ServerResponse if needed by types
-    createServer: vi.fn(() => mockServer),
+    createServer: createServerMockFn, // For import { createServer } from 'http'
+    default: { // For import http from 'http'
+      ...actualHttp, // Spread actualHttp's own default if it had one, or just keep other default props
+      createServer: createServerMockFn,
+    }
     // Add other http methods if used directly
   };
 });
@@ -119,7 +129,7 @@ vi.mock('http', async (importOriginal) => {
 vi.mock('axios');
 
 // Mock for process.exit
-const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as (code?: number) => never);
+const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn<[number?], never>());
 
 // Mock for console.info
 const mockConsoleInfo = vi.spyOn(console, 'info').mockImplementation(vi.fn());
@@ -295,7 +305,13 @@ Test content
 
 // New test suite for Server Startup and Port Handling
 describe('Server Startup and Port Handling', () => {
-  let mockHttpServer: { listen: MockInstance, on: MockInstance, close: MockInstance };
+  // mockHttpServer will hold the instance returned by the mocked http.default.createServer
+  // It needs to be typed as an http.Server but its methods will be mocks.
+  let mockHttpServer: http.Server & {
+    listen: MockInstance<Parameters<http.Server['listen']>, http.Server>;
+    on: MockInstance<Parameters<http.Server['on']>, http.Server>;
+    close: MockInstance<Parameters<http.Server['close']>, http.Server>;
+  };
   // Get the correctly typed mocked configService and logger
   let mockedConfigService: typeof import('../lib/config-service').configService;
   let mockedLogger: typeof import('../lib/config-service').logger;
@@ -326,9 +342,10 @@ describe('Server Startup and Port Handling', () => {
       requestTimeout: 0,
       // Add other necessary properties if TS still complains or SUT uses them.
       // For now, cast to satisfy the broader http.Server interface.
-    } as unknown as http.Server;
+    } as unknown as typeof mockHttpServer; // Cast to its own complex mock type
 
-    (http.createServer as vi.Mock).mockReturnValue(mockHttpServer);
+    // Configure the mocked http.default.createServer to return this specific instance
+    (http.default.createServer as Mock<any[], any>).mockReturnValue(mockHttpServer);
 
     // Get the mocked configService and logger from the vi.mock factory
     // This ensures we are interacting with the same mocked objects that the SUT uses.
@@ -365,7 +382,7 @@ describe('Server Startup and Port Handling', () => {
     await startServer('/fake/repo');
 
     expect(mockedConfigService.reloadConfigsFromFile).toHaveBeenCalled();
-    expect(vi.mocked(http.createServer)).toHaveBeenCalled();
+    expect(http.default.createServer).toHaveBeenCalled();
     expect(mockHttpServer.listen).toHaveBeenCalledWith(mockedConfigService.HTTP_PORT, expect.any(Function));
     expect(mockedLogger.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mockedConfigService.HTTP_PORT} for status and notifications.`);
     expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called

@@ -1,3 +1,29 @@
+# Retrospection for Test/Build Fixes (server.test.ts - http.default.createServer & TS types) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The runtime error `default.createServer.mockReturnValue is not a function` was a persistent and accurate clue, eventually leading to the correct mock access path (`http.default.createServer`).
+- TypeScript errors continued to provide precise feedback on type mismatches (`TS2345`, `TS2322`, `TS2503`), guiding the refinement of mock function types and mock object structures.
+- The use of `vi.fn<[argTypes], returnType>()` (e.g., `vi.fn<[number?], never>()`) for `process.exit` proved to be the correct way to satisfy TypeScript's strict type checking for functions with specific signatures.
+- Importing `Mock` from `vitest` resolved the `vi.Mock` namespace error.
+
+## What could be improved?
+- **Understanding Mock Factory Behavior:** The interaction between `vi.mock`'s factory, `esModuleInterop: true`, and `import http from 'http'` was a recurring point of confusion. Recognizing that `http` in the test scope refers to the `default` export of the mock factory is key. The error message itself (`default.createServer...`) was the strongest hint.
+- **Mock Object Typing:** Typing `mockHttpServer` to be compatible with `http.Server` while also reflecting that its methods are `MockInstance`s requires careful type definition. The iterative refinement of this type was necessary.
+
+## What did we learn?
+- **`http.default.createServer` Access:** When mocking Node.js built-in modules like `http` with a factory that provides a `default` export, and using `import http from 'http'`, the mocked members are accessed via `http.default.memberName` if the factory structures its `default` export that way.
+- **Vitest `Mock` Type:** The correct type for casting mock functions is `Mock` (imported from `vitest`), not `vi.Mock`.
+- **Strict Typing for `vi.fn()`:** For functions with specific signatures (especially `never` return types or complex argument types), `vi.fn<...>()` is superior to `vi.fn() as ...` for type safety.
+- **Incremental Type Refinement:** When TypeScript complains about mock object assignments (like `TS2322`), incrementally making the mock object's structure and method signatures more closely match the target type (e.g., `http.Server`) is an effective strategy.
+
+## Action Items / Follow-ups
+- Document the `http.default.createServer` access pattern for mocks of built-in CJS modules when `esModuleInterop` is used, as a common pitfall/solution.
+- Consistently use `vi.fn<[...], ...>()` for all non-trivial mock function signatures.
+- Ensure `Mock`, `MockInstance`, etc., are always imported from `vitest` when needed for type annotations or casts.
+- When a runtime error like `X.Y is not a function` occurs with mocks, carefully inspect the structure of `X` in the debugger or via `console.log` to confirm the actual path to the mocked function `Y`.
+
+---
+
 # Retrospection for Test/Build Fixes (server.test.ts - http & process.exit mocks) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
