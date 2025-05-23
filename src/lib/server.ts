@@ -196,13 +196,13 @@ export async function startServer(repoPath: string): Promise<void> {
         }
       },
       tools: {
-        search_code: {},
-        get_repository_context: {},
-        ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}),
-        get_changelog: {},
-        agent_query: {},
-        switch_suggestion_model: {},
-        get_indexing_status: {}, // New tool for indexing status
+        bb7_search_code: {},
+        bb7_get_repository_context: {},
+        ...(suggestionModelAvailable ? { bb7_generate_suggestion: {} } : {}),
+        bb7_get_changelog: {},
+        bb7_agent_query: {},
+        bb7_switch_suggestion_model: {},
+        bb7_get_indexing_status: {}, // New tool for indexing status
       },
       prompts: {}, // Explicitly declare prompts capability
     };
@@ -353,9 +353,9 @@ export async function startServer(repoPath: string): Promise<void> {
     registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
     
     registerPrompts(server); 
-
+    
     server.tool(
-      "get_indexing_status",
+      "bb7_get_indexing_status",
       "Retrieves the current status of repository indexing. Provides information on whether indexing is idle, in-progress, completed, or failed, along with progress percentage and any error messages.",
       {}, // No parameters, represented by an empty ZodRawShape
       (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
@@ -383,7 +383,7 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     );
     
     server.tool(
-      "switch_suggestion_model",
+      "bb7_switch_suggestion_model",
       "Switches the primary model and provider used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder' (DeepSeek provider), use `{\"model\": \"deepseek-coder\", \"provider\": \"deepseek\"}`. To switch to 'llama3.1:8b' (Ollama provider), use `{\"model\": \"llama3.1:8b\", \"provider\": \"ollama\"}`. If provider is omitted, it may be inferred for known model patterns. For other providers like 'openai', 'gemini', 'claude', specify both model and provider: `{\"model\": \"gpt-4\", \"provider\": \"openai\"}`.",
       {
         model: z.string().describe("The suggestion model to switch to (e.g., 'llama3.1:8b', 'deepseek-coder', 'gpt-4')."),
@@ -717,7 +717,7 @@ function registerTools( // Removed async
   
   // Add the agent_query tool
   server.tool(
-    "agent_query",
+    "bb7_agent_query",
     "Provides a detailed plan and a comprehensive summary for addressing complex questions or tasks related to the codebase. This tool generates these insights in a single pass. \nExample: `{\"query\": \"How is user authentication handled in this project?\"}`.",
     {
       query: z.string().describe("The question or task for the agent to process"),
@@ -774,7 +774,7 @@ function registerTools( // Removed async
   
   // Search Code Tool with iterative refinement
   server.tool(
-    "search_code",
+    "bb7_search_code",
     "Performs a semantic search for code snippets within the repository that are relevant to the given query. Results include file paths, code snippets, and relevance scores. \nExample: `{\"query\": \"function to handle user login\"}`. For a broader search: `{\"query\": \"database connection setup\"}`.",
     {
       query: z.string().describe("The search query to find relevant code in the repository"),
@@ -888,7 +888,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 
   // Add get_changelog tool
   server.tool(
-    "get_changelog", // name
+    "bb7_get_changelog", // name
     "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`. Title: Get Changelog", // description (Title incorporated here)
     {}, // paramsSchema (as ZodRawShape for no parameters)
     async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { // handler
@@ -921,7 +921,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   
   // Add get_session_history tool
   server.tool(
-    "get_session_history",
+    "bb7_get_session_history",
     "Retrieves the history of interactions (queries, suggestions, feedback) for a given session ID. This allows you to review past activities within a specific CodeCompass session. \nExample: `{\"sessionId\": \"your_session_id_here\"}`.",
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
@@ -988,7 +988,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
   if (suggestionModelAvailable) {
     // Generate Suggestion Tool with multi-step reasoning
     server.tool(
-      "generate_suggestion",
+      "bb7_generate_suggestion",
       "Generates code suggestions, implementation ideas, or examples based on a natural language query. It leverages repository context and relevant code snippets to provide targeted advice. \nExample: `{\"query\": \"Suggest an optimized way to fetch user data\"}`. For a specific task: `{\"query\": \"Write a Python function to parse a CSV file\"}`.",
       {
         query: z.string().describe("The query or prompt for generating code suggestions"),
@@ -1235,7 +1235,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 
     // Get Repository Context Tool with state management
     server.tool(
-      "get_repository_context",
+      "bb7_get_repository_context",
       "Provides a high-level summary of the repository's structure, common patterns, and conventions relevant to a specific query. It uses semantic search to find pertinent information and synthesizes it. \nExample: `{\"query\": \"What are the main components of the API service?\"}`. To understand coding standards: `{\"query\": \"coding conventions for frontend development\"}`.",
       {
         query: z.string().describe("The query to get repository context for"),
