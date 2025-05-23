@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Unit Test Stability & Build Errors (server.test.ts - Final) (Git Commit ID: 579a264):**
+    - Resolved unhandled errors/rejections in `src/tests/server.test.ts`. Modified the main `catch` block in `src/lib/server.ts` to re-throw errors in test environments instead of calling `process.exit(1)`, preventing the throwing `process.exit` mock from causing secondary unhandled errors.
+    - Corrected TypeScript error `TS2345` for the `process.exit` mock signature in `src/tests/server.test.ts` by changing the `code` parameter type to `number | undefined`.
+    - Fixed test `should start the server and listen on the configured port if free` by ensuring the `mockHttpServerListenFn` mock executes its callback, triggering the expected `logger.info` call.
+    - Refined `ml.error` assertions in the "ECONNREFUSED" test to correctly verify all expected error log messages.
+    - Ensured tests expecting `process.exit` correctly lead to `mockedMcpServerConnect.not.toHaveBeenCalled()` by fixing the error propagation.
 - **Unit Test Failures & Build Errors (server.test.ts) (Git Commit ID: cdfb314):**
     - Resolved test failures in `src/tests/server.test.ts`:
         - Adjusted `ml.info` assertion in "should start the server and listen..." test to use `expect.stringContaining` for robustness against other info logs.
