@@ -440,6 +440,7 @@ describe('Server Startup and Port Handling', () => {
 
      
      
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
     expect(http.createServer).toHaveBeenCalled();
      
@@ -503,6 +504,7 @@ describe('Server Startup and Port Handling', () => {
       
        
        
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(ml.warn).toHaveBeenCalledWith(`HTTP Port ${mcs.HTTP_PORT} is already in use. Attempting to ping...`);
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/ping`, { timeout: 500 });
@@ -594,6 +596,7 @@ describe('Server Startup and Port Handling', () => {
 
      
      
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await expect(startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
@@ -604,6 +607,7 @@ describe('Server Startup and Port Handling', () => {
 
      
      
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
      
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Ping error details: Error: Connection refused'));
@@ -639,8 +643,9 @@ describe('Server Startup and Port Handling', () => {
       return Promise.resolve({ status: 404, data: {} });
     });
 
-     
-     
+           
+           
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await expect(startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
@@ -650,9 +655,10 @@ describe('Server Startup and Port Handling', () => {
         exitCode: 1
       })
     );
-    
-     
-     
+        
+         
+         
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Error fetching status from existing CodeCompass server'));
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
@@ -672,8 +678,9 @@ describe('Server Startup and Port Handling', () => {
     });
     
     // We need to ensure listen is called to trigger the 'on' setup
-     
-     
+           
+           
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await expect(startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
@@ -683,12 +690,13 @@ describe('Server Startup and Port Handling', () => {
     );
     
     // Check that the 'on' handler was attached
-     
-     
+         
+         
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(mockHttpServerOnFn).toHaveBeenCalledWith('error', expect.any(Function));
-    
+        
     // Check for the specific error log for non-EADDRINUSE
-     
+         
     expect(ml.error).toHaveBeenCalledWith(`Failed to start HTTP server on port ${mcs.HTTP_PORT}: ${otherError.message}`);
      
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
