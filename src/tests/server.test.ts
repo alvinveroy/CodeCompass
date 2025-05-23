@@ -103,16 +103,14 @@ vi.mock('isomorphic-git', async (importOriginal) => {
 // Mock for http module
 vi.mock('http', async (importOriginal) => {
   const actualHttp = await importOriginal() as typeof http;
-  const mockServer = {
-    listen: vi.fn((_port: number, cb?: () => void) => { if (cb) cb(); return mockServer; }),
+  const mockServerInstance = { // Renamed to avoid conflict with http.Server type
+    listen: vi.fn((_port: number, cb?: () => void) => { if (cb) cb(); return mockServerInstance; }),
     on: vi.fn().mockReturnThis(),
-    close: vi.fn((cb?: (err?: Error) => void) => { if (cb) cb(); return mockServer; }),
-    // Add other common http.Server properties to satisfy TypeScript and SUT expectations
+    close: vi.fn((cb?: (err?: Error) => void) => { if (cb) cb(); return mockServerInstance; }),
     setTimeout: vi.fn().mockReturnThis(),
     address: vi.fn(() => ({ port: 3001, family: 'IPv4', address: '127.0.0.1' })),
-    // Add other necessary properties if TS still complains or SUT uses them.
   };
-  const createServerMockFn = vi.fn(() => mockServer);
+  const createServerMockFn = vi.fn(() => mockServerInstance);
 
   return {
     ...actualHttp, // Keep actual exports like IncomingMessage, ServerResponse if needed by types
@@ -129,7 +127,7 @@ vi.mock('http', async (importOriginal) => {
 vi.mock('axios');
 
 // Mock for process.exit
-const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn<[number?], never>());
+const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as (code?: number) => never);
 
 // Mock for console.info
 const mockConsoleInfo = vi.spyOn(console, 'info').mockImplementation(vi.fn());
@@ -307,10 +305,10 @@ Test content
 describe('Server Startup and Port Handling', () => {
   // mockHttpServer will hold the instance returned by the mocked http.default.createServer
   // It needs to be typed as an http.Server but its methods will be mocks.
-  let mockHttpServer: http.Server & {
-    listen: MockInstance<Parameters<http.Server['listen']>, http.Server>;
-    on: MockInstance<Parameters<http.Server['on']>, http.Server>;
-    close: MockInstance<Parameters<http.Server['close']>, http.Server>;
+  let mockHttpServer: Omit<http.Server, 'listen' | 'on' | 'close'> & { // Omit original methods
+    listen: Mock<Parameters<http.Server['listen']>, http.Server>;
+    on: Mock<Parameters<http.Server['on']>, http.Server>;
+    close: Mock<Parameters<http.Server['close']>, http.Server>;
   };
   // Get the correctly typed mocked configService and logger
   let mockedConfigService: typeof import('../lib/config-service').configService;
@@ -345,7 +343,7 @@ describe('Server Startup and Port Handling', () => {
     } as unknown as typeof mockHttpServer; // Cast to its own complex mock type
 
     // Configure the mocked http.default.createServer to return this specific instance
-    (http.default.createServer as Mock<any[], any>).mockReturnValue(mockHttpServer);
+    (http.default.createServer as Mock<Parameters<typeof http.createServer>, http.Server>).mockReturnValue(mockHttpServer);
 
     // Get the mocked configService and logger from the vi.mock factory
     // This ensures we are interacting with the same mocked objects that the SUT uses.

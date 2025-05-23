@@ -1,3 +1,27 @@
+# Retrospection for Test/Build Fixes (server.test.ts - Mocking & Typing Round 3) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The runtime error `default.default.createServer...` was a clear signal of an incorrect access path to the mock, which was simpler to fix once identified.
+- TypeScript errors related to `MockInstance` and `Mock` generic arguments (`TS2707`) guided the correction of how these Vitest types are used.
+- The `process.exit` mock typing was stabilized.
+
+## What could be improved?
+- **Consistency in Mock Access:** The repeated issue with `http.default.createServer` vs. `http.createServer` (and sometimes `http.default.default.createServer` appearing in errors) highlights the ongoing challenge of correctly interfacing with mocks of CJS modules under `esModuleInterop`. A very clear, documented pattern for mocking built-ins like `http` is essential.
+- **Vitest Type Specificity:** Understanding the exact generic arguments for `Mock`, `MockInstance`, and `MockedFunction` from Vitest can be tricky. Referring to Vitest's own type definitions or examples is often necessary.
+
+## What did we learn?
+- **Mock Access Path is Critical:** The exact path to the mocked function (e.g., `http.default.createServer`) must precisely match how the mock factory exposes it and how `import http from 'http'` resolves it. Errors like `X.Y.Z is not a function` usually mean one of X, Y, or Z is not what's expected at that point in the chain.
+- **`Mock<Args[], ReturnValue>`:** This is a common and correct way to type Vitest mocks for functions.
+- **`process.exit` Mocking:** `vi.fn() as (code?: number) => never` is a reliable way to type this mock.
+- **Type-Checking Mock Factories:** The return type of the `vi.mock` factory itself should be accurate to help TypeScript guide the usage of the mocked module in the test file. If the factory returns `{ default: { createServer: vi.fn() } }`, then `import http from 'http'` should result in `http.default.createServer` being the mock.
+
+## Action Items / Follow-ups
+- Create a definitive, documented example within the project (perhaps in a test helper or a specific section of `RETROSPECTION.md` or a testing guide) for mocking Node.js built-in CJS modules like `http` that demonstrates the correct factory structure and access path.
+- When encountering `MockInstance` or `Mock` type errors, consult Vitest documentation or type definitions to confirm the correct usage of generic arguments.
+- If `Property 'default' does not exist on type 'typeof import("...")'` occurs despite the mock factory providing a default, double-check how the module is imported in the test file and how TypeScript is resolving that import against the mock's type.
+
+---
+
 # Retrospection for Test/Build Fixes (server.test.ts - http.default.createServer & TS types) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
