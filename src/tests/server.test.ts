@@ -12,7 +12,7 @@ const mcpConnectStableMock = vi.fn();
 
 // Mock dependencies
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('@modelcontextprotocol/sdk/server/mcp.js');
+  const actual = await importOriginal();
   return {
     ...actual,
     McpServer: vi.fn().mockImplementation(() => ({
@@ -30,7 +30,7 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
 
 // Corrected mock path for configService and logger
 vi.mock('../lib/config-service', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('../lib/config-service');
+  const actual = await importOriginal();
   return {
     ...actual, // Spread actual to keep non-mocked parts if any, or specific exports
     configService: {
@@ -101,7 +101,7 @@ vi.mock('../lib/repository', async (importOriginal) => {
 });
 
 vi.mock('isomorphic-git', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('isomorphic-git');
+  const actual = await importOriginal();
   return {
     ...actual, // Keep actual exports
     default: { // Mock the default export if that's what's used
@@ -139,7 +139,7 @@ const mockHttpServerInstance = {
 } as unknown as httpModule.Server; // Cast to satisfy http.Server type
 
 vi.mock('http', async (importOriginal) => {
-  const actualHttpModule = await importOriginal() as typeof httpModule; // Ensure httpModule is imported as type
+  const actualHttpModule = await importOriginal(); // Ensure httpModule is imported as type
   const mockHttpMethods = {
     createServer: vi.fn(() => mockHttpServerInstance),
     Server: vi.fn(() => mockHttpServerInstance) as unknown as typeof httpModule.Server, // Mock constructor
@@ -170,7 +170,7 @@ vi.mock('../lib/version', () => ({
 import type { LLMProvider } from '../lib/llm-provider';
 // Mock for ../lib/llm-provider
 vi.mock('../lib/llm-provider', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('../lib/llm-provider');
+  const actual = await importOriginal();
   return {
     ...actual,
     getLLMProvider: vi.fn<() => Promise<Partial<LLMProvider>>>().mockResolvedValue({
@@ -185,7 +185,7 @@ vi.mock('../lib/llm-provider', async (importOriginal) => {
 // Mock fs/promises for server.ts if it uses it directly (e.g. for reading changelog)
 import fs from 'fs'; // Or import type { PathOrFileDescriptor, ObjectEncodingOptions } from 'fs';
 vi.mock('fs/promises', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('fs/promises');
+  const actual = await importOriginal();
   return {
     ...actual,
     readFile: vi.fn<(path: fs.PathOrFileDescriptor, options?: fs.ObjectEncodingOptions | BufferEncoding | null) => Promise<string | Buffer>>().mockResolvedValue('mock file content'),
@@ -433,14 +433,14 @@ describe('Server Startup and Port Handling', () => {
   it('should start the server and listen on the configured port if free', async () => {
     await startServer('/fake/repo');
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+     
     expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
     expect(http.createServer).toHaveBeenCalled();
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+     
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function)); // Changed mockedConfigService to mcs
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+     
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`)); // Changed mockedLogger to ml and mockedConfigService to mcs
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+     
     expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
     expect(mockProcessExit).not.toHaveBeenCalled();
   });
@@ -485,7 +485,7 @@ describe('Server Startup and Port Handling', () => {
       });
 
       // Expect ServerStartupError with specific message and code
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+       
       await expect(startServer('/fake/repo')).rejects.toThrow(
         expect.objectContaining({
           name: "ServerStartupError",
@@ -499,11 +499,11 @@ describe('Server Startup and Port Handling', () => {
       expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/indexing-status`, { timeout: 1000 });
       
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerPingVersion}`)); // Use version from ping
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+       
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Progress: ${mockExistingServerStatus.overallProgress}%`));
       
       expect(ml.info).toHaveBeenCalledWith("Current instance will exit as another CodeCompass server is already running.");
@@ -536,7 +536,7 @@ describe('Server Startup and Port Handling', () => {
       }
       return Promise.resolve({ status: 404, data: {} });
     });
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+     
     await expect(startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
@@ -578,7 +578,7 @@ describe('Server Startup and Port Handling', () => {
       return Promise.resolve({ status: 404, data: {} });
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+     
     await expect(startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
@@ -619,7 +619,7 @@ describe('Server Startup and Port Handling', () => {
       return Promise.resolve({ status: 404, data: {} });
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+     
     await expect(startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
@@ -649,7 +649,7 @@ describe('Server Startup and Port Handling', () => {
     });
     
     // We need to ensure listen is called to trigger the 'on' setup
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+     
     await expect(startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
@@ -663,7 +663,7 @@ describe('Server Startup and Port Handling', () => {
     
     // Check for the specific error log for non-EADDRINUSE
     expect(ml.error).toHaveBeenCalledWith(`Failed to start HTTP server on port ${mcs.HTTP_PORT}: ${otherError.message}`);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+     
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 });
