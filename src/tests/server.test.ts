@@ -494,6 +494,7 @@ describe('Server Startup and Port Handling', () => {
       // Expect ServerStartupError with specific message and code
        
        
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await expect(startServer('/fake/repo')).rejects.toThrow(
         expect.objectContaining({
           name: "ServerStartupError",
