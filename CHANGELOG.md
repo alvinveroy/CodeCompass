@@ -26,19 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Build Fix (Git Commit ID: b9ae103):**
     - Re-addressed and resolved persistent TypeScript build errors (TS2698: Spread types may only be created from object types; TS18046: 'variable' is of type 'unknown') in `src/tests/server.test.ts`.
     - Ensured that all instances of the `actual` variable, obtained from `await importOriginal()` within `vi.mock` factories, are explicitly and correctly typed using `as typeof import('module-name')`. This provides TypeScript with the necessary module type information for safe property access and object spreading.
-+- **Linting and Type Safety (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
-+    - Resolved various ESLint errors in `src/lib/server.ts` and `src/tests/server.test.ts`.
-+    - `src/lib/server.ts`:
-+        - Typed `axios.get` response data for `/api/ping` to fix `no-unsafe-member-access`.
-+        - Changed `any` to `unknown` for `httpServerSetupReject` parameter.
-+        - Disabled `no-misused-promises` for the `httpServer.on('error', ...)` async event handler, as the returned promise is intentionally not handled by the event emitter, a common pattern for async event handlers.
-+    - `src/tests/server.test.ts`:
-+        - Typed module imports from `importOriginal()` and `await import()`.
-+        - Provided explicit return types for `vi.fn().mockImplementation(...)` and generic types for `vi.fn<...>()` to resolve `no-unsafe-return` and `no-unsafe-assignment`.
-+        - Changed `any` to `unknown` in mock function signatures.
-+        - Removed `async` from `axios.get` mock implementations that did not use `await`, resolving `require-await`.
-+        - Disabled `unbound-method` for `expect(mockFn).toHaveBeenCalled()` assertions on simple `vi.fn` mocks, as these are typically false positives in test files.
-+        - Disabled `no-unsafe-argument` for `expect(...).rejects.toThrow(expect.objectContaining(...))` as `objectContaining` is a valid Vitest matcher here and the rule is overly strict.
++- **Linting Finalization (Git Commit ID: 317650b):**
++    - Resolved all remaining ESLint errors in `src/tests/server.test.ts`.
++    - Automatically fixed `no-unnecessary-type-assertion` errors that arose after TypeScript compilation successfully typed `importOriginal()` results.
++    - Typed the `fs` parameter in the `isomorphic-git` mock factory to resolve `no-explicit-any`.
++    - Disabled `unbound-method` for `expect(mockFn).toHaveBeenCalled()` assertions on simple `vi.fn` mocks, as these are typically false positives in test files.
++    - Disabled `no-unsafe-argument` for `expect(...).rejects.toThrow(expect.objectContaining(...))` as `objectContaining` is a valid Vitest matcher and the rule is overly strict in this testing context.
 +- **Build & Unit Test Errors (server.test.ts - Syntax Error & Mocking Stabilization) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
 +    - Resolved persistent `esbuild` error "Expected ")" but found "else"" and subsequent TypeScript compilation errors in `src/tests/server.test.ts` by removing a syntactically incorrect code block from the `beforeEach` hook of the "Server Startup and Port Handling" test suite.
 +    - Stabilized mocking for `McpServer.connect` by introducing a top-level stable mock function (`mcpConnectStableMock`) and using it in the `McpServer` mock factory.

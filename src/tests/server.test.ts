@@ -106,7 +106,7 @@ vi.mock('isomorphic-git', async (importOriginal) => {
     ...actual, // Keep actual exports
     default: { // Mock the default export if that's what's used
       ...(actual.default || {}), // Spread existing default export properties if any
-      listFiles: vi.fn<(args: { fs: any; dir: string; gitdir: string; ref: string }) => Promise<string[]>>().mockResolvedValue(['file1.ts', 'file2.ts']),
+      listFiles: vi.fn<(args: { fs: typeof fs; dir: string; gitdir: string; ref: string }) => Promise<string[]>>().mockResolvedValue(['file1.ts', 'file2.ts']),
       // Add other isomorphic-git functions if server.ts uses them directly
     },
     // If named exports from isomorphic-git are used, mock them here too
