@@ -1,3 +1,25 @@
+# Retrospection for Test/Build Fixes (server.test.ts - Timeouts & Vitest Types) (Git Commit ID: 1d7c9d7)
+
+## What went well?
+- The test timeout messages clearly indicated that asynchronous operations in `startServer` were not completing.
+- TypeScript errors for `vi.Mock` and `MockInstance` were clear and easy to fix once the correct type names and usage were identified.
+- The solution of checking `process.env.NODE_ENV` in `startServer` is a standard way to alter behavior for test environments.
+
+## What could be improved?
+- **Identifying Infinite Waits:** The `new Promise` waiting for `SIGINT` in `startServer` is a common pattern for keeping a server alive, but it's an immediate cause of timeouts in tests if not handled. This should be anticipated when testing server startup logic.
+- **Test Environment Configuration:** Setting `NODE_ENV=test` should be a standard practice for test suites that interact with code sensitive to this environment variable.
+
+## What did we learn?
+- **Server Lifecycle in Tests:** Functions that intentionally block or wait for external signals (like `SIGINT`) need special handling in automated tests to prevent hangs. Modifying behavior based on `NODE_ENV` is a common and effective technique.
+- **Vitest Types:** `Mock` should be imported from `vitest`. `MockInstance` is a generic type that usually takes 0 or 1 type argument (the function signature if needed, or can be left empty for `any`).
+- Test timeouts often point to unfulfilled promises or unterminated asynchronous operations within the SUT or the test itself.
+
+## Action Items / Follow-ups
+- When testing functions with indefinite waits (e.g., server listen loops, signal waits), ensure there's a mechanism to bypass or resolve these waits in the test environment.
+- Ensure consistent use of imported Vitest types (`Mock`, `MockInstance`) in type annotations.
+- Standardize setting `NODE_ENV=test` in `beforeEach` for relevant test suites.
+
+---
 # Retrospection for Build/Test Fixes (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?

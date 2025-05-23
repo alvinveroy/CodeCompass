@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Unit Test Timeouts & Build Failures (server.test.ts) (Git Commit ID: 1d7c9d7):**
+    - Resolved test timeouts in `src/tests/server.test.ts` for the "Server Startup and Port Handling" suite. The `startServer` function in `src/lib/server.ts` was modified to skip waiting for `SIGINT` when `process.env.NODE_ENV === 'test'`, allowing the function to resolve and tests to complete.
+    - Set `process.env.NODE_ENV = 'test'` in the `beforeEach` hook of the test suite and restored it in `afterEach`.
+    - Corrected TypeScript errors related to Vitest generic types:
+        - `TS2503: Cannot find namespace 'vi'`: Changed `vi.Mock` to `Mock` (imported from `vitest`).
+        - `TS2707: Generic type 'MockInstance<T>' requires 0-1 args`: Changed `MockInstance<any[], any>` to `MockInstance`.
 +- **Build & Unit Test Errors (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
 +    - Resolved `TypeError: ResourceTemplate is not a constructor` in `src/tests/server.test.ts` by adding a mock for `ResourceTemplate` to the `@modelcontextprotocol/sdk/server/mcp.js` mock.
 +    - Fixed TypeScript error `TS2304: Cannot find name 'net'` by importing `net` in `src/tests/server.test.ts`.
