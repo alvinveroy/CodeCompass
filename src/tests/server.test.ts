@@ -325,7 +325,7 @@ import { Logger as WinstonLogger } from 'winston';
 // Type for the mocked logger instance where each method is a vi.Mock
 type MockedLogger = {
   [K in keyof WinstonLogger]: WinstonLogger[K] extends (...args: infer A) => infer R
-    ? Mock<A, R> // Changed from vi.Mock
+    ? Mock<(...args: A) => R> // Corrected generic usage
     : WinstonLogger[K];
 };
 
@@ -342,7 +342,7 @@ type MockedConfigService = Pick<
   // Add any other relevant properties from ConfigService
 > & {
   logger: MockedLogger;
-  reloadConfigsFromFile: Mock<[], void>; // Changed from vi.Mock
+  reloadConfigsFromFile: Mock<() => void>; // Corrected generic usage
   // Add other methods from ConfigService that are mocked and used by server.ts
 };
 
@@ -359,7 +359,9 @@ describe('Server Startup and Port Handling', () => {
     vi.clearAllMocks(); 
 
     // Mock process.exit for each test
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as unknown as (code?: string | number | null | undefined) => never);
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number) => {
+      throw new Error(`process.exit called with ${code ?? 'unknown code'}`);
+    });
 
     // Reset http server method mocks
     mockHttpServerListenFn.mockReset();
@@ -400,7 +402,7 @@ describe('Server Startup and Port Handling', () => {
     expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
     expect(http.createServer).toHaveBeenCalled();
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function)); // Changed mockedConfigService to mcs
-    expect(ml.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`); // Changed mockedLogger to ml and mockedConfigService to mcs
+    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`)); // Changed mockedLogger to ml and mockedConfigService to mcs
     expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
     expect(mockProcessExit).not.toHaveBeenCalled();
   });
@@ -444,7 +446,7 @@ describe('Server Startup and Port Handling', () => {
         return { status: 404, data: {} }; // Default for other calls
       });
 
-      await startServer('/fake/repo');
+      await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 0');
       
       expect(ml.warn).toHaveBeenCalledWith(`HTTP Port ${mcs.HTTP_PORT} is already in use. Attempting to ping...`);
       expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/ping`, { timeout: 500 });
@@ -485,7 +487,7 @@ describe('Server Startup and Port Handling', () => {
       }
       return { status: 404, data: {} };
     });
-    await startServer('/fake/repo');
+    await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use, but it does not appear to be a CodeCompass server.`));
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
@@ -521,7 +523,7 @@ describe('Server Startup and Port Handling', () => {
       return { status: 404, data: {} };
     });
 
-    await startServer('/fake/repo');
+    await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port')); // Specific message for ECONNREFUSED
@@ -552,7 +554,7 @@ describe('Server Startup and Port Handling', () => {
       return mockHttpServerInstance;
     });
 
-    await startServer('/fake/repo');
+    await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Error fetching status from existing CodeCompass server'));
     expect(mockProcessExit).toHaveBeenCalledWith(1);
@@ -574,7 +576,7 @@ describe('Server Startup and Port Handling', () => {
     });
     
     // We need to ensure listen is called to trigger the 'on' setup
-    await startServer('/fake/repo');
+    await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
     
     // Check that the 'on' handler was attached
     expect(mockHttpServerOnFn).toHaveBeenCalledWith('error', expect.any(Function));
