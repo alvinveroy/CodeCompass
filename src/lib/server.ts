@@ -204,7 +204,11 @@ export async function startServer(repoPath: string): Promise<void> {
         bb7_switch_suggestion_model: {},
         bb7_get_indexing_status: {}, // New tool for indexing status
       },
-      prompts: {}, // Explicitly declare prompts capability
+      prompts: {
+        "bb7_repository-context": {},
+        "bb7_code-suggestion": {},
+        "bb7_code-analysis": {},
+      },
     };
 
     const server = new McpServer({
@@ -667,7 +671,7 @@ function registerPrompts(server: McpServer): void {
   }
 
   server.prompt(
-    "repository-context",
+    "bb7_repository-context",
     "Get context about your repository",
     { query: z.string().describe("The specific topic or question for which context is needed.") },
     ({ query }) => ({
@@ -679,7 +683,7 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.prompt(
-    "code-suggestion",
+    "bb7_code-suggestion",
     "Generate code suggestions",
     { query: z.string().describe("The specific topic or problem for which a code suggestion is needed.") },
     ({ query }) => ({
@@ -691,7 +695,7 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.prompt(
-    "code-analysis",
+    "bb7_code-analysis",
     "Analyze code problems",
     { query: z.string().describe("The code problem or snippet to be analyzed.") },
     ({ query }) => ({
@@ -702,7 +706,7 @@ function registerPrompts(server: McpServer): void {
     })
   );
 
-  logger.info("Registered prompts: repository-context, code-suggestion, code-analysis");
+  logger.info("Registered prompts: bb7_repository-context, bb7_code-suggestion, bb7_code-analysis");
 }
 
 function registerTools( // Removed async
