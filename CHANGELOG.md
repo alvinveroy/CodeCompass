@@ -13,10 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
-- **Unit Test Failures & Build Error (server.test.ts) (Git Commit ID: ebf63b1):**
-    - Resolved test failures where `startServer` was resolving instead of rejecting. Modified `src/lib/server.ts` to ensure that critical errors during HTTP server setup (like EADDRINUSE) cause the main `startServer` promise to reject with a custom `ServerStartupError`.
-    - Updated tests in `src/tests/server.test.ts` to expect `startServer` to reject with `ServerStartupError` in scenarios where `process.exit` was previously anticipated due to HTTP server issues. Removed direct assertions on `mockProcessExit` in these cases as the error is now caught and re-thrown by `startServer`'s main catch block in test mode.
-    - Corrected TypeScript error `TS2345` for the `process.exit` mock signature in `src/tests/server.test.ts` by ensuring the mock implementation returns `never` and accepts `code?: number`.
+- **Unit Test Failure & Build Error (server.test.ts) (Git Commit ID: fb714e7):**
+    - Resolved a test failure in `src/tests/server.test.ts` for the "ECONNREFUSED" scenario. Adjusted `ml.error` assertions to account for the additional "Failed to start CodeCompass" log message originating from `startServer`'s main catch block when a `ServerStartupError` is thrown.
+    - Corrected TypeScript error `TS2345` for the `process.exit` mock signature in `src/tests/server.test.ts` by aligning the mock's parameter type with the actual `(code?: string | number | null | undefined)` signature.
 - **Unit Test Failures & Build Errors (server.test.ts) (Git Commit ID: cdfb314):**
     - Resolved test failures in `src/tests/server.test.ts`:
         - Adjusted `ml.info` assertion in "should start the server and listen..." test to use `expect.stringContaining` for robustness against other info logs.
