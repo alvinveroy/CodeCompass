@@ -475,6 +475,11 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
       }
     );
 
+    const finalRegisteredTools = Array.from(server.tools.keys());
+    logger.info(`All registered tools: ${finalRegisteredTools.join(', ')}`);
+    const finalRegisteredPrompts = Array.from(server.prompts.keys());
+    logger.info(`All registered prompts: ${finalRegisteredPrompts.join(', ')}`);
+
     // Setup Express HTTP server for status, notifications, and MCP
     const expressApp = express();
      
@@ -705,8 +710,6 @@ function registerPrompts(server: McpServer): void {
       }]
     })
   );
-
-  logger.info("Registered prompts: bb7_repository-context, bb7_code-suggestion, bb7_code-analysis");
 }
 
 function registerTools( // Removed async
