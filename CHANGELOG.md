@@ -13,9 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
-- **Unit Test Failure & Build Error (server.test.ts) (Git Commit ID: fb714e7):**
-    - Resolved a test failure in `src/tests/server.test.ts` for the "ECONNREFUSED" scenario. Adjusted `ml.error` assertions to account for the additional "Failed to start CodeCompass" log message originating from `startServer`'s main catch block when a `ServerStartupError` is thrown.
-    - Corrected TypeScript error `TS2345` for the `process.exit` mock signature in `src/tests/server.test.ts` by aligning the mock's parameter type with the actual `(code?: string | number | null | undefined)` signature.
+- **Unit Test Failure (server.test.ts - ECONNREFUSED Log Assertion) (Git Commit ID: 0b7a75e):**
+    - Corrected a failing assertion in `src/tests/server.test.ts` for the "ECONNREFUSED" scenario. The `ml.error` assertion was updated from `expect.stringContaining('Connection refused on port')` to `expect.stringContaining('Ping error details: Error: Connection refused')` to accurately match the actual log message.
 - **Unit Test Failures & Build Errors (server.test.ts) (Git Commit ID: cdfb314):**
     - Resolved test failures in `src/tests/server.test.ts`:
         - Adjusted `ml.info` assertion in "should start the server and listen..." test to use `expect.stringContaining` for robustness against other info logs.
