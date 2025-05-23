@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Unit Test & Build Errors (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved runtime error `TypeError: vi.mocked(...).mockReturnValue is not a function` in `src/tests/server.test.ts` by directly casting `http.createServer` to `vi.Mock` and calling `mockReturnValue` on it, bypassing issues with `vi.mocked()`.
+    - Fixed TypeScript error `TS2345` for `process.exit` mock in `src/tests/server.test.ts` by casting `vi.fn()` to the expected `(code?: number) => never` signature.
+    - Addressed TypeScript error `TS2345` concerning `http.Server` type compatibility in `src/tests/server.test.ts` by enhancing the `mockHttpServer` object with more properties common to `http.Server` and using a type assertion (`as unknown as http.Server`).
 - **Test Failure (`config-service.test.ts`):** (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
     - Corrected the test `ConfigService > should persist model configuration when setSuggestionModel is called` in `src/tests/lib/config-service.test.ts`.
     - The test's expectation for the persisted JSON content in `model-config.json` was updated to include the `HTTP_PORT` field, aligning the test with the actual behavior of `ConfigService.persistModelConfiguration()`.

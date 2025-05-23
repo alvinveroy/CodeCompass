@@ -119,7 +119,7 @@ vi.mock('http', async (importOriginal) => {
 vi.mock('axios');
 
 // Mock for process.exit
-const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn());
+const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as (code?: number) => never);
 
 // Mock for console.info
 const mockConsoleInfo = vi.spyOn(console, 'info').mockImplementation(vi.fn());
@@ -303,14 +303,32 @@ describe('Server Startup and Port Handling', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks(); // Clear all mocks
-
-    // Re-assign mocks for http.createServer and its returned object for each test
     mockHttpServer = {
-      listen: vi.fn(),
-      on: vi.fn(),
-      close: vi.fn((cb) => { if (cb) cb(); }),
-    };
-    vi.mocked(http.createServer).mockReturnValue(mockHttpServer);
+      listen: vi.fn((_port: number, callback?: () => void) => {
+        if (callback) callback();
+        return mockHttpServer; // Return self for chaining
+      }),
+      on: vi.fn((_event: string, _listener: (...args: any[]) => void) => {
+        return mockHttpServer; // Return self for chaining
+      }),
+      close: vi.fn((callback?: (err?: Error) => void) => {
+        if (callback) callback();
+        return mockHttpServer; // Return self for chaining
+      }),
+      // Add common http.Server properties to satisfy TypeScript and SUT expectations
+      setTimeout: vi.fn().mockReturnThis(),
+      address: vi.fn(() => ({ port: 3001, family: 'IPv4', address: '127.0.0.1' })),
+      maxHeadersCount: null,
+      maxRequestsPerSocket: null,
+      timeout: 0,
+      keepAliveTimeout: 0,
+      headersTimeout: 0,
+      requestTimeout: 0,
+      // Add other necessary properties if TS still complains or SUT uses them.
+      // For now, cast to satisfy the broader http.Server interface.
+    } as unknown as http.Server;
+
+    (http.createServer as vi.Mock).mockReturnValue(mockHttpServer);
 
     // Get the mocked configService and logger from the vi.mock factory
     // This ensures we are interacting with the same mocked objects that the SUT uses.
