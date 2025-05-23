@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Linting Finalization (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved all remaining ESLint errors in `src/tests/server.test.ts`.
+    - Applied `eslint-disable-next-line` comments for `@typescript-eslint/unbound-method` on `expect(...).toHaveBeenCalled()` assertions and for `@typescript-eslint/no-unsafe-argument` on `expect(...).toThrow(expect.objectContaining(...))`. These address common false positives or overly strict interpretations in test files for valid testing patterns.
 - **Linting Finalization & Build Stability (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved all ESLint errors in `src/tests/server.test.ts` by:
         - Restoring essential `as typeof import(...)` type assertions for `await importOriginal()` results in mock factories.
