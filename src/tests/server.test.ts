@@ -102,11 +102,11 @@ vi.mock('isomorphic-git', async (importOriginal) => {
 
 // --- START: vi.mock for 'http' and related definitions ---
 // Define shared mock function instances for the http server methods
-const mockHttpServerListenFn = vi.fn<Parameters<httpModule.Server['listen']>, ReturnType<httpModule.Server['listen']>>();
-const mockHttpServerOnFn = vi.fn<Parameters<httpModule.Server['on']>, ReturnType<httpModule.Server['on']>>();
-const mockHttpServerCloseFn = vi.fn<Parameters<httpModule.Server['close']>, ReturnType<httpModule.Server['close']>>();
-const mockHttpServerAddressFn = vi.fn<Parameters<httpModule.Server['address']>, ReturnType<httpModule.Server['address']>>();
-const mockHttpServerSetTimeoutFn = vi.fn<Parameters<httpModule.Server['setTimeout']>, ReturnType<httpModule.Server['setTimeout']>>();
+const mockHttpServerListenFn = vi.fn<(...args: Parameters<httpModule.Server['listen']>) => ReturnType<httpModule.Server['listen']>>();
+const mockHttpServerOnFn = vi.fn<(event: string | symbol, listener: (...args: any[]) => void) => httpModule.Server>();
+const mockHttpServerCloseFn = vi.fn<(...args: Parameters<httpModule.Server['close']>) => ReturnType<httpModule.Server['close']>>();
+const mockHttpServerAddressFn = vi.fn<(...args: Parameters<httpModule.Server['address']>) => ReturnType<httpModule.Server['address']>>();
+const mockHttpServerSetTimeoutFn = vi.fn<(...args: Parameters<httpModule.Server['setTimeout']>) => ReturnType<httpModule.Server['setTimeout']>>();
 
 // Define the mock http server instance that createServer will return
 const mockHttpServerInstance = {
@@ -131,7 +131,7 @@ vi.mock('http', async (importOriginal) => {
 vi.mock('axios');
 
 // Mock for process.exit
-let mockProcessExit: Mock<Parameters<typeof process.exit>, ReturnType<typeof process.exit>>;
+let mockProcessExit: MockInstance<typeof process.exit>;
 
 // Mock for console.info
 const mockConsoleInfo = vi.spyOn(console, 'info').mockImplementation(vi.fn());
@@ -306,30 +306,65 @@ Test content
 
 
 // New test suite for Server Startup and Port Handling
+import { ConfigService } from '../lib/config-service'; // Assuming ConfigService is the class/type of the instance
+import { Logger as WinstonLogger } from 'winston';
+
+// Type for the mocked logger instance where each method is a vi.Mock
+type MockedLogger = {
+  [K in keyof WinstonLogger]: WinstonLogger[K] extends (...args: infer A) => infer R
+    ? vi.Mock<A, R>
+    : WinstonLogger[K];
+};
+
+// Type for the mocked configService instance
+// Adjust properties based on what server.ts actually uses from configService
+type MockedConfigService = Pick<
+  ConfigService,
+  | 'HTTP_PORT'
+  | 'OLLAMA_HOST' // Add other properties accessed by server.ts
+  | 'SUGGESTION_MODEL'
+  | 'LLM_PROVIDER'
+  | 'AGENT_DEFAULT_MAX_STEPS'
+  | 'DEFAULT_AGENT_DEFAULT_MAX_STEPS'
+  // Add any other relevant properties from ConfigService
+> & {
+  logger: MockedLogger;
+  reloadConfigsFromFile: vi.Mock<[], void>; // Or Promise<void> if async
+  // Add other methods from ConfigService that are mocked and used by server.ts
+};
+
 describe('Server Startup and Port Handling', () => {
-  // Get the correctly typed mocked configService and logger
-  let mockedConfigService: typeof import('../lib/config-service').configService;
-  let mockedLogger: typeof import('../lib/config-service').logger;
+  // Use the new mock-aware types
+  let mcs: MockedConfigService; // mcs for mockedConfigService
+  let ml: MockedLogger; // ml for mockedLogger
   let mockedMcpServerConnect: MockInstance;
 
   beforeEach(async () => {
     vi.clearAllMocks(); 
 
     // Mock process.exit for each test
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as (code?: string | number | null | undefined) => never);
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as unknown as (code?: string | number | null | undefined) => never);
 
     // Reset http server method mocks
     mockHttpServerListenFn.mockReset();
     mockHttpServerOnFn.mockReset();
     mockHttpServerCloseFn.mockReset();
-    mockHttpServerAddressFn.mockReset().mockReturnValue({ port: 3001, address: '127.0.0.1', family: 'IPv4' });
-    mockHttpServerSetTimeoutFn.mockReset().mockReturnThis();
+    // Get the mocked configService and logger from the vi.mock factory
+    // This ensures we are interacting with the same mocked objects that the SUT uses.
+    const actualConfigModule = await import('../lib/config-service.js');
+    // Cast to 'unknown' first, then to the mock type
+    mcs = actualConfigModule.configService as unknown as MockedConfigService;
+    ml = actualConfigModule.logger as unknown as MockedLogger;
 
-    // Default behavior for listen: call listener callback successfully
-    mockHttpServerListenFn.mockImplementation((_portOrPath: any, _hostnameOrListener?: any, _backlogOrListener?: any, listener?: () => void) => {
-      let actualListener: (() => void) | undefined = listener;
-      if (typeof _backlogOrListener === 'function') {
-        actualListener = _backlogOrListener;
+    // Clear mocks using the typed instances
+    ml.info?.mockClear();
+    ml.warn?.mockClear();
+    ml.error?.mockClear();
+    ml.debug?.mockClear();
+    mcs.reloadConfigsFromFile?.mockClear();
+
+    // Mock McpServer's connect method
+    const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
       } else if (typeof _hostnameOrListener === 'function') {
         actualListener = _hostnameOrListener;
       }
@@ -340,18 +375,18 @@ describe('Server Startup and Port Handling', () => {
       }
       return mockHttpServerInstance;
     });
+  it('should start the server and listen on the configured port if free', async () => {
+    await startServer('/fake/repo');
 
-    // Default behavior for on: return the server instance for chaining
-    mockHttpServerOnFn.mockImplementation((_event: string, _listener: (...args: any[]) => void) => {
-      return mockHttpServerInstance;
-    });
+    expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
+    expect(http.createServer).toHaveBeenCalled();
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function));
+    expect(ml.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`);
+    expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
+    expect(mockProcessExit).not.toHaveBeenCalled();
+  });
 
-    // The mock factory already ensures http.createServer returns mockHttpServerInstance.
-    // So, no need for: (http.createServer as Mock).mockReturnValue(mockHttpServerInstance);
-
-    // Get the mocked configService and logger from the vi.mock factory
-    // This ensures we are interacting with the same mocked objects that the SUT uses.
-    const actualConfigModule = await import('../lib/config-service.js');
+  it('should handle EADDRINUSE, detect another CodeCompass server, print status, and exit gracefully', async () => {
     mockedConfigService = actualConfigModule.configService;
     mockedLogger = actualConfigModule.logger;
 
@@ -385,23 +420,23 @@ describe('Server Startup and Port Handling', () => {
     expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
     expect(mockProcessExit).not.toHaveBeenCalled();
   });
+    await startServer('/fake/repo');
+    
+    expect(ml.warn).toHaveBeenCalledWith(`HTTP Port ${mcs.HTTP_PORT} is already in use. Attempting to ping...`);
+    expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/ping`, { timeout: 500 });
+    expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/indexing-status`, { timeout: 1000 });
+    
+    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
+    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerVersion}`));
+    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
+    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Progress: ${mockExistingServerStatus.overallProgress}%`));
+    
+    expect(ml.info).toHaveBeenCalledWith("Current instance will exit as another CodeCompass server is already running.");
+    expect(mockProcessExit).toHaveBeenCalledWith(0); // Graceful exit
+    expect(mockedMcpServerConnect).not.toHaveBeenCalled(); // MCP server should not connect
+  });
 
-  it('should handle EADDRINUSE, detect another CodeCompass server, print status, and exit gracefully', async () => {
-    // Use import type for IndexingStatusReport if needed for strict typing of mock data
-    const mockExistingServerStatus: import('../lib/repository').IndexingStatusReport = {
-      status: 'indexing_file_content',
-      message: 'Indexing in progress...',
-      overallProgress: 50,
-      currentFile: 'src/lib/file.ts',
-      lastUpdatedAt: new Date().toISOString(),
-    };
-    const existingServerVersion = 'existing-test-version';
-
-    // Simulate EADDRINUSE: make listen call the 'error' handler
-    mockHttpServerListenFn.mockImplementation(() => {
-      const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
-      if (errorArgs && typeof errorArgs[1] === 'function') {
-        const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
+  it('should handle EADDRINUSE, detect a non-CodeCompass server, log error, and exit with 1', async () => {
         const error = new Error('listen EADDRINUSE: address already in use :::3001') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
         errorHandler(error);
@@ -416,15 +451,15 @@ describe('Server Startup and Port Handling', () => {
       }
       if (url.endsWith('/api/indexing-status')) {
         return { status: 200, data: mockExistingServerStatus };
-      }
-      throw new Error(`Unexpected axios GET to ${url}`);
-    });
-
     await startServer('/fake/repo');
-    
-    expect(mockedLogger.warn).toHaveBeenCalledWith(`HTTP Port ${mockedConfigService.HTTP_PORT} is already in use. Attempting to ping...`);
-    expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mockedConfigService.HTTP_PORT}/api/ping`, { timeout: 500 });
-    expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mockedConfigService.HTTP_PORT}/api/indexing-status`, { timeout: 1000 });
+
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use, but it does not appear to be a CodeCompass server.`));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
+    expect(mockProcessExit).toHaveBeenCalledWith(1);
+    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
+  });
+
+  it('should handle EADDRINUSE, ping fails (e.g. ECONNREFUSED), log error, and exit with 1', async () => {
     
     expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mockedConfigService.HTTP_PORT} ---`));
     expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerVersion}`));
@@ -443,15 +478,15 @@ describe('Server Startup and Port Handling', () => {
         const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
-        errorHandler(error);
-      }
-      return mockHttpServerInstance;
-    });
-
-
-    vi.mocked(axios.get).mockResolvedValueOnce({ status: 200, data: { service: "OtherService" } }); // Ping response
-
     await startServer('/fake/repo');
+
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port'));
+    expect(mockProcessExit).toHaveBeenCalledWith(1);
+    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
+  });
+  
+  it('should handle EADDRINUSE, ping OK, but /api/indexing-status fails, log error, and exit with 1', async () => {
 
     expect(mockedLogger.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mockedConfigService.HTTP_PORT} is in use, but it does not appear to be a CodeCompass server.`));
     expect(mockedLogger.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
@@ -467,14 +502,14 @@ describe('Server Startup and Port Handling', () => {
         const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
         errorHandler(error);
-      }
-      return mockHttpServerInstance;
-    });
+    await startServer('/fake/repo');
 
-    
-    const pingError = new Error('connect ECONNREFUSED 127.0.0.1:3001') as import('axios').AxiosError;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (pingError as any).isAxiosError = true;
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Error fetching status from existing CodeCompass server'));
+    expect(mockProcessExit).toHaveBeenCalledWith(1);
+    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
+  });
+
+  it('should handle non-EADDRINUSE errors on HTTP server and exit with 1', async () => {
     pingError.code = 'ECONNREFUSED';
     vi.mocked(axios.get).mockRejectedValueOnce(pingError); // Ping fails
 
