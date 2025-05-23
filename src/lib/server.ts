@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 // If they are re-exported from the main SDK entry, use that.
 import express from 'express';
 import http from 'http';
+import axios from 'axios'; // Add this import
 import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
@@ -457,6 +458,10 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
       res.json(currentStatus);
     });
 
+    // Add the new /api/ping endpoint here
+    expressApp.get('/api/ping', (_req: express.Request, res: express.Response): void => {
+      res.json({ service: "CodeCompass", status: "ok", version: VERSION });
+    });
      
     expressApp.post('/api/repository/notify-update', (_req: express.Request, res: express.Response): void => {
       logger.info('Received notification to update repository via /api/repository/notify-update.');
@@ -489,13 +494,76 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
      
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
 
-    httpServer.on('error', (error: NodeJS.ErrnoException) => {
+    httpServer.on('error', async (error: NodeJS.ErrnoException) => {
       if (error.code === 'EADDRINUSE') {
-        logger.error(`HTTP Port ${httpPort} is already in use. Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
-        // Ensure logs are flushed before exiting if logger is asynchronous.
-        // For winston, this might involve waiting for a 'finish' event on transports or using logger.end().
-        // For simplicity and common behavior, process.exit(1) is used.
-        process.exit(1);
+        logger.warn(`HTTP Port ${httpPort} is already in use. Attempting to ping...`);
+        try {
+          const pingResponse = await axios.get(`http://localhost:${httpPort}/api/ping`, { timeout: 500 });
+          if (pingResponse.status === 200 && pingResponse.data && pingResponse.data.service === "CodeCompass") {
+            logger.info(`Another CodeCompass instance (version ${pingResponse.data.version || 'unknown'}) is running on port ${httpPort}. Fetching its status...`);
+            try {
+              const statusResponse = await axios.get<IndexingStatusReport>(`http://localhost:${httpPort}/api/indexing-status`, { timeout: 1000 });
+              if (statusResponse.status === 200 && statusResponse.data) {
+                const existingStatus = statusResponse.data;
+                // Use console.info for direct user feedback, logger.info for logs
+                console.info(`\n--- Status of existing CodeCompass instance on port ${httpPort} ---`);
+                console.info(`Version: ${pingResponse.data.version || 'unknown'}`);
+                console.info(`Status: ${existingStatus.status}`);
+                console.info(`Message: ${existingStatus.message}`);
+                if (existingStatus.overallProgress !== undefined) {
+                  console.info(`Progress: ${existingStatus.overallProgress}%`);
+                }
+                if (existingStatus.currentFile) {
+                  console.info(`Current File: ${existingStatus.currentFile}`);
+                }
+                if (existingStatus.currentCommit) {
+                  console.info(`Current Commit: ${existingStatus.currentCommit}`);
+                }
+                console.info(`Last Updated: ${existingStatus.lastUpdatedAt}`);
+                console.info(`-----------------------------------------------------------\n`);
+                logger.info("Current instance will exit as another CodeCompass server is already running.");
+                process.exit(0); // Graceful exit
+              } else {
+                logger.error(`Failed to retrieve status from existing CodeCompass server on port ${httpPort}. It responded to ping but status endpoint failed. Status: ${statusResponse.status}`);
+                process.exit(1);
+              }
+            } catch (statusError: unknown) {
+              if (axios.isAxiosError(statusError)) {
+                if (statusError.response) {
+                  logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${statusError.message}, Status: ${statusError.response.status}, Data: ${JSON.stringify(statusError.response.data)}`);
+                } else if (statusError.request) {
+                  logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): No response received. ${statusError.message}`);
+                } else {
+                  logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${statusError.message}`);
+                }
+              } else {
+                logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${String(statusError)}`);
+              }
+              process.exit(1);
+            }
+          } else {
+            // Ping successful but not a CodeCompass server
+            logger.error(`Port ${httpPort} is in use, but it does not appear to be a CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`);
+            logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
+            process.exit(1);
+          }
+        } catch (pingError: unknown) {
+          // Ping failed (timeout, connection refused, or other error)
+          logger.error(`Port ${httpPort} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
+          if (axios.isAxiosError(pingError)) {
+            if (pingError.code === 'ECONNREFUSED') {
+              logger.error(`Connection refused on port ${httpPort}.`);
+            } else if (pingError.code === 'ETIMEDOUT' || pingError.code === 'ECONNABORTED') { // ECONNABORTED for timeout
+              logger.error(`Ping attempt to port ${httpPort} timed out.`);
+            } else {
+              logger.error(`Ping error details: ${pingError.message}`);
+            }
+          } else {
+             logger.error(`Ping error details: ${String(pingError)}`);
+          }
+          logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
+          process.exit(1);
+        }
       } else {
         logger.error(`Failed to start HTTP server on port ${httpPort}: ${error.message}`);
         process.exit(1);
