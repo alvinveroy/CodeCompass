@@ -551,7 +551,7 @@ describe('Server Startup and Port Handling', () => {
     );
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port'));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Ping error details: Error: Connection refused'));
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
     // Add this new expectation for the log from the main catch block
     expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({ message: `Port ${mcs.HTTP_PORT} in use or ping failed.` }));

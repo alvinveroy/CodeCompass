@@ -1,20 +1,18 @@
-# Retrospection for Test/Build Fixes (server.test.ts - Error Log Assertion & Mock Signature) (Git Commit ID: ce93e7b)
+# Retrospection for Test/Build Fixes (server.test.ts - ECONNREFUSED Log Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
  
  ## What went well?
-+ The failing test for the ECONNREFUSED scenario pointed directly to a mismatch in expected `ml.error` calls, making it easier to identify the missing assertion.
-+ The TypeScript error `TS2345` for the `process.exit` mock signature was specific and guided the correction.
++ The detailed output of received calls for the `ml.error` spy in the Vitest failure log was crucial for identifying the exact discrepancy between the expected and actual log messages.
++ The fix was a straightforward adjustment of the `expect.stringContaining(...)` argument.
  
  ## What could be improved?
-+ **Tracing Error Log Sources:** When `startServer`'s main `catch` block re-throws an error in test mode, it also logs "Failed to start CodeCompass". This interaction needed to be considered when writing assertions for `ml.error` in tests that trigger this catch block.
-+ **Mock Signature Precision:** The `process.exit` mock signature needed to be fully compatible with the actual Node.js signature to satisfy TypeScript.
++ **Initial Assertion Accuracy:** The assertion for the "Connection refused" message was slightly off from the actual log format. More careful initial construction of assertions, possibly by running the test once to see the actual logs, could prevent such minor discrepancies.
  
  ## What did we learn?
-+ When errors are caught and re-thrown or lead to further logging in the SUT (System Under Test), test assertions for logger calls must account for all logs generated throughout the error handling path.
-+ The actual signature of Node.js built-in functions (like `process.exit`) should be strictly adhered to in mock implementations to avoid TypeScript errors.
++ Test assertions for log messages, especially when using `stringContaining`, must precisely match a substring of the actual log output.
++ Reviewing the full list of calls to a mocked function (as provided by Vitest on failure) is essential for debugging assertion errors.
  
  ## Action Items / Follow-ups
-+ When a test involving error handling and logging fails, carefully trace the sequence of log calls in the SUT to ensure assertions cover all relevant logs.
-+ Ensure mock signatures for Node.js built-ins are fully compatible with `@types/node` definitions.
++ When writing assertions for log messages, if unsure about the exact format, run the test and inspect the actual logged output to create accurate assertions.
  
  ---
 # Retrospection for Build/Test Fixes (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
