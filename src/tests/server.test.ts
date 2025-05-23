@@ -119,10 +119,10 @@ vi.mock('http', async (importOriginal) => {
 vi.mock('axios');
 
 // Mock for process.exit
-const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as (code?: number) => never);
+const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn());
 
 // Mock for console.info
-const mockConsoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {});
+const mockConsoleInfo = vi.spyOn(console, 'info').mockImplementation(vi.fn());
 
 // Mock for ../lib/version
 vi.mock('../lib/version', () => ({
@@ -310,11 +310,11 @@ describe('Server Startup and Port Handling', () => {
       on: vi.fn(),
       close: vi.fn((cb) => { if (cb) cb(); }),
     };
-    (http.createServer as MockInstance).mockReturnValue(mockHttpServer);
+    vi.mocked(http.createServer).mockReturnValue(mockHttpServer);
 
     // Get the mocked configService and logger from the vi.mock factory
     // This ensures we are interacting with the same mocked objects that the SUT uses.
-    const actualConfigModule = await import('../lib/config-service');
+    const actualConfigModule = await import('../lib/config-service.js');
     mockedConfigService = actualConfigModule.configService;
     mockedLogger = actualConfigModule.logger;
 
@@ -329,7 +329,7 @@ describe('Server Startup and Port Handling', () => {
 
 
     // Default mock for axios.get
-    (axios.get as MockInstance).mockResolvedValue({ status: 200, data: {} });
+    vi.mocked(axios.get).mockResolvedValue({ status: 200, data: {} });
   });
 
   afterEach(() => {
@@ -347,7 +347,7 @@ describe('Server Startup and Port Handling', () => {
     await startServer('/fake/repo');
 
     expect(mockedConfigService.reloadConfigsFromFile).toHaveBeenCalled();
-    expect(http.createServer).toHaveBeenCalled();
+    expect(vi.mocked(http.createServer)).toHaveBeenCalled();
     expect(mockHttpServer.listen).toHaveBeenCalledWith(mockedConfigService.HTTP_PORT, expect.any(Function));
     expect(mockedLogger.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mockedConfigService.HTTP_PORT} for status and notifications.`);
     expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
@@ -355,7 +355,8 @@ describe('Server Startup and Port Handling', () => {
   });
 
   it('should handle EADDRINUSE, detect another CodeCompass server, print status, and exit gracefully', async () => {
-    const mockExistingServerStatus: IndexingStatusReport = {
+    // Use import type for IndexingStatusReport if needed for strict typing of mock data
+    const mockExistingServerStatus: import('../lib/repository').IndexingStatusReport = {
       status: 'indexing_file_content',
       message: 'Indexing in progress...',
       overallProgress: 50,
@@ -375,7 +376,7 @@ describe('Server Startup and Port Handling', () => {
     });
 
     // Mock axios.get for /api/ping
-    (axios.get as MockInstance).mockImplementation(async (url: string) => {
+    vi.mocked(axios.get).mockImplementation(async (url: string) => {
       if (url.endsWith('/api/ping')) {
         return { status: 200, data: { service: "CodeCompass", status: "ok", version: existingServerVersion } };
       }
@@ -411,7 +412,7 @@ describe('Server Startup and Port Handling', () => {
       return mockHttpServer;
     });
 
-    (axios.get as MockInstance).mockResolvedValueOnce({ status: 200, data: { service: "OtherService" } }); // Ping response
+    vi.mocked(axios.get).mockResolvedValueOnce({ status: 200, data: { service: "OtherService" } }); // Ping response
 
     await startServer('/fake/repo');
 
@@ -435,7 +436,7 @@ describe('Server Startup and Port Handling', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (pingError as any).isAxiosError = true;
     pingError.code = 'ECONNREFUSED';
-    (axios.get as MockInstance).mockRejectedValueOnce(pingError); // Ping fails
+    vi.mocked(axios.get).mockRejectedValueOnce(pingError); // Ping fails
 
     await startServer('/fake/repo');
 
@@ -455,7 +456,7 @@ describe('Server Startup and Port Handling', () => {
       return mockHttpServer;
     });
 
-    (axios.get as MockInstance)
+    vi.mocked(axios.get)
       .mockResolvedValueOnce({ status: 200, data: { service: "CodeCompass", status: "ok", version: "test-version" } }) // Ping success
       .mockRejectedValueOnce(new Error('Failed to fetch status')); // Status fetch fails
 

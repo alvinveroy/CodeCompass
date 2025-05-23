@@ -20,7 +20,8 @@ import {
   FileChunkPayload,         // New
   CommitInfoPayload,        // New
   DiffChunkPayload          // New
-} from "./types";
+} from "./types"; 
+import { IndexingStatusReport } from './repository'; // Correct import for IndexingStatusReport
 import { z } from "zod";
 import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant } from "./qdrant";
