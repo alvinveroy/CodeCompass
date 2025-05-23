@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock } from 'vitest';
 import { normalizeToolParams, startServer } from '../lib/server'; // Import startServer
 import { IndexingStatusReport } from '../lib/repository'; // For mock status
-
+import type * as httpModule from 'http'; // For types
 // Import actual modules to be mocked
 import http from 'http';
 import axios from 'axios'; // Import axios
@@ -100,32 +100,30 @@ vi.mock('isomorphic-git', async (importOriginal) => {
   };
 });
 
-// Mock for http module
+// --- START: vi.mock for 'http' and related definitions ---
+// Define shared mock function instances for the http server methods
+const mockHttpServerListenFn = vi.fn<Parameters<httpModule.Server['listen']>, ReturnType<httpModule.Server['listen']>>();
+const mockHttpServerOnFn = vi.fn<Parameters<httpModule.Server['on']>, ReturnType<httpModule.Server['on']>>();
+const mockHttpServerCloseFn = vi.fn<Parameters<httpModule.Server['close']>, ReturnType<httpModule.Server['close']>>();
+const mockHttpServerAddressFn = vi.fn<Parameters<httpModule.Server['address']>, ReturnType<httpModule.Server['address']>>();
+const mockHttpServerSetTimeoutFn = vi.fn<Parameters<httpModule.Server['setTimeout']>, ReturnType<httpModule.Server['setTimeout']>>();
+
+// Define the mock http server instance that createServer will return
+const mockHttpServerInstance = {
+  listen: mockHttpServerListenFn,
+  on: mockHttpServerOnFn,
+  close: mockHttpServerCloseFn,
+  address: mockHttpServerAddressFn,
+  setTimeout: mockHttpServerSetTimeoutFn,
+} as unknown as httpModule.Server; // Cast to satisfy http.Server type
+
 vi.mock('http', async (importOriginal) => {
-  const actualHttp = await importOriginal() as typeof http;
-  // This is the object that createServer will return
-  const mockServerInstance = {
-    listen: vi.fn((_port: number, cb?: () => void) => { if (cb) cb(); return mockServerInstance; }),
-    on: vi.fn().mockReturnThis(),
-    close: vi.fn((cb?: (err?: Error) => void) => { if (cb) cb(); return mockServerInstance; }),
-    setTimeout: vi.fn().mockReturnThis(),
-    address: vi.fn(() => ({ port: 3001, family: 'IPv4', address: '127.0.0.1' })),
-  };
-  // This is the mock for the createServer function itself
-  const createServerMockFn = vi.fn(() => mockServerInstance as unknown as http.Server);
-
-  // The structure returned by the factory must match how 'http' is imported and used.
-  // If 'import http from "http"' is used, then 'http.default.createServer' is expected.
-  // If 'import { createServer } from "http"' is used, then 'http.createServer' is expected.
-
+  const actualHttpModule = await importOriginal() as typeof httpModule;
   return {
-    ...actualHttp, // Keep actual exports like IncomingMessage, ServerResponse if needed by types
-    createServer: createServerMockFn, // For import { createServer } from 'http'
-    default: { // For import http from 'http'
-      ...actualHttp, // Spread actualHttp's own default if it had one, or just keep other default props
-      createServer: createServerMockFn,
-    } satisfies Partial<typeof http> // Add satisfies for better type checking of the mock structure
-    // Add other http methods if used directly
+    createServer: vi.fn(() => mockHttpServerInstance),
+    Server: vi.fn(() => mockHttpServerInstance) as unknown as typeof httpModule.Server, // Mock constructor
+    IncomingMessage: actualHttpModule.IncomingMessage, // Preserve actual types if needed
+    ServerResponse: actualHttpModule.ServerResponse,   // Preserve actual types if needed
   };
 });
 
@@ -133,7 +131,7 @@ vi.mock('http', async (importOriginal) => {
 vi.mock('axios');
 
 // Mock for process.exit
-const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as (code?: number) => never);
+let mockProcessExit: Mock<Parameters<typeof process.exit>, ReturnType<typeof process.exit>>;
 
 // Mock for console.info
 const mockConsoleInfo = vi.spyOn(console, 'info').mockImplementation(vi.fn());
@@ -309,48 +307,47 @@ Test content
 
 // New test suite for Server Startup and Port Handling
 describe('Server Startup and Port Handling', () => {
-  // mockHttpServer will hold the instance returned by the mocked http.default.createServer
-  // It needs to be typed as an http.Server but its methods will be mocks.
-  let mockHttpServer: Omit<http.Server, 'listen' | 'on' | 'close' | 'setTimeout' | 'address'> & {
-    listen: Mock<typeof http.Server.prototype.listen>;
-    on: Mock<typeof http.Server.prototype.on>;
-    close: Mock<typeof http.Server.prototype.close>;
-    // Add other mocked methods if their types are needed for assertions
-  };
   // Get the correctly typed mocked configService and logger
   let mockedConfigService: typeof import('../lib/config-service').configService;
   let mockedLogger: typeof import('../lib/config-service').logger;
   let mockedMcpServerConnect: MockInstance;
 
   beforeEach(async () => {
-    vi.clearAllMocks(); // Clear all mocks
-    mockHttpServer = {
-      listen: vi.fn((_port: number, callback?: () => void) => {
-        if (callback) callback();
-        return mockHttpServer; // Return self for chaining
-      }),
-      on: vi.fn((_event: string, _listener: (...args: any[]) => void) => {
-        return mockHttpServer; // Return self for chaining
-      }),
-      close: vi.fn((callback?: (err?: Error) => void) => {
-        if (callback) callback();
-        return mockHttpServer; // Return self for chaining
-      }),
-      // Add common http.Server properties to satisfy TypeScript and SUT expectations
-      setTimeout: vi.fn().mockReturnThis(),
-      address: vi.fn(() => ({ port: 3001, family: 'IPv4', address: '127.0.0.1' })),
-      maxHeadersCount: null,
-      maxRequestsPerSocket: null,
-      timeout: 0,
-      keepAliveTimeout: 0,
-      headersTimeout: 0,
-      requestTimeout: 0,
-      // Add other necessary properties if TS still complains or SUT uses them.
-      // For now, cast to satisfy the broader http.Server interface.
-    } as unknown as typeof mockHttpServer; // Cast to its own complex mock type
+    vi.clearAllMocks(); 
 
-    // Configure the mocked http.default.createServer to return this specific instance
-    (http.default.createServer as Mock<typeof http.createServer>).mockReturnValue(mockHttpServer);
+    // Mock process.exit for each test
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as (code?: string | number | null | undefined) => never);
+
+    // Reset http server method mocks
+    mockHttpServerListenFn.mockReset();
+    mockHttpServerOnFn.mockReset();
+    mockHttpServerCloseFn.mockReset();
+    mockHttpServerAddressFn.mockReset().mockReturnValue({ port: 3001, address: '127.0.0.1', family: 'IPv4' });
+    mockHttpServerSetTimeoutFn.mockReset().mockReturnThis();
+
+    // Default behavior for listen: call listener callback successfully
+    mockHttpServerListenFn.mockImplementation((_portOrPath: any, _hostnameOrListener?: any, _backlogOrListener?: any, listener?: () => void) => {
+      let actualListener: (() => void) | undefined = listener;
+      if (typeof _backlogOrListener === 'function') {
+        actualListener = _backlogOrListener;
+      } else if (typeof _hostnameOrListener === 'function') {
+        actualListener = _hostnameOrListener;
+      }
+      // Note: This simplified mock for listen might need adjustment if specific overloads are critical.
+      // For most tests, ensuring the final callback is called is sufficient.
+      if (typeof actualListener === 'function') {
+        actualListener();
+      }
+      return mockHttpServerInstance;
+    });
+
+    // Default behavior for on: return the server instance for chaining
+    mockHttpServerOnFn.mockImplementation((_event: string, _listener: (...args: any[]) => void) => {
+      return mockHttpServerInstance;
+    });
+
+    // The mock factory already ensures http.createServer returns mockHttpServerInstance.
+    // So, no need for: (http.createServer as Mock).mockReturnValue(mockHttpServerInstance);
 
     // Get the mocked configService and logger from the vi.mock factory
     // This ensures we are interacting with the same mocked objects that the SUT uses.
@@ -374,21 +371,16 @@ describe('Server Startup and Port Handling', () => {
 
   afterEach(() => {
     // Restore any global mocks if necessary, though vi.clearAllMocks() handles most
-    mockProcessExit.mockClear();
+    if (mockProcessExit) mockProcessExit.mockClear(); // mockProcessExit is defined in beforeEach
     mockConsoleInfo.mockClear();
   });
 
   it('should start the server and listen on the configured port if free', async () => {
-    mockHttpServer.listen.mockImplementation((port, callback) => {
-      if (callback) callback(); // Simulate successful listen
-      return mockHttpServer;
-    });
-
     await startServer('/fake/repo');
 
     expect(mockedConfigService.reloadConfigsFromFile).toHaveBeenCalled();
-    expect(http.default.createServer).toHaveBeenCalled();
-    expect(mockHttpServer.listen).toHaveBeenCalledWith(mockedConfigService.HTTP_PORT, expect.any(Function));
+    expect(http.createServer).toHaveBeenCalled();
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mockedConfigService.HTTP_PORT, expect.any(Function));
     expect(mockedLogger.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mockedConfigService.HTTP_PORT} for status and notifications.`);
     expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
     expect(mockProcessExit).not.toHaveBeenCalled();
@@ -405,14 +397,16 @@ describe('Server Startup and Port Handling', () => {
     };
     const existingServerVersion = 'existing-test-version';
 
-    // Simulate EADDRINUSE
-    mockHttpServer.on.mockImplementation((event, handler) => {
-      if (event === 'error') {
+    // Simulate EADDRINUSE: make listen call the 'error' handler
+    mockHttpServerListenFn.mockImplementation(() => {
+      const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
+      if (errorArgs && typeof errorArgs[1] === 'function') {
+        const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         const error = new Error('listen EADDRINUSE: address already in use :::3001') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
-        handler(error); // Immediately invoke the error handler
+        errorHandler(error);
       }
-      return mockHttpServer;
+      return mockHttpServerInstance;
     });
 
     // Mock axios.get for /api/ping
@@ -443,14 +437,17 @@ describe('Server Startup and Port Handling', () => {
   });
 
   it('should handle EADDRINUSE, detect a non-CodeCompass server, log error, and exit with 1', async () => {
-    mockHttpServer.on.mockImplementation((event, handler) => {
-      if (event === 'error') {
+    mockHttpServerListenFn.mockImplementation(() => {
+      const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
+      if (errorArgs && typeof errorArgs[1] === 'function') {
+        const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
-        handler(error);
+        errorHandler(error);
       }
-      return mockHttpServer;
+      return mockHttpServerInstance;
     });
+
 
     vi.mocked(axios.get).mockResolvedValueOnce({ status: 200, data: { service: "OtherService" } }); // Ping response
 
@@ -463,14 +460,17 @@ describe('Server Startup and Port Handling', () => {
   });
 
   it('should handle EADDRINUSE, ping fails (e.g. ECONNREFUSED), log error, and exit with 1', async () => {
-    mockHttpServer.on.mockImplementation((event, handler) => {
-      if (event === 'error') {
+    mockHttpServerListenFn.mockImplementation(() => {
+      const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
+      if (errorArgs && typeof errorArgs[1] === 'function') {
+        const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
-        handler(error);
+        errorHandler(error);
       }
-      return mockHttpServer;
+      return mockHttpServerInstance;
     });
+
     
     const pingError = new Error('connect ECONNREFUSED 127.0.0.1:3001') as import('axios').AxiosError;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -487,13 +487,15 @@ describe('Server Startup and Port Handling', () => {
   });
   
   it('should handle EADDRINUSE, ping OK, but /api/indexing-status fails, log error, and exit with 1', async () => {
-    mockHttpServer.on.mockImplementation((event, handler) => {
-      if (event === 'error') {
+    mockHttpServerListenFn.mockImplementation(() => {
+      const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
+      if (errorArgs && typeof errorArgs[1] === 'function') {
+        const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
-        handler(error);
+        errorHandler(error);
       }
-      return mockHttpServer;
+      return mockHttpServerInstance;
     });
 
     vi.mocked(axios.get)
@@ -511,21 +513,21 @@ describe('Server Startup and Port Handling', () => {
     const otherError = new Error('Some other server error') as NodeJS.ErrnoException;
     otherError.code = 'EACCES'; // Example of another error code
 
-    mockHttpServer.on.mockImplementation((event, handler) => {
-      if (event === 'error') {
-        handler(otherError);
+    mockHttpServerListenFn.mockImplementation(() => {
+      // Simulate listen failure by invoking the 'error' handler
+      const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
+      if (errorArgs && typeof errorArgs[1] === 'function') {
+        const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
+        errorHandler(otherError);
       }
-      return mockHttpServer;
+      return mockHttpServerInstance;
     });
     
     // We need to ensure listen is called to trigger the 'on' setup
-    mockHttpServer.listen.mockImplementation(() => mockHttpServer);
-
-
     await startServer('/fake/repo');
     
     // Check that the 'on' handler was attached
-    expect(mockHttpServer.on).toHaveBeenCalledWith('error', expect.any(Function));
+    expect(mockHttpServerOnFn).toHaveBeenCalledWith('error', expect.any(Function));
     
     // Check for the specific error log for non-EADDRINUSE
     expect(mockedLogger.error).toHaveBeenCalledWith(`Failed to start HTTP server on port ${mockedConfigService.HTTP_PORT}: ${otherError.message}`);

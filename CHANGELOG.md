@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
++- **Unit Test & Build Errors (server.test.ts - Mocking & Typing Finalization v2) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
++    - Resolved runtime error `TypeError: default.default.createServer.mockReturnValue is not a function` and TypeScript error `TS2339: Property 'default' does not exist on type 'typeof import("http")'` in `src/tests/server.test.ts`. This was achieved by:
++        - Simplifying the `vi.mock('http', ...)` factory to directly export `createServer` and other necessary members, making `http.createServer` the correct access path for the mock.
++        - Updating test code to use `http.createServer` instead of `http.default.createServer`.
++    - Corrected TypeScript errors `TS2345` & `TS2352` for the `process.exit` mock by using the signature `(code?: string | number | null | undefined) => never`.
++    - Addressed TypeScript errors `TS2345`, `TS2367`, and `TS2554` related to `mockHttpServerInstance` and its methods (`listen`, `on`):
++        - Ensured `mockHttpServerInstance` is cast to `http.Server` and its mocked methods (`listen`, `on`, `address`, `setTimeout`, `close`) are defined with flexible signatures.
++        - Refined mock implementations for `listen` and `on` methods to correctly simulate event emissions (e.g., 'error' event) and handle listener arguments type-safely.
++    - Removed redundant `mockReturnValue` for `http.createServer` in `beforeEach` as the mock factory already establishes this.
 +- **Unit Test & Build Errors (server.test.ts - Final Round) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
 +    - Corrected runtime error `TypeError: default.default.createServer.mockReturnValue is not a function` by ensuring `http.default.createServer` is used to set mock return values, matching the mock factory structure.
 +    - Fixed TypeScript errors for `process.exit` mock by using `vi.fn() as (code?: number) => never`.
