@@ -64,6 +64,27 @@
 
 ---
 
+# Retrospection for Build Fix (server.test.ts - Typing importOriginal) (Git Commit ID: fd94467)
+
+## What went well?
+- The TypeScript error messages (TS2698, TS18046) clearly indicated the nature of the problem: variables being of type `unknown`, preventing safe spread operations and property access.
+- The solution, explicitly typing the result of `await importOriginal()` using `as typeof import('module-name')`, is a standard and effective way to address this in Vitest/Jest mock factories.
+
+## What could be improved?
+- **Consistency in Mock Typing:** This issue highlights the importance of consistently applying type assertions to the results of dynamic or less-typed import mechanisms like `importOriginal()` from the outset. Previous attempts to fix lint errors might have missed some of these or introduced slight variations.
+- **Build vs. Lint Feedback Loop:** Sometimes, lint errors (like "unnecessary type assertion") might appear after fixing build errors, or vice-versa. A clear process to prioritize build errors first, then address linting, is helpful.
+
+## What did we learn?
+- **`importOriginal()` Typing:** The `importOriginal()` function provided by Vitest's mock factory typically returns `unknown` or `any`. It's crucial to cast its result to the specific type of the module being imported (e.g., `await importOriginal() as typeof import('module-path')`) to enable type-safe operations within the mock factory.
+- **Impact of `unknown` Type:** When a variable is `unknown`, TypeScript correctly prevents operations like property access or spreading until the type is narrowed or asserted. This is a key safety feature.
+- **Error Triangulation:** Correlating TypeScript build errors with ESLint errors (even from previous runs) can help build a more complete picture of typing issues.
+
+## Action Items / Follow-ups
+- Establish a strict convention to always type the result of `await importOriginal()` in `vi.mock` factories.
+- When encountering TS2698 or TS18046 in mock factories, the first step should be to verify the typing of `importOriginal()`.
+- After fixing build errors, re-run ESLint with `--fix` to clean up any consequential lint issues (like "unnecessary type assertion" if the build fix improved type inference elsewhere).
+---
+
 # Retrospection for Build/Test Fixes (server.test.ts - Syntax Error & Mocking Stabilization) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
