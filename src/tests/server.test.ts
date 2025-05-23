@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { normalizeToolParams } from '../lib/server';
+import { IndexingStatusReport } from '../lib/repository'; // For mock status
 
 // Mock dependencies
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
