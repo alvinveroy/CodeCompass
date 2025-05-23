@@ -34,7 +34,7 @@ import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQu
 
 // Helper type for server startup errors
 class ServerStartupError extends Error {
-  constructor(message: string, public exitCode: number = 1) {
+  constructor(message: string, public exitCode = 1) {
     super(message);
     this.name = "ServerStartupError";
   }

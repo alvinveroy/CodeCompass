@@ -26,7 +26,7 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
 
 // Corrected mock path for configService and logger
 vi.mock('../lib/config-service', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('../lib/config-service');
+  const actual = await importOriginal();
   return {
     ...actual, // Spread actual to keep non-mocked parts if any, or specific exports
     configService: {
@@ -79,7 +79,7 @@ vi.mock('../lib/qdrant', () => ({
 }));
 
 vi.mock('../lib/repository', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('../lib/repository');
+  const actual = await importOriginal();
   return {
     ...actual, // Keep actual exports like IndexingStatusReport type
     validateGitRepository: vi.fn().mockResolvedValue(true),
@@ -95,7 +95,7 @@ vi.mock('../lib/repository', async (importOriginal) => {
 });
 
 vi.mock('isomorphic-git', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('isomorphic-git');
+  const actual = await importOriginal();
   return {
     ...actual, // Keep actual exports
     default: { // Mock the default export if that's what's used
@@ -133,7 +133,7 @@ const mockHttpServerInstance = {
 } as unknown as httpModule.Server; // Cast to satisfy http.Server type
 
 vi.mock('http', async (importOriginal) => {
-  const actualHttpModule = await importOriginal() as typeof httpModule;
+  const actualHttpModule = await importOriginal();
   const mockHttpMethods = {
     createServer: vi.fn(() => mockHttpServerInstance),
     Server: vi.fn(() => mockHttpServerInstance) as unknown as typeof httpModule.Server, // Mock constructor
@@ -163,7 +163,7 @@ vi.mock('../lib/version', () => ({
 
 // Mock for ../lib/llm-provider
 vi.mock('../lib/llm-provider', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('../lib/llm-provider');
+  const actual = await importOriginal();
   return {
     ...actual,
     getLLMProvider: vi.fn().mockResolvedValue({
@@ -177,7 +177,7 @@ vi.mock('../lib/llm-provider', async (importOriginal) => {
 
 // Mock fs/promises for server.ts if it uses it directly (e.g. for reading changelog)
 vi.mock('fs/promises', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('fs/promises');
+  const actual = await importOriginal();
   return {
     ...actual,
     readFile: vi.fn().mockResolvedValue('mock file content'),
@@ -366,7 +366,7 @@ describe('Server Startup and Port Handling', () => {
     vi.clearAllMocks(); 
 
     // Mock process.exit for each test
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number | string | null | undefined): never => {
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number | string | null  ): never => {
       throw new Error(`process.exit called with ${code ?? 'unknown code'}`);
     });
 
