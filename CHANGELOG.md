@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
++- **Build & Unit Test Errors (server.test.ts - Syntax Error & Mocking Stabilization) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
++    - Resolved persistent `esbuild` error "Expected ")" but found "else"" and subsequent TypeScript compilation errors in `src/tests/server.test.ts` by removing a syntactically incorrect code block from the `beforeEach` hook of the "Server Startup and Port Handling" test suite.
++    - Stabilized mocking for `McpServer.connect` by introducing a top-level stable mock function (`mcpConnectStableMock`) and using it in the `McpServer` mock factory.
++    - Ensured `mockedMcpServerConnect` is correctly initialized and cleared in `beforeEach` using the stable mock.
++    - Standardized usage of `mcs` (for mocked `configService`) and `ml` (for mocked `logger`) across tests, removing redundant mock setups within individual test cases.
++    - Provided a more specific type for `mockedMcpServerConnect` (`MockInstance<any[], any>`).
 +- **Unit Test & Build Errors (server.test.ts - Mocking & Typing Finalization v2) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
 +    - Resolved runtime error `TypeError: default.default.createServer.mockReturnValue is not a function` and TypeScript error `TS2339: Property 'default' does not exist on type 'typeof import("http")'` in `src/tests/server.test.ts`. This was achieved by:
 +        - Simplifying the `vi.mock('http', ...)` factory to directly export `createServer` and other necessary members, making `http.createServer` the correct access path for the mock.

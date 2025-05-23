@@ -6,10 +6,13 @@ import type * as httpModule from 'http'; // For types
 import http from 'http';
 import axios from 'axios'; // Import axios
 
+// Define stable mock for McpServer.connect
+const mcpConnectStableMock = vi.fn(); 
+
 // Mock dependencies
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: vi.fn().mockImplementation(() => ({
-    connect: vi.fn(),
+    connect: mcpConnectStableMock, // Use stable mock
     tool: vi.fn(),
     resource: vi.fn(),
     prompt: vi.fn(), // Added prompt mock
@@ -337,7 +340,7 @@ describe('Server Startup and Port Handling', () => {
   // Use the new mock-aware types
   let mcs: MockedConfigService; // mcs for mockedConfigService
   let ml: MockedLogger; // ml for mockedLogger
-  let mockedMcpServerConnect: MockInstance;
+  let mockedMcpServerConnect: MockInstance<any[], any>; // Typed the mock instance
 
   beforeEach(async () => {
     vi.clearAllMocks(); 
@@ -362,44 +365,11 @@ describe('Server Startup and Port Handling', () => {
     ml.error?.mockClear();
     ml.debug?.mockClear();
     mcs.reloadConfigsFromFile?.mockClear();
-
-    // Mock McpServer's connect method
-    const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-      } else if (typeof _hostnameOrListener === 'function') {
-        actualListener = _hostnameOrListener;
-      }
-      // Note: This simplified mock for listen might need adjustment if specific overloads are critical.
-      // For most tests, ensuring the final callback is called is sufficient.
-      if (typeof actualListener === 'function') {
-        actualListener();
-      }
-      return mockHttpServerInstance;
-    });
-  it('should start the server and listen on the configured port if free', async () => {
-    await startServer('/fake/repo');
-
-    expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
-    expect(http.createServer).toHaveBeenCalled();
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function));
-    expect(ml.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`);
-    expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
-    expect(mockProcessExit).not.toHaveBeenCalled();
-  });
-
-  it('should handle EADDRINUSE, detect another CodeCompass server, print status, and exit gracefully', async () => {
-    mockedConfigService = actualConfigModule.configService;
-    mockedLogger = actualConfigModule.logger;
-
-    // Mock McpServer's connect method
-    const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-    mockedMcpServerConnect = vi.mocked(McpServer).mock.results[0]?.value.connect;
-    if (!mockedMcpServerConnect) { // Fallback if the above path changes due to mock structure
-        const instance = new McpServer({ name: "test", version: "0.0.0", vendor: "test", capabilities: {} });
-        mockedMcpServerConnect = vi.mocked(instance.connect);
-    }
-    vi.mocked(mockedMcpServerConnect).mockClear();
-
-
+    
+    // Assign and clear the stable McpServer.connect mock
+    mcpConnectStableMock.mockClear();
+    mockedMcpServerConnect = mcpConnectStableMock;
+    
     // Default mock for axios.get
     vi.mocked(axios.get).mockResolvedValue({ status: 200, data: {} });
   });
@@ -413,7 +383,7 @@ describe('Server Startup and Port Handling', () => {
   it('should start the server and listen on the configured port if free', async () => {
     await startServer('/fake/repo');
 
-    expect(mockedConfigService.reloadConfigsFromFile).toHaveBeenCalled();
+    expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
     expect(http.createServer).toHaveBeenCalled();
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(mockedConfigService.HTTP_PORT, expect.any(Function));
     expect(mockedLogger.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mockedConfigService.HTTP_PORT} for status and notifications.`);
@@ -427,7 +397,7 @@ describe('Server Startup and Port Handling', () => {
     expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/indexing-status`, { timeout: 1000 });
     
     expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerVersion}`));
+    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${mockExistingServerStatus.version}`)); // Use version from status
     expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
     expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Progress: ${mockExistingServerStatus.overallProgress}%`));
     
@@ -437,20 +407,30 @@ describe('Server Startup and Port Handling', () => {
   });
 
   it('should handle EADDRINUSE, detect a non-CodeCompass server, log error, and exit with 1', async () => {
-        const error = new Error('listen EADDRINUSE: address already in use :::3001') as NodeJS.ErrnoException;
-        error.code = 'EADDRINUSE';
-        errorHandler(error);
-      }
-      return mockHttpServerInstance;
-    });
+    mockHttpServerListenFn.mockImplementation(
+      (
+        _portOrOptions?: number | string | net.ListenOptions | null,
+        _hostnameOrListener?: string | (() => void),
+        _backlogOrListener?: number | (() => void),
+        _listeningListener?: () => void
+      ): httpModule.Server => {
+        const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
+        if (errorArgs && typeof errorArgs[1] === 'function') {
+          const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
+          const error = new Error('listen EADDRINUSE: address already in use') as NodeJS.ErrnoException;
+          error.code = 'EADDRINUSE';
+          errorHandler(error);
+        }
+        return mockHttpServerInstance;
+      });
 
     // Mock axios.get for /api/ping
     vi.mocked(axios.get).mockImplementation(async (url: string) => {
-      if (url.endsWith('/api/ping')) {
-        return { status: 200, data: { service: "CodeCompass", status: "ok", version: existingServerVersion } };
+      if (url.endsWith('/api/ping')) { // Ping returns non-CodeCompass response or error
+        return { status: 200, data: { service: "OtherService" } };
       }
-      if (url.endsWith('/api/indexing-status')) {
-        return { status: 200, data: mockExistingServerStatus };
+      return { status: 404, data: {} };
+    });
     await startServer('/fake/repo');
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use, but it does not appear to be a CodeCompass server.`));
@@ -460,67 +440,41 @@ describe('Server Startup and Port Handling', () => {
   });
 
   it('should handle EADDRINUSE, ping fails (e.g. ECONNREFUSED), log error, and exit with 1', async () => {
-    
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mockedConfigService.HTTP_PORT} ---`));
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerVersion}`));
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Progress: ${mockExistingServerStatus.overallProgress}%`));
-    
-    expect(mockedLogger.info).toHaveBeenCalledWith("Current instance will exit as another CodeCompass server is already running.");
-    expect(mockProcessExit).toHaveBeenCalledWith(0); // Graceful exit
-    expect(mockedMcpServerConnect).not.toHaveBeenCalled(); // MCP server should not connect
-  });
+    mockHttpServerListenFn.mockImplementation(
+      (
+        _portOrOptions?: number | string | net.ListenOptions | null,
+        _hostnameOrListener?: string | (() => void),
+        _backlogOrListener?: number | (() => void),
+        _listeningListener?: () => void
+      ): httpModule.Server => {
+        const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
+        if (errorArgs && typeof errorArgs[1] === 'function') {
+          const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
+          const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
+          error.code = 'EADDRINUSE';
+          errorHandler(error); // Simulate EADDRINUSE
+        }
+        return mockHttpServerInstance;
+      }
+    );
 
-  it('should handle EADDRINUSE, detect a non-CodeCompass server, log error, and exit with 1', async () => {
-    mockHttpServerListenFn.mockImplementation(() => {
-      const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
-      if (errorArgs && typeof errorArgs[1] === 'function') {
-        const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
-        const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
-        error.code = 'EADDRINUSE';
+    const pingError = new Error('Connection refused') as NodeJS.ErrnoException;
+    pingError.code = 'ECONNREFUSED';
+    vi.mocked(axios.get).mockImplementation(async (url: string) => {
+      if (url.endsWith('/api/ping')) {
+        throw pingError;
+      }
+      return { status: 404, data: {} };
+    });
+
     await startServer('/fake/repo');
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port'));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port')); // Specific message for ECONNREFUSED
     expect(mockProcessExit).toHaveBeenCalledWith(1);
-    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
-  });
-  
-  it('should handle EADDRINUSE, ping OK, but /api/indexing-status fails, log error, and exit with 1', async () => {
-
-    expect(mockedLogger.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mockedConfigService.HTTP_PORT} is in use, but it does not appear to be a CodeCompass server.`));
-    expect(mockedLogger.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
-    expect(mockProcessExit).toHaveBeenCalledWith(1);
-    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
+    expect(mockedMcpServerConnect).not.toHaveBeenCalled(); // MCP server should not connect
   });
 
-  it('should handle EADDRINUSE, ping fails (e.g. ECONNREFUSED), log error, and exit with 1', async () => {
-    mockHttpServerListenFn.mockImplementation(() => {
-      const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
-      if (errorArgs && typeof errorArgs[1] === 'function') {
-        const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
-        const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
-        error.code = 'EADDRINUSE';
-        errorHandler(error);
-    await startServer('/fake/repo');
-
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Error fetching status from existing CodeCompass server'));
-    expect(mockProcessExit).toHaveBeenCalledWith(1);
-    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
-  });
-
-  it('should handle non-EADDRINUSE errors on HTTP server and exit with 1', async () => {
-    pingError.code = 'ECONNREFUSED';
-    vi.mocked(axios.get).mockRejectedValueOnce(pingError); // Ping fails
-
-    await startServer('/fake/repo');
-
-    expect(mockedLogger.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mockedConfigService.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
-    expect(mockedLogger.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port'));
-    expect(mockProcessExit).toHaveBeenCalledWith(1);
-    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
-  });
-  
   it('should handle EADDRINUSE, ping OK, but /api/indexing-status fails, log error, and exit with 1', async () => {
     mockHttpServerListenFn.mockImplementation(() => {
       const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
@@ -528,18 +482,25 @@ describe('Server Startup and Port Handling', () => {
         const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
-        errorHandler(error);
+        errorHandler(error); // Simulate EADDRINUSE
       }
       return mockHttpServerInstance;
     });
 
-    vi.mocked(axios.get)
-      .mockResolvedValueOnce({ status: 200, data: { service: "CodeCompass", status: "ok", version: "test-version" } }) // Ping success
-      .mockRejectedValueOnce(new Error('Failed to fetch status')); // Status fetch fails
+    // Mock axios.get for /api/ping
+    vi.mocked(axios.get).mockImplementation(async (url: string) => {
+      if (url.endsWith('/api/ping')) {
+        return { status: 200, data: { service: "CodeCompass", status: "ok", version: "test-version" } }; // Ping success
+      }
+      if (url.endsWith('/api/indexing-status')) {
+        throw new Error('Failed to fetch status'); // Status fetch fails
+      }
+      return mockHttpServerInstance;
+    });
 
     await startServer('/fake/repo');
 
-    expect(mockedLogger.error).toHaveBeenCalledWith(expect.stringContaining('Error fetching status from existing CodeCompass server'));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Error fetching status from existing CodeCompass server'));
     expect(mockProcessExit).toHaveBeenCalledWith(1);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
@@ -565,7 +526,7 @@ describe('Server Startup and Port Handling', () => {
     expect(mockHttpServerOnFn).toHaveBeenCalledWith('error', expect.any(Function));
     
     // Check for the specific error log for non-EADDRINUSE
-    expect(mockedLogger.error).toHaveBeenCalledWith(`Failed to start HTTP server on port ${mockedConfigService.HTTP_PORT}: ${otherError.message}`);
+    expect(ml.error).toHaveBeenCalledWith(`Failed to start HTTP server on port ${mcs.HTTP_PORT}: ${otherError.message}`);
     expect(mockProcessExit).toHaveBeenCalledWith(1);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
