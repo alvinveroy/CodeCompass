@@ -32,9 +32,16 @@ import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 
+// Define this interface at the top level of the file, e.g., after imports
+interface PingResponseData {
+  service?: string;
+  status?: string;
+  version?: string;
+}
+
 // Helper type for server startup errors
 class ServerStartupError extends Error {
-  constructor(message: string, public exitCode = 1) {
+  constructor(message: string, public exitCode = 1) { // Remove : number type annotation
     super(message);
     this.name = "ServerStartupError";
   }
@@ -98,7 +105,7 @@ export async function startServer(repoPath: string): Promise<void> {
   logger.info("Starting CodeCompass MCP server...");
 
   // Create a promise that will be rejected if httpServer setup fails critically
-  let httpServerSetupReject: (reason?: any) => void;
+  let httpServerSetupReject: (reason?: unknown) => void;
   const httpServerSetupPromise = new Promise<void>((_resolve, reject) => {
     httpServerSetupReject = reject;
   });
@@ -512,11 +519,12 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
      
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
 
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     httpServer.on('error', async (error: NodeJS.ErrnoException) => {
       if (error.code === 'EADDRINUSE') {
         logger.warn(`HTTP Port ${httpPort} is already in use. Attempting to ping...`);
         try {
-          const pingResponse = await axios.get(`http://localhost:${httpPort}/api/ping`, { timeout: 500 });
+          const pingResponse = await axios.get<PingResponseData>(`http://localhost:${httpPort}/api/ping`, { timeout: 500 });
           if (pingResponse.status === 200 && pingResponse.data && pingResponse.data.service === "CodeCompass") {
             logger.info(`Another CodeCompass instance (version ${pingResponse.data.version || 'unknown'}) is running on port ${httpPort}. Fetching its status...`);
             try {

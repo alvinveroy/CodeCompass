@@ -15,6 +15,32 @@
 + When writing assertions for log messages, if unsure about the exact format, run the test and inspect the actual logged output to create accurate assertions.
  
  ---
+# Retrospection for ESLint Fixes (server.ts, server.test.ts) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- Successfully addressed a range of ESLint errors, improving type safety and code clarity in `src/lib/server.ts` and `src/tests/server.test.ts`.
+- Typing Axios responses in `server.ts` resolved `no-unsafe-member-access` errors effectively.
+- Explicitly typing mock function signatures and return values in `server.test.ts` fixed `no-unsafe-return` and `no-unsafe-assignment` issues.
+- Identifying and removing unnecessary `async` keywords from test mocks resolved `require-await` errors.
+- Pragmatic use of `eslint-disable` for specific, well-understood cases (like `no-misused-promises` for async event handlers and `unbound-method`/`no-unsafe-argument` in tests) prevented overly complex code changes while maintaining test intent.
+
+## What could be improved?
+- **Initial Mock Typing:** Some mock functions in tests initially lacked explicit type annotations for their parameters or return values, leading to several `no-unsafe-*` errors. Stricter typing from the outset can prevent these.
+- **ESLint Rule Understanding:** Certain rules like `no-misused-promises` and `unbound-method` can be tricky in specific contexts (event handlers, test assertions). Ensuring the team understands when these are true issues versus overly strict interpretations is important.
+
+## What did we learn?
+- **Axios Typing:** Using generic types for `axios.get<ResponseType>()` is crucial for type-safe access to response data.
+- **Mocking Best Practices:** Providing explicit types for `vi.fn()` (e.g., `vi.fn<Args, Return>()`) and for the return values of `mockImplementation` or `mockResolvedValue` significantly helps ESLint and TypeScript understand the code.
+- **`async` in Mocks:** `async` should only be used in mock implementations if `await` is present within the mock's body. Otherwise, a synchronous function returning a `Promise` is preferred.
+- **ESLint in Tests:** Test files can sometimes trigger ESLint rules in ways that are technically correct by the rule's definition but impractical or counterproductive for testing. Judicious use of `eslint-disable` with clear justification is acceptable in such cases, especially for rules like `unbound-method` on simple mock call assertions or `no-unsafe-argument` with complex but valid matchers.
+- **`no-misused-promises` in Event Handlers:** An `async` event handler returns a `Promise`. If the event emitter expects a `void`-returning function, this rule triggers. If the promise settlement is not relevant to the emitter, disabling the rule is a common and acceptable practice.
+
+## Action Items / Follow-ups
+- Encourage consistent explicit typing for all mock function definitions in tests.
+- Periodically review `eslint-disable` comments to ensure they are still necessary and justified, especially after ESLint or TypeScript updates.
+- Add `@types/axios` to `devDependencies` to ensure Axios types are available.
+
+---
 # Retrospection for Build/Test Fixes (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
