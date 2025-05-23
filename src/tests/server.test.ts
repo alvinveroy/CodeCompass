@@ -366,7 +366,7 @@ describe('Server Startup and Port Handling', () => {
     vi.clearAllMocks(); 
 
     // Mock process.exit for each test
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number) => { // Correct signature
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number): never => { // Ensure it's `never`
       throw new Error(`process.exit called with ${code ?? 'unknown code'}`);
     });
 
@@ -453,7 +453,14 @@ describe('Server Startup and Port Handling', () => {
         return { status: 404, data: {} }; // Default for other calls
       });
 
-      await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 0');
+      // Expect ServerStartupError with specific message and code
+      await expect(startServer('/fake/repo')).rejects.toThrow(
+        expect.objectContaining({
+          name: "ServerStartupError",
+          message: `Port ${mcs.HTTP_PORT} in use by another CodeCompass instance.`,
+          exitCode: 0
+        })
+      );
       
       expect(ml.warn).toHaveBeenCalledWith(`HTTP Port ${mcs.HTTP_PORT} is already in use. Attempting to ping...`);
       expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/ping`, { timeout: 500 });
@@ -465,7 +472,7 @@ describe('Server Startup and Port Handling', () => {
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Progress: ${mockExistingServerStatus.overallProgress}%`));
       
       expect(ml.info).toHaveBeenCalledWith("Current instance will exit as another CodeCompass server is already running.");
-      expect(mockProcessExit).toHaveBeenCalledWith(0);
+      // mockProcessExit is not directly called by startServer's main catch in test mode anymore
       expect(mockedMcpServerConnect).not.toHaveBeenCalled();
     });
 
@@ -494,11 +501,16 @@ describe('Server Startup and Port Handling', () => {
       }
       return { status: 404, data: {} };
     });
-    await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
+    await expect(startServer('/fake/repo')).rejects.toThrow(
+      expect.objectContaining({
+        name: "ServerStartupError",
+        message: `Port ${mcs.HTTP_PORT} in use by non-CodeCompass server.`,
+        exitCode: 1
+      })
+    );
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use, but it does not appear to be a CodeCompass server.`));
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
-    expect(mockProcessExit).toHaveBeenCalledWith(1);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
@@ -530,12 +542,17 @@ describe('Server Startup and Port Handling', () => {
       return { status: 404, data: {} };
     });
 
-    await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
+    await expect(startServer('/fake/repo')).rejects.toThrow(
+      expect.objectContaining({
+        name: "ServerStartupError",
+        message: `Port ${mcs.HTTP_PORT} in use or ping failed.`,
+        exitCode: 1
+      })
+    );
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port'));
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
-    expect(mockProcessExit).toHaveBeenCalledWith(1);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled(); // MCP server should not connect
   });
 
@@ -559,13 +576,20 @@ describe('Server Startup and Port Handling', () => {
       if (url.endsWith('/api/indexing-status')) {
         throw new Error('Failed to fetch status'); // Status fetch fails
       }
-      return mockHttpServerInstance;
+      return mockHttpServerInstance; // This was incorrect, should be the response for axios.get
     });
 
-    await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
-
+    await expect(startServer('/fake/repo')).rejects.toThrow(
+      expect.objectContaining({
+        name: "ServerStartupError",
+        // The message might vary slightly based on the exact point of failure in the EADDRINUSE logic for status fetch
+        // For example, if it's the catch block after statusError:
+        message: `Port ${mcs.HTTP_PORT} in use, status fetch error.`, 
+        exitCode: 1
+      })
+    );
+    
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Error fetching status from existing CodeCompass server'));
-    expect(mockProcessExit).toHaveBeenCalledWith(1);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
@@ -584,14 +608,19 @@ describe('Server Startup and Port Handling', () => {
     });
     
     // We need to ensure listen is called to trigger the 'on' setup
-    await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
+    await expect(startServer('/fake/repo')).rejects.toThrow(
+      expect.objectContaining({
+        name: "ServerStartupError",
+        message: `HTTP server error: ${otherError.message}`,
+        exitCode: 1
+      })
+    );
     
     // Check that the 'on' handler was attached
     expect(mockHttpServerOnFn).toHaveBeenCalledWith('error', expect.any(Function));
     
     // Check for the specific error log for non-EADDRINUSE
     expect(ml.error).toHaveBeenCalledWith(`Failed to start HTTP server on port ${mcs.HTTP_PORT}: ${otherError.message}`);
-    expect(mockProcessExit).toHaveBeenCalledWith(1);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 });

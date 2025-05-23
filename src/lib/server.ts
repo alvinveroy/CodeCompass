@@ -32,6 +32,13 @@ import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 
+// Helper type for server startup errors
+class ServerStartupError extends Error {
+  constructor(message: string, public exitCode: number = 1) {
+    super(message);
+    this.name = "ServerStartupError";
+  }
+}
 
 export function normalizeToolParams(params: unknown): Record<string, unknown> {
   if (typeof params === 'object' && params !== null) {
@@ -74,7 +81,7 @@ export async function startServer(repoPath: string): Promise<void> {
     // Mandatory exit after uncaught exception
     // Ensure logs are flushed before exiting if logger is asynchronous.
     // For simplicity here, assuming logger.error is synchronous enough or process.exit will allow flushing.
-    if (process.env.NODE_ENV !== 'test') { // Add this condition
+    if (process.env.NODE_ENV !== 'test') { 
       process.exit(1); 
     }
   });
@@ -83,12 +90,18 @@ export async function startServer(repoPath: string): Promise<void> {
     logger.error('UNHANDLED PROMISE REJECTION:', { reason, promise });
     // Optionally, exit or take other measures. For robustness, exiting is often safer.
     // Ensure logs are flushed.
-    if (process.env.NODE_ENV !== 'test') { // Add this condition
+    if (process.env.NODE_ENV !== 'test') { 
       process.exit(1);
     }
   });
   
   logger.info("Starting CodeCompass MCP server...");
+
+  // Create a promise that will be rejected if httpServer setup fails critically
+  let httpServerSetupReject: (reason?: any) => void;
+  const httpServerSetupPromise = new Promise<void>((_resolve, reject) => {
+    httpServerSetupReject = reject;
+  });
 
   try {
     // ConfigService constructor loads from env and files.
@@ -527,10 +540,10 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
                 console.info(`Last Updated: ${existingStatus.lastUpdatedAt}`);
                 console.info(`-----------------------------------------------------------\n`);
                 logger.info("Current instance will exit as another CodeCompass server is already running.");
-                process.exit(0); // Graceful exit
+                httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use by another CodeCompass instance.`, 0));
               } else {
                 logger.error(`Failed to retrieve status from existing CodeCompass server on port ${httpPort}. It responded to ping but status endpoint failed. Status: ${statusResponse.status}`);
-                process.exit(1);
+                httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use, status fetch failed.`, 1));
               }
             } catch (statusError: unknown) {
               if (axios.isAxiosError(statusError)) {
@@ -544,13 +557,13 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
               } else {
                 logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${String(statusError)}`);
               }
-              process.exit(1);
+              httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use, status fetch error.`, 1));
             }
           } else {
             // Ping successful but not a CodeCompass server
             logger.error(`Port ${httpPort} is in use, but it does not appear to be a CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`);
             logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
-            process.exit(1);
+            httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use by non-CodeCompass server.`, 1));
           }
         } catch (pingError: unknown) {
           // Ping failed (timeout, connection refused, or other error)
@@ -567,17 +580,24 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
              logger.error(`Ping error details: ${String(pingError)}`);
           }
           logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
-          process.exit(1);
+          httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use or ping failed.`, 1));
         }
       } else {
         logger.error(`Failed to start HTTP server on port ${httpPort}: ${error.message}`);
-        process.exit(1);
+        httpServerSetupReject!(new ServerStartupError(`HTTP server error: ${error.message}`, 1));
       }
     });
 
-    httpServer.listen(httpPort, () => {
-      logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
+    const listenPromise = new Promise<void>((resolve) => {
+      httpServer.listen(httpPort, () => {
+        logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
+        resolve(); // HTTP server is successfully listening
+      });
     });
+
+    // Race the listenPromise against the httpServerSetupPromise
+    // If httpServerSetupPromise rejects (due to EADDRINUSE or other http error), this will throw
+    await Promise.race([listenPromise, httpServerSetupPromise]);
     
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
     const toolStubs = serverCapabilities.tools || {};
@@ -589,6 +609,7 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     
     if (process.env.NODE_ENV === 'test') {
       logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");
+      // No explicit resolve here, function completes normally if no errors
     } else {
       // Original block
       await new Promise<void>((resolve) => {
@@ -600,12 +621,14 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     }
 
   } catch (error: unknown) {
-    const err = error as Error;
+    const err = error instanceof ServerStartupError ? error : error as Error;
     logger.error("Failed to start CodeCompass", { message: err.message });
-    if (process.env.NODE_ENV === 'test') { // Add this condition
+    if (process.env.NODE_ENV === 'test') { 
       throw err; // Re-throw in test env to be caught by test assertions
     }
-    process.exit(1);
+    // Determine exit code from ServerStartupError if possible
+    const exitCode = error instanceof ServerStartupError ? error.exitCode : 1;
+    process.exit(exitCode);
   }
 }
 
