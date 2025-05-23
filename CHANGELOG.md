@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
++- **Build & Unit Test Errors (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
++    - Resolved `TypeError: ResourceTemplate is not a constructor` in `src/tests/server.test.ts` by adding a mock for `ResourceTemplate` to the `@modelcontextprotocol/sdk/server/mcp.js` mock.
++    - Fixed TypeScript error `TS2304: Cannot find name 'net'` by importing `net` in `src/tests/server.test.ts`.
++    - Corrected `mockExistingServerStatus` in `server.test.ts` by removing the `version` property, as `IndexingStatusReport` does not define it. The test now correctly asserts the version obtained from the `/api/ping` mock.
++    - Ensured correct usage of `MockInstance` and `Mock` types from `vitest`.
 +- **Build & Unit Test Errors (server.test.ts - Syntax Error & Mocking Stabilization) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
 +    - Resolved persistent `esbuild` error "Expected ")" but found "else"" and subsequent TypeScript compilation errors in `src/tests/server.test.ts` by removing a syntactically incorrect code block from the `beforeEach` hook of the "Server Startup and Port Handling" test suite.
 +    - Stabilized mocking for `McpServer.connect` by introducing a top-level stable mock function (`mcpConnectStableMock`) and using it in the `McpServer` mock factory.
@@ -44,9 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 +    - Fixed TypeScript errors `TS2345` & `TS2352` for `process.exit` mock by using a specifically typed mock function: `vi.fn<[number?], never>()`.
 +    - Addressed TypeScript error `TS2322` for `mockHttpServer` assignment by refining its type definition to accurately represent an `http.Server` whose methods are `MockInstance`s.
 +    - Fixed TypeScript error `TS2503` (`Cannot find namespace 'vi'`) by correctly importing the `Mock` type from `vitest` for casting.
- - **Unit Test & Build Errors (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
-     - Resolved runtime error `TypeError: vi.mocked(...).mockReturnValue is not a function` in `src/tests/server.test.ts` by directly casting `http.createServer` to `vi.Mock` and calling `mockReturnValue` on it, bypassing issues with `vi.mocked()`.
-     - Fixed TypeScript error `TS2345` for `process.exit` mock in `src/tests/server.test.ts` by casting `vi.fn()` to the expected `(code?: number) => never` signature.
++- **Unit Test & Build Errors (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
++    - Resolved runtime error `TypeError: vi.mocked(...).mockReturnValue is not a function` in `src/tests/server.test.ts` by directly casting `http.createServer` to `vi.Mock` and calling `mockReturnValue` on it, bypassing issues with `vi.mocked()`.
++    - Fixed TypeScript error `TS2345` for `process.exit` mock in `src/tests/server.test.ts` by casting `vi.fn()` to the expected `(code?: number) => never` signature.
     - Addressed TypeScript error `TS2345` concerning `http.Server` type compatibility in `src/tests/server.test.ts` by enhancing the `mockHttpServer` object with more properties common to `http.Server` and using a type assertion (`as unknown as http.Server`).
 - **Test Failure (`config-service.test.ts`):** (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
     - Corrected the test `ConfigService > should persist model configuration when setSuggestionModel is called` in `src/tests/lib/config-service.test.ts`.

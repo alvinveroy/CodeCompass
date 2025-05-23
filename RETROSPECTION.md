@@ -1,3 +1,26 @@
+# Retrospection for Build/Test Fixes (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The primary error `TypeError: ResourceTemplate is not a constructor` clearly pointed to a missing mock in `src/tests/server.test.ts`.
+- Identifying the need to import `net` for `net.ListenOptions` was straightforward once the TypeScript error `TS2304` appeared.
+- Reviewing the `IndexingStatusReport` type and the `server.ts` logic for how an existing server's version is obtained (via `/api/ping`) helped correct the `mockExistingServerStatus` and related assertions.
+- The existing test structure and mock setup for `http`, `axios`, and `configService` were largely robust and only needed minor adjustments related to these specific errors.
+
+## What could be improved?
+- **Initial Mock Completeness:** When mocking an external SDK module like `@modelcontextprotocol/sdk/server/mcp.js`, it's beneficial to review its exports and mock all entities used by the SUT (System Under Test) from the outset, rather than discovering missing mocks one by one through test failures.
+- **Type Alignment in Mocks:** Ensuring that mock data structures (like `mockExistingServerStatus`) precisely align with the actual types they represent (`IndexingStatusReport`) is crucial for test accuracy.
+
+## What did we learn?
+- Test failures are valuable indicators of discrepancies between the SUT's expectations and the test environment's provisions (e.g., missing mocks).
+- Careful attention to TypeScript errors is key to resolving type-related issues in tests.
+- When mocking interactions with external services or other instances of the application (like the EADDRINUSE scenario), the mock responses must accurately reflect the data contracts and information flow of the actual interaction. For example, understanding that the version of an existing server comes from its `/api/ping` endpoint, not its `/api/indexing-status` report.
+
+## Action Items / Follow-ups
+- When adding new dependencies or using new features from existing SDKs, proactively update the corresponding mocks in tests to include any newly utilized exports.
+- During test writing or debugging, always cross-reference mock data structures with their actual TypeScript type definitions to ensure alignment.
+
+---
+
 # Retrospection for Build/Test Fixes (server.test.ts - Syntax Error & Mocking Stabilization) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?

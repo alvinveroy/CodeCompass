@@ -5,6 +5,7 @@ import type * as httpModule from 'http'; // For types
 // Import actual modules to be mocked
 import http from 'http';
 import axios from 'axios'; // Import axios
+import * as net from 'net'; // For net.ListenOptions
 
 // Define stable mock for McpServer.connect
 const mcpConnectStableMock = vi.fn(); 
@@ -16,7 +17,11 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
     tool: vi.fn(),
     resource: vi.fn(),
     prompt: vi.fn(), // Added prompt mock
-  }))
+  })),
+  ResourceTemplate: vi.fn().mockImplementation((uriTemplate, _options) => {
+    // Basic mock for ResourceTemplate constructor
+    return { uriTemplate };
+  })
 }));
 
 // Corrected mock path for configService and logger
@@ -421,7 +426,7 @@ describe('Server Startup and Port Handling', () => {
       // Mock axios.get specifically for this test
       vi.mocked(axios.get).mockImplementation(async (url: string) => {
         if (url.endsWith('/api/ping')) {
-          return { status: 200, data: { service: "CodeCompass", status: "ok", version: mockExistingServerStatus.version } };
+          return { status: 200, data: { service: "CodeCompass", status: "ok", version: existingServerPingVersion } };
         }
         if (url.endsWith('/api/indexing-status')) {
           return { status: 200, data: mockExistingServerStatus };
@@ -436,7 +441,7 @@ describe('Server Startup and Port Handling', () => {
       expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/indexing-status`, { timeout: 1000 });
       
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
-      expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${mockExistingServerStatus.version}`));
+      expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerPingVersion}`)); // Use version from ping
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Progress: ${mockExistingServerStatus.overallProgress}%`));
       
