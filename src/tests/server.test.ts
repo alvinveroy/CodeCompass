@@ -366,7 +366,7 @@ describe('Server Startup and Port Handling', () => {
     vi.clearAllMocks(); 
 
     // Mock process.exit for each test
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number): never => { // Ensure it's `never`
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number | string | null | undefined): never => {
       throw new Error(`process.exit called with ${code ?? 'unknown code'}`);
     });
 
@@ -553,6 +553,8 @@ describe('Server Startup and Port Handling', () => {
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port'));
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
+    // Add this new expectation for the log from the main catch block
+    expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({ message: `Port ${mcs.HTTP_PORT} in use or ping failed.` }));
     expect(mockedMcpServerConnect).not.toHaveBeenCalled(); // MCP server should not connect
   });
 
