@@ -127,11 +127,16 @@ const mockHttpServerInstance = {
 
 vi.mock('http', async (importOriginal) => {
   const actualHttpModule = await importOriginal() as typeof httpModule;
-  return {
+  const mockHttpMethods = {
     createServer: vi.fn(() => mockHttpServerInstance),
     Server: vi.fn(() => mockHttpServerInstance) as unknown as typeof httpModule.Server, // Mock constructor
     IncomingMessage: actualHttpModule.IncomingMessage, // Preserve actual types if needed
     ServerResponse: actualHttpModule.ServerResponse,   // Preserve actual types if needed
+    // Add any other http members that server.ts might use directly from the http import
+  };
+  return {
+    ...mockHttpMethods, // Makes methods available for `import * as http from 'http'`
+    default: mockHttpMethods, // This is what `import http from 'http'` will resolve to
   };
 });
 
