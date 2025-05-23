@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
++- **Unit Test & Build Errors (server.test.ts - Final Round) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
++    - Corrected runtime error `TypeError: default.default.createServer.mockReturnValue is not a function` by ensuring `http.default.createServer` is used to set mock return values, matching the mock factory structure.
++    - Fixed TypeScript errors for `process.exit` mock by using `vi.fn() as (code?: number) => never`.
++    - Resolved TypeScript errors `TS2707` for `Mock` type by providing the full function signature as a single type argument (e.g., `Mock<typeof http.Server.prototype.listen>`).
++    - Addressed TypeScript error `TS2339` (`Property 'default' does not exist on type 'typeof import("http")'`) by ensuring the `http` mock factory explicitly types its `default` export structure.
 +- **Unit Test & Build Errors (server.test.ts - Round 3) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
 +    - Corrected runtime error `TypeError: default.default.createServer.mockReturnValue is not a function` by ensuring `http.default.createServer` is used to set mock return values.
 +    - Fixed TypeScript errors for `process.exit` mock by using `vi.fn() as (code?: number) => never`.

@@ -1,3 +1,27 @@
+# Retrospection for Test/Build Fixes (server.test.ts - Mocking & Typing Final Round) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The runtime error `default.default.createServer...` was correctly identified as an incorrect mock access path.
+- TypeScript errors for `Mock` generic arguments (`TS2707`) and `process.exit` typing were addressed with more precise type definitions.
+- The `TS2339` error regarding `http.default` was a key indicator that the mock factory's return type needed to be more explicit about its `default` export structure to satisfy TypeScript's static analysis of `import http from 'http'`.
+
+## What could be improved?
+- **Mock Factory Typing:** When mocking modules with default exports, especially built-ins under `esModuleInterop`, the mock factory's return type must meticulously match the structure TypeScript expects for the default import. Using `satisfies Partial<typeof http>` on the mock factory's return can help catch structural mismatches earlier.
+- **Vitest Generic Types:** The usage of Vitest's generic types like `Mock` (expecting `Mock<FunctionSignature>`) needs to be consistently applied.
+
+## What did we learn?
+- **`http.default.createServer` Access Path:** This was confirmed as the correct path given the mock factory structure and `import http from 'http'`.
+- **Typing `Mock<FunctionSignature>`:** The `Mock` type from Vitest generally expects a single type argument representing the entire signature of the function being mocked (e.g., `typeof http.createServer` or `typeof http.Server.prototype.listen`).
+- **`process.exit` Mock:** `vi.fn() as (code?: number) => never` remains a stable way to type this.
+- **Explicit Mock Factory Return Types:** For complex mocks, especially those involving `default` exports, explicitly typing the return value of the `vi.mock` factory (or using `satisfies`) can help TypeScript validate the mock's structure against the module's expected shape.
+
+## Action Items / Follow-ups
+- Review all `vi.mock` factories for built-in or CJS modules to ensure their return types (especially `default` exports) are explicitly typed or use `satisfies` to align with TypeScript's expectations for `import X from 'module'` or `import * as X from 'module'`.
+- Standardize the use of `Mock<FunctionSignature>` for typing mocked functions.
+- If `Property 'default' does not exist on type 'typeof import("...")'` errors occur, the primary suspect should be the mock factory's return type for the `default` export.
+
+---
+
 # Retrospection for Test/Build Fixes (server.test.ts - Mocking & Typing Round 3) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
