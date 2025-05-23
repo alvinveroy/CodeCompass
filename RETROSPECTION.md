@@ -1,21 +1,24 @@
-# Retrospection for Test/Build Fixes (server.test.ts - Unhandled Errors & Mock Signatures) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+# Retrospection for Test/Build Fixes (server.test.ts - Unhandled Errors, Mock Behavior & Assertions) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-+ The Vitest error logs clearly indicated "Unhandled Errors" and "Uncaught Exception", pointing towards issues with how errors (specifically from the `process.exit` mock) were propagating.
-+ The TypeScript error `TS2345` for the `process.exit` mock signature was specific and actionable.
++ Identifying that the main `catch` block in `startServer` was re-triggering the throwing `process.exit` mock was key to solving the unhandled errors.
++ The TypeScript error for the `process.exit` mock signature was straightforward to fix.
++ Recognizing that the `httpServer.listen` mock needed to execute its callback resolved the missing log assertion.
 
 ## What could be improved?
-+ **Interaction of Global Handlers and Mocked `process.exit`:** The interaction where global error handlers in the SUT (`src/lib/server.ts`) also call `process.exit`, which is mocked to throw in tests, created a loop of unhandled errors. This interaction should have been anticipated when deciding to make the `process.exit` mock throw.
-+ **Mock Signature Accuracy:** The `process.exit` mock signature was initially too restrictive. Ensuring mock signatures closely match the actual function signatures, especially for built-in Node.js functions, is important for TypeScript compatibility.
++ **Holistic Error Flow in Tests:** When mocking functions that terminate processes (like `process.exit`) to throw errors, it's crucial to consider how those errors propagate through the SUT, including its own error handling blocks (like main `try...catch`). The SUT's error handling might also need test-specific adjustments.
++ **Mock Completeness for Callbacks:** Mocks for functions that accept callbacks (like `httpServer.listen`) must often be implemented to actually *invoke* those callbacks for dependent logic to execute and be testable.
++ **Assertion Precision for Multiple Logs:** When a sequence of events produces multiple log calls of the same type (e.g., multiple `ml.error`), assertions need to be specific enough to target the correct log or verify all expected logs in order.
 
 ## What did we learn?
-+ **Global Error Handlers in Tests:** When testing code that includes global error handlers (like `process.on('uncaughtException')`), these handlers can interfere with test assertions if they also perform actions like `process.exit()`. It's often necessary to conditionally disable parts of these handlers in a test environment (e.g., via `NODE_ENV`).
-+ **Error Propagation in Tests:** When a mock throws an error (like our `process.exit` mock), this error will propagate. If the SUT catches this error and then calls `process.exit` again (via a global handler), the mock will throw again, leading to unhandled errors if not managed.
-+ **TypeScript and Mock Signatures:** `vi.spyOn` infers the signature of the original function. The mock implementation's signature must be compatible.
++ Modifying the SUT's main error handling for test environments (e.g., re-throwing instead of exiting) can be necessary to prevent test infrastructure from misinterpreting errors.
++ Tests for functions that should terminate early (e.g., due to `process.exit`) must ensure that subsequent actions (like `McpServer.connect`) are indeed not performed. This is often verified by ensuring the `process.exit` mock effectively stops execution flow.
++ The signature for `process.exit` in Node.js is `(code?: number) => never`.
 
 ## Action Items / Follow-ups
-+ When using throwing mocks for functions like `process.exit`, consider the impact on global error handlers within the SUT and adjust them for test environments if necessary.
-+ Always ensure mock function signatures in TypeScript are as close as possible to, or compatible with, the original function's signature.
++ When tests report unhandled errors after a mock throws, investigate if the SUT's own error handling is re-triggering the throwing mock.
++ Ensure mocks for functions with callbacks correctly simulate callback execution if downstream logic depends on it.
++ For tests involving multiple similar log calls, use `toHaveBeenCalledWith(expect.stringContaining(...))` for each distinct expected log message to ensure all are present.
 
 ---
 # Retrospection for Build/Test Fixes (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])

@@ -602,6 +602,9 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
   } catch (error: unknown) {
     const err = error as Error;
     logger.error("Failed to start CodeCompass", { message: err.message });
+    if (process.env.NODE_ENV === 'test') { // Add this condition
+      throw err; // Re-throw in test env to be caught by test assertions
+    }
     process.exit(1);
   }
 }

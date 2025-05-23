@@ -110,7 +110,14 @@ vi.mock('isomorphic-git', async (importOriginal) => {
 
 // --- START: vi.mock for 'http' and related definitions ---
 // Define shared mock function instances for the http server methods
-const mockHttpServerListenFn = vi.fn<(...args: Parameters<httpModule.Server['listen']>) => ReturnType<httpModule.Server['listen']>>();
+const mockHttpServerListenFn = vi.fn((_port, listeningListenerOrHostname?: (() => void) | string, _backlog?: number, listeningListener?: () => void) => {
+  if (typeof listeningListenerOrHostname === 'function') {
+    listeningListenerOrHostname(); // Call the listener if it's the second argument
+  } else if (typeof listeningListener === 'function') {
+    listeningListener(); // Call the listener if it's the fourth argument
+  }
+  return mockHttpServerInstance; // Return the mock server instance
+}) as Mock<(...args: Parameters<httpModule.Server['listen']>) => ReturnType<httpModule.Server['listen']>>;
 const mockHttpServerOnFn = vi.fn<(event: string | symbol, listener: (...args: any[]) => void) => httpModule.Server>();
 const mockHttpServerCloseFn = vi.fn<(...args: Parameters<httpModule.Server['close']>) => ReturnType<httpModule.Server['close']>>();
 const mockHttpServerAddressFn = vi.fn<(...args: Parameters<httpModule.Server['address']>) => ReturnType<httpModule.Server['address']>>();
@@ -359,7 +366,7 @@ describe('Server Startup and Port Handling', () => {
     vi.clearAllMocks(); 
 
     // Mock process.exit for each test
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number | string | null) => { // Make signature more permissive
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number) => { // Correct signature
       throw new Error(`process.exit called with ${code ?? 'unknown code'}`);
     });
 
@@ -526,7 +533,8 @@ describe('Server Startup and Port Handling', () => {
     await expect(startServer('/fake/repo')).rejects.toThrow('process.exit called with 1');
 
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`));
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port')); // Specific message for ECONNREFUSED
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Connection refused on port'));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Please free the port or configure a different one'));
     expect(mockProcessExit).toHaveBeenCalledWith(1);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled(); // MCP server should not connect
   });
