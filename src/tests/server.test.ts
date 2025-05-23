@@ -385,26 +385,65 @@ describe('Server Startup and Port Handling', () => {
 
     expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
     expect(http.createServer).toHaveBeenCalled();
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mockedConfigService.HTTP_PORT, expect.any(Function));
-    expect(mockedLogger.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mockedConfigService.HTTP_PORT} for status and notifications.`);
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function)); // Changed mockedConfigService to mcs
+    expect(ml.info).toHaveBeenCalledWith(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`); // Changed mockedLogger to ml and mockedConfigService to mcs
     expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
     expect(mockProcessExit).not.toHaveBeenCalled();
   });
-    await startServer('/fake/repo');
-    
-    expect(ml.warn).toHaveBeenCalledWith(`HTTP Port ${mcs.HTTP_PORT} is already in use. Attempting to ping...`);
-    expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/ping`, { timeout: 500 });
-    expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/indexing-status`, { timeout: 1000 });
-    
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${mockExistingServerStatus.version}`)); // Use version from status
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
-    expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Progress: ${mockExistingServerStatus.overallProgress}%`));
-    
-    expect(ml.info).toHaveBeenCalledWith("Current instance will exit as another CodeCompass server is already running.");
-    expect(mockProcessExit).toHaveBeenCalledWith(0); // Graceful exit
-    expect(mockedMcpServerConnect).not.toHaveBeenCalled(); // MCP server should not connect
-  });
+    // Add the new 'it' block here, starting around line 395 of your provided file content
+    it('should handle EADDRINUSE, detect existing CodeCompass server, log status, and exit with 0', async () => {
+      // Define the mock status for an existing server
+      const mockExistingServerStatus: IndexingStatusReport = {
+        version: 'existing-test-version',
+        status: 'idle',
+        message: 'Existing server idle',
+        overallProgress: 100,
+        lastUpdatedAt: new Date().toISOString(),
+      };
+
+      mockHttpServerListenFn.mockImplementation(
+        (
+          _portOrOptions?: number | string | net.ListenOptions | null,
+          _hostnameOrListener?: string | (() => void),
+          _backlogOrListener?: number | (() => void),
+          _listeningListener?: () => void
+        ): httpModule.Server => {
+          const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
+          if (errorArgs && typeof errorArgs[1] === 'function') {
+            const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
+            const error = new Error('listen EADDRINUSE: address already in use') as NodeJS.ErrnoException;
+            error.code = 'EADDRINUSE';
+            errorHandler(error);
+          }
+          return mockHttpServerInstance;
+        });
+
+      // Mock axios.get specifically for this test
+      vi.mocked(axios.get).mockImplementation(async (url: string) => {
+        if (url.endsWith('/api/ping')) {
+          return { status: 200, data: { service: "CodeCompass", status: "ok", version: mockExistingServerStatus.version } };
+        }
+        if (url.endsWith('/api/indexing-status')) {
+          return { status: 200, data: mockExistingServerStatus };
+        }
+        return { status: 404, data: {} }; // Default for other calls
+      });
+
+      await startServer('/fake/repo');
+      
+      expect(ml.warn).toHaveBeenCalledWith(`HTTP Port ${mcs.HTTP_PORT} is already in use. Attempting to ping...`);
+      expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/ping`, { timeout: 500 });
+      expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/indexing-status`, { timeout: 1000 });
+      
+      expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
+      expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${mockExistingServerStatus.version}`));
+      expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
+      expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Progress: ${mockExistingServerStatus.overallProgress}%`));
+      
+      expect(ml.info).toHaveBeenCalledWith("Current instance will exit as another CodeCompass server is already running.");
+      expect(mockProcessExit).toHaveBeenCalledWith(0);
+      expect(mockedMcpServerConnect).not.toHaveBeenCalled();
+    });
 
   it('should handle EADDRINUSE, detect a non-CodeCompass server, log error, and exit with 1', async () => {
     mockHttpServerListenFn.mockImplementation(
