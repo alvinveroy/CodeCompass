@@ -1,3 +1,24 @@
+# Retrospection for HTTP Server Port Conflict (EADDRINUSE) Handling (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- Successfully identified a common runtime issue (`EADDRINUSE` when the HTTP port is occupied).
+- Implemented a specific error handler in `src/lib/server.ts` for the HTTP server's `listen` method.
+- The error message provided to the user is informative, guiding them on how to resolve the port conflict (freeing the port or reconfiguring).
+- The server now exits gracefully with a clear log message instead of an unhandled exception.
+
+## What could be improved?
+- For future enhancements, the server could attempt to listen on an alternative (e.g., incremented) port if the configured one is busy. However, this would require a mechanism to inform the client/user of the new port, adding complexity. For now, exiting is a robust and simple solution.
+- The logging for `EADDRINUSE` could include which application is using the port, if discoverable by the OS (though this is often platform-specific and non-trivial).
+
+## What did we learn?
+- Specific error handling for critical operations like starting network listeners is crucial for robust server applications.
+- Providing clear, actionable error messages significantly improves user experience when encountering common configuration or environmental issues.
+- It's important to ensure logs are flushed before exiting, especially with asynchronous loggers, although `process.exit(1)` often allows for this.
+
+## Action Items / Follow-ups
+- Monitor user feedback for any issues related to port conflicts to see if more advanced handling (like trying alternative ports) becomes necessary.
+- Ensure documentation (e.g., README) clearly states how to configure `HTTP_PORT`.
+
 # Retrospection for Background Indexing & Status Reporting (Git Commit ID: [Previous Git Commit ID])
 
 ## What went well?

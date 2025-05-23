@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **HTTP Server Port Conflict (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Added error handling in `src/lib/server.ts` to detect if the configured `HTTP_PORT` is already in use (`EADDRINUSE`). The server will now log a specific error message and exit gracefully instead of crashing.
 - **ESLint Errors & Code Quality (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved `@typescript-eslint/require-await` error in `src/lib/server.ts` by ensuring the `get_session_history` tool handler is synchronous as it contains no `await` expressions.
     - Addressed various `@typescript-eslint/no-unsafe-*` errors in `src/lib/server.ts` related to Express app setup by:

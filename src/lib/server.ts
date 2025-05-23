@@ -488,6 +488,20 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     const httpPort = configService.HTTP_PORT; // Read from configService
      
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
+
+    httpServer.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE') {
+        logger.error(`HTTP Port ${httpPort} is already in use. Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
+        // Ensure logs are flushed before exiting if logger is asynchronous.
+        // For winston, this might involve waiting for a 'finish' event on transports or using logger.end().
+        // For simplicity and common behavior, process.exit(1) is used.
+        process.exit(1);
+      } else {
+        logger.error(`Failed to start HTTP server on port ${httpPort}: ${error.message}`);
+        process.exit(1);
+      }
+    });
+
     httpServer.listen(httpPort, () => {
       logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
     });
