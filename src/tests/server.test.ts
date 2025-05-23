@@ -359,7 +359,7 @@ describe('Server Startup and Port Handling', () => {
     vi.clearAllMocks(); 
 
     // Mock process.exit for each test
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number) => {
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code?: number | string | null) => { // Make signature more permissive
       throw new Error(`process.exit called with ${code ?? 'unknown code'}`);
     });
 

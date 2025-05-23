@@ -1,23 +1,21 @@
-# Retrospection for Test/Build Fixes (server.test.ts - process.exit Mocking, Assertions & Vitest Types) (Git Commit ID: cdfb314)
+# Retrospection for Test/Build Fixes (server.test.ts - Unhandled Errors & Mock Signatures) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
- Identifying that `mockProcessExit` not halting execution was the root cause of several `mockedMcpServerConnect.not.toHaveBeenCalled()` failures was key.
- The solution to make `mockProcessExit` throw an error is a robust way to simulate process termination in tests.
- Correcting the `Mock` generic type usage (`Mock<(...args: A) => R>`) resolved the TypeScript errors.
++ The Vitest error logs clearly indicated "Unhandled Errors" and "Uncaught Exception", pointing towards issues with how errors (specifically from the `process.exit` mock) were propagating.
++ The TypeScript error `TS2345` for the `process.exit` mock signature was specific and actionable.
 
 ## What could be improved?
- **Mocking `process.exit`:** The initial mock for `process.exit` (`vi.fn()`) didn't stop code flow. This is a common pitfall. Recognizing this earlier would have saved time.
- **Assertion Specificity:** The `ml.info` assertion was too broad. Using `stringContaining` or more targeted assertions based on specific events (like the HTTP server's `listening` event callback) can make tests less brittle.
++ **Interaction of Global Handlers and Mocked `process.exit`:** The interaction where global error handlers in the SUT (`src/lib/server.ts`) also call `process.exit`, which is mocked to throw in tests, created a loop of unhandled errors. This interaction should have been anticipated when deciding to make the `process.exit` mock throw.
++ **Mock Signature Accuracy:** The `process.exit` mock signature was initially too restrictive. Ensuring mock signatures closely match the actual function signatures, especially for built-in Node.js functions, is important for TypeScript compatibility.
 
 ## What did we learn?
- **Simulating `process.exit`:** To truly stop execution flow in a test when `process.exit()` is called in the SUT, the mock must throw an error. The test should then assert this throw.
- **Order of Operations in Async Code:** When testing asynchronous functions, the order of mock calls and assertions is critical. Failures in `*.not.toHaveBeenCalled()` often mean the SUT proceeded further than expected.
- **Vitest `Mock` Generic:** The `Mock` type from Vitest expects a single type argument, which is the entire function signature (e.g., `(...args: string[]) => number`).
++ **Global Error Handlers in Tests:** When testing code that includes global error handlers (like `process.on('uncaughtException')`), these handlers can interfere with test assertions if they also perform actions like `process.exit()`. It's often necessary to conditionally disable parts of these handlers in a test environment (e.g., via `NODE_ENV`).
++ **Error Propagation in Tests:** When a mock throws an error (like our `process.exit` mock), this error will propagate. If the SUT catches this error and then calls `process.exit` again (via a global handler), the mock will throw again, leading to unhandled errors if not managed.
++ **TypeScript and Mock Signatures:** `vi.spyOn` infers the signature of the original function. The mock implementation's signature must be compatible.
 
 ## Action Items / Follow-ups
- Document the pattern of mocking `process.exit` to throw an error for tests that need to verify termination paths.
- Review other tests that mock `process.exit` to ensure they correctly simulate execution stoppage.
- When logger assertions are brittle, consider using `stringContaining` or tying assertions to more specific events rather than general log calls.
++ When using throwing mocks for functions like `process.exit`, consider the impact on global error handlers within the SUT and adjust them for test environments if necessary.
++ Always ensure mock function signatures in TypeScript are as close as possible to, or compatible with, the original function's signature.
 
 ---
 # Retrospection for Build/Test Fixes (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])

@@ -74,14 +74,18 @@ export async function startServer(repoPath: string): Promise<void> {
     // Mandatory exit after uncaught exception
     // Ensure logs are flushed before exiting if logger is asynchronous.
     // For simplicity here, assuming logger.error is synchronous enough or process.exit will allow flushing.
-    process.exit(1); 
+    if (process.env.NODE_ENV !== 'test') { // Add this condition
+      process.exit(1); 
+    }
   });
 
   process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
     logger.error('UNHANDLED PROMISE REJECTION:', { reason, promise });
     // Optionally, exit or take other measures. For robustness, exiting is often safer.
     // Ensure logs are flushed.
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'test') { // Add this condition
+      process.exit(1);
+    }
   });
   
   logger.info("Starting CodeCompass MCP server...");
