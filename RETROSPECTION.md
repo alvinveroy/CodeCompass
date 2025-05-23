@@ -1,23 +1,23 @@
-# Retrospection for Test/Build Fixes (server.test.ts - Timeouts & Vitest Types) (Git Commit ID: 1d7c9d7)
+# Retrospection for Test/Build Fixes (server.test.ts - process.exit Mocking, Assertions & Vitest Types) (Git Commit ID: cdfb314)
 
 ## What went well?
-- The test timeout messages clearly indicated that asynchronous operations in `startServer` were not completing.
-- TypeScript errors for `vi.Mock` and `MockInstance` were clear and easy to fix once the correct type names and usage were identified.
-- The solution of checking `process.env.NODE_ENV` in `startServer` is a standard way to alter behavior for test environments.
+ Identifying that `mockProcessExit` not halting execution was the root cause of several `mockedMcpServerConnect.not.toHaveBeenCalled()` failures was key.
+ The solution to make `mockProcessExit` throw an error is a robust way to simulate process termination in tests.
+ Correcting the `Mock` generic type usage (`Mock<(...args: A) => R>`) resolved the TypeScript errors.
 
 ## What could be improved?
-- **Identifying Infinite Waits:** The `new Promise` waiting for `SIGINT` in `startServer` is a common pattern for keeping a server alive, but it's an immediate cause of timeouts in tests if not handled. This should be anticipated when testing server startup logic.
-- **Test Environment Configuration:** Setting `NODE_ENV=test` should be a standard practice for test suites that interact with code sensitive to this environment variable.
+ **Mocking `process.exit`:** The initial mock for `process.exit` (`vi.fn()`) didn't stop code flow. This is a common pitfall. Recognizing this earlier would have saved time.
+ **Assertion Specificity:** The `ml.info` assertion was too broad. Using `stringContaining` or more targeted assertions based on specific events (like the HTTP server's `listening` event callback) can make tests less brittle.
 
 ## What did we learn?
-- **Server Lifecycle in Tests:** Functions that intentionally block or wait for external signals (like `SIGINT`) need special handling in automated tests to prevent hangs. Modifying behavior based on `NODE_ENV` is a common and effective technique.
-- **Vitest Types:** `Mock` should be imported from `vitest`. `MockInstance` is a generic type that usually takes 0 or 1 type argument (the function signature if needed, or can be left empty for `any`).
-- Test timeouts often point to unfulfilled promises or unterminated asynchronous operations within the SUT or the test itself.
+ **Simulating `process.exit`:** To truly stop execution flow in a test when `process.exit()` is called in the SUT, the mock must throw an error. The test should then assert this throw.
+ **Order of Operations in Async Code:** When testing asynchronous functions, the order of mock calls and assertions is critical. Failures in `*.not.toHaveBeenCalled()` often mean the SUT proceeded further than expected.
+ **Vitest `Mock` Generic:** The `Mock` type from Vitest expects a single type argument, which is the entire function signature (e.g., `(...args: string[]) => number`).
 
 ## Action Items / Follow-ups
-- When testing functions with indefinite waits (e.g., server listen loops, signal waits), ensure there's a mechanism to bypass or resolve these waits in the test environment.
-- Ensure consistent use of imported Vitest types (`Mock`, `MockInstance`) in type annotations.
-- Standardize setting `NODE_ENV=test` in `beforeEach` for relevant test suites.
+ Document the pattern of mocking `process.exit` to throw an error for tests that need to verify termination paths.
+ Review other tests that mock `process.exit` to ensure they correctly simulate execution stoppage.
+ When logger assertions are brittle, consider using `stringContaining` or tying assertions to more specific events rather than general log calls.
 
 ---
 # Retrospection for Build/Test Fixes (server.test.ts - Mocking & Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
