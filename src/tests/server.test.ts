@@ -12,7 +12,7 @@ const mcpConnectStableMock = vi.fn();
 
 // Mock dependencies
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as typeof import('@modelcontextprotocol/sdk/server/mcp.js');
   return {
     ...actual,
     McpServer: vi.fn().mockImplementation(() => ({
@@ -30,7 +30,7 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
 
 // Corrected mock path for configService and logger
 vi.mock('../lib/config-service', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as typeof import('../lib/config-service');
   return {
     ...actual, // Spread actual to keep non-mocked parts if any, or specific exports
     configService: {
@@ -101,7 +101,7 @@ vi.mock('../lib/repository', async (importOriginal) => {
 });
 
 vi.mock('isomorphic-git', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as typeof import('isomorphic-git');
   return {
     ...actual, // Keep actual exports
     default: { // Mock the default export if that's what's used
@@ -139,7 +139,7 @@ const mockHttpServerInstance = {
 } as unknown as httpModule.Server; // Cast to satisfy http.Server type
 
 vi.mock('http', async (importOriginal) => {
-  const actualHttpModule = await importOriginal();
+  const actualHttpModule = await importOriginal() as typeof httpModule; // Ensure httpModule is imported as type
   const mockHttpMethods = {
     createServer: vi.fn(() => mockHttpServerInstance),
     Server: vi.fn(() => mockHttpServerInstance) as unknown as typeof httpModule.Server, // Mock constructor
@@ -170,7 +170,7 @@ vi.mock('../lib/version', () => ({
 import type { LLMProvider } from '../lib/llm-provider';
 // Mock for ../lib/llm-provider
 vi.mock('../lib/llm-provider', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as typeof import('../lib/llm-provider');
   return {
     ...actual,
     getLLMProvider: vi.fn<() => Promise<Partial<LLMProvider>>>().mockResolvedValue({
@@ -185,7 +185,7 @@ vi.mock('../lib/llm-provider', async (importOriginal) => {
 // Mock fs/promises for server.ts if it uses it directly (e.g. for reading changelog)
 import fs from 'fs'; // Or import type { PathOrFileDescriptor, ObjectEncodingOptions } from 'fs';
 vi.mock('fs/promises', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as typeof import('fs/promises');
   return {
     ...actual,
     readFile: vi.fn<(path: fs.PathOrFileDescriptor, options?: fs.ObjectEncodingOptions | BufferEncoding | null) => Promise<string | Buffer>>().mockResolvedValue('mock file content'),

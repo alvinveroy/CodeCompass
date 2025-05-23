@@ -83,6 +83,27 @@
 - Establish a strict convention to always type the result of `await importOriginal()` in `vi.mock` factories.
 - When encountering TS2698 or TS18046 in mock factories, the first step should be to verify the typing of `importOriginal()`.
 - After fixing build errors, re-run ESLint with `--fix` to clean up any consequential lint issues (like "unnecessary type assertion" if the build fix improved type inference elsewhere).
+
+---
+# Retrospection for Build Fix (server.test.ts - Recurring `importOriginal` Typing) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The TypeScript error messages (TS2698, TS18046) consistently and accurately pointed to the type issue with variables derived from `importOriginal()`.
+- The solution strategy (explicitly casting `await importOriginal()`) is known and correct.
+
+## What could be improved?
+- **Verification of Fixes:** The recurrence of this specific issue suggests that previous applications of the fix might have been incomplete or that changes were inadvertently reverted. A more thorough verification step after applying such fixes, including a clean build, is necessary.
+- **Attention to Detail:** Ensuring that *every* instance of `await importOriginal()` is correctly typed requires careful attention to detail, especially in files with multiple mock factories.
+
+## What did we learn?
+- **`importOriginal()` Typing is Critical:** This issue re-emphasizes that `await importOriginal()` in Vitest/Jest mock factories typically returns `unknown` or `any`. Failing to cast its result to the specific module type (`as typeof import('module-path')`) will consistently lead to TS2698 and TS18046 errors when trying to use the module's exports.
+- **Impact of `unknown` Type:** TypeScript's `unknown` type is effective in preventing unsafe operations. These errors are a direct result of this safety feature.
+- **Build Errors as Primary Indicators:** Build errors from `tsc` are definitive. If they persist after a fix attempt, it means the fix was not correctly or completely applied to all relevant locations.
+
+## Action Items / Follow-ups
+- Re-iterate the importance of meticulously typing the result of `await importOriginal()` in all `vi.mock` factories.
+- After applying fixes for build errors, always perform a clean build (`npm run build` or `tsc`) to confirm resolution before committing.
+- If similar errors appear, the first diagnostic step for `vi.mock` factories should be to check the typing of `await importOriginal()`.
 ---
 
 # Retrospection for Build/Test Fixes (server.test.ts - Syntax Error & Mocking Stabilization) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
