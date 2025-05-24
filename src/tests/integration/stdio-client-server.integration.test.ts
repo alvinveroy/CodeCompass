@@ -201,5 +201,108 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(client.state).toBe('closed');
   }, 40000); // Increased timeout for this test
 
-  // More tests will be added here for search, agent_query, etc.
+  it('should trigger indexing, wait for completion, and perform a search_code', async () => {
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    await waitForServerReady(serverProcess);
+
+    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    const transport = new StdioClientTransport({
+      readableStream: serverProcess.stdout!,
+      writableStream: serverProcess.stdin!,
+    });
+    await client.connect(transport);
+
+    // 1. Trigger indexing (or assume initial indexing will pick it up)
+    // For a more robust test, explicitly trigger and wait.
+    // However, initial indexing might be fast enough for a small repo.
+    // Let's try relying on initial indexing first, then add trigger_repository_update if needed.
+
+    // 2. Wait for indexing to complete by polling get_indexing_status
+    let indexingComplete = false;
+    let attempts = 0;
+    const maxAttempts = 60; // Wait up to 30 seconds (60 * 500ms)
+    while (!indexingComplete && attempts < maxAttempts) {
+      const statusResult = await client.callTool({ name: 'get_indexing_status', arguments: {} });
+      const statusText = statusResult.content![0].text as string;
+      if (statusText.includes("Status: idle") || statusText.includes("Status: completed")) {
+        if (statusText.includes("Overall Progress: 100%")) {
+           indexingComplete = true;
+           console.log("Integration test: Indexing reported as complete.");
+        } else if (statusText.includes("Status: idle") && !statusText.includes("Overall Progress:")) {
+            // Handle older status format or cases where progress might not be 100% but it's idle after initial
+            console.log("Integration test: Indexing reported as idle, assuming complete for test.");
+            indexingComplete = true;
+        }
+      }
+      if (!indexingComplete) {
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 500)); // Poll every 500ms
+      }
+    }
+    if (!indexingComplete) {
+      const finalStatus = await client.callTool({ name: 'get_indexing_status', arguments: {} });
+      console.error("Final indexing status before failing test:", finalStatus.content![0].text);
+      throw new Error(`Indexing did not complete within the timeout. Attempts: ${attempts}`);
+    }
+
+    // 3. Mock Qdrant search response for "Hello from file1"
+    const mockSearchResults = [
+      {
+        id: 'file1.ts-chunk0',
+        score: 0.9,
+        payload: {
+          dataType: 'file_chunk',
+          filepath: 'file1.ts',
+          file_content_chunk: 'console.log("Hello from file1");',
+          chunk_index: 0,
+          total_chunks: 1,
+          last_modified: new Date().toISOString(),
+        },
+      },
+    ];
+    mockQdrantClientInstance.search.mockResolvedValue(mockSearchResults as any); // Cast as any for simplified mock
+
+    // 4. Perform search_code
+    const searchQuery = "Hello from file1";
+    const searchResult = await client.callTool({ name: 'search_code', arguments: { query: searchQuery } });
+    
+    expect(searchResult).toBeDefined();
+    expect(searchResult.content).toBeInstanceOf(Array);
+    const searchResultText = searchResult.content![0].text as string;
+    expect(searchResultText).toContain(`# Search Results for: "${searchQuery}"`);
+    expect(searchResultText).toContain('## file1.ts');
+    expect(searchResultText).toContain('console.log("Hello from file1")');
+    // Check if the mocked LLM summary is present (generateText is mocked)
+    expect(searchResultText).toContain("Mocked LLM response for integration test.");
+
+
+    await client.close();
+  }, 60000); // Increased timeout for indexing and search
+
+  it('should execute agent_query and get a mocked LLM response', async () => {
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    await waitForServerReady(serverProcess);
+
+    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    const transport = new StdioClientTransport({
+      readableStream: serverProcess.stdout!,
+      writableStream: serverProcess.stdin!,
+    });
+    await client.connect(transport);
+    
+    // Ensure LLM generateText is mocked for the agent's synthesis step
+    mockLLMProviderInstance.generateText.mockResolvedValueOnce("This is the agent's plan and summary based on the query about file1.");
+
+    const agentQueryResult = await client.callTool({ name: 'agent_query', arguments: { query: "What is in file1.ts?" } });
+    expect(agentQueryResult).toBeDefined();
+    expect(agentQueryResult.content).toBeInstanceOf(Array);
+    const agentResultText = agentQueryResult.content![0].text as string;
+    
+    // The agent_query response is complex. We check for the final mocked synthesis.
+    // The exact content depends on the agent's internal plan and capabilities it calls.
+    // For this test, we're primarily interested that it ran and the LLM mock was hit for synthesis.
+    expect(agentResultText).toContain("This is the agent's plan and summary based on the query about file1.");
+
+    await client.close();
+  }, 45000);
 });
