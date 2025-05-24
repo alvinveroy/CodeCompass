@@ -151,7 +151,7 @@ describe('CLI with yargs (index.ts)', () => {
       StdioClientTransport: vi.fn().mockImplementation(() => ({ /* mock transport methods if needed */ })),
     }));
     
-    await import('../index.js'); 
+    await import(indexPath); 
 
     // The following block (const declarations, vi.doMock calls, and the second await import) was duplicated and is removed.
     // // Dynamically resolve paths as src/index.ts would
