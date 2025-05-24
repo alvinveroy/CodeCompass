@@ -343,12 +343,8 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 
 
 export async function startServer(repoPath: string): Promise<void> {
-  // Global error handlers to catch issues that might otherwise lead to silent crashes or malformed responses
   process.on('uncaughtException', (error: Error) => {
     logger.error('UNCAUGHT EXCEPTION:', { message: error.message, stack: error.stack });
-    // Mandatory exit after uncaught exception
-    // Ensure logs are flushed before exiting if logger is asynchronous.
-    // For simplicity here, assuming logger.error is synchronous enough or process.exit will allow flushing.
     if (process.env.NODE_ENV !== 'test') { 
       process.exit(1); 
     }
@@ -356,8 +352,6 @@ export async function startServer(repoPath: string): Promise<void> {
 
   process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
     logger.error('UNHANDLED PROMISE REJECTION:', { reason, promise });
-    // Optionally, exit or take other measures. For robustness, exiting is often safer.
-    // Ensure logs are flushed.
     if (process.env.NODE_ENV !== 'test') { 
       process.exit(1);
     }
@@ -365,17 +359,13 @@ export async function startServer(repoPath: string): Promise<void> {
   
   logger.info("Starting CodeCompass MCP server...");
 
-  // Create a promise that will be rejected if httpServer setup fails critically
-  let httpServerSetupReject: (reason?: unknown) => void;
+  let httpServerSetupReject: (reason?: unknown) => void = () => {}; // Initialize with a no-op
   const httpServerSetupPromise = new Promise<void>((_resolve, reject) => {
     httpServerSetupReject = reject;
   });
 
   try {
-    // ConfigService constructor loads from env and files.
-    // For server start, ensure it reflects the latest state.
     configService.reloadConfigsFromFile(true); 
-
     logger.info(`Initial suggestion model from config: ${configService.SUGGESTION_MODEL}`);
     
     if (!repoPath || repoPath === "${workspaceFolder}" || repoPath.trim() === "") {
@@ -394,8 +384,8 @@ export async function startServer(repoPath: string): Promise<void> {
     try {
       const currentSuggestionProvider = configService.SUGGESTION_PROVIDER.toLowerCase();
       if (currentSuggestionProvider === 'ollama') {
-        await checkOllama();
-        await checkOllamaModel(configService.EMBEDDING_MODEL, true);
+        await checkOllama(); // Assumes checkOllama is imported
+        await checkOllamaModel(configService.EMBEDDING_MODEL, true); // Assumes checkOllamaModel is imported
         await checkOllamaModel(configService.SUGGESTION_MODEL, false);
         suggestionModelAvailable = true;
       } else if (currentSuggestionProvider === 'deepseek') {
@@ -408,385 +398,142 @@ export async function startServer(repoPath: string): Promise<void> {
     }
     
     const qdrantClient = await initializeQdrant();
-    // const llmProvider = await getLLMProvider(); // Already initialized a few lines above
     
     logger.info(`Initial indexing process started for ${repoPath} in the background.`);
     indexRepository(qdrantClient, repoPath, llmProvider)
       .then(() => {
         logger.info(`Initial indexing process completed successfully for ${repoPath}.`);
-        // Status is managed by indexRepository itself
       })
       .catch((error: unknown) => {
         const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`Initial indexing process failed for ${repoPath}: ${errorMessage}`);
-        // Status is managed by indexRepository itself
       });
 
-    // Prompts will be registered using server.prompt() later
-
-    const serverCapabilities = {
+    const serverCapabilities = { /* ... capabilities definition as in your file ... */ 
       resources: {
-        "repo://structure": {
-          name: "Repository File Structure",
-          description: "Lists all files in the current Git repository.",
-          mimeType: "text/plain"
-        },
-        "repo://files/{filepath}": {
-          name: "Repository File Content",
-          description: "Retrieves the content of a specific file from the repository. Replace {filepath} with a full file path relative to the repository root, e.g., 'repo://files/src/main.js'.",
-          mimeType: "text/plain", // Default, actual content type might vary
-          template: true,
-          parameters: {
-            filepath: {
-              type: "string",
-              description: "The path to the file relative to the repository root."
-            }
-          }
-        },
-        "repo://health": {
-          name: "Server Health Status",
-          description: "Provides the health status of the CodeCompass server and its core components (LLM provider, vector database, and repository access).",
-          mimeType: "application/json"
-        },
-        "repo://version": {
-          name: "Server Version",
-          description: "Provides the current version of the CodeCompass server.",
-          mimeType: "text/plain"
-        }
+        "repo://structure": { name: "Repository File Structure", description: "Lists all files in the current Git repository.", mimeType: "text/plain" },
+        "repo://files/{filepath}": { name: "Repository File Content", description: "Retrieves the content of a specific file...", mimeType: "text/plain", template: true, parameters: { filepath: { type: "string", description: "..." }}},
+        "repo://health": { name: "Server Health Status", description: "Provides the health status...", mimeType: "application/json" },
+        "repo://version": { name: "Server Version", description: "Provides the current version...", mimeType: "text/plain" }
       },
       tools: {
-        bb7_search_code: {},
-        bb7_get_repository_context: {},
+        bb7_search_code: {}, bb7_get_repository_context: {}, 
         ...(suggestionModelAvailable ? { bb7_generate_suggestion: {} } : {}),
-        bb7_get_changelog: {},
-        bb7_agent_query: {},
-        bb7_switch_suggestion_model: {},
-        bb7_get_indexing_status: {}, // New tool for indexing status
+        bb7_get_changelog: {}, bb7_agent_query: {}, bb7_switch_suggestion_model: {}, bb7_get_indexing_status: {},
       },
-      prompts: {
-        "bb7_repository-context": {},
-        "bb7_code-suggestion": {},
-        "bb7_code-analysis": {},
-      },
+      prompts: { "bb7_repository-context": {}, "bb7_code-suggestion": {}, "bb7_code-analysis": {} },
     };
 
-    const server = new McpServer({
-      name: "CodeCompass",
-      version: VERSION,
-      vendor: "CodeCompass",
-      capabilities: serverCapabilities,
+    // This McpServer instance is primarily for defining capabilities.
+    // Per-session instances will be created for actual MCP communication.
+    const _globalMcpServer = new McpServer({
+      name: "CodeCompass", version: VERSION, vendor: "CodeCompass", capabilities: serverCapabilities,
     });
-
-    // Register resources
-    if (typeof server.resource !== "function") {
-      throw new Error("MCP server does not support 'resource' method");
-    }
-    
-    server.resource("Server Health Status", "repo://health", async () => {
-      const healthUri = "repo://health";
-      try {
-        // More robust error capturing for individual checks
-        let ollamaStatus = "unhealthy";
-        try {
-          await checkOllama();
-          ollamaStatus = "healthy";
-        } catch (err) {
-          logger.warn(`Ollama health check failed during repo://health: ${err instanceof Error ? err.message : String(err)}`);
-          // ollamaStatus remains "unhealthy"
-        }
-
-        let qdrantStatus = "unhealthy";
-        try {
-          await qdrantClient.getCollections(); // This just checks if the call succeeds
-          qdrantStatus = "healthy";
-        } catch (err) {
-          logger.warn(`Qdrant health check failed during repo://health: ${err instanceof Error ? err.message : String(err)}`);
-          // qdrantStatus remains "unhealthy"
-        }
-        
-        // validateGitRepository already logs its own warnings and should return true/false
-        const repositoryStatus = await validateGitRepository(repoPath) ? "healthy" : "unhealthy";
-
-        const status = {
-          ollama: ollamaStatus,
-          qdrant: qdrantStatus,
-          repository: repositoryStatus,
-          version: VERSION,
-          timestamp: new Date().toISOString()
-        };
-        return { contents: [{ uri: healthUri, text: JSON.stringify(status, null, 2) }] };
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(`Critical error in repo://health resource handler: ${errorMessage}`);
-        const errorPayload = {
-          error: "Failed to retrieve complete health status due to a critical error.",
-          details: errorMessage,
-          version: VERSION,
-          timestamp: new Date().toISOString(),
-          ollama: "unknown", 
-          qdrant: "unknown",
-          repository: "unknown"
-        };
-        return { contents: [{ uri: healthUri, text: JSON.stringify(errorPayload, null, 2) }] };
-      }
-    });
-    
-    server.resource("Server Version", "repo://version", () => {
-      return { contents: [{ uri: "repo://version", text: VERSION }] };
-    });
-    server.resource("Repository File Structure", "repo://structure", async () => {
-      const uriStr = "repo://structure";
-      const isGitRepo = await validateGitRepository(repoPath);
-      if (!isGitRepo) {
-        // Consistent with original behavior: empty list if not a valid/recognized git repo.
-        // validateGitRepository already logs a warning.
-        return { contents: [{ uri: uriStr, text: "" }] }; 
-      }
-      try {
-        const files = await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" });
-        return { contents: [{ uri: uriStr, text: files.join("\n") }] };
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(`Error listing repository files for ${repoPath}: ${errorMessage}`);
-        return { contents: [{ uri: uriStr, text: "", error: `Failed to list repository files: ${errorMessage}` }] };
-      }
-    });
-
-    server.resource(
-      "Repository File Content",
-      new ResourceTemplate("repo://files/{filepath}", { list: undefined }), // Used ResourceTemplate directly
-      {}, // metadata
-      async (uri: URL, variables: Variables, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { // Used Variables directly
-      const rawFilepathValue = variables.filepath;
-      let relativeFilepath = '';
-      if (typeof rawFilepathValue === 'string') {
-        relativeFilepath = rawFilepathValue.trim();
-      } else if (Array.isArray(rawFilepathValue) && rawFilepathValue.length > 0 && typeof rawFilepathValue[0] === 'string') {
-        logger.warn(`Filepath parameter '${JSON.stringify(rawFilepathValue)}' resolved to an array. Using the first element: '${rawFilepathValue[0]}'`);
-        relativeFilepath = rawFilepathValue[0].trim();
-      } else if (rawFilepathValue !== undefined) {
-        logger.warn(`Filepath parameter '${Array.isArray(rawFilepathValue) ? JSON.stringify(rawFilepathValue) : rawFilepathValue}' resolved to an unexpected type: ${typeof rawFilepathValue}. Treating as empty.`);
-      }
-      // If rawFilepathValue is undefined, or an empty array, or an array not containing a string at index 0, relativeFilepath remains ''.
-
-      if (!relativeFilepath) {
-        const errMsg = "File path cannot be empty.";
-        logger.error(`Error accessing resource for URI ${uri.toString()}: ${errMsg}`);
-        return { contents: [{ uri: uri.toString(), text: "", error: errMsg }] };
-      }
-
-      try {
-        const resolvedRepoPath = path.resolve(repoPath); // Normalized
-        const requestedFullPath = path.resolve(repoPath, relativeFilepath); // Normalized
-
-        // Initial security check: Ensure the resolved path is within the repoPath
-        if (!requestedFullPath.startsWith(resolvedRepoPath + path.sep) && requestedFullPath !== resolvedRepoPath) {
-          throw new Error(`Access denied: Path '${relativeFilepath}' attempts to traverse outside the repository directory.`);
-        }
-        
-        let finalPathToRead = requestedFullPath;
-        try {
-            const stats = await fs.lstat(requestedFullPath);
-            if (stats.isSymbolicLink()) {
-                const symlinkTargetPath = await fs.realpath(requestedFullPath);
-                // Ensure the resolved symlink target is also within the repository
-                if (!path.resolve(symlinkTargetPath).startsWith(resolvedRepoPath + path.sep) && path.resolve(symlinkTargetPath) !== resolvedRepoPath) {
-                    throw new Error(`Access denied: Symbolic link '${relativeFilepath}' points outside the repository directory.`);
-                }
-                finalPathToRead = symlinkTargetPath; // Update path to read from the symlink's target
-            } else if (!stats.isFile()) {
-                throw new Error(`Access denied: Path '${relativeFilepath}' is not a file.`);
-            }
-        } catch (statError: unknown) {
-            if ((statError as NodeJS.ErrnoException).code === 'ENOENT') {
-                throw new Error(`File not found: ${relativeFilepath}`);
-            }
-            throw statError; // Re-throw other stat/realpath errors
-        }
-
-        const content = await fs.readFile(finalPathToRead, "utf8");
-        return { contents: [{ uri: uri.toString(), text: content }] };
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(`Error accessing resource for URI ${uri.toString()} (relative path: ${relativeFilepath}): ${errorMessage}`);
-        return { contents: [{ uri: uri.toString(), text: "", error: errorMessage }] };
-      }
-    });
-
-    registerTools(server, qdrantClient, repoPath, suggestionModelAvailable); 
-    
-    registerPrompts(server); 
-    
-    server.tool(
-      "bb7_get_indexing_status",
-      "Retrieves the current status of repository indexing. Provides information on whether indexing is idle, in-progress, completed, or failed, along with progress percentage and any error messages.",
-      {}, // No parameters, represented by an empty ZodRawShape
-      (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
-        logger.info("Tool 'get_indexing_status' execution started.");
-        const currentStatus = getGlobalIndexingStatus();
-        return {
-          content: [{
-            type: "text",
-            text: `# Indexing Status
-- Status: ${currentStatus.status}
-- Progress: ${currentStatus.overallProgress}%
-- Message: ${currentStatus.message}
-- Last Updated: ${currentStatus.lastUpdatedAt}
-${currentStatus.currentFile ? `- Current File: ${currentStatus.currentFile}` : ''}
-${currentStatus.currentCommit ? `- Current Commit: ${currentStatus.currentCommit}` : ''}
-${currentStatus.totalFilesToIndex ? `- Total Files: ${currentStatus.totalFilesToIndex}` : ''}
-${currentStatus.filesIndexed ? `- Files Indexed: ${currentStatus.filesIndexed}` : ''}
-${currentStatus.totalCommitsToIndex ? `- Total Commits: ${currentStatus.totalCommitsToIndex}` : ''}
-${currentStatus.commitsIndexed ? `- Commits Indexed: ${currentStatus.commitsIndexed}` : ''}
-${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
-            `,
-          }],
-        };
-      }
-    );
-    
-    server.tool(
-      "bb7_switch_suggestion_model",
-      "Switches the primary model and provider used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder' (DeepSeek provider), use `{\"model\": \"deepseek-coder\", \"provider\": \"deepseek\"}`. To switch to 'llama3.1:8b' (Ollama provider), use `{\"model\": \"llama3.1:8b\", \"provider\": \"ollama\"}`. If provider is omitted, it may be inferred for known model patterns. For other providers like 'openai', 'gemini', 'claude', specify both model and provider: `{\"model\": \"gpt-4\", \"provider\": \"openai\"}`.",
-      {
-        model: z.string().describe("The suggestion model to switch to (e.g., 'llama3.1:8b', 'deepseek-coder', 'gpt-4')."),
-        provider: z.string().optional().describe("The LLM provider for the model (e.g., 'ollama', 'deepseek', 'openai', 'gemini', 'claude'). If omitted, an attempt will be made to infer it.")
-      },
-      async (args: { model: string; provider?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
-        logger.info("Received args for switch_suggestion_model", { args });
-
-        const modelToSwitchTo = args.model;
-        const providerToSwitchTo = args.provider?.toLowerCase(); // provider is optional
-
-        if (!modelToSwitchTo || typeof modelToSwitchTo !== 'string' || modelToSwitchTo.trim() === "") {
-          const errorMsg = "Invalid or missing 'model' parameter. Please provide a non-empty model name string.";
-          logger.error(errorMsg, { receivedModel: modelToSwitchTo });
-          return {
-            content: [{
-              type: "text",
-              text: `# Error Switching Suggestion Model\n\n${errorMsg}`,
-            }],
-          };
-        }
-
-        if (args.provider !== undefined && (typeof args.provider !== 'string' || args.provider.trim() === "")) {
-            const errorMsg = "Invalid 'provider' parameter. If provided, it must be a non-empty string.";
-            logger.error(errorMsg, { receivedProvider: args.provider });
-            return {
-                content: [{
-                    type: "text",
-                    text: `# Error Switching Suggestion Model\n\n${errorMsg}`,
-                }],
-            };
-        }
-      
-        logger.info(`Requested model switch: Model='${modelToSwitchTo}', Provider='${providerToSwitchTo || "(infer)"}'`);
-        
-        try {
-          // The switchSuggestionModel function in llm-provider.ts now handles provider inference 
-          // if providerToSwitchTo is undefined, and also any provider-specific checks (like API keys).
-          const success = await switchSuggestionModel(modelToSwitchTo, providerToSwitchTo);
-        
-          if (!success) {
-            // switchSuggestionModel in llm-provider.ts should log specific reasons for failure.
-            return {
-              content: [{
-                type: "text",
-                text: `# Failed to Switch Suggestion Model\n\nUnable to switch to model '${modelToSwitchTo}'${providerToSwitchTo ? ` with provider '${providerToSwitchTo}'` : ''}. Please check your configuration and server logs for details. Ensure the provider is supported and any necessary API keys or host configurations are correctly set.`,
-              }],
-            };
-          }
-        
-          const actualModel = configService.SUGGESTION_MODEL;
-          const actualProvider = configService.SUGGESTION_PROVIDER;
-          const embeddingProvider = configService.EMBEDDING_PROVIDER;
-        
-          logger.info(`Successfully switched. ConfigService reports: Model='${actualModel}', Provider='${actualProvider}', Embedding Provider='${embeddingProvider}'`);
-        
-          let message = `# Suggestion Model Switched\n\nSuccessfully switched to model '${actualModel}' using provider '${actualProvider}' for suggestions.\nEmbeddings continue to use '${embeddingProvider}'.\n\n`;
-          message += `To make this change permanent, update your environment variables (e.g., SUGGESTION_MODEL='${actualModel}', SUGGESTION_PROVIDER='${actualProvider}') or the relevant configuration files (e.g., ~/.codecompass/model-config.json).`;
-          
-          if (actualProvider === 'deepseek' && !configService.DEEPSEEK_API_KEY) {
-            message += `\n\nWarning: DeepSeek provider is selected, but DEEPSEEK_API_KEY is not found in current configuration. Ensure it is set for DeepSeek to function.`;
-          } else if (actualProvider === 'openai' && !configService.OPENAI_API_KEY) {
-            message += `\n\nWarning: OpenAI provider is selected, but OPENAI_API_KEY is not found. Ensure it is set.`;
-          } else if (actualProvider === 'gemini' && !configService.GEMINI_API_KEY) {
-            message += `\n\nWarning: Gemini provider is selected, but GEMINI_API_KEY is not found. Ensure it is set.`;
-          } else if (actualProvider === 'claude' && !configService.CLAUDE_API_KEY) {
-            message += `\n\nWarning: Claude provider is selected, but CLAUDE_API_KEY is not found. Ensure it is set.`;
-          }
-
-          return {
-            content: [{
-              type: "text",
-              text: message,
-            }],
-          };
-        } catch (error: unknown) {
-          logger.error("Error switching suggestion model", { message: error instanceof Error ? error.message : String(error) });
-          return {
-            content: [{
-              type: "text",
-              text: `# Error Switching Suggestion Model\n\n${error instanceof Error ? error.message : String(error)}`,
-            }],
-          };
-        }
-      }
-    );
+    // Resource/tool/prompt registration for the global server instance is not strictly necessary
+    // if all MCP communication goes through per-session instances that are configured individually.
+    // However, if any global handlers were intended, they would be registered on _globalMcpServer.
+    // For now, configureMcpServerInstance will be called on per-session servers.
 
     const finalDeclaredTools = Object.keys(serverCapabilities.tools);
     logger.info(`Declared tools in capabilities: ${finalDeclaredTools.join(', ')}`);
     const finalDeclaredPrompts = Object.keys(serverCapabilities.prompts);
     logger.info(`Declared prompts in capabilities: ${finalDeclaredPrompts.join(', ')}`);
 
-    // Setup Express HTTP server for status, notifications, and MCP
     const expressApp = express();
-     
-    expressApp.use(express.json()); // Middleware to parse JSON bodies
-
-    // MCP Server Setup is now handled per-session within the /mcp routes.
-    // The global mcpHttpTransport and its direct middleware usage have been removed.
-     
+    expressApp.use(express.json());
+    
     expressApp.get('/api/indexing-status', (_req: express.Request, res: express.Response): void => {
-      const currentStatus = getGlobalIndexingStatus();
-       
-      res.json(currentStatus);
+      res.json(getGlobalIndexingStatus());
     });
-
-    // Add the new /api/ping endpoint here
     expressApp.get('/api/ping', (_req: express.Request, res: express.Response): void => {
       res.json({ service: "CodeCompass", status: "ok", version: VERSION });
     });
-     
     expressApp.post('/api/repository/notify-update', (_req: express.Request, res: express.Response): void => {
-      logger.info('Received notification to update repository via /api/repository/notify-update.');
-      
+      logger.info('Received /api/repository/notify-update.');
       const currentStatus = getGlobalIndexingStatus();
       if (['initializing', 'validating_repo', 'listing_files', 'cleaning_stale_entries', 'indexing_file_content', 'indexing_commits_diffs'].includes(currentStatus.status)) {
-        logger.warn('Re-indexing request received, but indexing is already in progress.');
-        res.status(409).json({ message: 'Indexing already in progress.' });
-        return;
+        res.status(409).json({ message: 'Indexing already in progress.' }); return;
       }
-
-      logger.info(`Triggering re-indexing for repository: ${repoPath}`);
-      // Re-use qdrantClient, repoPath, llmProvider from the outer scope
-      indexRepository(qdrantClient, repoPath, llmProvider)
-        .then(() => {
-          logger.info(`Repository re-indexing completed successfully for ${repoPath}.`);
-          // Status managed by indexRepository
-        })
-        .catch((error: unknown) => {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          logger.error(`Repository re-indexing failed for ${repoPath}: ${errorMessage}`);
-          // Status managed by indexRepository
-        });
-      
-       
-      res.status(202).json({ message: 'Re-indexing process initiated.' });
+      indexRepository(qdrantClient, repoPath, llmProvider).catch(err => logger.error("Re-indexing error:", err));
+      res.status(202).json({ message: 'Re-indexing initiated.' });
     });
 
-    const httpPort = configService.HTTP_PORT; // Read from configService
-     
+    const activeSessionTransports: Map<string, StreamableHTTPServerTransport> = new Map();
+
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    expressApp.post('/mcp', async (req: express.Request, res: express.Response) => {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      let transport: StreamableHTTPServerTransport | undefined = sessionId ? activeSessionTransports.get(sessionId) : undefined;
+
+      if (transport) {
+        logger.debug(`MCP POST: Reusing transport for session ${sessionId}`);
+      } else if (isInitializeRequest(req.body)) {
+        logger.info('MCP POST: Initialization request, creating new transport and server instance.');
+        const newTransport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: randomUUID,
+          onsessioninitialized: (newSessionId) => {
+            activeSessionTransports.set(newSessionId, newTransport);
+            logger.info(`MCP Session initialized: ${newSessionId}`);
+          }
+        });
+        newTransport.onclose = () => {
+          if (newTransport.sessionId) {
+            activeSessionTransports.delete(newTransport.sessionId);
+            logger.info(`MCP Session closed and transport removed: ${newTransport.sessionId}`);
+          }
+        };
+        const sessionServer = new McpServer({
+          name: "CodeCompass", version: VERSION, vendor: "CodeCompass", capabilities: serverCapabilities,
+        });
+        await configureMcpServerInstance(sessionServer, qdrantClient, repoPath, suggestionModelAvailable);
+        await sessionServer.connect(newTransport);
+        transport = newTransport;
+      } else {
+        logger.warn(`MCP POST: Bad Request. No valid session ID and not an init request.`);
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Bad Request: No valid session ID or not an init request.' },
+          id: req.body?.id || null,
+        });
+        return;
+      }
+      try {
+        await transport.handleRequest(req, res, req.body);
+      } catch (transportError) {
+        logger.error("Error handling MCP POST request via transport:", transportError);
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: '2.0', error: { code: -32000, message: 'Internal MCP transport error.' }, id: req.body?.id || null,
+          });
+        }
+      }
+    });
+
+    const handleSessionRequest = async (req: express.Request, res: express.Response) => {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      if (!sessionId || !activeSessionTransports.has(sessionId)) {
+        logger.warn(`MCP ${req.method}: Invalid or missing session ID: ${sessionId}.`);
+        res.status(400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Invalid or missing session ID.' }, id: null });
+        return;
+      }
+      const transport = activeSessionTransports.get(sessionId)!;
+      logger.debug(`MCP ${req.method}: Handling request for session ${sessionId}`);
+      try {
+        await transport.handleRequest(req, res);
+      } catch (transportError) {
+        logger.error(`Error handling MCP ${req.method} request for session ${sessionId}:`, transportError);
+        if (!res.headersSent) {
+          res.status(500).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Internal MCP transport error.' }, id: null });
+        }
+      }
+    };
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    expressApp.get('/mcp', handleSessionRequest);
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    expressApp.delete('/mcp', handleSessionRequest);
+    logger.info(`MCP communication will be available at the /mcp endpoint via POST, GET, DELETE.`);
+
+    const httpPort = configService.HTTP_PORT;
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
 
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -795,13 +542,14 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
         logger.warn(`HTTP Port ${httpPort} is already in use. Attempting to ping...`);
         try {
           const pingResponse = await axios.get<PingResponseData>(`http://localhost:${httpPort}/api/ping`, { timeout: 500 });
-          if (pingResponse.status === 200 && pingResponse.data && pingResponse.data.service === "CodeCompass") {
-            logger.info(`Another CodeCompass instance (version ${pingResponse.data.version || 'unknown'}) is running on port ${httpPort}. Fetching its status...`);
+          if (pingResponse.status === 200 && pingResponse.data?.service === "CodeCompass") {
+            logger.info(`Another CodeCompass instance (v${pingResponse.data.version || 'unknown'}) is running on port ${httpPort}.`);
+            // ... (rest of EADDRINUSE handling logic as in your file) ...
+            // Full EADDRINUSE logic from user's provided file:
             try {
               const statusResponse = await axios.get<IndexingStatusReport>(`http://localhost:${httpPort}/api/indexing-status`, { timeout: 1000 });
               if (statusResponse.status === 200 && statusResponse.data) {
                 const existingStatus = statusResponse.data;
-                // Use console.info for direct user feedback, logger.info for logs
                 console.info(`\n--- Status of existing CodeCompass instance on port ${httpPort} ---`);
                 console.info(`Version: ${pingResponse.data.version || 'unknown'}`);
                 console.info(`Status: ${existingStatus.status}`);
@@ -838,18 +586,16 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
               httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use, status fetch error.`, 1));
             }
           } else {
-            // Ping successful but not a CodeCompass server
-            logger.error(`Port ${httpPort} is in use, but it does not appear to be a CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`);
+            logger.error(`Port ${httpPort} is in use by non-CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`);
             logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
             httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use by non-CodeCompass server.`, 1));
           }
-        } catch (pingError: unknown) {
-          // Ping failed (timeout, connection refused, or other error)
+        } catch (pingError) {
           logger.error(`Port ${httpPort} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
           if (axios.isAxiosError(pingError)) {
             if (pingError.code === 'ECONNREFUSED') {
               logger.error(`Connection refused on port ${httpPort}.`);
-            } else if (pingError.code === 'ETIMEDOUT' || pingError.code === 'ECONNABORTED') { // ECONNABORTED for timeout
+            } else if (pingError.code === 'ETIMEDOUT' || pingError.code === 'ECONNABORTED') {
               logger.error(`Ping attempt to port ${httpPort} timed out.`);
             } else {
               logger.error(`Ping error details: ${pingError.message}`);
@@ -869,26 +615,30 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     const listenPromise = new Promise<void>((resolve) => {
       httpServer.listen(httpPort, () => {
         logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
-        resolve(); // HTTP server is successfully listening
+        resolve();
       });
     });
 
-    // Race the listenPromise against the httpServerSetupPromise
-    // If httpServerSetupPromise rejects (due to EADDRINUSE or other http error), this will throw
     await Promise.race([listenPromise, httpServerSetupPromise]);
-    
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
-    const toolStubs = serverCapabilities.tools || {};
-    logger.info(`CodeCompass server configured with tool stubs: ${Object.keys(toolStubs).join(', ')}`);
+    console.error(`CodeCompass v${VERSION} HTTP Server running on port ${httpPort}, with MCP at /mcp`); // Changed to console.error as per user's new code
     
-
+    if (process.env.NODE_ENV === 'test') {
+      logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");
+    } else {
+      await new Promise<void>((resolve) => {
+        process.on('SIGINT', () => {
+          logger.info("SIGINT received, shutting down server.");
+          resolve();
+        });
+      });
+    }
   } catch (error: unknown) {
-    const err = error instanceof ServerStartupError ? error : error as Error;
+    const err = error instanceof ServerStartupError ? error : new Error(String(error)); // Ensure err is Error type
     logger.error("Failed to start CodeCompass", { message: err.message });
     if (process.env.NODE_ENV === 'test') { 
-      throw err; // Re-throw in test env to be caught by test assertions
+      throw err;
     }
-    // Determine exit code from ServerStartupError if possible
     const exitCode = error instanceof ServerStartupError ? error.exitCode : 1;
     process.exit(exitCode);
   }

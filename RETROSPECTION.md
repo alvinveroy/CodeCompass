@@ -1,3 +1,23 @@
+# Retrospection for Server Logic Restoration & Linting (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- ESLint warnings (`@typescript-eslint/no-unused-vars`) accurately pinpointed that critical components for MCP HTTP transport and session management were not being utilized.
+- The established correct structure for `startServer` (including per-session MCP server instantiation and Express route handling) from previous refactoring steps served as the target for restoration.
+
+## What could be improved?
+- **Change Verification:** The fact that core logic within `startServer` became disconnected, leading to "unused var" warnings, underscores the need for more thorough verification after each significant refactoring step. This could involve not just builds and tests, but also a quick review of the diff to ensure essential code blocks remain intact and functional.
+- **Complexity of `startServer`:** The `startServer` function has grown quite complex. Future refactoring could aim to break it down into smaller, more manageable pieces, though the current per-session model already helps isolate MCP setup.
+
+## What did we learn?
+- "Unused variable" warnings for key architectural components (like transport classes or core helper functions) are strong indicators that a significant piece of logic has been accidentally removed or is not being invoked as intended.
+- Restoring a previously established correct code structure is often the most direct way to fix such issues, assuming the previous structure was sound.
+- Maintaining the `eslint-disable-next-line @typescript-eslint/require-await` for `configureMcpServerInstance` is appropriate given its role and potential for future asynchronous operations, even if its immediate body doesn't use `await`.
+
+## Action Items / Follow-ups
+- After applying substantial code changes or refactoring (especially those involving deletion or large replacements), perform a targeted review to ensure that all necessary imports, function calls, and logic blocks are still present and correctly connected.
+- Consider if parts of `startServer`'s non-MCP HTTP setup (like EADDRINUSE handling) could be further modularized to improve readability, though its current state is functional.
+
+---
 # Retrospection for Unit Test Fix (server.test.ts - Incorrect Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?

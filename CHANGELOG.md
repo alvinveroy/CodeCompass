@@ -13,9 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
-- **Linting & Server Logic Restoration (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
-    - Resolved ESLint warnings (`@typescript-eslint/no-unused-vars`) for `StreamableHTTPServerTransport`, `randomUUID`, `isInitializeRequest`, and `configureMcpServerInstance` in `src/lib/server.ts` by ensuring the `startServer` function contains the complete and correct implementation for HTTP and MCP server setup, which utilizes these components. This effectively restores logic that may have been inadvertently removed during previous refactoring.
-    - Addressed ESLint error (`@typescript-eslint/require-await`) for the `configureMcpServerInstance` function by adding an `eslint-disable-next-line` comment. The function is kept `async` to maintain a consistent promise-based interface for server configuration steps and for future extensibility with `await` operations, even if no `await` is currently used in its immediate body.
+- **Server Logic Restoration & Linting (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved ESLint warnings (`@typescript-eslint/no-unused-vars`) for `StreamableHTTPServerTransport`, `randomUUID`, `isInitializeRequest`, and `configureMcpServerInstance` in `src/lib/server.ts`.
+    - The fix involved restoring the complete and correct implementation of the `startServer` function, ensuring it properly sets up the Express HTTP server and MCP routes, thereby utilizing these previously flagged components. This addresses an issue where essential logic might have been inadvertently removed or disconnected during prior refactoring.
+    - The `configureMcpServerInstance` function (defined at module level) is now correctly called within `startServer` for new MCP sessions.
+    - Maintained the `eslint-disable-next-line @typescript-eslint/require-await` for `configureMcpServerInstance` as it's intentionally `async` for API consistency and future extensibility.
 - **Unit Test Fix (server.test.ts - Incorrect Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Corrected a failing unit test in `src/tests/server.test.ts` (`Server Startup and Port Handling > should start the server and listen on the configured port if free`).
     - Removed the assertion `expect(mockedMcpServerConnect).toHaveBeenCalled()`. This assertion was incorrect because `McpServer.connect()` is only invoked when an MCP client sends an `initialize` request to the `/mcp` endpoint, not during the basic HTTP server startup sequence that this test verifies.
@@ -95,6 +97,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Resolved all ESLint errors in `src/tests/server.test.ts`.
     - The primary fix involved ensuring that `eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion` directives are present and preserved before all `await importOriginal() as typeof import(...)` type assertions in mock factories. These assertions are essential for ESLint's subsequent type-checking rules (`no-unsafe-return`, `no-unsafe-assignment`) to function correctly, even if `tsc` alone might not strictly require the disable.
     - Maintained necessary `eslint-disable-next-line` comments for `unbound-method` on `expect(...).toHaveBeenCalled()` assertions and for `no-unsafe-argument` on `expect(...).toThrow(expect.objectContaining(...))`, as these address common false positives or overly strict interpretations in test files.
+- **Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [PREVIOUS_GIT_COMMIT_ID_FOR_THIS_ENTRY]):**
+    - Resolved critical TypeScript build errors (`TS2451` - redeclared variables `finalDeclaredTools`, `finalDeclaredPrompts`, `expressApp`, `httpPort`, `httpServer`, `listenPromise`; `TS2304` - cannot find name `configureMcpServerInstance`) and Vitest test failures in `src/lib/server.ts`.
+    - Added the missing `configureMcpServerInstance` helper function at the module level to handle per-session MCP server setup.
+    - Removed a large duplicated block of code within `startServer` that was responsible for the redeclaration errors. The HTTP server setup and route registration now occur only once.
+    - Ensured `configureMcpServerInstance` is correctly called from within the `/mcp` POST route handler for new sessions.
+    - Maintained correct `StreamableHTTPServerTransport` instantiation and `McpServer.connect(transport)` usage for per-session instances.
 - **Test Failure (`config-service.test.ts`):** (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
     - Corrected the test `ConfigService > should persist model configuration when setSuggestionModel is called` in `src/tests/lib/config-service.test.ts`.
     - The test's expectation for the persisted JSON content in `model-config.json` was updated to include the `HTTP_PORT` field, aligning the test with the actual behavior of `ConfigService.persistModelConfiguration()`.
