@@ -21,21 +21,21 @@
 # Retrospection for Unit Test Fix (server.test.ts - EADDRINUSE Non-CodeCompass Server Log Assertions) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-- The detailed failure output from Vitest, showing all calls to the mocked `ml.error` function, was instrumental in understanding the discrepancy and formulating the correct assertions.
-- The fix involved making the test assertions more precise, which improves test reliability.
+- The detailed failure output from Vitest, showing the exact string received by the mocked `ml.error` function, made it straightforward to identify the mismatch in the assertion.
+- The fix was a minor but crucial adjustment to the expected substring in `expect.stringContaining`.
 
 ## What could be improved?
-- **Initial Assertion Granularity:** The original assertion for `ml.error` was too broad. When a function is expected to be called multiple times with different arguments, assertions should ideally verify each call specifically or use matchers that accommodate the variations if a single assertion is intended to cover multiple calls (though the latter is less precise).
-- **Log Message Stability:** While not an issue here, if log messages change frequently, tests asserting their exact content can become brittle. Using `expect.stringContaining` for key phrases is a good balance, but the overall sequence of logs still needs to be stable for `toHaveBeenNthCalledWith`.
+- **Log Message Precision in Tests:** When asserting parts of log messages, especially error messages that might have specific phrasing, ensuring the test expectation exactly matches a portion of the actual log is critical. A slight wording difference can cause test failures.
+- **Review of Log Messages:** The log message itself ("Port ... is in use by non-CodeCompass server...") is clear. The test just needed to align with it.
 
 ## What did we learn?
-- When testing functions that log multiple distinct messages (especially error messages in different phases of handling an error), it's important to assert each log call accurately.
-- Vitest's `toHaveBeenNthCalledWith` is very useful for verifying the arguments of specific calls in a sequence.
-- Detailed mock call reporting in test runner output is invaluable for debugging assertion failures.
+- `expect.stringContaining` is a powerful tool, but the substring provided must accurately reflect a part of the actual string.
+- Even minor phrasing differences between expected and actual log messages will cause assertion failures.
+- Test output that shows the "Received" value is essential for debugging such discrepancies.
 
 ## Action Items / Follow-ups
-- When writing tests that assert log outputs, if multiple log calls are expected, use specific assertions for each call (e.g., `toHaveBeenNthCalledWith`) rather than a single, broad assertion, to improve test precision and debuggability.
-- Review other tests that assert multiple log calls to ensure they are using precise assertions.
+- When a test asserting a log message with `stringContaining` fails, carefully compare the expected substring with the actual logged message provided in the test runner's output to find the exact point of divergence.
+- This fix supersedes the previous attempt (Git Commit ID `2c47648`) for this specific log message assertion, highlighting the iterative nature of test refinement.
 
 ---
 # Retrospection for Unit Test Fix (server.test.ts - Incorrect Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])

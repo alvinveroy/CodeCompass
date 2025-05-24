@@ -567,7 +567,7 @@ describe('Server Startup and Port Handling', () => {
     );
 
     // Verify the specific error log calls in order
-    expect(ml.error).toHaveBeenNthCalledWith(1, expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use, but it does not appear to be a CodeCompass server. Response: {"service":"OtherService"}`));
+    expect(ml.error).toHaveBeenNthCalledWith(1, expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server. Response: {"service":"OtherService"}`));
     expect(ml.error).toHaveBeenNthCalledWith(2, expect.stringContaining('Please free the port or configure a different one'));
     expect(ml.error).toHaveBeenNthCalledWith(3, "Failed to start CodeCompass", expect.objectContaining({ message: `Port ${mcs.HTTP_PORT} in use by non-CodeCompass server.` }));
     
