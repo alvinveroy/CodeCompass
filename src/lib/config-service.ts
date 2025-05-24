@@ -60,7 +60,9 @@ class ConfigService {
   private _maxFileContentLengthForCapability: number;
   private _maxDirListingEntriesForCapability: number;
   private _httpPort: number; // Added
-
+  
+  public IS_UTILITY_SERVER_DISABLED = false;
+  public RELAY_TARGET_UTILITY_PORT?: number;
 
   private _useMixedProviders: boolean;
   private _suggestionProvider: string;
