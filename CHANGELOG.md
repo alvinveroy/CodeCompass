@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Dynamically importing `ConfigService` within the "Default Configuration" and "Logger Configuration" test suites after `vi.resetModules()` and environment variable cleanup, guaranteeing a fresh service instance for these tests. (cd97d8c)
 
 ## [Unreleased]
+### Added
+- **CLI Port Configuration (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Added a `--port <number>` command-line argument to `src/index.ts`.
+    - This allows users to specify the HTTP port for the server at runtime, overriding the `HTTP_PORT` environment variable and the default port.
+    - Argument parsing in `src/index.ts` was updated to handle this option, setting `process.env.HTTP_PORT` before `ConfigService` initializes.
+    - The `--help` output was updated to include information about the new `--port` option.
 ### Changed
 - **Server Startup Error Handling Refactor (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Modified `src/lib/server.ts`:

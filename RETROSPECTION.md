@@ -18,6 +18,29 @@
 - Consider if parts of `startServer`'s non-MCP HTTP setup (like EADDRINUSE handling) could be further modularized to improve readability, though its current state is functional.
 
 ---
+# Retrospection for CLI Port Configuration (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The `--port <number>` CLI argument was successfully implemented in `src/index.ts`.
+- The argument parsing logic correctly identifies the `--port` flag and its value.
+- Port number validation (numeric, within valid range) was included.
+- `process.env.HTTP_PORT` is set *before* `ConfigService` or related modules are imported, ensuring the CLI argument takes highest precedence as intended. This was achieved by deferring the `require('./lib/server')` call.
+- The help message (`displayHelp()`) was updated to reflect the new option.
+
+## What could be improved?
+- The argument parsing in `src/index.ts` is currently manual. For more complex CLI argument scenarios in the future (e.g., more options, sub-commands for Phase 2), adopting a dedicated CLI argument parsing library (like `yargs` or `commander`) would make the parsing logic more robust, maintainable, and feature-rich (e.g., automatic help generation, type coercion).
+- The deferred `require()` for `startServer` is a bit of a workaround to ensure `process.env` is set before `ConfigService` loads. While effective, a more explicit initialization sequence or passing configuration directly could be considered in a larger architectural review, though for this specific need, it's a pragmatic solution.
+
+## What did we learn?
+- Order of operations is critical when CLI arguments need to influence configuration that is read early in the application lifecycle (like `ConfigService` reading `process.env`). Deferring imports or using dynamic `require()` can be a necessary technique.
+- Basic CLI argument parsing can be done manually, but for growing complexity, dedicated libraries offer significant advantages.
+- Updating help messages is an essential part of adding new CLI features.
+
+## Action Items / Follow-ups
+- Ensure the Git commit ID placeholder is replaced in `CHANGELOG.md` and this retrospection entry.
+- For future CLI enhancements (especially Phase 2 client mode), evaluate the adoption of a CLI argument parsing library.
+
+---
 # Retrospection for Server Startup Error Handling Refactor (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
