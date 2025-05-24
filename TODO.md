@@ -47,7 +47,7 @@ This document outlines the tasks required to enhance CodeCompass.
         - `client.callTool()` works over `stdio`. (Completed)
     - **Session ID Management for Client Calls**: (Considered/Supported) The current mechanism allows users to pass `sessionId` within the JSON parameters for tools that support it. Help text updated to reflect this. No further client-side generation or automatic management of session IDs is planned for this phase.
     - **Further Enhancements (Future)**:
-        - **Add comprehensive unit/integration tests for the `stdio`-based client mode functionality.**
+        - **Add comprehensive unit/integration tests for the `stdio`-based client mode functionality.** (Completed - Integration tests for stdio client-server interactions cover this)
         - **Refactor CLI to use `yargs` library**: (Completed) `src/index.ts` refactored to use `yargs` for argument parsing, command handling, and help generation. This addresses the evaluation of needing a dedicated CLI library.
         - Explore more advanced output formatting options if needed for specific tools.
 
@@ -87,11 +87,11 @@ This document outlines the tasks required to enhance CodeCompass.
 - **Testing**:
     - (Completed) Unit tests for utility HTTP port conflict handling and MCP tool relaying in `src/tests/server.test.ts`.
     - (Completed) Unit tests for `src/index.ts` CLI behavior (including stdio client mode) updated.
-    - (In Progress) Develop comprehensive integration tests for `stdio` server and client interactions.
+    - (Completed) Develop comprehensive integration tests for `stdio` server and client interactions.
         - Initial test file structure and basic connection test created. (a52448e)
         - Mocks for Qdrant, Ollama, and LLMProvider set up. (a52448e)
         - Added integration tests for indexing, search_code, and agent_query. (212f0ff)
         - Unmocked `indexRepository` and `getGlobalIndexingStatus` in integration tests for more realistic testing. (230f232)
         - Added integration tests for `get_changelog` and `trigger_repository_update`. (230f232)
         - Enhanced Qdrant client mock in integration tests to support `scroll` and `delete` methods for stale entry cleanup. (230f232)
-        - Added integration tests for `switch_suggestion_model`, `get_session_history`, `generate_suggestion`, and `get_repository_context`.
+        - Added integration tests for `switch_suggestion_model`, `get_session_history`, `generate_suggestion`, and `get_repository_context`. (dbbeee9)
