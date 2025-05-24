@@ -136,41 +136,42 @@ describe('CLI with yargs (index.ts)', () => {
     }));
     
     await import('../index.js'); 
-    
-    // Dynamically resolve paths as src/index.ts would
-    // require.resolve needs a path that exists relative to this test file to find index.js
-    // Assuming index.js is in dist/ and tests are in dist/tests/
-    // If src/index.ts is run directly (e.g. via ts-node for tests), then '../index.js' might point to src/index.js
-    // Let's assume the compiled output structure where index.js is at a level accessible via '../index.js' from 'dist/tests/index.js'
-    // And 'lib' is a sibling to 'index.js'
-    // const indexPath = require.resolve('../index.js'); // Get absolute path to index.js - This block was duplicated
-    // const SUT_distPath = path.dirname(indexPath); // Get directory of index.js (e.g., /path/to/project/dist) - This block was duplicated
-    // const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir - This block was duplicated
-    
-    // vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({ // This vi.doMock block was duplicated
-      configService: currentMockConfigServiceInstance, // Use the current, fresh mock
-      logger: currentMockLoggerInstance,             // Use the current, fresh mock
-    }));
-    vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({
-      startServer: mockStartServer,
-      startProxyServer: mockStartProxyServer,
-      ServerStartupError: ServerStartupError,
-    }));
-    // Mock SDK client components that are dynamically required in handleClientCommand
-    vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
-      Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
-    }));
-    vi.doMock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
-      StreamableHTTPClientTransport: vi.fn(),
-    }));
 
-    // Importing src/index.js executes main() at its end.
-    // No need to destructure or call main explicitly if it's not exported.
-    await import('../index.js'); 
+    // The following block (const declarations, vi.doMock calls, and the second await import) was duplicated and is removed.
+    // // Dynamically resolve paths as src/index.ts would
+    // // require.resolve needs a path that exists relative to this test file to find index.js
+    // // Assuming index.js is in dist/ and tests are in dist/tests/
+    // // If src/index.ts is run directly (e.g. via ts-node for tests), then '../index.js' might point to src/index.js
+    // // Let's assume the compiled output structure where index.js is at a level accessible via '../index.js' from 'dist/tests/index.js'
+    // // And 'lib' is a sibling to 'index.js'
+    // // const indexPath = require.resolve('../index.js'); // Get absolute path to index.js
+    // // const SUT_distPath = path.dirname(indexPath); // Get directory of index.js (e.g., /path/to/project/dist)
+    // // const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
+
+    // // vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
+    // //   configService: currentMockConfigServiceInstance, // Use the current, fresh mock
+    // //   logger: currentMockLoggerInstance,             // Use the current, fresh mock
+    // // }));
+    // // vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({
+    // //   startServer: mockStartServer,
+    // //   startProxyServer: mockStartProxyServer,
+    // //   ServerStartupError: ServerStartupError,
+    // // }));
+    // // // Mock SDK client components that are dynamically required in handleClientCommand
+    // // vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
+    // //   Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
+    // // }));
+    // // vi.doMock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
+    // //   StreamableHTTPClientTransport: vi.fn(),
+    // // }));
+
+    // // // Importing src/index.js executes main() at its end.
+    // // // No need to destructure or call main explicitly if it's not exported.
+    // // await import('../index.js'); 
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
     // to allow assertions on console.error or logger.error before process.exit is checked.
     try {
-      await main();
+      // await main(); // main() is not exported and is self-executing on import. This call is incorrect.
     } catch (e) {
       // Suppress errors thrown by handlers if yargs .fail() is expected to catch them
       // This allows tests to assert on console/logger output from .fail()
