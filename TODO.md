@@ -87,4 +87,6 @@ This document outlines the tasks required to enhance CodeCompass.
 - **Testing**:
     - (Completed) Unit tests for utility HTTP port conflict handling and MCP tool relaying in `src/tests/server.test.ts`.
     - (Completed) Unit tests for `src/index.ts` CLI behavior (including stdio client mode) updated.
-    - (Pending) Develop comprehensive integration tests for `stdio` server and client interactions.
+    - (In Progress) Develop comprehensive integration tests for `stdio` server and client interactions.
+        - Initial test file structure and basic connection test created.
+        - Mocks for Qdrant, Ollama, and LLMProvider set up.
