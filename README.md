@@ -74,8 +74,75 @@ We welcome community contributions and suggestions for future development! Pleas
 
 3. **Install CodeCompass**:
    ```bash
-   npx -y @alvinveroy/codecompass@latest /path/to/your/repo
+   npx -y @alvinveroy/codecompass@latest
    ```
+   This installs CodeCompass globally. You can then run it from any directory.
+
+## Usage
+
+CodeCompass can be run in two main modes: as a server (default) or as a client to execute specific tools against a running server.
+
+**1. Running the CodeCompass Server:**
+
+To start the CodeCompass server, navigate to the root of your git repository and run:
+```bash
+codecompass [repoPath] [--port <number>]
+```
+- `[repoPath]` (optional): Path to the repository you want CodeCompass to analyze. If omitted, it defaults to the current directory (`.`).
+- `--port <number>` (optional): Specify the HTTP port for the server. This overrides the `HTTP_PORT` environment variable and the default port (3001).
+
+Examples:
+```bash
+# Start server for the current directory on the default port
+codecompass
+
+# Start server for a specific repository
+codecompass /path/to/your/project
+
+# Start server for the current directory on port 3005
+codecompass --port 3005
+```
+Once started, CodeCompass will begin indexing your repository (if it hasn't already) and will be available for MCP clients (like Cursor) or direct CLI tool execution.
+
+**2. Executing Tools via CLI Client Mode:**
+
+If a CodeCompass server is already running, you can use the CLI to execute specific tools directly.
+```bash
+codecompass <tool_name> [json_parameters] [--json] [--port <number>]
+```
+- `<tool_name>`: The name of the tool to execute (see list below).
+- `[json_parameters]` (optional): A JSON string containing parameters for the tool. For tools that take no parameters, this can be omitted or an empty JSON object `{}` can be used.
+- `--json` or `-j` (optional): Output the raw JSON response from the tool. Useful for scripting or debugging.
+- `--port <number>` (optional): Specify the port of the running CodeCompass server if it's not the default (3001) or not set by `HTTP_PORT` env var.
+
+**Available Tools for CLI Client Execution:**
+
+*   `agent_query <json_params>`: Orchestrates capabilities to answer complex queries.
+    *   Example: `codecompass agent_query '{"query": "How is user authentication handled?", "sessionId": "my-session-123"}'`
+    *   With JSON output: `codecompass agent_query '{"query": "Show me user models"}' --json`
+*   `search_code <json_params>`: Performs semantic code search.
+    *   Example: `codecompass search_code '{"query": "database connection setup"}'`
+*   `get_changelog`: Retrieves the project's `CHANGELOG.md`.
+    *   Example: `codecompass get_changelog`
+*   `get_indexing_status`: Gets the current status of repository indexing.
+    *   Example: `codecompass get_indexing_status --json`
+*   `switch_suggestion_model <json_params>`: Switches the suggestion model/provider.
+    *   Example: `codecompass switch_suggestion_model '{"model": "deepseek-coder", "provider": "deepseek"}'`
+*   `get_session_history <json_params>`: Retrieves history for a session ID. (Requires `sessionId` in params).
+    *   Example: `codecompass get_session_history '{"sessionId": "my-session-123"}'`
+*   `generate_suggestion <json_params>`: Generates code suggestions.
+    *   Example: `codecompass generate_suggestion '{"query": "optimize this database query"}'`
+*   `get_repository_context <json_params>`: Provides a high-level summary of repository context.
+    *   Example: `codecompass get_repository_context '{"query": "main API components"}'`
+
+**General CLI Commands:**
+
+*   `codecompass --help` or `codecompass -h`: Show help message.
+*   `codecompass --version` or `codecompass -v`: Show CodeCompass version.
+*   `codecompass changelog [--verbose]`: Show the project changelog.
+
+---
+With CodeCompass set up, use natural language prompts in Cursor or other AI tools to vibe code—interact with your codebase intuitively. The Agentic RAG feature, powered by Qdrant and Ollama/DeepSeek, ensures your AI understands your code’s context for precise results. The CLI client mode offers another way to interact with CodeCompass tools directly.
 
 ## Configuration
 
@@ -256,6 +323,7 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
 ```
 
 **Note**: When setting environment variables directly or via MCP client configurations, you do not need to create a `.env` file. The list above serves as a reference for the variable names and their purposes. For a local setup with Ollama, the default settings often work without needing to set many environment variables, unless you want to customize models or providers. If using cloud providers like DeepSeek, setting the respective `API_KEY` and adjusting `LLM_PROVIDER` and `SUGGESTION_MODEL` is necessary.
+The HTTP port can also be set via the `--port <number>` CLI argument when starting the server, which takes precedence over the `HTTP_PORT` environment variable and defaults.
 
 ## Troubleshooting
 
@@ -302,18 +370,6 @@ EMBEDDING_MODEL=nomic-embed-text:v1.5
 3. Restart Cursor.
 
 **Note**: For Cline in VSCode, configure similarly in `cline_mcp_settings.json` (see [Cline Docs](https://github.com/saoudrizwan/claude-dev)). Environment variables set in this manner will also be recognized by CodeCompass.
-
-## Usage
-
-With CodeCompass set up, use natural language prompts in Cursor or other AI tools to vibe code—interact with your codebase intuitively. The Agentic RAG feature, powered by Qdrant and Ollama/DeepSeek, ensures your AI understands your code’s context for precise results. Here are some examples:
-Your primary interaction will be through a natural language query, which invokes the powerful `agent_query` tool. This tool then orchestrates various internal capabilities to understand and respond to your request. Here are some examples of how you might prompt the system:
-- “Hey CodeCompass, find any unused functions in my codebase.”
-- “Can CodeCompass suggest modern JavaScript updates for this old module?”
-- “Show me how my repo’s architecture fits together, CodeCompass.”
-- “CodeCompass, check for risky patterns like `eval()` and suggest fixes.”
-- “Help me add a login feature by finding similar code in my repo, CodeCompass.”
-
-These prompts let you work naturally, making coding feel like a conversation with your codebase.
 
 ## Contributing
 
