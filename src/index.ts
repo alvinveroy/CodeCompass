@@ -256,24 +256,21 @@ async function startServerHandler(repoPath: string) {
         // Existing CodeCompass server found
         const existingVersion = (typedError.existingServerStatus as PingResponseData)?.version;
 
+        // An existing CodeCompass server was detected on the utility HTTP port.
+        // src/lib/server.ts has already logged detailed status of the existing instance.
+        // Log a summary message here and exit gracefully.
+        // The HTTP-to-HTTP MCP proxy (`localStartProxyServer`) is deprioritized with stdio-first MCP.
         localLogger.info(
-          `An existing CodeCompass server (v${existingVersion || 'unknown'}) was detected on port ${typedError.detectedServerPort}.`
+          `Another CodeCompass instance is active on port ${typedError.detectedServerPort || typedError.requestedPort || 'unknown'}. This instance will exit.`
         );
-        localLogger.info(`This instance will attempt to start as an MCP proxy.`);
-
-        if (typedError.requestedPort && typedError.detectedServerPort) {
-          try {
-            // localStartProxyServer is already required with a robust path
-            await localStartProxyServer(typedError.requestedPort, typedError.detectedServerPort, existingVersion);
-            // If startProxyServer resolves, the proxy is running. The process should stay alive.
-            // No process.exit() here.
-          } catch (proxyError: any) {
-            localLogger.error(`Failed to start MCP proxy: ${proxyError.message}. Exiting.`);
-            process.exit(1); // Exit directly if proxy fails
-          }
+        // Ensure this exit is handled correctly, yargs might interfere if we just throw.
+        // Direct exit is cleaner here as this is not an "error" for yargs to report loudly.
+        if (process.env.NODE_ENV !== 'test') {
+          process.exit(0);
         } else {
-          localLogger.error('Proxy: Could not determine necessary port information from ServerStartupError. Exiting.');
-          process.exit(1);
+          // For testing, re-throw so the test can assert the error type and exitCode.
+          // The test environment should catch this and not actually exit.
+          throw typedError;
         }
       } else {
         // Other ServerStartupError (e.g., non-CodeCompass server on port, or other startup failure)
