@@ -16,6 +16,14 @@ vi.mock('fs', () => ({
   // Let's assume direct availability for now.
 }));
 
+vi.mock('child_process', async () => {
+  const actualCp = await vi.importActual('child_process') as typeof import('child_process');
+  return {
+    ...actualCp,
+    spawn: mockSpawnFn,
+  };
+});
+
 const mockMcpClientInstance = {
   connect: vi.fn(),
   callTool: vi.fn(),
@@ -70,6 +78,10 @@ vi.mock('../lib/server.js', () => ({
 }));
 // --- End Mocks ---
 
+import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
+
+const mockSpawnFn = vi.fn();
+
 let mockProcessExit: MockInstance<typeof process.exit>;
 let mockConsoleLog: MockInstance<typeof console.log>;
 let mockConsoleError: MockInstance<typeof console.error>;
@@ -77,6 +89,10 @@ let originalProcessEnv: NodeJS.ProcessEnv;
 let originalArgv: string[];
 
 describe('CLI with yargs (index.ts)', () => {
+  let mockSpawnInstance: {
+    on: Mock; kill: Mock; pid?: number; stdin: any; stdout: any; stderr: any;
+  };
+
   beforeEach(() => {
     vi.resetAllMocks();
     originalProcessEnv = { ...process.env };
@@ -109,7 +125,7 @@ describe('CLI with yargs (index.ts)', () => {
     vi.resetModules(); 
     
     // Dynamically resolve paths as src/index.ts would
-    const indexPath = require.resolve('../index.js'); 
+    const indexPath = require.resolve('../../dist/index.js');
     const SUT_distPath = path.dirname(indexPath); 
     const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); 
     
@@ -224,40 +240,25 @@ describe('CLI with yargs (index.ts)', () => {
     };
 
     beforeEach(() => {
-      // Mock child_process.spawn
+      // Initialize mockSpawnInstance (it's declared at a higher scope)
       mockSpawnInstance = {
         on: vi.fn((event, cb) => {
-          // Simulate server ready via stderr log for 'MCP active on stdio'
           if (event === 'error' || event === 'exit') { /* store cb if needed */ }
           return mockSpawnInstance;
         }),
         kill: vi.fn(),
         pid: 12345,
-        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() }, // Mock stream properties
-        stdout: { on: vi.fn(), pipe: vi.fn(), unpipe: vi.fn(), resume: vi.fn() }, // Mock stream properties
-        stderr: { on: vi.fn(), pipe: vi.fn() }, // Mock stream properties
+        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
+        stdout: { on: vi.fn(), pipe: vi.fn(), unpipe: vi.fn(), resume: vi.fn() },
+        stderr: { on: vi.fn(), pipe: vi.fn() },
       };
-      vi.mock('child_process', async (importOriginal) => {
-        const actual = await importOriginal() as typeof import('child_process');
-        return {
-          ...actual,
-          spawn: vi.fn().mockReturnValue(mockSpawnInstance),
-        };
-      });
-      // Ensure the mock is active for dynamic require
-      const { spawn: spawnMock } = require('child_process');
-      vi.mocked(spawnMock).mockReturnValue(mockSpawnInstance as any);
+      mockSpawnFn.mockReturnValue(mockSpawnInstance); // Configure the mock function
 
       // Simulate server ready message on stderr
-      // This needs to happen after spawn is called by the SUT
       vi.mocked(mockSpawnInstance.stderr.on).mockImplementation((event, callback) => {
         if (event === 'data') {
-          // Simulate the server sending its "ready" message
-          // Call the callback with a Buffer containing the ready message
-          // This needs to be timed correctly or triggered by the test.
-          // For simplicity, we can make the 'data' callback trigger 'serverReady' almost immediately
-          // or have a mechanism in tests to fire it.
-          // Let's assume the test will trigger this if needed, or the timeout handles it.
+          // Store callback if needed for manual triggering in tests
+          // The original comment about simulating server ready message can remain.
         }
         return mockSpawnInstance.stderr;
       });
@@ -395,6 +396,22 @@ describe('CLI with yargs (index.ts)', () => {
   });
 
   describe('Global Options', () => {
+    beforeEach(() => {
+      // Initialize mockSpawnInstance if tests in this suite need it
+      mockSpawnInstance = {
+        on: vi.fn((event, cb) => {
+          if (event === 'error' || event === 'exit') { /* store cb if needed */ }
+          return mockSpawnInstance;
+        }),
+        kill: vi.fn(),
+        pid: 12345,
+        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
+        stdout: { on: vi.fn(), pipe: vi.fn(), unpipe: vi.fn(), resume: vi.fn() },
+        stderr: { on: vi.fn(), pipe: vi.fn() },
+      };
+      mockSpawnFn.mockReturnValue(mockSpawnInstance);
+    });
+
     it('--port option should set HTTP_PORT environment variable for spawned server', async () => {
       const customPort = 1234;
       let stderrDataCallback: ((data: Buffer) => void) | undefined;
