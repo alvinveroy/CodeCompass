@@ -7,17 +7,18 @@ import fs from 'fs'; // For mocking fs in changelog test
 // axios mock removed as it's no longer directly used by handleClientCommand's primary path
 
 // Mock fs for changelog command - ensure it's correctly structured
-const mockFsFunctions = {
-  statSync: vi.fn(),
-  readFileSync: vi.fn(),
-  // Add any other fs functions if index.ts uses them, e.g. existsSync
-  // For changelog, only statSync and readFileSync are directly used by displayChangelog
-};
-
-vi.mock('fs', () => ({
-  default: mockFsFunctions,
-  ...mockFsFunctions, // Also make them available at the root for easier test access if needed
-}));
+vi.mock('fs', () => {
+  const mockFsFunctionsInFactory = {
+    statSync: vi.fn(),
+    readFileSync: vi.fn(),
+    // Add any other fs functions if index.ts uses them, e.g. existsSync
+    // For changelog, only statSync and readFileSync are directly used by displayChangelog
+  };
+  return {
+    default: mockFsFunctionsInFactory,
+    ...mockFsFunctionsInFactory, // Also make them available at the root for easier test access if needed
+  };
+});
 
 vi.mock('child_process', async () => {
   const actualCp = await vi.importActual('child_process') as typeof import('child_process');

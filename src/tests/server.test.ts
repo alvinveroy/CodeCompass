@@ -612,10 +612,8 @@ describe('Server Startup and Port Handling', () => {
     // // eslint-disable-next-line @typescript-eslint/unbound-method
     // vi.mocked(axios.get).mockImplementation((url: string) => {
     //   if (url.endsWith('/api/ping')) {
-        return Promise.reject(pingError);
-      }
-      return Promise.resolve({ status: 404, data: {} });
-    });
+    //   }
+    // });
     
      
     await expect(startServer('/fake/repo')).rejects.toThrow(
