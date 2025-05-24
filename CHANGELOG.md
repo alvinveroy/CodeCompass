@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Build Fix (SDK Imports & Server Property Access) (Git Commit ID: 8684429):**
+    - Resolved TypeScript errors `TS2307` (Cannot find module) for `@modelcontextprotocol/sdk/server/transport/http` and `@modelcontextprotocol/sdk/server/session` by removing the `.js` suffix from the import paths in `src/lib/server.ts`. This aligns with `NodeNext` module resolution, which typically relies on the SDK's `package.json` exports map that may not use the `.js` extension for all paths.
+    - Corrected TypeScript errors `TS2551` (Property does not exist) in `src/lib/server.ts` by changing `server.tools.keys()` and `server.prompts.keys()` to `Object.keys(serverCapabilities.tools)` and `Object.keys(serverCapabilities.prompts)` respectively. This logs the tools and prompts declared in `serverCapabilities` rather than attempting to access non-existent public collections on the `McpServer` instance.
 - **Linting Finalization (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved all remaining ESLint errors in `src/tests/server.test.ts`.
     - Applied `eslint-disable-next-line` comments for `@typescript-eslint/unbound-method` on `expect(...).toHaveBeenCalled()` assertions and for `@typescript-eslint/no-unsafe-argument` on `expect(...).toThrow(expect.objectContaining(...))`. These address common false positives or overly strict interpretations in test files for valid testing patterns.
