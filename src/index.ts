@@ -4,8 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';
 import axios from 'axios';
-import yargs from 'yargs';
-import { hideBin } from 'yargs/helpers';
+import yargs from 'yargs'; // Import yargs
+import { hideBin } from 'yargs/helpers'; // Import hideBin
 
 // SDK imports will be done dynamically within handleClientCommand
 // Do not import configService or startServer here yet if we need to set process.env first.
@@ -111,7 +111,8 @@ async function handleClientCommand(toolName: string, toolParamsString?: string) 
       logger.error((e as Error).message);
       console.error(`Error: Invalid JSON parameters for tool '${toolName}'. Please provide a valid JSON string.`);
       console.error(`Details: ${(e as Error).message}`);
-      process.exit(1); // yargs might handle exit differently, ensure this is desired
+      // Let yargs handle exit by re-throwing or yargs.fail will catch it if this function is a handler
+      throw new Error(`Invalid JSON parameters: ${(e as Error).message}`); 
     }
   } else {
     logger.info('With no parameters.');
@@ -157,7 +158,7 @@ async function handleClientCommand(toolName: string, toolParamsString?: string) 
         }
         
         await client.close();
-        // process.exit(0); // yargs will handle exit based on promise resolution
+        // For yargs, successful promise resolution means exit 0.
       } catch (clientError: unknown) {
         logger.error("MCP Client error during tool execution:", clientError);
         if (isJsonRpcErrorResponse(clientError)) {
@@ -170,7 +171,7 @@ async function handleClientCommand(toolName: string, toolParamsString?: string) 
         } else {
           console.error(`An unknown error occurred while executing tool '${toolName}'.`);
         }
-        throw clientError; // Re-throw to let yargs handle the failure
+        throw clientError; // Re-throw to let yargs handle the failure (exit 1)
       }
     } else {
       logger.warn(`Service on port ${configService.HTTP_PORT} is not a CodeCompass server or responded unexpectedly. Ping response:`, pingResponse.data);
@@ -180,7 +181,7 @@ async function handleClientCommand(toolName: string, toolParamsString?: string) 
     }
   } catch (error: unknown) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { logger: localLogger } = require('./lib/config-service') as typeof import('./lib/config-service'); // Ensure logger is available
+    const { logger: localLogger } = require('./lib/config-service') as typeof import('./lib/config-service');
     if (axios.isAxiosError(error)) {
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
         localLogger.warn(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Connection refused or timed out.`);
@@ -208,146 +209,146 @@ async function startServerHandler(repoPath: string) {
     if (error instanceof LocalServerStartupError) {
       if (error.exitCode !== 0) {
         localLogger.error(`CodeCompass server failed to start. Error: ${error.message}`);
-        console.error(`CodeCompass server failed to start. Error: ${error.message}`);
+        // console.error is now handled by yargs .fail() or if error is re-thrown
       }
-      // yargs will exit with code from the error if the promise is rejected
-      // For exitCode 0, we might want to resolve the promise if yargs doesn't exit.
-      // However, re-throwing ensures yargs sees it as a failure if exitCode != 0.
-      if (error.exitCode !== 0) throw error; 
       // If exitCode is 0, it means an existing instance was found.
-      // The server.ts logic already logs this. We can let yargs exit gracefully.
+      // The server.ts logic already logs this. We can let yargs exit gracefully by resolving.
+      if (error.exitCode !== 0) throw error; // Re-throw only for actual errors
     } else {
       localLogger.error('An unexpected error occurred during server startup:', error);
-      console.error('An unexpected error occurred during server startup:', error);
       throw error; // Re-throw for yargs
     }
   }
 }
 
-// Configure yargs
-const cli = yargs(hideBin(process.argv))
-  .option('port', {
-    alias: 'p',
-    type: 'number',
-    description: 'Specify the HTTP port for the server. Overrides HTTP_PORT env var.',
-    global: true, // Makes it available to all commands
-    // Apply the port setting to process.env immediately if provided
-    // This middleware runs before command handlers
-    apply: (value: number | undefined) => {
-      if (value !== undefined) {
-        if (isNaN(value) || value <= 0 || value > 65535) {
-          // yargs own validation might catch this, but good to be explicit
-          console.error(`Error: Invalid port number "${value}". Port must be between 1 and 65535.`);
-          process.exit(1);
+// Main CLI execution logic using yargs
+async function main() {
+  const cli = yargs(hideBin(process.argv))
+    .option('port', {
+      alias: 'p',
+      type: 'number',
+      description: 'Specify the HTTP port for the server. Overrides HTTP_PORT env var.',
+      global: true,
+      // Apply the port setting to process.env immediately if provided
+      // This middleware runs before command handlers
+      apply: (value: number | undefined) => { // Changed from middleware to apply for direct effect
+        if (value !== undefined) {
+          if (isNaN(value) || value <= 0 || value > 65535) {
+            // yargs will typically handle this with its own validation if type: 'number' is effective
+            // but an explicit check here is safer before setting env var.
+            // Throwing an error here will be caught by yargs .fail()
+            throw new Error(`Error: Invalid port number "${value}". Port must be between 1 and 65535.`);
+          }
+          process.env.HTTP_PORT = String(value);
+          // Dynamically require logger here if we want to log this early
+          // For now, this side-effect is silent until configService is fully loaded by a command.
         }
-        process.env.HTTP_PORT = String(value);
       }
-    }
-  })
-  .command(
-    'changelog',
-    'Show the project changelog',
-    (yargsInstance) => {
-      return yargsInstance.option('verbose', {
-        type: 'boolean',
-        default: false,
-        description: 'Show verbose changelog output (future use)',
-      });
-    },
-    (argv) => {
-      displayChangelog(argv.verbose);
-    }
-  )
-  .command(
-    // Default command for starting the server
-    ['start [repoPath]', '$0 [repoPath]'],
-    'Start the CodeCompass server (default command)',
-    (yargsInstance) => {
-      return yargsInstance.positional('repoPath', {
-        type: 'string',
-        default: '.',
-        describe: 'Path to the git repository to serve',
-      });
-    },
-    async (argv) => {
-      // process.env.HTTP_PORT would have been set by the global 'port' option's middleware
-      await startServerHandler(argv.repoPath as string);
-    }
-  )
-  .version(getPackageVersion())
-  .alias('v', 'version')
-  .help()
-  .alias('h', 'help')
-  .wrap(Math.min(120, yargs().terminalWidth()))
-  .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass');
+    })
+    .command(
+      'changelog',
+      'Show the project changelog',
+      (yargsInstance) => {
+        return yargsInstance.option('verbose', {
+          type: 'boolean',
+          default: false,
+          description: 'Show verbose changelog output (future use)',
+        });
+      },
+      (argv) => { // This handler is synchronous
+        displayChangelog(argv.verbose);
+        // yargs expects a promise from async handlers, or nothing from sync.
+        // If displayChangelog were async, we'd await it.
+      }
+    )
+    .command(
+      // Default command for starting the server
+      ['start [repoPath]', '$0 [repoPath]'],
+      'Start the CodeCompass server (default command)',
+      (yargsInstance) => {
+        return yargsInstance.positional('repoPath', {
+          type: 'string',
+          default: '.',
+          describe: 'Path to the git repository to serve',
+        });
+      },
+      async (argv) => {
+        // process.env.HTTP_PORT would have been set by the global 'port' option's 'apply'
+        await startServerHandler(argv.repoPath as string);
+      }
+    );
 
-// Dynamically add commands for each known tool
-KNOWN_TOOLS.forEach(toolName => {
-  let commandDescription = `Execute the '${toolName}' tool.`;
-  let exampleParams = `'{"some_param": "value"}'`;
-  if (toolName === 'get_changelog' || toolName === 'get_indexing_status') {
-    exampleParams = '(no parameters needed)';
-  } else if (toolName === 'agent_query') {
-    exampleParams = `'{"query": "How is auth handled?", "sessionId": "my-session"}'`;
-  } else if (toolName === 'get_session_history') {
-    exampleParams = `'{"sessionId": "your-session-id"}' (sessionId is required)`;
-  }
+  // Dynamically add commands for each known tool
+  KNOWN_TOOLS.forEach(toolName => {
+    let commandDescription = `Execute the '${toolName}' tool.`;
+    let exampleParams = `'{"some_param": "value"}'`;
+    // Customize example params based on tool
+    if (toolName === 'get_changelog' || toolName === 'get_indexing_status') {
+      exampleParams = '(no parameters needed)';
+    } else if (toolName === 'agent_query') {
+      exampleParams = `'{"query": "How is auth handled?", "sessionId": "my-session"}'`;
+    } else if (toolName === 'get_session_history') {
+      exampleParams = `'{"sessionId": "your-session-id"}' (sessionId is required)`;
+    } // Add more else if for other tools with specific examples
 
+    cli.command(
+      `${toolName} [params]`,
+      commandDescription,
+      (yargsInstance) => {
+        return yargsInstance.positional('params', {
+          type: 'string',
+          describe: `JSON string of parameters for ${toolName}. Example: ${exampleParams}`,
+          // Default to '{}' for tools that can accept no params but still need a JSON object
+          default: (toolName === 'get_changelog' || toolName === 'get_indexing_status') ? '{}' : undefined,
+        });
+      },
+      async (argv) => {
+        // process.env.HTTP_PORT would have been set by the global 'port' option's 'apply'
+        await handleClientCommand(toolName, argv.params as string | undefined);
+      }
+    );
+  });
 
-  cli.command(
-    `${toolName} [params]`,
-    commandDescription,
-    (yargsInstance) => {
-      return yargsInstance.positional('params', {
-        type: 'string',
-        describe: `JSON string of parameters for ${toolName}. Example: ${exampleParams}`,
-        default: toolName === 'get_changelog' || toolName === 'get_indexing_status' ? '{}' : undefined,
-      });
-    },
-    async (argv) => {
-      // process.env.HTTP_PORT would have been set by the global 'port' option's middleware
-      await handleClientCommand(toolName, argv.params as string | undefined);
-    }
-  );
-});
+  cli
+    .version(getPackageVersion()) // Setup --version
+    .alias('v', 'version')
+    .help() // Setup --help
+    .alias('h', 'help')
+    .wrap(Math.min(120, yargs(hideBin(process.argv)).terminalWidth())) // Use yargs().terminalWidth()
+    .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass')
+    .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
+    .strict() // Error on unknown options/commands
+    .fail((msg, err, yargsInstance) => {
+      // Dynamically import logger for failure messages if possible
+      try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { logger } = require('./lib/config-service') as typeof import('./lib/config-service');
+          if (err) {
+              logger.error('CLI Error:', { message: err.message, stack: err.stack });
+          } else if (msg) {
+              logger.error('CLI Usage Error:', msg);
+          }
+      } catch (_ignored) { /* fallback to console.error */ }
 
-// Finalize and parse
-cli
-  .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
-  .strict() // Error on unknown options/commands
-  .fail((msg, err, _yargs) => {
-    // Dynamically import logger for failure messages if possible
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { logger } = require('./lib/config-service') as typeof import('./lib/config-service');
-        if (err) {
-            logger.error('CLI Error:', err);
-        } else if (msg) {
-            logger.error('CLI Usage Error:', msg);
-        }
-    } catch (_ignored) { /* fallback to console.error */ }
+      if (err) {
+        // console.error(err); // yargs might print its own error message
+        // To avoid double printing, we might only print if yargs doesn't
+        // Or, customize yargs error display. For now, let yargs handle it.
+      } else {
+        // yargsInstance.showHelp(); // Show help on usage error
+        console.error(msg); // Print the specific message from yargs
+      }
+      // yargs automatically exits with 1 on failure by default
+      // process.exit(1); // This might be redundant if yargs handles it
+    });
 
-    if (err) {
-      console.error(err); // Log the actual error object
-    } else {
-      console.error(msg || 'An unknown CLI error occurred.'); // Log the message from yargs
-    }
-    // yargs.help() might be useful here if msg indicates a help-related issue
-    // _yargs.showHelp(); // Could show help on failure
-    process.exit(1);
-  })
-  .parseAsync() // Use parseAsync for promise-based handlers
-  .then(() => {
-    // This block executes if all commands resolved successfully.
+  try {
+    await cli.parseAsync(); // Use parseAsync for promise-based handlers
+    // If parseAsync resolves, it means command handlers (if any ran) resolved.
     // yargs handles process.exit for its own errors or if handlers throw.
-    // If a handler resolves but we still need to exit (e.g. after client command success),
-    // the handler itself should call process.exit or yargs will exit with 0.
-    // `handleClientCommand` now resolves on success, so yargs exits 0.
-    // `startServerHandler` resolves when server is running (or for SIGINT).
-  })
-  .catch(error => {
+  } catch (error) {
     // This catch is for unhandled promise rejections from command handlers
-    // or errors not caught by yargs' .fail()
+    // that weren't caught by yargs' .fail() or if parseAsync itself throws.
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { logger } = require('./lib/config-service') as typeof import('./lib/config-service');
@@ -355,4 +356,8 @@ cli
     } catch (_ignored) { /* fallback to console.error */ }
     console.error('Critical error in CLI execution:', error);
     process.exit(1);
-  });
+  }
+}
+
+// Execute the main function
+main(); // No .catch here, main's internal try/catch for parseAsync handles it.
