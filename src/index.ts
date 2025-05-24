@@ -50,26 +50,29 @@ Server Commands:
                                codecompass --port 3005 /path/to/repo
 
 Client Commands (if a server is running on the configured port):
+  Parameters are provided as a JSON string. For tools supporting session context,
+  you can include a "sessionId": "your-session-id" pair in the JSON parameters.
+
   agent_query <json_params>
                       Execute the 'agent_query' tool.
-                      Example: codecompass agent_query '{"query": "How is auth handled?"}'
+                      Example: codecompass agent_query '{"query": "How is auth handled?", "sessionId": "my-session"}'
   search_code <json_params>
                       Execute the 'search_code' tool.
-                      Example: codecompass search_code '{"query": "user login function"}'
+                      Example: codecompass search_code '{"query": "user login function", "sessionId": "my-session"}'
   get_changelog       Execute the 'get_changelog' tool (no parameters).
   get_indexing_status Execute the 'get_indexing_status' tool (no parameters).
   switch_suggestion_model <json_params>
                       Execute the 'switch_suggestion_model' tool.
                       Example: codecompass switch_suggestion_model '{"model": "deepseek-coder", "provider": "deepseek"}'
   get_session_history <json_params>
-                      Execute the 'get_session_history' tool.
-                      Example: codecompass get_session_history '{"sessionId": "some-id"}'
+                      Execute the 'get_session_history' tool. Requires "sessionId".
+                      Example: codecompass get_session_history '{"sessionId": "your-session-id"}'
   generate_suggestion <json_params>
                       Execute the 'generate_suggestion' tool.
-                      Example: codecompass generate_suggestion '{"query": "optimize this loop"}'
+                      Example: codecompass generate_suggestion '{"query": "optimize this loop", "sessionId": "my-session"}'
   get_repository_context <json_params>
                       Execute the 'get_repository_context' tool.
-                      Example: codecompass get_repository_context '{"query": "main API components"}'
+                      Example: codecompass get_repository_context '{"query": "main API components", "sessionId": "my-session"}'
 
 
 Other Commands:

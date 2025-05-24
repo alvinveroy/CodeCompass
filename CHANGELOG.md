@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - If no server is running, or if the command is not a known tool, the CLI proceeds with server startup or other commands as before.
     - Updated `displayHelp()` in `src/index.ts` with examples for client command usage.
 ### Changed
+- **CLI Client Mode Enhancements (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Improved error reporting and output formatting in `executeClientCommand` within `src/index.ts`.
+    - Clarified in `--help` output that `sessionId` can be included in the JSON parameters for client tool calls that support session context. The existing parameter parsing mechanism already supports passing this through.
 - **Tool and Prompt Name Refactoring (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Removed the `bb7_` prefix from all tool and prompt names for brevity and cleaner naming.
     - Updated tool registration and capability definitions in `src/lib/server.ts`.

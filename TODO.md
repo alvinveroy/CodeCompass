@@ -30,10 +30,9 @@ This document outlines the tasks required to enhance CodeCompass.
         - Implemented dynamic import of `configService` and MCP SDK client components.
         - Implemented MCP client setup (`Client`, `StreamableHTTPClientTransport`).
         - Implemented `client.callTool()` to execute the specified tool with parsed JSON parameters.
-        - Implemented basic console output for tool results and error handling for connection/tool call failures.
+        - Implemented improved error reporting and output formatting for tool results and connection/tool call failures.
+    - **Session ID Management for Client Calls**: (Considered/Supported) The current mechanism allows users to pass `sessionId` within the JSON parameters for tools that support it. Help text updated to reflect this. No further client-side generation or automatic management of session IDs is planned for this phase.
     - **Further Enhancements (Future)**:
-        - More sophisticated error reporting and user feedback for client mode.
-        - Standardized output formatting for various tool responses.
-        - Consider session ID management for client calls if needed by specific tools or for context continuity.
         - Add comprehensive unit/integration tests for the client mode functionality.
         - Evaluate using a dedicated CLI argument parsing library (e.g., `yargs`, `commander`) if CLI complexity grows further.
+        - Explore more advanced output formatting options if needed for specific tools.
