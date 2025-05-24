@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
-- **Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+- **Unit Test Fix (server.test.ts - Incorrect Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Corrected a failing unit test in `src/tests/server.test.ts` (`Server Startup and Port Handling > should start the server and listen on the configured port if free`).
+    - Removed the assertion `expect(mockedMcpServerConnect).toHaveBeenCalled()`. This assertion was incorrect because `McpServer.connect()` is only invoked when an MCP client sends an `initialize` request to the `/mcp` endpoint, not during the basic HTTP server startup sequence that this test verifies.
+- **Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [PREVIOUS_GIT_COMMIT_ID_FOR_THIS_ENTRY]):**
     - Resolved critical TypeScript build errors (`TS2451` - redeclared variables `finalDeclaredTools`, `finalDeclaredPrompts`, `expressApp`, `httpPort`, `httpServer`, `listenPromise`; `TS2304` - cannot find name `configureMcpServerInstance`) and Vitest test failures in `src/lib/server.ts`.
     - Added the missing `configureMcpServerInstance` helper function at the module level to handle per-session MCP server setup.
     - Removed a large duplicated block of code within `startServer` that was responsible for the redeclaration errors. The HTTP server setup and route registration now occur only once.

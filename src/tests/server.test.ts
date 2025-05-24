@@ -449,7 +449,10 @@ describe('Server Startup and Port Handling', () => {
      
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`)); // Changed mockedLogger to ml and mockedConfigService to mcs
      
-    expect(mockedMcpServerConnect).toHaveBeenCalled(); // Check if MCP server connect is called
+    // Removed: expect(mockedMcpServerConnect).toHaveBeenCalled();
+    // This assertion is incorrect for this test, as McpServer.connect is only called
+    // upon an actual MCP client initialization request to the /mcp endpoint,
+    // not during general HTTP server startup.
     expect(mockProcessExit).not.toHaveBeenCalled();
   });
     // Add the new 'it' block here, starting around line 395 of your provided file content

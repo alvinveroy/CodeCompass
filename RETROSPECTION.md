@@ -1,3 +1,23 @@
+# Retrospection for Unit Test Fix (server.test.ts - Incorrect Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The Vitest error message `AssertionError: expected "spy" to be called at least once` clearly indicated which assertion was failing.
+- Analysis of the `startServer` logic in `src/lib/server.ts` and the mock setup for `McpServer` revealed that the `connect` method is tied to MCP client initialization, not general HTTP server startup.
+
+## What could be improved?
+- **Test Specificity:** The failing test (`should start the server and listen on the configured port if free`) had an assertion (`expect(mockedMcpServerConnect).toHaveBeenCalled()`) that was outside its core responsibility. Tests should be focused on verifying specific units of behavior.
+- **Test Coverage for MCP Handshake:** While this fix corrects the immediate failing test, it highlights a potential gap: the MCP initialization handshake (POST to `/mcp` leading to `McpServer.connect()`) might not be explicitly tested.
+
+## What did we learn?
+- It's crucial to ensure that test assertions align precisely with the behavior being verified by that specific test case.
+- Complex server startup sequences involving multiple protocols or deferred initializations (like MCP session setup) require careful consideration of when specific methods are expected to be called.
+- `McpServer.connect()` in the current design is invoked as part of handling an MCP `initialize` request, not as part of the initial `startServer()` call that brings up the HTTP listener.
+
+## Action Items / Follow-ups
+- Review other tests to ensure assertions are tightly coupled to the specific behavior each test aims to verify.
+- Consider adding new, focused integration tests for the `/mcp` endpoint to specifically verify the MCP handshake, including the creation of `McpServer` instances and the invocation of their `connect` method upon valid `initialize` requests.
+
+---
 # Retrospection for Build Fix (SDK Imports & Server Property Access) (Git Commit ID: 8684429)
 
 ## What went well?
