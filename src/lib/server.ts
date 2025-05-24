@@ -86,6 +86,7 @@ export function normalizeToolParams(params: unknown): Record<string, unknown> {
 
 // Add this function definition at the module level, before startServer
 
+// eslint-disable-next-line @typescript-eslint/require-await
 async function configureMcpServerInstance(
   mcpInstance: McpServer,
   qdrantClient: QdrantClient,

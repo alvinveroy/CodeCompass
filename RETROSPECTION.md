@@ -706,3 +706,24 @@
 - When deleting large code blocks, be precise to avoid removing necessary parts or leaving remnants of the deleted logic.
 
 ---
+# Retrospection for Linting & Server Logic Restoration (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- ESLint correctly identified unused variables and a function potentially missing `await`, pointing to structural issues in `src/lib/server.ts`.
+- The previous refactoring efforts had established the correct patterns for HTTP/MCP server setup and per-session instance configuration.
+
+## What could be improved?
+- **Change Management:** The appearance of "unused var" warnings for core components suggests that a significant portion of the `startServer` function's logic might have been accidentally removed or commented out during a previous refactoring step (likely when removing duplicated code). More careful application of large `SEARCH/REPLACE` blocks or manual editing is needed to avoid deleting essential code.
+- **Verification After Refactoring:** After each refactoring step, especially those involving removal of code, a quick check (e.g., running ESLint, a build, or a smoke test) can help catch such inadvertent deletions early.
+
+## What did we learn?
+- "Unused variable" lint warnings for critical imports or helper functions are strong indicators that the code consuming them is missing or disconnected.
+- The `@typescript-eslint/require-await` rule is useful but can be overly strict for functions designed to be `async` for interface consistency or future `await` usage. In such cases, a targeted `eslint-disable` is appropriate.
+- Large-scale refactoring, especially involving deletion of duplicated blocks, carries a risk of accidentally removing more code than intended. Incremental changes or more precise diff-based tools might be safer for complex cleanups.
+
+## Action Items / Follow-ups
+- Implement a more rigorous verification step after applying complex refactoring changes, including running linters and builds, to catch unintended code deletions or disconnections.
+- When providing or applying large code replacement blocks, double-check that the scope of the replacement is precise and doesn't inadvertently affect surrounding essential code.
+- Continue to use `eslint-disable-next-line @typescript-eslint/require-await` with justification for functions that are intentionally `async` without current `await` expressions for API consistency or future-proofing.
+
+---

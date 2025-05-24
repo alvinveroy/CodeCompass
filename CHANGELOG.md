@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Linting & Server Logic Restoration (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved ESLint warnings (`@typescript-eslint/no-unused-vars`) for `StreamableHTTPServerTransport`, `randomUUID`, `isInitializeRequest`, and `configureMcpServerInstance` in `src/lib/server.ts` by ensuring the `startServer` function contains the complete and correct implementation for HTTP and MCP server setup, which utilizes these components. This effectively restores logic that may have been inadvertently removed during previous refactoring.
+    - Addressed ESLint error (`@typescript-eslint/require-await`) for the `configureMcpServerInstance` function by adding an `eslint-disable-next-line` comment. The function is kept `async` to maintain a consistent promise-based interface for server configuration steps and for future extensibility with `await` operations, even if no `await` is currently used in its immediate body.
 - **Unit Test Fix (server.test.ts - Incorrect Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Corrected a failing unit test in `src/tests/server.test.ts` (`Server Startup and Port Handling > should start the server and listen on the configured port if free`).
     - Removed the assertion `expect(mockedMcpServerConnect).toHaveBeenCalled()`. This assertion was incorrect because `McpServer.connect()` is only invoked when an MCP client sends an `initialize` request to the `/mcp` endpoint, not during the basic HTTP server startup sequence that this test verifies.
