@@ -460,7 +460,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
     const activeSessionTransports: Map<string, StreamableHTTPServerTransport> = new Map();
 
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+     
     expressApp.post('/mcp', async (req: express.Request, res: express.Response) => {
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
       let transport: StreamableHTTPServerTransport | undefined = sessionId ? activeSessionTransports.get(sessionId) : undefined;
@@ -527,9 +527,9 @@ export async function startServer(repoPath: string): Promise<void> {
         }
       }
     };
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+     
     expressApp.get('/mcp', handleSessionRequest);
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+     
     expressApp.delete('/mcp', handleSessionRequest);
     logger.info(`MCP communication will be available at the /mcp endpoint via POST, GET, DELETE.`);
 
@@ -566,10 +566,10 @@ export async function startServer(repoPath: string): Promise<void> {
                 console.info(`Last Updated: ${existingStatus.lastUpdatedAt}`);
                 console.info(`-----------------------------------------------------------\n`);
                 logger.info("Current instance will exit as another CodeCompass server is already running.");
-                httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use by another CodeCompass instance.`, 0));
+                httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use by another CodeCompass instance.`, 0));
               } else {
                 logger.error(`Failed to retrieve status from existing CodeCompass server on port ${httpPort}. It responded to ping but status endpoint failed. Status: ${statusResponse.status}`);
-                httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use, status fetch failed.`, 1));
+                httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use, status fetch failed.`, 1));
               }
             } catch (statusError: unknown) {
               if (axios.isAxiosError(statusError)) {
@@ -583,12 +583,12 @@ export async function startServer(repoPath: string): Promise<void> {
               } else {
                 logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${String(statusError)}`);
               }
-              httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use, status fetch error.`, 1));
+              httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use, status fetch error.`, 1));
             }
           } else {
             logger.error(`Port ${httpPort} is in use by non-CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`);
             logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
-            httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use by non-CodeCompass server.`, 1));
+            httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use by non-CodeCompass server.`, 1));
           }
         } catch (pingError) {
           logger.error(`Port ${httpPort} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
@@ -604,11 +604,11 @@ export async function startServer(repoPath: string): Promise<void> {
              logger.error(`Ping error details: ${String(pingError)}`);
           }
           logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
-          httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use or ping failed.`, 1));
+          httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use or ping failed.`, 1));
         }
       } else {
         logger.error(`Failed to start HTTP server on port ${httpPort}: ${error.message}`);
-        httpServerSetupReject!(new ServerStartupError(`HTTP server error: ${error.message}`, 1));
+        httpServerSetupReject(new ServerStartupError(`HTTP server error: ${error.message}`, 1));
       }
     });
 
