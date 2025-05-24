@@ -626,15 +626,16 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     // The McpServer instance and its registrations will now be handled per session for HTTP transport.
     // The serverCapabilities object is defined once and used for each new McpServer instance.
 
-    // This block for finalDeclaredTools, finalDeclaredPrompts, and expressApp is the correct one.
-    // The duplicated block later in the code will be removed.
-    // Note: These logs for finalDeclaredTools and finalDeclaredPrompts are from the *first* (correct) declaration block.
-    // The user's SEARCH block started *after* the first expressApp declaration, but *included* the second (faulty)
-    // declarations of finalDeclaredTools, finalDeclaredPrompts, and expressApp.
-    // The REPLACE block here correctly *omits* these redeclarations.
+    const finalDeclaredTools = Object.keys(serverCapabilities.tools);
+    logger.info(`Declared tools in capabilities: ${finalDeclaredTools.join(', ')}`);
+    const finalDeclaredPrompts = Object.keys(serverCapabilities.prompts);
+    logger.info(`Declared prompts in capabilities: ${finalDeclaredPrompts.join(', ')}`);
 
+    // Setup Express HTTP server for status, notifications, and MCP
+    const expressApp = express();
+    expressApp.use(express.json()); // Middleware to parse JSON bodies
+    
     // --- Start: HTTP API Endpoints (Non-MCP) ---
-    // Note: expressApp here refers to the *first* (correctly scoped) instance.
     expressApp.get('/api/indexing-status', (_req: express.Request, res: express.Response): void => {
       const currentStatus = getGlobalIndexingStatus();
       res.json(currentStatus);
@@ -684,7 +685,7 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
         // New initialization request
         logger.info('MCP POST: Initialization request, creating new transport and server instance.');
         
-        const newTransport = new StreamableHTTPServerTransport({ // Corrected: No 'server' argument here
+        const newTransport = new StreamableHTTPServerTransport({
           sessionIdGenerator: randomUUID,
           onsessioninitialized: (newSessionId) => {
             activeSessionTransports.set(newSessionId, newTransport);
@@ -706,9 +707,10 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
           capabilities: serverCapabilities,
         });
         
+        // configureMcpServerInstance is defined at the module level
         await configureMcpServerInstance(sessionServer, qdrantClient, repoPath, suggestionModelAvailable);
         
-        await sessionServer.connect(newTransport); // Connect the new server instance to the new transport
+        await sessionServer.connect(newTransport);
         transport = newTransport;
       } else {
         logger.warn(`MCP POST: Bad Request. No valid session ID and not an init request. Headers: ${JSON.stringify(req.headers)}, Body: ${JSON.stringify(req.body).substring(0,100)}...`);
@@ -766,8 +768,9 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     expressApp.delete('/mcp', handleSessionRequest);
     logger.info(`MCP communication will be available at the /mcp endpoint via POST, GET, DELETE.`);
 
+    // This is the primary HTTP server setup block. The redundant one later is removed.
     const httpPort = configService.HTTP_PORT;
-    const httpServer = http.createServer(expressApp); // expressApp is already a request handler
+    const httpServer = http.createServer(expressApp);
 
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     httpServer.on('error', async (error: NodeJS.ErrnoException) => {
@@ -853,7 +856,6 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     await Promise.race([listenPromise, httpServerSetupPromise]);
     
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
-    // Tool stubs logging already done earlier by the first (correct) logging lines.
     
     console.error(`CodeCompass v${VERSION} HTTP Server running on port ${httpPort}, with MCP at /mcp`);
     
