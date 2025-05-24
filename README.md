@@ -124,8 +124,10 @@ codecompass <tool_name> [json_parameters] [--json] [--port <number>]
     *   Example: `codecompass search_code '{"query": "database connection setup"}'`
 *   `get_changelog`: Retrieves the project's `CHANGELOG.md`.
     *   Example: `codecompass get_changelog`
-*   `get_indexing_status`: Gets the current status of repository indexing.
+*   `get_indexing_status`: Gets the current status of repository indexing. (May be relayed if another CC instance is primary)
     *   Example: `codecompass get_indexing_status --json`
+*   `trigger_repository_update`: Triggers a re-indexing of the repository. (May be relayed)
+    *   Example: `codecompass trigger_repository_update`
 *   `switch_suggestion_model <json_params>`: Switches the suggestion model/provider.
     *   Example: `codecompass switch_suggestion_model '{"model": "deepseek-coder", "provider": "deepseek"}'`
 *   `get_session_history <json_params>`: Retrieves history for a session ID. (Requires `sessionId` in params).
