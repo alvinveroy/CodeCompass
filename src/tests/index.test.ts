@@ -98,10 +98,15 @@ describe('CLI with yargs (index.ts)', () => {
   };
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.resetAllMocks(); 
     originalProcessEnv = { ...process.env };
     originalArgv = [...process.argv];
-    
+
+    // Initialize console and process spies
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as unknown as typeof process.exit);
+    mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(vi.fn());
+    mockConsoleError = vi.spyOn(console, 'error').mockImplementation(vi.fn());
+        
     // Reset the mutable mockConfigServiceInstance to its original state by creating fresh copies
     currentMockConfigServiceInstance = { ...originalMockConfigServiceInstance };
     currentMockLoggerInstance = {
@@ -125,11 +130,12 @@ describe('CLI with yargs (index.ts)', () => {
   });
     
   async function runMainWithArgs(args: string[]) {
-    process.argv = ['node', 'index.js', ...args];
+    const indexPath = require.resolve('../../dist/index.js'); // Define indexPath first
+    process.argv = ['node', indexPath, ...args]; // Use absolute indexPath here
     vi.resetModules(); 
-    
+      
     // Dynamically resolve paths as src/index.ts would
-    const indexPath = require.resolve('../../dist/index.js');
+    // const indexPath = require.resolve('../../dist/index.js'); // This line is now effectively moved up
     const SUT_distPath = path.dirname(indexPath); 
     const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); 
     
@@ -315,8 +321,8 @@ describe('CLI with yargs (index.ts)', () => {
       await new Promise(setImmediate);
 
 
-      const { spawn } = require('child_process');
-      expect(spawn).toHaveBeenCalledWith(
+      // const { spawn } = require('child_process'); // Not needed
+      expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath, // node
         [process.argv[1], 'start', '.', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)], // script, start, repoPath, --port
         expect.anything()
@@ -339,8 +345,8 @@ describe('CLI with yargs (index.ts)', () => {
       else throw new Error("stderr 'data' listener not attached");
       await new Promise(setImmediate);
 
-      const { spawn } = require('child_process');
-      expect(spawn).toHaveBeenCalledWith(
+      // const { spawn } = require('child_process'); // Not needed
+      expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath,
         [process.argv[1], 'start', '/custom/path', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)],
         expect.anything()
@@ -351,8 +357,8 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should handle client command failure (spawn error) and log via yargs .fail()', async () => {
       const spawnError = new Error("Failed to spawn");
-      const { spawn } = require('child_process');
-      vi.mocked(spawn).mockImplementation(() => { throw spawnError; }); // Simulate spawn throwing an error
+      // const { spawn } = require('child_process'); // Not needed
+      vi.mocked(mockSpawnFn).mockImplementation(() => { throw spawnError; }); // Use mockSpawnFn
 
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}']);
@@ -386,8 +392,8 @@ describe('CLI with yargs (index.ts)', () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query": "test"']); // Invalid JSON
       // Spawn won't happen if JSON is invalid before that
-      const { spawn } = require('child_process');
-      expect(spawn).not.toHaveBeenCalled(); 
+      // const { spawn } = require('child_process'); // Not needed
+      expect(mockSpawnFn).not.toHaveBeenCalled(); 
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Invalid JSON parameters for tool 'agent_query'"));
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: expect.stringContaining('Invalid JSON parameters') }));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
@@ -427,8 +433,8 @@ describe('CLI with yargs (index.ts)', () => {
       await new Promise(setImmediate);
 
       expect(process.env.HTTP_PORT).toBe(String(customPort)); // Parent process.env is set by yargs
-      const { spawn } = require('child_process');
-      expect(spawn).toHaveBeenCalledWith(
+      // const { spawn } = require('child_process'); // Not needed
+      expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath,
         [process.argv[1], 'start', '.', '--port', String(customPort)], // Child gets --port
         expect.anything()
@@ -454,8 +460,8 @@ describe('CLI with yargs (index.ts)', () => {
       else throw new Error("stderr 'data' listener not attached for repo option test");
       await new Promise(setImmediate);
       
-      const { spawn } = require('child_process');
-      expect(spawn).toHaveBeenCalledWith(
+      // const { spawn } = require('child_process'); // Not needed
+      expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath,
         [process.argv[1], 'start', '/my/client/repo', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)],
         expect.anything()

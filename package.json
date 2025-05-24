@@ -76,6 +76,8 @@
     "@types/yargs": "^17.0.33",
     "eslint": "^9.8.0",
     "globals": "^15.8.0",
+    "nock": "^13.5.4",
+    "@types/nock": "^11.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.0.0",

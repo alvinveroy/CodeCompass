@@ -11,7 +11,7 @@ import express from 'express';
 import http from 'http';
 import axios from 'axios'; // Add this import
 // import { ServerRequest, ServerNotification, isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"; // No longer needed for stdio transport
-import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
+import { RequestHandlerExtra, type ServerRequest, type ServerNotification } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
 import fs from "fs/promises";
 import path from "path";
@@ -469,8 +469,8 @@ export async function startServer(repoPath: string): Promise<void> {
     await configureMcpServerInstance(mainStdioMcpServer, qdrantClient, repoPath, suggestionModelAvailable);
 
     const stdioTransport = new StdioServerTransport({
-      // Assuming default options are sufficient (e.g., uses process.stdin/stdout)
-      // Consult MCP SDK documentation for StdioServerTransport options if needed.
+      readableStream: process.stdin,
+      writableStream: process.stdout,
     });
     await mainStdioMcpServer.connect(stdioTransport);
     logger.info("CodeCompass MCP server connected to stdio transport. Ready for MCP communication over stdin/stdout.");

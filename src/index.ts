@@ -216,7 +216,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     const transport = new StdioClientTransport({
       readableStream: child.stdout!, // Non-null assertion: stdio is piped
       writableStream: child.stdin!,  // Non-null assertion: stdio is piped
-    });
+    } as any); // Workaround for potential SDK type issue TS2353
     const client = new MCPClient({ name: "codecompass-cli-client", version: getPackageVersion() });
 
     await client.connect(transport);
@@ -406,8 +406,12 @@ async function main() {
           });
       },
       async (argv) => {
-        // Pass the full argv to handleClientCommand so it can access --json and --repo
-        await handleClientCommand(argv as ClientCommandArgs & { repo?: string });
+        // Construct the ClientCommandArgs object correctly, including the toolName
+        const commandArgs: ClientCommandArgs = {
+          ...(argv as any), // Cast argv to any to spread its properties
+          toolName: toolName, // This 'toolName' is from the forEach loop's scope
+        };
+        await handleClientCommand(commandArgs as ClientCommandArgs & { repo?: string });
       }
     );
   });

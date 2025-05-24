@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock } from 'vitest';
 // Add findFreePort to the import from ../lib/server
 import { normalizeToolParams, startServer, findFreePort, ServerStartupError } from '../lib/server';
-import { IndexingStatusReport } from '../lib/repository'; // For mock status
+import { IndexingStatusReport, getGlobalIndexingStatus } from '../lib/repository'; // For mock status
 import type * as httpModule from 'http'; // For types
 // Import actual modules to be mocked
 import http from 'http';
@@ -125,13 +125,6 @@ vi.mock('isomorphic-git', async (importOriginal) => {
 });
 
 // --- START: vi.mock for 'http' and related definitions ---
-// Define shared mock function instances for the http server methods
-const mockHttpServerListenFn = vi.fn(); // Will be configured per test
-const mockHttpServerOnFn = vi.fn();     // Will be configured per test
-const mockHttpServerCloseFn = vi.fn();  // Will be configured per test
-const mockHttpServerAddressFn = vi.fn(); // Will be configured per test
-const mockHttpServerSetTimeoutFn = vi.fn<(...args: Parameters<httpModule.Server['setTimeout']>) => ReturnType<httpModule.Server['setTimeout']>>();
-
 // Define the mock http server instance that createServer will return
 // This instance's methods will be dynamically reassigned in tests for findFreePort
 let currentMockHttpServerInstance: Partial<httpModule.Server> & {
@@ -145,6 +138,14 @@ let currentMockHttpServerInstance: Partial<httpModule.Server> & {
 
 vi.mock('http', async (importOriginal) => {
   const actualHttpModule = await importOriginal() as typeof httpModule;
+
+  // Define mock functions inside the factory to avoid hoisting issues
+  const mockHttpServerListenFn = vi.fn();
+  const mockHttpServerOnFn = vi.fn();
+  const mockHttpServerCloseFn = vi.fn();
+  const mockHttpServerAddressFn = vi.fn();
+  const mockHttpServerSetTimeoutFn = vi.fn<(...args: Parameters<httpModule.Server['setTimeout']>) => ReturnType<httpModule.Server['setTimeout']>>();
+
   const createMockServer = () => ({
     listen: mockHttpServerListenFn,
     on: mockHttpServerOnFn,
@@ -388,6 +389,8 @@ type MockedConfigService = Pick<
   // logger removed as it's a separate export, not a property of configService mock
   reloadConfigsFromFile: Mock<() => void>; // Corrected generic usage
   VERSION: string; // VERSION is part of the mock, but not original ConfigService
+  IS_UTILITY_SERVER_DISABLED: boolean; // Added
+  RELAY_TARGET_UTILITY_PORT?: number; // Added
   // Add other methods from ConfigService that are mocked and used by server.ts
 };
 
@@ -535,7 +538,7 @@ describe('Server Startup and Port Handling', () => {
           error.code = 'EADDRINUSE';
           errorHandler(error);
         }
-        return mockHttpServerInstance;
+        return currentMockHttpServerInstance as unknown as httpModule.Server;
       });
 
     // Mock axios.get for /api/ping
@@ -591,7 +594,7 @@ describe('Server Startup and Port Handling', () => {
           error.code = 'EADDRINUSE';
           errorHandler(error); // Simulate EADDRINUSE
         }
-        return mockHttpServerInstance;
+        return currentMockHttpServerInstance as unknown as httpModule.Server;
       }
     );
 
@@ -615,18 +618,6 @@ describe('Server Startup and Port Handling', () => {
     //   }
     // });
     
-     
-    await expect(startServer('/fake/repo')).rejects.toThrow(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      expect.objectContaining({
-        name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`, // Use localPingError
-        exitCode: 1,
-        requestedPort: mcs.HTTP_PORT,
-        existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' })
-      })
-    );
-
     const localPingError = new Error('Connection refused'); // Define localPingError here
     // eslint-disable-next-line @typescript-eslint/no-unbound-method
     vi.mocked(axios.get).mockImplementation(async (url: string) => {
@@ -637,6 +628,17 @@ describe('Server Startup and Port Handling', () => {
     });
     
     await expect(startServer('/fake/repo')).rejects.toThrow(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      expect.objectContaining({
+        name: "ServerStartupError",
+        message: `Port ${mcs.HTTP_PORT} is in use by an unknown or unresponsive service. Ping error: ${localPingError.message}`,
+        exitCode: 1,
+        requestedPort: mcs.HTTP_PORT,
+        existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' })
+      })
+    );
+    // The following duplicate expect block was removed as per user's instruction to move localPingError definition up.
+    // await expect(startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
         message: `Port ${mcs.HTTP_PORT} is in use by an unknown or unresponsive service. Ping error: ${localPingError.message}`,
@@ -660,7 +662,7 @@ describe('Server Startup and Port Handling', () => {
         error.code = 'EADDRINUSE';
         errorHandler(error); // Simulate EADDRINUSE
       }
-      return mockHttpServerInstance;
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
     });
 
     // Mock axios.get for /api/ping
@@ -720,7 +722,7 @@ describe('Server Startup and Port Handling', () => {
         const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         errorHandler(otherError);
       }
-      return mockHttpServerInstance;
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
     });
     
     // We need to ensure listen is called to trigger the 'on' setup
@@ -969,7 +971,7 @@ describe('startProxyServer', () => {
     const proxyListenPort = requestedPort + 100; // Assume findFreePort will give this
     
     // Mock findFreePort specifically for startProxyServer tests
-    const serverLib = await import('../lib/server');
+    const serverLib = await import('../lib/server.js');
     const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
@@ -994,7 +996,7 @@ describe('startProxyServer', () => {
 
   it('should proxy POST /mcp with body and headers', async () => {
     const proxyListenPort = requestedPort + 101;
-    const serverLib = await import('../lib/server');
+    const serverLib = await import('../lib/server.js');
     const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
 
     const requestBody = { jsonrpc: "2.0", method: "test", params: { data: "value" }, id: 1 };
@@ -1031,7 +1033,7 @@ describe('startProxyServer', () => {
 
   it('should proxy GET /mcp for SSE', async () => {
     const proxyListenPort = requestedPort + 102;
-    const serverLib = await import('../lib/server');
+    const serverLib = await import('../lib/server.js');
     const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
     const sessionId = "sse-session-id";
 
@@ -1063,7 +1065,7 @@ describe('startProxyServer', () => {
   
   it('should proxy DELETE /mcp', async () => {
     const proxyListenPort = requestedPort + 103;
-    const serverLib = await import('../lib/server');
+    const serverLib = await import('../lib/server.js');
     const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
     const sessionId = "delete-session-id";
 
@@ -1086,7 +1088,7 @@ describe('startProxyServer', () => {
 
   it('should proxy /api/indexing-status', async () => {
     const proxyListenPort = requestedPort + 104;
-    const serverLib = await import('../lib/server');
+    const serverLib = await import('../lib/server.js');
     const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
     const mockStatus = { status: 'idle', message: 'Target server is idle' };
 
@@ -1105,7 +1107,7 @@ describe('startProxyServer', () => {
 
   it('should handle target server unreachable for /mcp', async () => {
     const proxyListenPort = requestedPort + 105;
-    const serverLib = await import('../lib/server');
+    const serverLib = await import('../lib/server.js');
     const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
@@ -1129,7 +1131,7 @@ describe('startProxyServer', () => {
 
   it('should forward target server 500 error for /mcp', async () => {
     const proxyListenPort = requestedPort + 106;
-    const serverLib = await import('../lib/server');
+    const serverLib = await import('../lib/server.js');
     const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
     const errorBody = { jsonrpc: "2.0", error: { code: -32000, message: "Target Internal Error" }, id: null };
 
@@ -1151,7 +1153,7 @@ describe('startProxyServer', () => {
   });
    it('should reject if findFreePort fails', async () => {
     const findFreePortError = new Error("No ports for proxy!");
-    const serverLib = await import('../lib/server');
+    const serverLib = await import('../lib/server.js');
     const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockRejectedValue(findFreePortError);
 
     await expect(serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
@@ -1188,7 +1190,7 @@ describe('MCP Tool Relaying', () => {
       status: 'idle', message: 'Local idle status', overallProgress: 0, lastUpdatedAt: new Date().toISOString()
     } as IndexingStatusReport);
     
-    const { indexRepository } = await import('../lib/repository');
+    const { indexRepository } = await import('../lib/repository.js');
     vi.mocked(indexRepository).mockResolvedValue(undefined);
 
     // Simulate McpServer setup to register tools
@@ -1204,7 +1206,7 @@ describe('MCP Tool Relaying', () => {
     // To prevent full server start, we can make http.listen throw an error *after* tools are registered.
     
     // Minimal mock for getLLMProvider for tool registration
-    const { getLLMProvider: getLLMProviderActual } = await import('../lib/llm-provider');
+    const { getLLMProvider: getLLMProviderActual } = await import('../lib/llm-provider.js');
     vi.mocked(getLLMProviderActual).mockResolvedValue({
         checkConnection: vi.fn().mockResolvedValue(true),
         generateText: vi.fn().mockResolvedValue("mocked text"),
@@ -1241,7 +1243,7 @@ describe('MCP Tool Relaying', () => {
 
     const handler = capturedToolHandlers['get_indexing_status'];
     expect(handler).toBeDefined();
-    const result = await handler({}, undefined);
+    const result = await handler({} as any, {} as any); // Added as any for params
 
     expect(axios.get).toHaveBeenCalledWith(`http://localhost:3005/api/indexing-status`);
     expect(result.content[0].text).toContain('# Indexing Status (Relayed from :3005)');
@@ -1253,7 +1255,7 @@ describe('MCP Tool Relaying', () => {
     mcs.IS_UTILITY_SERVER_DISABLED = false;
     const handler = capturedToolHandlers['get_indexing_status'];
     expect(handler).toBeDefined();
-    const result = await handler({}, undefined);
+    const result = await handler({} as any, {} as any); // Added as any for params
 
     expect(vi.mocked(getGlobalIndexingStatus)).toHaveBeenCalled();
     expect(axios.get).not.toHaveBeenCalled();
@@ -1266,11 +1268,11 @@ describe('MCP Tool Relaying', () => {
     mcs.RELAY_TARGET_UTILITY_PORT = 3005;
     vi.mocked(axios.post).mockResolvedValue({ status: 202, data: { message: "Relayed update accepted" }, headers: {}, config: {} as any });
     
-    const { indexRepository } = await import('../lib/repository'); // ensure mock is used
+    const { indexRepository } = await import('../lib/repository.js'); // ensure mock is used
 
     const handler = capturedToolHandlers['trigger_repository_update'];
     expect(handler).toBeDefined();
-    const result = await handler({}, undefined);
+    const result = await handler({} as any, {} as any); // Added as any for params
 
     expect(axios.post).toHaveBeenCalledWith(`http://localhost:3005/api/repository/notify-update`, {});
     expect(result.content[0].text).toContain('# Repository Update Triggered (Relayed to :3005)');
@@ -1280,14 +1282,14 @@ describe('MCP Tool Relaying', () => {
 
   it('trigger_repository_update should trigger local indexing if relaying is disabled', async () => {
     mcs.IS_UTILITY_SERVER_DISABLED = false;
-    const { indexRepository } = await import('../lib/repository'); // ensure mock is used
+    const { indexRepository } = await import('../lib/repository.js'); // ensure mock is used
 
     const handler = capturedToolHandlers['trigger_repository_update'];
     expect(handler).toBeDefined();
-    const result = await handler({}, undefined);
+    const result = await handler({} as any, {} as any); // Added as any for params
     
     // Need to ensure the llmProvider is correctly mocked and passed for indexRepository
-    const { getLLMProvider: getLLMProviderActual } = await import('../lib/llm-provider');
+    const { getLLMProvider: getLLMProviderActual } = await import('../lib/llm-provider.js');
     const llmProviderInstance = await getLLMProviderActual();
 
 
@@ -1300,11 +1302,11 @@ describe('MCP Tool Relaying', () => {
     vi.mocked(getGlobalIndexingStatus).mockReturnValue({
       status: 'indexing_file_content', message: 'Local indexing in progress', overallProgress: 50, lastUpdatedAt: new Date().toISOString()
     } as IndexingStatusReport);
-    const { indexRepository } = await import('../lib/repository');
+    const { indexRepository } = await import('../lib/repository.js');
 
     const handler = capturedToolHandlers['trigger_repository_update'];
     expect(handler).toBeDefined();
-    const result = await handler({}, undefined);
+    const result = await handler({} as any, {} as any); // Added as any for params
 
     expect(vi.mocked(indexRepository)).not.toHaveBeenCalled();
     expect(result.content[0].text).toContain('# Repository Update Trigger Failed');
