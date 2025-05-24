@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Argument parsing in `src/index.ts` was updated to handle this option, setting `process.env.HTTP_PORT` before `ConfigService` initializes.
     - The `--help` output was updated to include information about the new `--port` option.
 ### Changed
+- **Tool and Prompt Name Refactoring (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Removed the `bb7_` prefix from all tool and prompt names for brevity and cleaner naming.
+    - Updated tool registration and capability definitions in `src/lib/server.ts`.
+    - Updated the `KNOWN_TOOLS` array and help text examples in `src/index.ts`.
 - **Server Startup Error Handling Refactor (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Modified `src/lib/server.ts`:
         - The main `catch` block in `startServer` no longer calls `process.exit()`.
