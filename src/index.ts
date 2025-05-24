@@ -52,24 +52,23 @@ Client Commands (if a server is running on the configured port):
   agent_query <json_params>
                       Execute the 'agent_query' tool.
                       Example: codecompass agent_query '{"query": "How is auth handled?"}'
-  bb7_search_code <json_params>
-                      Execute the 'bb7_search_code' tool.
-                      Example: codecompass bb7_search_code '{"query": "user login function"}'
-  bb7_get_changelog   Execute the 'bb7_get_changelog' tool (no parameters).
-  bb7_get_indexing_status
-                      Execute the 'bb7_get_indexing_status' tool (no parameters).
-  bb7_switch_suggestion_model <json_params>
-                      Execute the 'bb7_switch_suggestion_model' tool.
-                      Example: codecompass bb7_switch_suggestion_model '{"model": "deepseek-coder", "provider": "deepseek"}'
-  bb7_get_session_history <json_params>
-                      Execute the 'bb7_get_session_history' tool.
-                      Example: codecompass bb7_get_session_history '{"sessionId": "some-id"}'
-  bb7_generate_suggestion <json_params>
-                      Execute the 'bb7_generate_suggestion' tool.
-                      Example: codecompass bb7_generate_suggestion '{"query": "optimize this loop"}'
-  bb7_get_repository_context <json_params>
-                      Execute the 'bb7_get_repository_context' tool.
-                      Example: codecompass bb7_get_repository_context '{"query": "main API components"}'
+  search_code <json_params>
+                      Execute the 'search_code' tool.
+                      Example: codecompass search_code '{"query": "user login function"}'
+  get_changelog       Execute the 'get_changelog' tool (no parameters).
+  get_indexing_status Execute the 'get_indexing_status' tool (no parameters).
+  switch_suggestion_model <json_params>
+                      Execute the 'switch_suggestion_model' tool.
+                      Example: codecompass switch_suggestion_model '{"model": "deepseek-coder", "provider": "deepseek"}'
+  get_session_history <json_params>
+                      Execute the 'get_session_history' tool.
+                      Example: codecompass get_session_history '{"sessionId": "some-id"}'
+  generate_suggestion <json_params>
+                      Execute the 'generate_suggestion' tool.
+                      Example: codecompass generate_suggestion '{"query": "optimize this loop"}'
+  get_repository_context <json_params>
+                      Execute the 'get_repository_context' tool.
+                      Example: codecompass get_repository_context '{"query": "main API components"}'
 
 
 Other Commands:
@@ -116,13 +115,13 @@ function displayChangelog(verbose: boolean) {
 // This helps distinguish tool calls from repoPath arguments.
 const KNOWN_TOOLS = [
   'agent_query',
-  'bb7_search_code',
-  'bb7_get_changelog',
-  'bb7_get_indexing_status',
-  'bb7_switch_suggestion_model',
-  'bb7_get_session_history',
-  'bb7_generate_suggestion',
-  'bb7_get_repository_context',
+  'search_code',
+  'get_changelog',
+  'get_indexing_status',
+  'switch_suggestion_model',
+  'get_session_history',
+  'generate_suggestion',
+  'get_repository_context',
   // Add other tools intended for CLI client execution here
 ];
 

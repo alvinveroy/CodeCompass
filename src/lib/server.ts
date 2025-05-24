@@ -232,7 +232,7 @@ async function configureMcpServerInstance(
   registerPrompts(mcpInstance); 
   
   mcpInstance.tool(
-    "bb7_get_indexing_status",
+    "get_indexing_status", // Renamed
     "Retrieves the current status of repository indexing. Provides information on whether indexing is idle, in-progress, completed, or failed, along with progress percentage and any error messages.",
     {}, 
     (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
@@ -260,13 +260,14 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
   );
   
   mcpInstance.tool(
-    "bb7_switch_suggestion_model",
+    "switch_suggestion_model", // Renamed
     "Switches the primary model and provider used for generating suggestions. Embeddings continue to be handled by the configured Ollama embedding model. \nExample: To switch to 'deepseek-coder' (DeepSeek provider), use `{\"model\": \"deepseek-coder\", \"provider\": \"deepseek\"}`. To switch to 'llama3.1:8b' (Ollama provider), use `{\"model\": \"llama3.1:8b\", \"provider\": \"ollama\"}`. If provider is omitted, it may be inferred for known model patterns. For other providers like 'openai', 'gemini', 'claude', specify both model and provider: `{\"model\": \"gpt-4\", \"provider\": \"openai\"}`.",
     {
       model: z.string().describe("The suggestion model to switch to (e.g., 'llama3.1:8b', 'deepseek-coder', 'gpt-4')."),
       provider: z.string().optional().describe("The LLM provider for the model (e.g., 'ollama', 'deepseek', 'openai', 'gemini', 'claude'). If omitted, an attempt will be made to infer it.")
     },
     async (args: { model: string; provider?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      // ... (handler logic remains the same, just ensure logs refer to 'switch_suggestion_model')
       logger.info("Received args for switch_suggestion_model", { args });
 
       const modelToSwitchTo = args.model;
@@ -423,11 +424,11 @@ export async function startServer(repoPath: string): Promise<void> {
         "repo://version": { name: "Server Version", description: "Provides the current version...", mimeType: "text/plain" }
       },
       tools: {
-        bb7_search_code: {}, bb7_get_repository_context: {}, 
-        ...(suggestionModelAvailable ? { bb7_generate_suggestion: {} } : {}),
-        bb7_get_changelog: {}, bb7_agent_query: {}, bb7_switch_suggestion_model: {}, bb7_get_indexing_status: {},
+        search_code: {}, get_repository_context: {}, // Renamed
+        ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}), // Renamed
+        get_changelog: {}, agent_query: {}, switch_suggestion_model: {}, get_indexing_status: {}, // Renamed
       },
-      prompts: { "bb7_repository-context": {}, "bb7_code-suggestion": {}, "bb7_code-analysis": {} },
+      prompts: { "repository-context": {}, "code-suggestion": {}, "code-analysis": {} }, // Renamed
     };
 
     // This McpServer instance is primarily for defining capabilities.
@@ -659,7 +660,7 @@ function registerPrompts(server: McpServer): void {
   }
 
   server.prompt(
-    "bb7_repository-context",
+    "repository-context", // Renamed
     "Get context about your repository",
     { query: z.string().describe("The specific topic or question for which context is needed.") },
     ({ query }) => ({
@@ -671,7 +672,7 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.prompt(
-    "bb7_code-suggestion",
+    "code-suggestion", // Renamed
     "Generate code suggestions",
     { query: z.string().describe("The specific topic or problem for which a code suggestion is needed.") },
     ({ query }) => ({
@@ -683,7 +684,7 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.prompt(
-    "bb7_code-analysis",
+    "code-analysis", // Renamed
     "Analyze code problems",
     { query: z.string().describe("The code problem or snippet to be analyzed.") },
     ({ query }) => ({
@@ -707,7 +708,7 @@ function registerTools( // Removed async
   
   // Add the agent_query tool
   server.tool(
-    "bb7_agent_query",
+    "agent_query", // Renamed
     "Provides a detailed plan and a comprehensive summary for addressing complex questions or tasks related to the codebase. This tool generates these insights in a single pass. \nExample: `{\"query\": \"How is user authentication handled in this project?\"}`.",
     {
       query: z.string().describe("The question or task for the agent to process"),
@@ -715,6 +716,7 @@ function registerTools( // Removed async
       // maxSteps removed
     },
     async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      // ... (handler logic remains the same, ensure logs refer to 'agent_query')
       logger.info(`Tool 'agent_query' execution started with args:`, args);
 
       const query = args.query;
@@ -764,17 +766,18 @@ function registerTools( // Removed async
   
   // Search Code Tool with iterative refinement
   server.tool(
-    "bb7_search_code",
+    "search_code", // Renamed
     "Performs a semantic search for code snippets within the repository that are relevant to the given query. Results include file paths, code snippets, and relevance scores. \nExample: `{\"query\": \"function to handle user login\"}`. For a broader search: `{\"query\": \"database connection setup\"}`.",
     {
       query: z.string().describe("The search query to find relevant code in the repository"),
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
     },
     async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      // ... (handler logic remains the same, ensure logs refer to 'search_code')
       logger.info(`Tool 'search_code' execution started.`);
       logger.info("Received args for search_code", { args });
 
-      const searchQuery = args.query || "code search"; // Default if query is empty string
+      const searchQuery = args.query || "code search"; 
       const searchSessionId = args.sessionId;
       
       if (args.query === undefined || args.query === null || args.query.trim() === "") {
@@ -878,10 +881,11 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 
   // Add get_changelog tool
   server.tool(
-    "bb7_get_changelog", // name
-    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`. Title: Get Changelog", // description (Title incorporated here)
-    {}, // paramsSchema (as ZodRawShape for no parameters)
-    async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { // handler
+    "get_changelog", // Renamed
+    "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`. Title: Get Changelog", 
+    {}, 
+    async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { 
+      // ... (handler logic remains the same)
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
         const changelog = await fs.readFile(changelogPath, 'utf8'); 
@@ -911,13 +915,13 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
   
   // Add get_session_history tool
   server.tool(
-    "bb7_get_session_history",
+    "get_session_history", // Renamed
     "Retrieves the history of interactions (queries, suggestions, feedback) for a given session ID. This allows you to review past activities within a specific CodeCompass session. \nExample: `{\"sessionId\": \"your_session_id_here\"}`.",
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
-    // Ensure this handler is synchronous if no await is used.
-    (args: { sessionId: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { // Removed async
+    (args: { sessionId: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { 
+      // ... (handler logic remains the same, ensure logs refer to 'get_session_history')
       logger.info("Received args for get_session_history", { args });
 
       const sessionIdValue = args.sessionId;
@@ -976,19 +980,19 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
   });
     
   if (suggestionModelAvailable) {
-    // Generate Suggestion Tool with multi-step reasoning
     server.tool(
-      "bb7_generate_suggestion",
+      "generate_suggestion", // Renamed
       "Generates code suggestions, implementation ideas, or examples based on a natural language query. It leverages repository context and relevant code snippets to provide targeted advice. \nExample: `{\"query\": \"Suggest an optimized way to fetch user data\"}`. For a specific task: `{\"query\": \"Write a Python function to parse a CSV file\"}`.",
       {
         query: z.string().describe("The query or prompt for generating code suggestions"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
       async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        // ... (handler logic remains the same, ensure logs refer to 'generate_suggestion')
         logger.info(`Tool 'generate_suggestion' execution started.`);
         logger.info("Received args for generate_suggestion", { args });
 
-        const queryStr = args.query || "code suggestion"; // Default if query is empty string
+        const queryStr = args.query || "code suggestion"; 
         const sessionIdFromParams = args.sessionId;
 
         if (args.query === undefined || args.query === null || args.query.trim() === "") {
@@ -1225,16 +1229,17 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 
     // Get Repository Context Tool with state management
     server.tool(
-      "bb7_get_repository_context",
+      "get_repository_context", // Renamed
       "Provides a high-level summary of the repository's structure, common patterns, and conventions relevant to a specific query. It uses semantic search to find pertinent information and synthesizes it. \nExample: `{\"query\": \"What are the main components of the API service?\"}`. To understand coding standards: `{\"query\": \"coding conventions for frontend development\"}`.",
       {
         query: z.string().describe("The query to get repository context for"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
       async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        // ... (handler logic remains the same, ensure logs refer to 'get_repository_context')
         logger.info("Received args for get_repository_context", { args });
 
-        const queryStrCtx = args.query || "repository context"; // Default if query is empty string
+        const queryStrCtx = args.query || "repository context"; 
         const sessionIdFromParamsCtx = args.sessionId;
 
         if (args.query === undefined || args.query === null || args.query.trim() === "") {
