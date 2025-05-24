@@ -3,8 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';
-import axios from 'axios';
+// axios import removed as it's no longer used by handleClientCommand
 import yargs from 'yargs'; // Import yargs
+import { spawn, type ChildProcess } from 'child_process'; // Added spawn
 // Use path.resolve for dynamic requires to make them more robust, especially in test environments.
 const libPath = path.resolve(__dirname, './lib');
 import { hideBin } from 'yargs/helpers'; // Import hideBin
@@ -111,8 +112,11 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
   const { logger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
 
-  logger.info(`CLI Client Mode: Attempting to execute tool '${toolName}'`);
+  logger.info(`CLI Client Mode: Attempting to execute tool '${toolName}' via stdio`);
   
+  const clientRepoPath = argv.repo as string || '.'; // Use global --repo option or default to '.'
+  logger.info(`Using repository path for client command: ${clientRepoPath}`);
+
   let parsedParams: Record<string, unknown> = {};
   if (toolParamsString) {
     try {
@@ -130,124 +134,170 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     logger.info('With no parameters.');
   }
 
-  const serverUrl = `http://localhost:${configService.HTTP_PORT}`;
-  
+  let child: ChildProcess | null = null;
+
   try {
-    logger.debug(`Pinging server at ${serverUrl}/api/ping`);
-    const pingResponse = await axios.get<PingResponseData>(`${serverUrl}/api/ping`, { timeout: 2000 });
+    const scriptPath = process.argv[1]; // Path to the current script (e.g., dist/index.js)
+    const args = ['start', clientRepoPath];
+    // Pass the --port to the child if it was specified for the parent
+    if (process.env.HTTP_PORT) {
+      args.push('--port', process.env.HTTP_PORT);
+    }
+    logger.info(`Spawning server process: ${process.execPath} ${scriptPath} ${args.join(' ')}`);
 
-    if (pingResponse.status === 200 && pingResponse.data?.service === "CodeCompass") {
-      logger.info(`CodeCompass server v${pingResponse.data.version || 'unknown'} is running on port ${configService.HTTP_PORT}. Proceeding with tool execution.`);
-      
-       
-      const { Client } = require('@modelcontextprotocol/sdk/client/index.js') as typeof import('@modelcontextprotocol/sdk/client/index.js');
-       
-      const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js') as typeof import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+    child = spawn(process.execPath, [scriptPath, ...args], {
+      stdio: ['pipe', 'pipe', 'pipe'], // pipe stdin, stdout, stderr
+    });
 
-      const transport = new StreamableHTTPClientTransport(new URL(serverUrl));
-      const client = new Client({ name: "codecompass-cli-client", version: getPackageVersion() });
+    let serverReady = false;
+    let earlyExitError: Error | null = null;
 
-      try {
-        await client.connect(transport);
-        logger.info("MCP Client connected to server.");
-        logger.info(`Calling tool '${toolName}' with params:`, parsedParams);
-        const result = await client.callTool({ name: toolName, arguments: parsedParams });
-        logger.info("Tool execution successful.");
-        logger.debug("Raw tool result:", result);
+    child.stderr?.on('data', (data: Buffer) => {
+      const message = data.toString();
+      // Heuristic to detect server readiness from stderr logs
+      // Example: "CodeCompass vX.Y.Z ready. MCP active on stdio."
+      if (message.includes("MCP active on stdio")) {
+        serverReady = true;
+        logger.info("Spawned server reported ready on stdio.");
+      }
+      // Log server's stderr, prefixed
+      process.stderr.write(`[server stderr] ${message}`);
+    });
 
-        if (outputJson) {
-          console.log(JSON.stringify(result, null, 2));
+    child.on('error', (err) => {
+      logger.error('Failed to start server process:', err);
+      earlyExitError = err;
+    });
+
+    child.on('exit', (code, signal) => {
+      if (!serverReady && !earlyExitError) { // Exited before explicitly ready and no spawn error
+        const exitMsg = `Server process exited prematurely with code ${code}, signal ${signal}. Check server logs.`;
+        logger.error(exitMsg);
+        earlyExitError = new Error(exitMsg);
+      } else if (code !== 0 && code !== null && !earlyExitError) { // Exited with error after being ready
+         const exitMsg = `Server process exited with error code ${code}, signal ${signal}.`;
+         logger.error(exitMsg);
+         // This might happen if client.close() causes server to exit with error, or other issues.
+         // We might not want to overwrite a specific tool execution error with this.
+         // For now, log it. The primary error will be from callTool if it occurred.
+      }
+    });
+    
+    // Wait a short period for the server to initialize or detect early exit
+    // This is a heuristic. A more robust method would be for the server to send a specific "ready" signal on stdout.
+    // For now, we rely on stderr log parsing and a timeout.
+    await new Promise<void>((resolve, reject) => {
+      const readyTimeout = setTimeout(() => {
+        if (!serverReady && !earlyExitError) {
+          reject(new Error("Timeout waiting for spawned server to become ready."));
+        } else if (earlyExitError) {
+          reject(earlyExitError);
         } else {
-          if (result.content && Array.isArray(result.content)) {
-            result.content.forEach(item => {
-              // Assuming item is ToolResponseContentItem from SDK
-              if (item && typeof item === 'object' && 'type' in item && item.type === 'text' && 'text' in item && typeof item.text === 'string') {
-                console.log(item.text);
-              } else {
-                console.log(JSON.stringify(item, null, 2));
-              }
-            });
-          } else if (result) { // result itself might be the content if not structured with `content` array
-            console.log(JSON.stringify(result, null, 2));
-          } else {
-            logger.info("Tool executed, but no content was returned in the response.");
-          }
+          resolve();
         }
-        
-        await client.close();
-      } catch (clientError: unknown) {
-        logger.error("MCP Client error during tool execution:", clientError);
-        if (outputJson && clientError) { // Also output JSON for errors if --json is used
-            if (isJsonRpcErrorResponse(clientError)) {
-                 console.error(JSON.stringify(clientError, null, 2));
-            } else if (clientError instanceof Error) {
-                console.error(JSON.stringify({ error: { message: clientError.message, name: clientError.name }}, null, 2));
-            } else {
-                console.error(JSON.stringify({ error: { message: "Unknown client error" }}, null, 2));
-            }
-        } else { // Default text error reporting
-            if (isJsonRpcErrorResponse(clientError)) {
-              console.error(`Error executing tool '${toolName}': ${clientError.error.message} (Code: ${clientError.error.code})`);
-              if (clientError.error.data) {
-                console.error(`Details: ${JSON.stringify(clientError.error.data, null, 2)}`);
-              }
-            } else if (clientError instanceof Error) {
-              console.error(`Error during tool '${toolName}' execution: ${clientError.message}`);
-            } else {
-              console.error(`An unknown error occurred while executing tool '${toolName}'.`);
-            }
+      }, 10000); // 10-second timeout for server readiness
+
+      const checkReady = () => {
+        if (serverReady || earlyExitError) {
+          clearTimeout(readyTimeout);
+          if (earlyExitError) reject(earlyExitError); else resolve();
+        } else {
+          setTimeout(checkReady, 100);
         }
-        throw clientError; 
-      }
-    } else {
-      // ... (existing non-CodeCompass server handling)
-      logger.warn(`Service on port ${configService.HTTP_PORT} is not a CodeCompass server or responded unexpectedly. Ping response:`, pingResponse.data);
-      const errorMessage = `A service is running on port ${configService.HTTP_PORT}, but it's not a CodeCompass server or it's unresponsive.`;
-      if (outputJson) {
-          console.error(JSON.stringify({ error: { message: errorMessage, pingResponse: pingResponse.data }}, null, 2));
-      } else {
-          console.error(errorMessage);
-          console.error(`Ping Response Status: ${pingResponse.status}, Data: ${JSON.stringify(pingResponse.data)}`);
-      }
-      throw new Error("Non-CodeCompass server detected or ping failed.");
-    }
-  } catch (error: unknown) {
-    // ... (existing server connection error handling)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const { logger: localLogger, configService: localConfigService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
-    let errorMessage = `Failed to connect to CodeCompass server on port ${localConfigService.HTTP_PORT}.`;
-    if (axios.isAxiosError(error)) {
-      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        errorMessage = `CodeCompass server is not running on port ${localConfigService.HTTP_PORT}. The server is required for background repository synchronization and to process tool commands. Please start the server first (e.g., by running 'codecompass [repoPath]'). (Detail: ${error.code})`; // Keep detailed message
-        localLogger.warn(errorMessage);
-      } else {
-        errorMessage = `Failed to connect to CodeCompass server (AxiosError) on port ${localConfigService.HTTP_PORT}: ${error.message}`;
-        localLogger.error(errorMessage, { code: error.code, response: error.response?.data });
-      }
-    } else if (error instanceof Error) {
-        errorMessage = `Failed to connect to CodeCompass server (Error) on port ${localConfigService.HTTP_PORT}: ${error.message}`; // Use localConfigService
-        localLogger.error(errorMessage, error);
-    } else {
-        errorMessage = `Failed to connect to CodeCompass server (UnknownError) on port ${configService.HTTP_PORT}.`;
-        localLogger.error(errorMessage, error);
-    }
+      };
+      checkReady();
+    });
+    
+    if (earlyExitError) throw earlyExitError; // If an error occurred during spawn/early exit
+
+    const { Client: MCPClient } = require('@modelcontextprotocol/sdk/client/index.js') as typeof import('@modelcontextprotocol/sdk/client/index.js');
+    const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js') as typeof import('@modelcontextprotocol/sdk/client/stdio.js');
+
+    const transport = new StdioClientTransport({
+      readableStream: child.stdout!, // Non-null assertion: stdio is piped
+      writableStream: child.stdin!,  // Non-null assertion: stdio is piped
+    });
+    const client = new MCPClient({ name: "codecompass-cli-client", version: getPackageVersion() });
+
+    await client.connect(transport);
+    logger.info("MCP Client connected to spawned server via stdio.");
+    logger.info(`Calling tool '${toolName}' with params:`, parsedParams);
+    const result = await client.callTool({ name: toolName, arguments: parsedParams });
+    logger.info("Tool execution successful via stdio.");
+    logger.debug("Raw tool result:", result);
 
     if (outputJson) {
-        console.error(JSON.stringify({ error: { message: errorMessage }}, null, 2));
+      console.log(JSON.stringify(result, null, 2));
     } else {
-        console.error(errorMessage.split('(Detail:')[0].trim()); // Show simpler message for non-json
+      if (result.content && Array.isArray(result.content)) {
+        result.content.forEach(item => {
+          if (item && typeof item === 'object' && 'type' in item && item.type === 'text' && 'text' in item && typeof item.text === 'string') {
+            console.log(item.text);
+          } else {
+            console.log(JSON.stringify(item, null, 2));
+          }
+        });
+      } else if (result) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        logger.info("Tool executed, but no content was returned in the response.");
+      }
     }
+    await client.close();
+
+  } catch (error: unknown) {
+    logger.error(`Error during client command '${toolName}' (stdio):`, error);
+    const reportError = (errToReport: unknown) => {
+      if (outputJson) {
+        if (isJsonRpcErrorResponse(errToReport)) {
+          console.error(JSON.stringify(errToReport, null, 2));
+        } else if (errToReport instanceof Error) {
+          console.error(JSON.stringify({ error: { message: errToReport.message, name: errToReport.name } }, null, 2));
+        } else {
+          console.error(JSON.stringify({ error: { message: "Unknown client error" } }, null, 2));
+        }
+      } else {
+        if (isJsonRpcErrorResponse(errToReport)) {
+          console.error(`Error executing tool '${toolName}': ${errToReport.error.message} (Code: ${errToReport.error.code})`);
+          if (errToReport.error.data) console.error(`Details: ${JSON.stringify(errToReport.error.data, null, 2)}`);
+        } else if (errToReport instanceof Error) {
+          console.error(`Error during tool '${toolName}' execution: ${errToReport.message}`);
+        } else {
+          console.error(`An unknown error occurred while executing tool '${toolName}'.`);
+        }
+      }
+    };
+    reportError(error);
     throw error; // Re-throw for yargs
+  } finally {
+    if (child) {
+      logger.info(`Terminating spawned server process (PID: ${child.pid}).`);
+      child.kill('SIGTERM'); // Send SIGTERM first
+      // Set a timeout to force kill if it doesn't exit gracefully
+      const killTimeout = setTimeout(() => {
+        if (child && !child.killed) {
+          logger.warn(`Spawned server process (PID: ${child.pid}) did not exit gracefully, sending SIGKILL.`);
+          child.kill('SIGKILL');
+        }
+      }, 2000); // 2 seconds to exit gracefully
+      child.on('exit', () => clearTimeout(killTimeout));
+    }
   }
 }
 
-async function startServerHandler(repoPath: string) {
+async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }) {
+  let effectiveRepoPath: string;
+  if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath
+    effectiveRepoPath = repoPathOrArgv;
+  } else { // Called from yargs with argv object
+    effectiveRepoPath = repoPathOrArgv.repoPath || repoPathOrArgv.repo || '.';
+  }
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     const { startServer, ServerStartupError: LocalServerStartupError } = require(path.join(libPath, 'server.js')) as typeof import('./lib/server');
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     const { logger: localLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
   try {
-    await startServer(repoPath);
+    await startServer(effectiveRepoPath);
     // If startServer resolves, it means stdio MCP is up. Utility HTTP server might be disabled
     // due to a conflict (Option C), but the instance is operational.
     // No specific action needed here; server will continue to run.
@@ -270,11 +320,9 @@ async function main() {
     .option('port', {
       alias: 'p',
       type: 'number',
-      description: 'Specify the HTTP port for the server. Overrides HTTP_PORT env var.',
+      description: 'Specify the HTTP port for the server or spawned client server. Overrides HTTP_PORT env var.',
       global: true,
-      // Apply the port setting to process.env immediately if provided
-      // This middleware runs before command handlers
-      apply: (value: number | undefined) => { // Changed from middleware to apply for direct effect
+      apply: (value: number | undefined) => {
         if (value !== undefined) {
           if (isNaN(value) || value <= 0 || value > 65535) {
             // yargs will typically handle this with its own validation if type: 'number' is effective
@@ -283,10 +331,15 @@ async function main() {
             throw new Error(`Error: Invalid port number "${value}". Port must be between 1 and 65535.`);
           }
           process.env.HTTP_PORT = String(value);
-          // Dynamically require logger here if we want to log this early
-          // For now, this side-effect is silent until configService is fully loaded by a command.
         }
       }
+    })
+    .option('repo', { // New global option for repository path
+      alias: 'r',
+      type: 'string',
+      description: 'Specify the repository path for server or client tool context.',
+      global: true,
+      // No 'apply' needed, handlers will use this value from argv.
     })
     .command(
       'changelog',
@@ -317,7 +370,8 @@ async function main() {
       },
       async (argv) => {
         // process.env.HTTP_PORT would have been set by the global 'port' option's 'apply'
-        await startServerHandler(argv.repoPath);
+        // Pass the full argv object so startServerHandler can access .repo if .repoPath is not set
+        await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; });
       }
     );
 
@@ -352,12 +406,8 @@ async function main() {
           });
       },
       async (argv) => {
-        // Pass the full argv to handleClientCommand so it can access --json
-        await handleClientCommand({
-            toolName, 
-            params: argv.params, 
-            outputJson: argv.json // Pass the new flag
-        });
+        // Pass the full argv to handleClientCommand so it can access --json and --repo
+        await handleClientCommand(argv as ClientCommandArgs & { repo?: string });
       }
     );
   });
