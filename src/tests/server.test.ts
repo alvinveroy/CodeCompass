@@ -516,6 +516,7 @@ describe('Server Startup and Port Handling', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/indexing-status`, { timeout: 1000 });
       
+      expect(ml.info).toHaveBeenCalledWith(`Another CodeCompass instance (v${existingServerPingVersion}) is running on port ${mcs.HTTP_PORT}.`);
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
        
       expect(mockConsoleInfo).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerPingVersion}`)); // Use version from ping
