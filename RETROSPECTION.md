@@ -441,26 +441,28 @@
 
 ---
 
-# Retrospection for HTTP Server Port Conflict (EADDRINUSE) Handling (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+# Retrospection for Server Startup Behavior on Port Conflict (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-- Successfully identified a common runtime issue (`EADDRINUSE` when the HTTP port is occupied).
-- Implemented a specific error handler in `src/lib/server.ts` for the HTTP server's `listen` method.
-- The error message provided to the user is informative, guiding them on how to resolve the port conflict (freeing the port or reconfiguring).
-- The server now exits gracefully with a clear log message instead of an unhandled exception.
+- The change successfully addresses the user's request to handle port conflicts with existing CodeCompass instances more gracefully.
+- Instead of an error, the application now provides informative output about the existing server and exits cleanly.
+- The modification was localized primarily to the `EADDRINUSE` error handling block in `src/lib/server.ts`.
+- Reused existing mechanisms (`/api/ping`, `/api/indexing-status`) for querying the existing instance.
+- Differentiated behavior for `test` and non-test environments (throwing a specific error vs. `process.exit(0)`) allows for robust testability of this specific exit path.
 
 ## What could be improved?
-- For future enhancements, the server could attempt to listen on an alternative (e.g., incremented) port if the configured one is busy. However, this would require a mechanism to inform the client/user of the new port, adding complexity. For now, exiting is a robust and simple solution.
-- The logging for `EADDRINUSE` could include which application is using the port, if discoverable by the OS (though this is often platform-specific and non-trivial).
+- The logging of the existing server's status uses a mix of `logger.info` and `console.info`. While functional, standardizing to one method (likely `logger.info` for structured logging, and letting the logger's transport handle console output) could be a minor refinement in the future if desired, but not critical.
+- The `ServerStartupError` is reused with `exitCode = 0`. While functional, a more specific error type (e.g., `ExistingInstanceDetectedError`) could be considered in a larger refactor for even greater clarity, though it's not strictly necessary for this change.
 
 ## What did we learn?
-- Specific error handling for critical operations like starting network listeners is crucial for robust server applications.
-- Providing clear, actionable error messages significantly improves user experience when encountering common configuration or environmental issues.
-- It's important to ensure logs are flushed before exiting, especially with asynchronous loggers, although `process.exit(1)` often allows for this.
+- Clear communication with the user is important, especially for common operational issues like port conflicts. Providing detailed status of the existing instance is helpful.
+- Modifying exit codes and logging levels can significantly change the perceived behavior of an application from an error state to an informational one.
+- Designing error handling to be testable (e.g., by throwing errors in test mode instead of directly exiting) is a good practice that was successfully applied here.
+- Querying existing service endpoints (`/api/ping`, `/api/indexing-status`) is an effective way to "act as a client" to gather information before deciding on an action.
 
 ## Action Items / Follow-ups
-- Monitor user feedback for any issues related to port conflicts to see if more advanced handling (like trying alternative ports) becomes necessary.
-- Ensure documentation (e.g., README) clearly states how to configure `HTTP_PORT`.
+- Ensure the Git commit ID placeholder is replaced in `CHANGELOG.md` and this retrospection entry.
+- (Completed) Update relevant unit tests in `src/tests/server.test.ts` to expect the new logging behavior and the `ServerStartupError` with `exitCode: 0` when a CodeCompass instance is already running.
 
 # Retrospection for Background Indexing & Status Reporting (Git Commit ID: [Previous Git Commit ID])
 

@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Dynamically importing `ConfigService` within the "Default Configuration" and "Logger Configuration" test suites after `vi.resetModules()` and environment variable cleanup, guaranteeing a fresh service instance for these tests. (cd97d8c)
 
 ## [Unreleased]
+### Changed
+- **Server Startup Behavior on Port Conflict (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Modified server startup logic in `src/lib/server.ts` for `EADDRINUSE` (port already in use) errors.
+    - If CodeCompass attempts to start on a port already occupied by another CodeCompass instance, it will now:
+        - Log the status (version, operational status, message, progress, etc.) of the existing instance using `logger.info` and `console.info`.
+        - Log a message indicating that the new instance will exit gracefully.
+        - Exit with code `0` (success) instead of `1` (error) in non-test environments. In test environments, it throws a `ServerStartupError` with `exitCode: 0`.
+    - This change allows the user to be informed about the running instance and use it, rather than treating the port conflict as a startup failure for the new instance.
 ### Fixed
 - **Unit Test Fix (server.test.ts - EADDRINUSE Non-CodeCompass Server Log Assertions) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Corrected a failing assertion in `src/tests/server.test.ts` for the test case "should handle EADDRINUSE, detect a non-CodeCompass server, log error, and exit with 1".
