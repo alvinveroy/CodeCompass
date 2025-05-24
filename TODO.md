@@ -33,31 +33,31 @@ This document outlines the tasks required to enhance CodeCompass.
         - Implemented improved error reporting and output formatting for tool results and connection/tool call failures.
     - **Session ID Management for Client Calls**: (Considered/Supported) The current mechanism allows users to pass `sessionId` within the JSON parameters for tools that support it. Help text updated to reflect this. No further client-side generation or automatic management of session IDs is planned for this phase.
     - **Further Enhancements (Future)**:
-        - **Add comprehensive unit/integration tests for the client mode functionality.** (In Progress - Initial tests added, will need significant updates after yargs refactor)
+        - **Add comprehensive unit/integration tests for the client mode functionality.** (In Progress - Initial tests added, significant updates and fixes applied during yargs refactor and subsequent build/test cycles. Ongoing refinement needed.)
         - **Refactor CLI to use `yargs` library**: (Completed) `src/index.ts` refactored to use `yargs` for argument parsing, command handling, and help generation. This addresses the evaluation of needing a dedicated CLI library.
         - Explore more advanced output formatting options if needed for specific tools.
 
-## Phase 4: MCP Client Bridge on Port Conflict
+## Phase 4: MCP Client Bridge on Port Conflict (Completed - Core Logic)
 - **Goal**: If CodeCompass CLI attempts to start a server on a port already occupied by another CodeCompass instance, instead of just exiting, the new instance should start a lightweight proxy server on a *different*, free port. This proxy will forward MCP requests and key API calls (like `/api/ping`, `/api/indexing-status`) to the original, running CodeCompass server.
-- **Tasks**:
+- **Status**: Core logic implemented as of commit `a51a8f8` and refined in subsequent commits (e.g., `5ffc89c`).
+- **Tasks Completed**:
     - **`src/lib/server.ts` Modifications**:
-        - **`ServerStartupError` Enhancement**: Update `ServerStartupError` to include `originalError`, `existingServerStatus` (e.g., `PingResponseData`), `requestedPort`, and `detectedServerPort` (port of the existing CodeCompass server).
-        - **Populate Enhanced `ServerStartupError`**: In `startServer`, when an `EADDRINUSE` error occurs and an existing CodeCompass instance is detected, populate the new fields in the `ServerStartupError` (with `exitCode: 0`).
-        - **`findFreePort` Utility**: Add a helper function `async findFreePort(startPort: number): Promise<number>` to find an available port by incrementally checking from `startPort`.
-        - **`startProxyServer` Function**: Implement `async function startProxyServer(requestedPort: number, targetServerPort: number, existingServerVersion?: string): Promise<void>`. This function will:
-            - Use `findFreePort` to get a port for the proxy.
-            - Create an Express app.
-            - Proxy `/mcp` requests (all methods: GET, POST, DELETE) to `http://localhost:<targetServerPort>/mcp`. Ensure headers (including `mcp-session-id`, `Content-Type`, `Accept`, `Authorization`) and body are correctly forwarded. Handle response streaming.
-            - Proxy `/api/ping` and `/api/indexing-status` GET requests.
-            - Listen on the found free port.
-            - Log information about the proxy and the target server.
+        - **`ServerStartupError` Enhancement**: (Completed) Updated `ServerStartupError` to include `originalError`, `existingServerStatus`, `requestedPort`, and `detectedServerPort`.
+        - **Populate Enhanced `ServerStartupError`**: (Completed) In `startServer`, when an `EADDRINUSE` error occurs and an existing CodeCompass instance is detected, the new fields in `ServerStartupError` are populated (with `exitCode: 0`).
+        - **`findFreePort` Utility**: (Completed) Added helper function `async findFreePort(startPort: number): Promise<number>`.
+        - **`startProxyServer` Function**: (Completed) Implemented `async function startProxyServer(requestedPort: number, targetServerPort: number, existingServerVersion?: string): Promise<void>`.
     - **`src/index.ts` Modifications**:
-        - **Update `startServerHandler`**: In the `catch` block for `ServerStartupError`:
-            - If `error.exitCode === 0` (existing CodeCompass instance found):
-                - Extract `requestedPort`, `detectedServerPort`, and `existingServerStatus.version` from the error.
-                - Call the new `startProxyServer` function with these details.
-                - If `startProxyServer` resolves, the CLI process should remain running (as the proxy is active).
-                - If `startProxyServer` rejects, log an error and exit.
-            - If `error.exitCode !== 0`, handle as a standard startup failure (re-throw for yargs).
-    - **Testing**: Add unit/integration tests for `findFreePort` and the proxying behavior of `startProxyServer`. Test the main CLI flow for entering proxy mode.
+        - **Update `startServerHandler`**: (Completed) In the `catch` block for `ServerStartupError`, if `error.exitCode === 0`, `startProxyServer` is called.
+- **Pending Tasks for Phase 4**:
+    - **Testing**: Add comprehensive unit/integration tests for `findFreePort` and the proxying behavior of `startProxyServer`. Test the main CLI flow for entering proxy mode more thoroughly.
     - **Documentation**: Update `README.md` and CLI help text to explain the proxy mode behavior if a port conflict with another CodeCompass instance occurs.
+
+## Next Steps (Immediate Focus)
+- **Resolve Remaining ESLint Issues**: Address all errors and warnings from `npm run lint -- --fix`.
+- **Fix Build and Test Failures**: Ensure `npm run build` and `npm test` pass cleanly after recent refactoring and ESLint fixes. This includes addressing:
+    - `esbuild` errors (e.g., "The symbol ... has already been declared" in test files).
+    - `tsc` compilation errors.
+    - Any remaining unit test failures.
+- **Update Documentation**:
+    - Update `CHANGELOG.md` and `RETROSPECTION.md` with the latest commit ID (`5ffc89c` or subsequent) once the current batch of fixes is stable.
+    - Review and update `README.md` for CLI usage, proxy mode, and configuration.
