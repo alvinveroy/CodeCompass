@@ -125,44 +125,38 @@ vi.mock('isomorphic-git', async (importOriginal) => {
 });
 
 // --- START: vi.mock for 'http' and related definitions ---
-// Define the mock http server instance that createServer will return
-// This instance's methods will be dynamically reassigned in tests for findFreePort
-let currentMockHttpServerInstance: Partial<httpModule.Server> & {
-    listen: Mock;
-    on: Mock;
-    close: Mock;
-    address: Mock;
-    removeAllListeners: Mock; // Add removeAllListeners
-    _listeners?: Record<string, (...args: any[]) => void>; // For findFreePort tests
-};
+
+// Define stable mock functions at the top level of the test file
+const mockHttpServerListenFn = vi.fn();
+const mockHttpServerOnFn = vi.fn();
+const mockHttpServerCloseFn = vi.fn();
+const mockHttpServerAddressFn = vi.fn();
+const mockHttpServerSetTimeoutFn = vi.fn<(...args: Parameters<httpModule.Server['setTimeout']>) => ReturnType<httpModule.Server['setTimeout']>>();
+const mockHttpServerRemoveAllListenersFn = vi.fn();
+
 
 vi.mock('http', async (importOriginal) => {
   const actualHttpModule = await importOriginal() as typeof httpModule;
 
-  // Define mock functions inside the factory to avoid hoisting issues
-  const mockHttpServerListenFn = vi.fn();
-  const mockHttpServerOnFn = vi.fn();
-  const mockHttpServerCloseFn = vi.fn();
-  const mockHttpServerAddressFn = vi.fn();
-  const mockHttpServerSetTimeoutFn = vi.fn<(...args: Parameters<httpModule.Server['setTimeout']>) => ReturnType<httpModule.Server['setTimeout']>>();
-
-  const createMockServer = () => ({
+  // This function creates a new mock server object instance for each call to http.createServer()
+  // It uses the stable top-level mock functions.
+  const createNewMockServerObject = () => ({
     listen: mockHttpServerListenFn,
     on: mockHttpServerOnFn,
     close: mockHttpServerCloseFn,
     address: mockHttpServerAddressFn,
     setTimeout: mockHttpServerSetTimeoutFn,
-    removeAllListeners: vi.fn(), // Mock for removeAllListeners
+    removeAllListeners: mockHttpServerRemoveAllListenersFn,
+    _listeners: {} as Record<string, (...args: any[]) => void> // For findFreePort tests state
   });
-  currentMockHttpServerInstance = createMockServer() as any; // Initialize
+
+  const mockCreateServerFn = vi.fn(() => {
+    return createNewMockServerObject();
+  });
 
   const mockHttpMethods = {
-    createServer: vi.fn(() => {
-        // Return a new instance for each createServer call for findFreePort's loop
-        currentMockHttpServerInstance = createMockServer() as any;
-        return currentMockHttpServerInstance;
-    }),
-    Server: vi.fn(() => createMockServer()) as unknown as typeof httpModule.Server,
+    createServer: mockCreateServerFn,
+    Server: vi.fn().mockImplementation(createNewMockServerObject) as unknown as typeof httpModule.Server,
     IncomingMessage: actualHttpModule.IncomingMessage,
     ServerResponse: actualHttpModule.ServerResponse,
   };
@@ -774,41 +768,47 @@ describe('findFreePort', () => {
     mockHttpServerOnFn.mockReset();
     mockHttpServerCloseFn.mockReset();
     mockHttpServerAddressFn.mockReset();
-    if (currentMockHttpServerInstance && currentMockHttpServerInstance.removeAllListeners) {
-      currentMockHttpServerInstance.removeAllListeners.mockReset();
-    }
+    mockHttpServerRemoveAllListenersFn.mockReset();
 
 
     // Default behavior for mocks, can be overridden in specific tests
-    mockHttpServerOnFn.mockImplementation((event, callback) => {
-      if (!currentMockHttpServerInstance._listeners) {
-        currentMockHttpServerInstance._listeners = {};
-      }
-      currentMockHttpServerInstance._listeners[event] = callback as (...args: any[]) => void;
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+    // Note: For findFreePort tests, the instance returned by http.createServer() is key.
+    // The mockHttpServerOnFn needs to operate on the specific instance's _listeners.
+    // This is handled by createNewMockServerObject returning an object with its own _listeners.
+    mockHttpServerOnFn.mockImplementation(function(this: any, event, callback) {
+        if (!this._listeners) this._listeners = {};
+        this._listeners[event] = callback;
+        return this;
     });
 
-    mockHttpServerCloseFn.mockImplementation((callback?: (err?: Error) => void) => {
+    mockHttpServerCloseFn.mockImplementation(function(this: any, callback?: (err?: Error) => void) {
       if (callback) callback();
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+      return this;
     });
 
-    mockHttpServerAddressFn.mockImplementation(() => ({ port: 3000 + portCounter, address: '127.0.0.1', family: 'IPv4' })); // Default, override if needed
+    mockHttpServerAddressFn.mockImplementation(function(this: any) {
+        // For findFreePort, the port in address() should match the listen() attempt
+        // This requires the listen mock to set it or have access to the port it was called with.
+        // For simplicity, we'll assume the test sets this up if specific address is needed.
+        // Defaulting to a dynamic port based on counter for now.
+        return { port: 3000 + portCounter, address: '127.0.0.1', family: 'IPv4' };
+    });
   });
 
   it('should find the starting port if it is free', async () => {
     const startPort = 3000;
-    mockHttpServerListenFn.mockImplementation((portToListen, _hostname, callbackOrUndefined) => {
+    
+    // Mock listen to succeed and call the listening handler
+    mockHttpServerListenFn.mockImplementation(function(this: any, portToListen, _hostname, callbackOrUndefined) {
       expect(portToListen).toBe(startPort);
-      // Simulate successful listen by invoking the 'listening' event handler
-      if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.listening) {
-        currentMockHttpServerInstance._listeners.listening();
-      } else if (typeof callbackOrUndefined === 'function') { // Handle direct callback if provided
+      mockHttpServerAddressFn.mockReturnValueOnce({ port: startPort, address: '127.0.0.1', family: 'IPv4' }); // Ensure address() returns the correct port
+      if (this._listeners && this._listeners.listening) {
+        this._listeners.listening();
+      } else if (typeof callbackOrUndefined === 'function') {
         (callbackOrUndefined as () => void)();
       }
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+      return this;
     });
-    mockHttpServerAddressFn.mockReturnValue({ port: startPort, address: '127.0.0.1', family: 'IPv4' });
 
     await expect(findFreePort(startPort)).resolves.toBe(startPort);
     expect(mockedHttp.createServer).toHaveBeenCalledTimes(1);
@@ -821,24 +821,24 @@ describe('findFreePort', () => {
     portCounter = 0; // for address mock
 
     mockHttpServerListenFn
-      .mockImplementationOnce((_p, _h, _cb) => { // First call (port 3001) - EADDRINUSE
+      .mockImplementationOnce(function(this: any, _p, _h, _cb) { // First call (port 3001) - EADDRINUSE
         portCounter++;
-        if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.error) {
+        if (this._listeners && this._listeners.error) {
           const err = new Error('EADDRINUSE') as NodeJS.ErrnoException;
           err.code = 'EADDRINUSE';
-          currentMockHttpServerInstance._listeners.error(err);
+          this._listeners.error(err);
         }
-        return currentMockHttpServerInstance as unknown as httpModule.Server;
+        return this;
       })
-      .mockImplementationOnce((portToListen, _h, callbackOrUndefined) => { // Second call (port 3002) - Free
+      .mockImplementationOnce(function(this: any, portToListen, _h, callbackOrUndefined) { // Second call (port 3002) - Free
         expect(portToListen).toBe(startPort + 1);
-        mockHttpServerAddressFn.mockReturnValue({ port: startPort + 1, address: '127.0.0.1', family: 'IPv4' });
-        if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.listening) {
-          currentMockHttpServerInstance._listeners.listening();
+        mockHttpServerAddressFn.mockReturnValueOnce({ port: startPort + 1, address: '127.0.0.1', family: 'IPv4' });
+        if (this._listeners && this._listeners.listening) {
+          this._listeners.listening();
         } else if (typeof callbackOrUndefined === 'function') {
             (callbackOrUndefined as () => void)();
         }
-        return currentMockHttpServerInstance as unknown as httpModule.Server;
+        return this;
       });
 
     await expect(findFreePort(startPort)).resolves.toBe(startPort + 1);
@@ -853,11 +853,11 @@ describe('findFreePort', () => {
     const otherError = new Error('Some other error') as NodeJS.ErrnoException;
     otherError.code = 'EACCES';
 
-    mockHttpServerListenFn.mockImplementationOnce(() => {
-      if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.error) {
-        currentMockHttpServerInstance._listeners.error(otherError);
+    mockHttpServerListenFn.mockImplementationOnce(function(this: any) {
+      if (this._listeners && this._listeners.error) {
+        this._listeners.error(otherError);
       }
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+      return this;
     });
 
     await expect(findFreePort(startPort)).rejects.toThrow(otherError);
@@ -869,18 +869,18 @@ describe('findFreePort', () => {
     const startPort = 3003;
     const closeError = new Error('Failed to close server');
 
-    mockHttpServerListenFn.mockImplementation((_p, _h, callbackOrUndefined) => {
-      mockHttpServerAddressFn.mockReturnValue({ port: startPort, address: '127.0.0.1', family: 'IPv4' });
-      if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.listening) {
-        currentMockHttpServerInstance._listeners.listening();
+    mockHttpServerListenFn.mockImplementation(function(this: any, _p, _h, callbackOrUndefined) {
+      mockHttpServerAddressFn.mockReturnValueOnce({ port: startPort, address: '127.0.0.1', family: 'IPv4' });
+      if (this._listeners && this._listeners.listening) {
+        this._listeners.listening();
       } else if (typeof callbackOrUndefined === 'function') {
         (callbackOrUndefined as () => void)();
       }
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+      return this;
     });
-    mockHttpServerCloseFn.mockImplementationOnce((callback?: (err?: Error) => void) => {
+    mockHttpServerCloseFn.mockImplementationOnce(function(this: any, callback?: (err?: Error) => void) {
       if (callback) callback(closeError); // Simulate error during close
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+      return this;
     });
 
     await expect(findFreePort(startPort)).rejects.toThrow(closeError);
@@ -891,25 +891,25 @@ describe('findFreePort', () => {
     const startPort = 65530; // Start near the limit
     let currentPortAttempt = startPort;
 
-    mockHttpServerListenFn.mockImplementation(() => {
+    mockHttpServerListenFn.mockImplementation(function(this: any) {
       if (currentPortAttempt > 65535) {
         // This case should be caught by findFreePort's internal limit before listen is called for >65535
         // So, we simulate EADDRINUSE for all valid ports
         const err = new Error('EADDRINUSE test') as NodeJS.ErrnoException;
         err.code = 'EADDRINUSE';
-        if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.error) {
-            currentMockHttpServerInstance._listeners.error(err);
+        if (this._listeners && this._listeners.error) {
+            this._listeners.error(err);
         }
       } else {
          // Simulate EADDRINUSE for ports up to 65535
         const err = new Error('EADDRINUSE test') as NodeJS.ErrnoException;
         err.code = 'EADDRINUSE';
-        if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.error) {
-            currentMockHttpServerInstance._listeners.error(err);
+        if (this._listeners && this._listeners.error) {
+            this._listeners.error(err);
         }
       }
       currentPortAttempt++;
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+      return this;
     });
     // Adjust the number of createServer calls expected based on the loop limit in findFreePort
     // The loop in findFreePort is `while (true)` but has an internal check `if (port > 65535)`

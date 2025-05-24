@@ -195,7 +195,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
         } else {
           resolve();
         }
-      }, 10000); // 10-second timeout for server readiness
+      }, 20000); // 20-second timeout for server readiness (increased from 10s)
 
       const checkReady = () => {
         if (serverReady || earlyExitError) {

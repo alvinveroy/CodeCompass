@@ -11,8 +11,7 @@ import express from 'express';
 import http from 'http';
 import axios from 'axios'; // Add this import
 // import { ServerRequest, ServerNotification, isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"; // No longer needed for stdio transport
-import { RequestHandlerExtra, type ServerRequest, type ServerNotification } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
+import { type RequestHandlerExtra, type ServerRequest, type ServerNotification, type Variables } from "@modelcontextprotocol/sdk"; // Updated import path
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
@@ -472,7 +471,12 @@ export async function startServer(repoPath: string): Promise<void> {
       readableStream: process.stdin,
       writableStream: process.stdout,
     });
-    await mainStdioMcpServer.connect(stdioTransport);
+    // StdioServerTransport constructor expects stdin and stdout properties
+    const transportForStdio = new StdioServerTransport({
+        stdin: process.stdin,
+        stdout: process.stdout,
+    });
+    await mainStdioMcpServer.connect(transportForStdio); // Connect the main server instance
     logger.info("CodeCompass MCP server connected to stdio transport. Ready for MCP communication over stdin/stdout.");
 
     const finalDeclaredTools = Object.keys(serverCapabilities.tools);
@@ -1405,7 +1409,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 }
 
 // Add this function definition, e.g., before startProxyServer
-async function findFreePort(startPort: number): Promise<number> {
+export async function findFreePort(startPort: number): Promise<number> { // Added export
   let port = startPort;
    
   while (true) {

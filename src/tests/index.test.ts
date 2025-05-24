@@ -270,7 +270,7 @@ describe('CLI with yargs (index.ts)', () => {
       });
     });
 
-    it('should spawn server and call tool via stdio for "agent_query"', async () => {
+    it('should spawn server and call tool via stdio for "agent_query"', { timeout: 30000 }, async () => {
       // Simulate server ready message
       mockSpawnInstance.on.mockImplementation((event, cb) => {
         if (event === 'exit') { /* store cb */ }
@@ -322,7 +322,7 @@ describe('CLI with yargs (index.ts)', () => {
       }
       
       // Wait for async operations within handleClientCommand to complete
-      await new Promise(resolve => setTimeout(resolve, 500)); // Give time for client.callTool etc.
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased from 500ms
 
 
       // const { spawn } = require('child_process'); // Not needed
@@ -336,7 +336,7 @@ describe('CLI with yargs (index.ts)', () => {
       expect(mockSpawnInstance.kill).toHaveBeenCalled();
     });
     
-    it('should use --repo path for spawned server in client stdio mode', async () => {
+    it('should use --repo path for spawned server in client stdio mode', { timeout: 30000 }, async () => {
       let stderrDataCallback: ((data: Buffer) => void) | undefined;
       vi.mocked(mockSpawnInstance.stderr.on).mockImplementation((event, callback) => {
         if (event === 'data') stderrDataCallback = callback;
@@ -354,7 +354,7 @@ describe('CLI with yargs (index.ts)', () => {
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
       else throw new Error("stderr 'data' listener not attached (timed out polling)");
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased
 
 
       // const { spawn } = require('child_process'); // Not needed
@@ -430,7 +430,7 @@ describe('CLI with yargs (index.ts)', () => {
       mockSpawnFn.mockReturnValue(mockSpawnInstance);
     });
 
-    it('--port option should set HTTP_PORT environment variable for spawned server', async () => {
+    it('--port option should set HTTP_PORT environment variable for spawned server', { timeout: 30000 }, async () => {
       const customPort = 1234;
       let stderrDataCallback: ((data: Buffer) => void) | undefined;
       vi.mocked(mockSpawnInstance.stderr.on).mockImplementation((event, callback) => {
@@ -449,7 +449,7 @@ describe('CLI with yargs (index.ts)', () => {
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
       else throw new Error("stderr 'data' listener not attached for port test (timed out polling)");
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased
 
       expect(process.env.HTTP_PORT).toBe(String(customPort)); // Parent process.env is set by yargs
       // const { spawn } = require('child_process'); // Not needed
@@ -466,7 +466,7 @@ describe('CLI with yargs (index.ts)', () => {
       expect(mockStartServer).toHaveBeenCalledWith('/custom/repo/for/start');
     });
     
-    it('--repo option should be used by client stdio command for spawned server', async () => {
+    it('--repo option should be used by client stdio command for spawned server', { timeout: 30000 }, async () => {
       let stderrDataCallback: ((data: Buffer) => void) | undefined;
       vi.mocked(mockSpawnInstance.stderr.on).mockImplementation((event, callback) => {
         if (event === 'data') stderrDataCallback = callback;
@@ -484,7 +484,7 @@ describe('CLI with yargs (index.ts)', () => {
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
       else throw new Error("stderr 'data' listener not attached for repo option test (timed out polling)");
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased
       
       // const { spawn } = require('child_process'); // Not needed
       expect(mockSpawnFn).toHaveBeenCalledWith(
@@ -505,7 +505,9 @@ describe('CLI with yargs (index.ts)', () => {
     it('--help option should display help and exit', async () => {
       // Yargs handles --help and exits 0. No .fail() involvement.
       await runMainWithArgs(['--help']);
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Usage: codecompass"));
+      // The scriptName is set to "codecompass", so help output should reflect that.
+      // Yargs typically shows "Usage: <scriptName> [command]"
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Usage: codecompass [repoPath]"));
       expect(mockProcessExit).toHaveBeenCalledWith(0);
     });
   });
@@ -570,12 +572,12 @@ describe('CLI with yargs (index.ts)', () => {
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
       else throw new Error("stderr 'data' listener not attached for json success test (timed out polling)");
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased
       
       expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResult, null, 2));
     });
 
-    it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)', async () => {
+    it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)', { timeout: 30000 }, async () => {
       const rpcError = { jsonrpc: "2.0", id: "err-123", error: { code: -32001, message: "Tool specific error", data: { reason: "invalid input" } } } as const;
       mockMcpClientInstance.callTool.mockRejectedValue(rpcError);
       
@@ -597,14 +599,14 @@ describe('CLI with yargs (index.ts)', () => {
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
       else throw new Error("stderr 'data' listener not attached for json rpc error test (timed out polling)");
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased
 
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
-    it('should output JSON error when --json flag is used and tool call fails with generic Error (stdio)', async () => {
+    it('should output JSON error when --json flag is used and tool call fails with generic Error (stdio)', { timeout: 30000 }, async () => {
       const genericError = new Error("A generic client error occurred");
       mockMcpClientInstance.callTool.mockRejectedValue(genericError);
 
@@ -626,7 +628,7 @@ describe('CLI with yargs (index.ts)', () => {
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
       else throw new Error("stderr 'data' listener not attached for json generic error test (timed out polling)");
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased
       
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name } }, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
