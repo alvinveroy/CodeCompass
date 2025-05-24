@@ -404,4 +404,159 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     await client.close();
   }, 45000);
+
+  it('should call switch_suggestion_model and get a success response', async () => {
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    await waitForServerReady(serverProcess);
+
+    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    const transport = new StdioClientTransport({
+      readableStream: serverProcess.stdout!,
+      writableStream: serverProcess.stdin!,
+    });
+    await client.connect(transport);
+
+    const modelSwitchArgs = { model: 'deepseek-coder', provider: 'deepseek' };
+    // Mock the underlying switchSuggestionModel from llm-provider to return true for this test
+    // as the actual provider availability checks are complex and mocked.
+    const llmProviderModule = await import('../../lib/llm-provider');
+    vi.mocked(llmProviderModule.switchSuggestionModel).mockResolvedValue(true);
+    // Also ensure getLLMProvider's checkConnection for the "new" provider returns true
+    // This is tricky as getLLMProvider is called internally by the tool.
+    // For this integration test, we'll rely on the switchSuggestionModel mock and the tool's response.
+
+    const switchResult = await client.callTool({ name: 'switch_suggestion_model', arguments: modelSwitchArgs });
+    expect(switchResult).toBeDefined();
+    expect(switchResult.content).toBeInstanceOf(Array);
+    const switchResultText = switchResult.content![0].text as string;
+
+    expect(switchResultText).toContain('# Suggestion Model Switched');
+    expect(switchResultText).toContain(`Successfully switched to model '${modelSwitchArgs.model}' using provider '${modelSwitchArgs.provider}'`);
+    
+    // Verify that configService.persistModelConfiguration was called (indirectly, via switchSuggestionModel)
+    // This requires spying on the actual configService instance used by the spawned server, which is hard.
+    // Unit tests for switchSuggestionModel should cover this. Here, we focus on the tool's response.
+
+    await client.close();
+  }, 40000);
+
+  it('should perform some actions and then retrieve session history with get_session_history', async () => {
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    await waitForServerReady(serverProcess);
+
+    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    const transport = new StdioClientTransport({
+      readableStream: serverProcess.stdout!,
+      writableStream: serverProcess.stdin!,
+    });
+    await client.connect(transport);
+
+    const sessionId = `test-session-${Date.now()}`;
+    const query1 = "first search query for session history";
+    const query2 = "second agent query for session history";
+
+    // Mock Qdrant search for these specific queries
+    mockQdrantClientInstance.search.mockResolvedValueOnce([
+      { id: 'q1', score: 0.8, payload: { dataType: 'file_chunk', filepath: 'file1.ts', file_content_chunk: 'content1' } }
+    ]).mockResolvedValueOnce([ // For agent_query's internal search
+      { id: 'q2', score: 0.7, payload: { dataType: 'file_chunk', filepath: 'file2.txt', file_content_chunk: 'content2' } }
+    ]);
+    mockLLMProviderInstance.generateText.mockResolvedValue("Agent response for session history test.");
+
+
+    await client.callTool({ name: 'search_code', arguments: { query: query1, sessionId } });
+    await client.callTool({ name: 'agent_query', arguments: { query: query2, sessionId } });
+
+    const historyResult = await client.callTool({ name: 'get_session_history', arguments: { sessionId } });
+    expect(historyResult).toBeDefined();
+    expect(historyResult.content).toBeInstanceOf(Array);
+    const historyText = historyResult.content![0].text as string;
+
+    expect(historyText).toContain(`# Session History (${sessionId})`);
+    expect(historyText).toContain(`Query 1: "${query1}"`);
+    expect(historyText).toContain(`Query 2: "${query2}"`); // Agent query also gets logged
+    expect(historyText).toContain('## Queries (2)'); // Expecting two queries
+
+    await client.close();
+  }, 50000);
+
+  it('should call generate_suggestion and get a mocked LLM response', async () => {
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    await waitForServerReady(serverProcess);
+    
+    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    const transport = new StdioClientTransport({
+      readableStream: serverProcess.stdout!,
+      writableStream: serverProcess.stdin!,
+    });
+    await client.connect(transport);
+
+    // Wait for indexing (similar to search_code test)
+    let indexingComplete = false, attempts = 0;
+    while (!indexingComplete && attempts < 60) {
+      const statusResult = await client.callTool({ name: 'get_indexing_status', arguments: {} });
+      if ((statusResult.content![0].text as string).includes("Status: idle") || (statusResult.content![0].text as string).includes("Status: completed")) indexingComplete = true;
+      else { attempts++; await new Promise(resolve => setTimeout(resolve, 500)); }
+    }
+    if (!indexingComplete) throw new Error("Indexing did not complete for generate_suggestion test.");
+
+    mockQdrantClientInstance.search.mockResolvedValue([ // Mock search results for context
+      { id: 'sugg-ctx', score: 0.85, payload: { dataType: 'file_chunk', filepath: 'file1.ts', file_content_chunk: 'context for suggestion' } }
+    ]);
+    mockLLMProviderInstance.generateText.mockResolvedValue("This is a generated suggestion based on context.");
+
+    const suggestionQuery = "Suggest how to use file1.ts";
+    const suggestionResult = await client.callTool({ name: 'generate_suggestion', arguments: { query: suggestionQuery } });
+    
+    expect(suggestionResult).toBeDefined();
+    expect(suggestionResult.content).toBeInstanceOf(Array);
+    const suggestionText = suggestionResult.content![0].text as string;
+
+    expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
+    expect(suggestionText).toContain("This is a generated suggestion based on context.");
+    expect(suggestionText).toContain("Context Used");
+    expect(suggestionText).toContain("File: file1.ts");
+
+    await client.close();
+  }, 60000);
+
+  it('should call get_repository_context and get a mocked LLM summary', async () => {
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    await waitForServerReady(serverProcess);
+
+    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    const transport = new StdioClientTransport({
+      readableStream: serverProcess.stdout!,
+      writableStream: serverProcess.stdin!,
+    });
+    await client.connect(transport);
+
+    // Wait for indexing
+    let indexingComplete = false, attempts = 0;
+    while (!indexingComplete && attempts < 60) {
+      const statusResult = await client.callTool({ name: 'get_indexing_status', arguments: {} });
+      if ((statusResult.content![0].text as string).includes("Status: idle") || (statusResult.content![0].text as string).includes("Status: completed")) indexingComplete = true;
+      else { attempts++; await new Promise(resolve => setTimeout(resolve, 500)); }
+    }
+    if (!indexingComplete) throw new Error("Indexing did not complete for get_repository_context test.");
+
+    mockQdrantClientInstance.search.mockResolvedValue([ // Mock search results for context
+      { id: 'repo-ctx', score: 0.75, payload: { dataType: 'file_chunk', filepath: 'file2.txt', file_content_chunk: 'repository context information' } }
+    ]);
+    mockLLMProviderInstance.generateText.mockResolvedValue("This is a summary of the repository context.");
+
+    const repoContextQuery = "What is the main purpose of this repo?";
+    const repoContextResult = await client.callTool({ name: 'get_repository_context', arguments: { query: repoContextQuery } });
+    
+    expect(repoContextResult).toBeDefined();
+    expect(repoContextResult.content).toBeInstanceOf(Array);
+    const repoContextText = repoContextResult.content![0].text as string;
+
+    expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
+    expect(repoContextText).toContain("This is a summary of the repository context.");
+    expect(repoContextText).toContain("Relevant Information Used for Summary");
+    expect(repoContextText).toContain("File: file2.txt");
+
+    await client.close();
+  }, 60000);
 });
