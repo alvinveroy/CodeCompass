@@ -637,14 +637,7 @@ describe('Server Startup and Port Handling', () => {
         existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' })
       })
     );
-    // The following duplicate expect block was removed as per user's instruction to move localPingError definition up.
-    // await expect(startServer('/fake/repo')).rejects.toThrow(
-      expect.objectContaining({
-        name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} is in use by an unknown or unresponsive service. Ping error: ${localPingError.message}`,
-        exitCode: 1,
-      })
-    );
+    // The orphaned expect.objectContaining block below was causing a syntax error.
     
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service, or the service is unresponsive. Ping error: ${localPingError.message}. This instance will exit.`));
     expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({

@@ -357,6 +357,7 @@ async function main() {
         // If displayChangelog were async, we'd await it.
       }
     )
+    .scriptName("codecompass") // Set script name for help output
     .command(
       // Default command for starting the server
       ['start [repoPath]', '$0 [repoPath]'],
@@ -408,8 +409,12 @@ async function main() {
       async (argv) => {
         // Construct the ClientCommandArgs object correctly, including the toolName
         const commandArgs: ClientCommandArgs = {
-          ...(argv as any), // Cast argv to any to spread its properties
+          params: argv.params as string | undefined,
+          outputJson: argv.json as boolean | undefined,
+          repo: argv.repo as string | undefined,
           toolName: toolName, // This 'toolName' is from the forEach loop's scope
+          $0: argv.$0 as string,
+          _: argv._ as (string | number)[],
         };
         await handleClientCommand(commandArgs as ClientCommandArgs & { repo?: string });
       }

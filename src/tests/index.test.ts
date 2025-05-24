@@ -226,7 +226,7 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should call startServerHandler with repoPath from --repo for "start" command if no positional', async () => {
       await runMainWithArgs(['start', '--repo', '/global/start/repo']);
-      expect(mockStartServer).toHaveBeenCalledWith('/my/repo/path');
+      expect(mockStartServer).toHaveBeenCalledWith('/global/start/repo');
     });
 
     it('should handle startServer failure (fatal error, exitCode 1) and log via yargs .fail()', async () => {
@@ -307,18 +307,22 @@ describe('CLI with yargs (index.ts)', () => {
 
       await runMainWithArgs(['agent_query', '{"query":"test_stdio"}']);
       
+      // Poll for stderrDataCallback to be set by the SUT
+      let attempts = 0;
+      while (!stderrDataCallback && attempts < 100) { // Poll for up to 10 seconds (100 * 100ms)
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+      }
+
       // Simulate the server sending its ready message on stderr
       if (stderrDataCallback) {
         stderrDataCallback(Buffer.from("CodeCompass v0.0.0 ready. MCP active on stdio."));
       } else {
-        // Fail test if callback wasn't captured, means SUT didn't attach listener as expected
-        // This path might not be hit if the SUT's timeout for readiness is shorter than test timeout.
-        throw new Error("stderr 'data' listener not attached by SUT");
+        throw new Error("stderr 'data' listener not attached by SUT (timed out polling)");
       }
       
-      // Wait for async operations within runMainWithArgs to complete
-      // This might require a small delay or a more robust way to await internal promises.
-      await new Promise(setImmediate);
+      // Wait for async operations within handleClientCommand to complete
+      await new Promise(resolve => setTimeout(resolve, 500)); // Give time for client.callTool etc.
 
 
       // const { spawn } = require('child_process'); // Not needed
@@ -341,9 +345,17 @@ describe('CLI with yargs (index.ts)', () => {
 
       await runMainWithArgs(['agent_query', '{"query":"test_repo"}', '--repo', '/custom/path']);
       
+      let attempts = 0;
+      while (!stderrDataCallback && attempts < 100) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+      }
+      
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
-      else throw new Error("stderr 'data' listener not attached");
-      await new Promise(setImmediate);
+      else throw new Error("stderr 'data' listener not attached (timed out polling)");
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+
 
       // const { spawn } = require('child_process'); // Not needed
       expect(mockSpawnFn).toHaveBeenCalledWith(
@@ -428,9 +440,16 @@ describe('CLI with yargs (index.ts)', () => {
       
       await runMainWithArgs(['--port', String(customPort), 'agent_query', '{"query":"test_port_option"}']);
       
+      let attempts = 0;
+      while (!stderrDataCallback && attempts < 100) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+      }
+
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
-      else throw new Error("stderr 'data' listener not attached for port test");
-      await new Promise(setImmediate);
+      else throw new Error("stderr 'data' listener not attached for port test (timed out polling)");
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       expect(process.env.HTTP_PORT).toBe(String(customPort)); // Parent process.env is set by yargs
       // const { spawn } = require('child_process'); // Not needed
@@ -456,9 +475,16 @@ describe('CLI with yargs (index.ts)', () => {
 
       await runMainWithArgs(['agent_query', '{"query":"test_repo_opt"}', '--repo', '/my/client/repo']);
 
+      let attempts = 0;
+      while (!stderrDataCallback && attempts < 100) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+      }
+
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
-      else throw new Error("stderr 'data' listener not attached for repo option test");
-      await new Promise(setImmediate);
+      else throw new Error("stderr 'data' listener not attached for repo option test (timed out polling)");
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // const { spawn } = require('child_process'); // Not needed
       expect(mockSpawnFn).toHaveBeenCalledWith(
@@ -535,9 +561,16 @@ describe('CLI with yargs (index.ts)', () => {
       
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
 
+      let attempts = 0;
+      while (!stderrDataCallback && attempts < 100) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+      }
+
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
-      else throw new Error("stderr 'data' listener not attached for json success test");
-      await new Promise(setImmediate);
+      else throw new Error("stderr 'data' listener not attached for json success test (timed out polling)");
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResult, null, 2));
     });
@@ -555,9 +588,16 @@ describe('CLI with yargs (index.ts)', () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json']);
 
+      let attempts = 0;
+      while (!stderrDataCallback && attempts < 100) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+      }
+
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
-      else throw new Error("stderr 'data' listener not attached for json rpc error test");
-      await new Promise(setImmediate);
+      else throw new Error("stderr 'data' listener not attached for json rpc error test (timed out polling)");
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
@@ -577,9 +617,16 @@ describe('CLI with yargs (index.ts)', () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_json_generic_error"}', '--json']);
 
+      let attempts = 0;
+      while (!stderrDataCallback && attempts < 100) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+      }
+
       if (stderrDataCallback) stderrDataCallback(Buffer.from("MCP active on stdio"));
-      else throw new Error("stderr 'data' listener not attached for json generic error test");
-      await new Promise(setImmediate);
+      else throw new Error("stderr 'data' listener not attached for json generic error test (timed out polling)");
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name } }, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
