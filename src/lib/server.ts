@@ -599,10 +599,28 @@ export async function startServer(repoPath: string): Promise<void> {
                 logger.info(`Last Updated: ${existingStatus.lastUpdatedAt}`);
                 logger.info(`-----------------------------------------------------------\n`);
                 logger.info("Current instance will exit as another CodeCompass server is already running.");
-                httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use by another CodeCompass instance.`, 0));
+                httpServerSetupReject(new ServerStartupError(
+                  `Port ${httpPort} in use by another CodeCompass instance (v${pingResponse.data.version || 'unknown'}).`,
+                  0, // Exit code 0 for graceful exit/proxy mode
+                  {
+                    originalError: error, // The original EADDRINUSE error
+                    existingServerStatus: pingResponse.data, // Store the ping data
+                    requestedPort: httpPort,
+                    detectedServerPort: httpPort,
+                  }
+                ));
               } else {
                 logger.error(`Failed to retrieve status from existing CodeCompass server on port ${httpPort}. It responded to ping but status endpoint failed. Status: ${statusResponse.status}`);
-                httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use, status fetch failed.`, 1));
+                httpServerSetupReject(new ServerStartupError(
+                  `Port ${httpPort} in use, status fetch failed.`,
+                  1,
+                  {
+                    originalError: error,
+                    existingServerStatus: pingResponse.data, // Still pass ping data
+                    requestedPort: httpPort,
+                    detectedServerPort: httpPort,
+                  }
+                ));
               }
             } catch (statusError: unknown) {
               if (axios.isAxiosError(statusError)) {
