@@ -13,10 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
-- **Build Fix (SDK Integration) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
-    - Resolved TypeScript build errors and unit test failures in `src/lib/server.ts`:
-        - Corrected `TS2724` by changing the imported name from `StreamableHttpServerTransport` to `StreamableHTTPServerTransport` (case sensitivity) from `@modelcontextprotocol/sdk/server/streamableHttp.js`.
-        - Resolved `TS2307` (Cannot find module) for `@modelcontextprotocol/sdk/server/session.js` by removing the import and usage of `SessionManager`. Session management (specifically session ID generation) is now configured directly via options passed to the `StreamableHTTPServerTransport` constructor (using `sessionIdGenerator: randomUUID`), aligning with SDK examples.
+- **Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved TypeScript build errors (`TS2554` - wrong constructor arguments for `StreamableHTTPServerTransport`, `TS2339` - missing `createExpressMiddleware` method) and Vitest test failures related to `@modelcontextprotocol/sdk` integration in `src/lib/server.ts`.
+    - Corrected `StreamableHTTPServerTransport` instantiation to take a single options object, not an `McpServer` instance. The `McpServer` instance is now connected to the transport using `server.connect(transport)`.
+    - Removed the incorrect usage of `mcpHttpTransport.createExpressMiddleware()`. MCP request handling is now correctly managed by the explicit Express route handlers (`POST`, `GET`, `DELETE` for `/mcp`) that use `transport.handleRequest()`, aligning with SDK examples and its source code.
+    - Maintained the session management logic:
+        - Stores active `StreamableHTTPServerTransport` instances in a map keyed by session ID.
+        - Creates a new `McpServer` instance and a new `StreamableHTTPServerTransport` for each new client session initiated via an `initialize` request.
+        - Each new `McpServer` instance is configured with resources, tools, and prompts via a helper function `configureMcpServerInstance`.
+    - Imported `isInitializeRequest` from `@modelcontextprotocol/sdk/types.js`.
 - **Build Fix (SDK Imports & Server Property Access) (Git Commit ID: 8684429):**
     - (Note: The part of this fix regarding `.js` suffix removal for SDK imports was found to be incorrect for `@modelcontextprotocol/sdk` and is superseded by the fix above. The SDK's documentation indicates `.js` suffixes are used.)
     - Corrected TypeScript errors `TS2551` (Property does not exist) in `src/lib/server.ts` by changing `server.tools.keys()` and `server.prompts.keys()` to `Object.keys(serverCapabilities.tools)` and `Object.keys(serverCapabilities.prompts)` respectively. This logs the tools and prompts declared in `serverCapabilities` rather than attempting to access non-existent public collections on the `McpServer` instance.

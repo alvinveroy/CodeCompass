@@ -665,24 +665,25 @@
 - Reinforce the practice of updating unit tests as an integral part of any pull request that modifies the behavior of the code under test.
 - When reviewing pull requests, pay attention to whether tests for modified components have also been updated.
 
-# Retrospection for Build Fix (SDK Integration - StreamableHTTPServerTransport & SessionManager) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+# Retrospection for Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-- TypeScript error messages (`TS2724` and `TS2307`) were precise in identifying the issues: incorrect casing for an imported member and a module not found.
-- The SDK's README examples for `StreamableHTTPServerTransport` provided crucial clues on how session management is typically handled (via constructor options rather than a separate `SessionManager` instance passed to the transport).
+- TypeScript errors (`TS2554`, `TS2339`) and Vitest test failures clearly indicated incorrect usage of the `StreamableHTTPServerTransport`.
+- The `@modelcontextprotocol/typescript-sdk` README examples and its source code for "Streamable HTTP with Session Management" provided the correct pattern for instantiating the transport and handling requests with Express.
+- The per-session `McpServer` instance model was correctly identified as the SDK's intended approach.
 
 ## What could be improved?
-- **SDK Usage Verification:** When integrating SDK components, especially complex ones like server transports, relying solely on type definitions might not be enough if the usage pattern is subtle. Cross-referencing with official examples is vital. The initial assumption about how `SessionManager` integrates with `StreamableHTTPServerTransport` was incorrect.
-- **Iterative Fixes:** The previous attempt to fix SDK imports by adjusting `.js` suffixes was a step in the right direction for some paths, but it didn't address the incorrect `SessionManager` usage or the casing issue for `StreamableHTTPServerTransport`. A more holistic review of the SDK's example usage for HTTP transport would have been beneficial earlier.
+- **SDK Integration Details:** The initial integration of `StreamableHTTPServerTransport` had subtle errors in constructor arguments and Express integration. A closer reading of the SDK's `streamableHttp.ts` source or its detailed examples from the outset would have prevented these.
+- **Iterative Refinement:** While the previous refactor correctly moved towards per-session server instances, the final step of aligning transport instantiation and Express integration with the SDK's exact pattern was missed.
 
 ## What did we learn?
-- **Case Sensitivity in Imports:** JavaScript/TypeScript module imports are case-sensitive. `StreamableHttpServerTransport` is different from `StreamableHTTPServerTransport`.
-- **SDK API Patterns:** The `@modelcontextprotocol/sdk` (version `^1.11.4` as per `package.json`) appears to handle session ID generation for `StreamableHTTPServerTransport` via options like `sessionIdGenerator` passed directly to its constructor, rather than requiring a separate `SessionManager` instance as a constructor argument. The module `@modelcontextprotocol/sdk/server/session.js` either does not exist or does not export `SessionManager` in a way that was being used.
-- **Documentation as Primary Reference:** When facing integration issues with an SDK, its official documentation and examples should be the primary source for correct usage patterns, especially if type errors suggest a mismatch in how components are being wired together.
+- **SDK Constructor Signatures:** `StreamableHTTPServerTransport` expects a single options object in its constructor. The `McpServer` instance is connected later via `server.connect(transport)`.
+- **SDK Express Integration:** The SDK's `StreamableHTTPServerTransport` uses a `handleRequest()` method within custom Express route handlers, not a dedicated middleware factory like `createExpressMiddleware()`.
+- **Session Management in SDK:** The SDK's pattern for stateful HTTP servers involves creating a new `McpServer` instance for each client session, connected to a dedicated transport.
+- **Source Code as Documentation:** When SDK examples are high-level, consulting the SDK's own source code (like `streamableHttp.ts`) can provide definitive answers on usage.
 
 ## Action Items / Follow-ups
-- Always double-check case sensitivity for named imports from SDKs.
-- When an SDK module cannot be found (`TS2307`), verify the import path against the SDK's documentation and `node_modules` structure. If the module is part of the SDK, ensure it's being used as intended by the SDK's examples.
-- If the `StreamableHTTPServerTransport` still causes issues or if multi-session support needs to be more robust, a deeper refactor of `src/lib/server.ts` might be needed to align more closely with the SDK's stateful server example (e.g., managing multiple transport instances).
+- Thoroughly test the corrected session-based `McpServer` instantiation and transport handling.
+- When integrating SDKs, if documentation is ambiguous or high-level, refer to the SDK's source code for precise usage patterns, especially for constructors and request handling.
 
 ---

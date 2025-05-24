@@ -9,7 +9,7 @@ import { randomUUID } from "crypto";
 import express from 'express';
 import http from 'http';
 import axios from 'axios'; // Add this import
-import { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
+import { ServerRequest, ServerNotification, isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
 import fs from "fs/promises";
@@ -637,11 +637,135 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     const toolStubs = serverCapabilities.tools || {};
     logger.info(`CodeCompass server configured with tool stubs: ${Object.keys(toolStubs).join(', ')}`);
     
+    // The McpServer instance and its registrations will now be handled per session for HTTP transport.
+    // The serverCapabilities object is defined once and used for each new McpServer instance.
+
+    const finalDeclaredTools = Object.keys(serverCapabilities.tools);
+    logger.info(`Declared tools in capabilities: ${finalDeclaredTools.join(', ')}`);
+    const finalDeclaredPrompts = Object.keys(serverCapabilities.prompts);
+    logger.info(`Declared prompts in capabilities: ${finalDeclaredPrompts.join(', ')}`);
+
+    // Setup Express HTTP server for status, notifications, and MCP
+    const expressApp = express();
+    expressApp.use(express.json()); // Middleware to parse JSON bodies
+
+    // Map to store transports by session ID
+    const activeSessionTransports: Map<string, StreamableHTTPServerTransport> = new Map();
+
+    // Handle POST requests for client-to-server communication
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    expressApp.post('/mcp', async (req: express.Request, res: express.Response) => {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      let transport: StreamableHTTPServerTransport | undefined = sessionId ? activeSessionTransports.get(sessionId) : undefined;
+
+      if (transport) {
+        // Reuse existing transport
+        logger.debug(`MCP POST: Reusing transport for session ${sessionId}`);
+      } else if (isInitializeRequest(req.body)) {
+        // New initialization request
+        logger.info('MCP POST: Initialization request, creating new transport and server instance.');
+        
+        // Correct instantiation: only options object
+        const newTransport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: randomUUID,
+          onsessioninitialized: (newSessionId) => {
+            activeSessionTransports.set(newSessionId, newTransport);
+            logger.info(`MCP Session initialized: ${newSessionId}`);
+          }
+        });
+
+        // Clean up transport when closed
+        newTransport.onclose = () => {
+          if (newTransport.sessionId) {
+            activeSessionTransports.delete(newTransport.sessionId);
+            logger.info(`MCP Session closed and transport removed: ${newTransport.sessionId}`);
+          }
+        };
+        
+        // Create and configure a new McpServer instance for this session
+        const sessionServer = new McpServer({
+          name: "CodeCompass",
+          version: VERSION,
+          vendor: "CodeCompass",
+          capabilities: serverCapabilities, // Use the predefined capabilities
+        });
+        
+        // Pass qdrantClient, repoPath, suggestionModelAvailable from the outer scope
+        await configureMcpServerInstance(sessionServer, qdrantClient, repoPath, suggestionModelAvailable);
+        
+        // Connect the McpServer instance to the transport
+        await sessionServer.connect(newTransport);
+        transport = newTransport;
+      } else {
+        // Invalid request (not an init request and no valid session ID)
+        logger.warn(`MCP POST: Bad Request. No valid session ID and not an init request. Headers: ${JSON.stringify(req.headers)}, Body: ${JSON.stringify(req.body).substring(0,100)}...`);
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Bad Request: No valid session ID provided or not an initialization request.' },
+          id: req.body?.id || null,
+        });
+        return;
+      }
+
+      // Handle the request using the identified or new transport
+      try {
+        await transport.handleRequest(req, res, req.body);
+      } catch (transportError) {
+        logger.error("Error handling MCP POST request via transport:", transportError);
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32000, message: 'Internal MCP transport error.' },
+            id: req.body?.id || null,
+          });
+        }
+      }
+    });
+
+    // Reusable handler for GET and DELETE session requests
+    const handleSessionRequest = async (req: express.Request, res: express.Response) => {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      if (!sessionId || !activeSessionTransports.has(sessionId)) {
+        logger.warn(`MCP ${req.method}: Invalid or missing session ID: ${sessionId}. Headers: ${JSON.stringify(req.headers)}`);
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Invalid or missing session ID.' },
+          id: null
+        });
+        return;
+      }
+
+      const transport = activeSessionTransports.get(sessionId)!;
+      logger.debug(`MCP ${req.method}: Handling request for session ${sessionId}`);
+      try {
+        await transport.handleRequest(req, res); // For GET/DELETE, body is not passed to handleRequest
+      } catch (transportError) {
+        logger.error(`Error handling MCP ${req.method} request via transport for session ${sessionId}:`, transportError);
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32000, message: 'Internal MCP transport error.' },
+            id: null, // GET/DELETE requests in MCP spec don't have body/id
+          });
+        }
+      }
+    };
+
+    // Handle GET requests for server-to-client notifications via SSE
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    expressApp.get('/mcp', handleSessionRequest);
+
+    // Handle DELETE requests for session termination
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    expressApp.delete('/mcp', handleSessionRequest);
+    // The mcpHttpTransport.createExpressMiddleware() line is removed as it's not needed.
+    // The routes above handle /mcp directly.
+    logger.info(`MCP communication will be available at the /mcp endpoint via POST, GET, DELETE.`);
+
     // The console.error message now reflects that MCP is part of the HTTP server
     console.error(`CodeCompass v${VERSION} HTTP Server running on port ${httpPort}, with MCP at /mcp`);
     
-    // server.connect(transport) is not needed for StreamableHttpServerTransport
-    // as it's integrated via Express middleware.
+    // server.connect(transport) is handled per session now.
     
     if (process.env.NODE_ENV === 'test') {
       logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");
