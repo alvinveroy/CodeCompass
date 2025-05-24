@@ -617,7 +617,7 @@ describe('Server Startup and Port Handling', () => {
     
     const localPingError = new Error('Connection refused'); // Define localPingError here
     // eslint-disable-next-line @typescript-eslint/no-unbound-method
-    vi.mocked(axios.get).mockImplementation(async (url: string) => {
+    vi.mocked(axios.get).mockImplementation(async (url: string): Promise<any> => { // Added Promise<any>
       if (url.endsWith('/api/ping')) {
         return Promise.reject(localPingError);
       }
