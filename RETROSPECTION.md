@@ -18,6 +18,26 @@
 - Consider if parts of `startServer`'s non-MCP HTTP setup (like EADDRINUSE handling) could be further modularized to improve readability, though its current state is functional.
 
 ---
+# Retrospection for Unit Test Fix (server.test.ts - EADDRINUSE Non-CodeCompass Server Log Assertions) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The detailed failure output from Vitest, showing all calls to the mocked `ml.error` function, was instrumental in understanding the discrepancy and formulating the correct assertions.
+- The fix involved making the test assertions more precise, which improves test reliability.
+
+## What could be improved?
+- **Initial Assertion Granularity:** The original assertion for `ml.error` was too broad. When a function is expected to be called multiple times with different arguments, assertions should ideally verify each call specifically or use matchers that accommodate the variations if a single assertion is intended to cover multiple calls (though the latter is less precise).
+- **Log Message Stability:** While not an issue here, if log messages change frequently, tests asserting their exact content can become brittle. Using `expect.stringContaining` for key phrases is a good balance, but the overall sequence of logs still needs to be stable for `toHaveBeenNthCalledWith`.
+
+## What did we learn?
+- When testing functions that log multiple distinct messages (especially error messages in different phases of handling an error), it's important to assert each log call accurately.
+- Vitest's `toHaveBeenNthCalledWith` is very useful for verifying the arguments of specific calls in a sequence.
+- Detailed mock call reporting in test runner output is invaluable for debugging assertion failures.
+
+## Action Items / Follow-ups
+- When writing tests that assert log outputs, if multiple log calls are expected, use specific assertions for each call (e.g., `toHaveBeenNthCalledWith`) rather than a single, broad assertion, to improve test precision and debuggability.
+- Review other tests that assert multiple log calls to ensure they are using precise assertions.
+
+---
 # Retrospection for Unit Test Fix (server.test.ts - Incorrect Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
