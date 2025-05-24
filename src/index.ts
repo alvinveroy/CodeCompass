@@ -92,8 +92,17 @@ function isJsonRpcErrorResponse(obj: unknown): obj is JsonRpcErrorResponse {
   );
 }
 
-async function handleClientCommand(toolName: string, toolParamsString?: string) {
-  // Dynamically import configService and logger here
+// Add outputJson to argv type for handleClientCommand
+interface ClientCommandArgs {
+  toolName: string;
+  params?: string;
+  outputJson?: boolean; // New option
+  // yargs also adds $0 and _
+  [key: string]: unknown;
+}
+
+async function handleClientCommand(argv: ClientCommandArgs) {
+  const { toolName, params: toolParamsString, outputJson } = argv;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { configService } = require('./lib/config-service') as typeof import('./lib/config-service');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -143,56 +152,86 @@ async function handleClientCommand(toolName: string, toolParamsString?: string) 
         logger.info("Tool execution successful.");
         logger.debug("Raw tool result:", result);
 
-        if (result.content && Array.isArray(result.content)) {
-          result.content.forEach(item => {
-            if (item && item.type === 'text' && typeof item.text === 'string') {
-              console.log(item.text);
-            } else {
-              console.log(JSON.stringify(item, null, 2));
-            }
-          });
-        } else if (result) {
+        if (outputJson) {
           console.log(JSON.stringify(result, null, 2));
         } else {
-          logger.info("Tool executed, but no content was returned in the response.");
+          if (result.content && Array.isArray(result.content)) {
+            result.content.forEach(item => {
+              if (item && item.type === 'text' && typeof item.text === 'string') {
+                console.log(item.text);
+              } else {
+                console.log(JSON.stringify(item, null, 2));
+              }
+            });
+          } else if (result) {
+            console.log(JSON.stringify(result, null, 2));
+          } else {
+            logger.info("Tool executed, but no content was returned in the response.");
+          }
         }
         
         await client.close();
-        // For yargs, successful promise resolution means exit 0.
       } catch (clientError: unknown) {
         logger.error("MCP Client error during tool execution:", clientError);
-        if (isJsonRpcErrorResponse(clientError)) {
-          console.error(`Error executing tool '${toolName}': ${clientError.error.message} (Code: ${clientError.error.code})`);
-          if (clientError.error.data) {
-            console.error(`Details: ${JSON.stringify(clientError.error.data, null, 2)}`);
-          }
-        } else if (clientError instanceof Error) {
-          console.error(`Error during tool '${toolName}' execution: ${clientError.message}`);
-        } else {
-          console.error(`An unknown error occurred while executing tool '${toolName}'.`);
+        if (outputJson && clientError) { // Also output JSON for errors if --json is used
+            if (isJsonRpcErrorResponse(clientError)) {
+                 console.error(JSON.stringify(clientError, null, 2));
+            } else if (clientError instanceof Error) {
+                console.error(JSON.stringify({ error: { message: clientError.message, name: clientError.name }}, null, 2));
+            } else {
+                console.error(JSON.stringify({ error: { message: "Unknown client error" }}, null, 2));
+            }
+        } else { // Default text error reporting
+            if (isJsonRpcErrorResponse(clientError)) {
+              console.error(`Error executing tool '${toolName}': ${clientError.error.message} (Code: ${clientError.error.code})`);
+              if (clientError.error.data) {
+                console.error(`Details: ${JSON.stringify(clientError.error.data, null, 2)}`);
+              }
+            } else if (clientError instanceof Error) {
+              console.error(`Error during tool '${toolName}' execution: ${clientError.message}`);
+            } else {
+              console.error(`An unknown error occurred while executing tool '${toolName}'.`);
+            }
         }
-        throw clientError; // Re-throw to let yargs handle the failure (exit 1)
+        throw clientError; 
       }
     } else {
+      // ... (existing non-CodeCompass server handling)
       logger.warn(`Service on port ${configService.HTTP_PORT} is not a CodeCompass server or responded unexpectedly. Ping response:`, pingResponse.data);
-      console.error(`A service is running on port ${configService.HTTP_PORT}, but it's not a CodeCompass server or it's unresponsive.`);
-      console.error(`Ping Response Status: ${pingResponse.status}, Data: ${JSON.stringify(pingResponse.data)}`);
+      const errorMessage = `A service is running on port ${configService.HTTP_PORT}, but it's not a CodeCompass server or it's unresponsive.`;
+      if (outputJson) {
+          console.error(JSON.stringify({ error: { message: errorMessage, pingResponse: pingResponse.data }}, null, 2));
+      } else {
+          console.error(errorMessage);
+          console.error(`Ping Response Status: ${pingResponse.status}, Data: ${JSON.stringify(pingResponse.data)}`);
+      }
       throw new Error("Non-CodeCompass server detected or ping failed.");
     }
   } catch (error: unknown) {
+    // ... (existing server connection error handling)
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { logger: localLogger } = require('./lib/config-service') as typeof import('./lib/config-service');
+    let errorMessage = `Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}.`;
     if (axios.isAxiosError(error)) {
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        localLogger.warn(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Connection refused or timed out.`);
-        console.error(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Please start the server first.`);
+        errorMessage = `CodeCompass server is not running on port ${configService.HTTP_PORT}. Please start the server first. (Detail: ${error.code})`;
+        localLogger.warn(errorMessage);
       } else {
-        localLogger.error(`Failed to connect to CodeCompass server (AxiosError) on port ${configService.HTTP_PORT}: ${error.message}`, { code: error.code, response: error.response?.data });
-        console.error(`Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}: ${error.message}`);
+        errorMessage = `Failed to connect to CodeCompass server (AxiosError) on port ${configService.HTTP_PORT}: ${error.message}`;
+        localLogger.error(errorMessage, { code: error.code, response: error.response?.data });
       }
+    } else if (error instanceof Error) {
+        errorMessage = `Failed to connect to CodeCompass server (Error) on port ${configService.HTTP_PORT}: ${error.message}`;
+        localLogger.error(errorMessage, error);
     } else {
-      localLogger.error(`Failed to connect to CodeCompass server (UnknownError) on port ${configService.HTTP_PORT}:`, error);
-      console.error(`Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}.`);
+        errorMessage = `Failed to connect to CodeCompass server (UnknownError) on port ${configService.HTTP_PORT}.`;
+        localLogger.error(errorMessage, error);
+    }
+
+    if (outputJson) {
+        console.error(JSON.stringify({ error: { message: errorMessage }}, null, 2));
+    } else {
+        console.error(errorMessage.split('(Detail:')[0].trim()); // Show simpler message for non-json
     }
     throw error; // Re-throw for yargs
   }
@@ -300,11 +339,21 @@ async function main() {
           describe: `JSON string of parameters for ${toolName}. Example: ${exampleParams}`,
           // Default to '{}' for tools that can accept no params but still need a JSON object
           default: (toolName === 'get_changelog' || toolName === 'get_indexing_status') ? '{}' : undefined,
-        });
+          })
+          .option('json', { // Add --json flag for tool commands
+            alias: 'j',
+            type: 'boolean',
+            description: 'Output the raw JSON response from the tool.',
+            default: false,
+          });
       },
       async (argv) => {
-        // process.env.HTTP_PORT would have been set by the global 'port' option's 'apply'
-        await handleClientCommand(toolName, argv.params as string | undefined);
+        // Pass the full argv to handleClientCommand so it can access --json
+        await handleClientCommand({
+            toolName, 
+            params: argv.params as string | undefined, 
+            outputJson: argv.json as boolean // Pass the new flag
+        });
       }
     );
   });
