@@ -668,20 +668,21 @@
 # Retrospection for Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-- TypeScript errors (`TS2451`, `TS2304`) clearly identified the structural problems in `src/lib/server.ts` related to duplicated code blocks and potentially mis-scoped helper functions.
-- The previous refactoring steps correctly established the per-session `McpServer` model and the use of `configureMcpServerInstance`.
+- TypeScript errors (`TS2451`, `TS2304`) were very specific, clearly indicating both variable redeclarations and a missing function definition.
+- The strategy of using a helper function (`configureMcpServerInstance`) for per-session MCP server setup is sound.
 
 ## What could be improved?
-- **Merge/Refactor Cleanliness:** The duplication of the HTTP server setup block indicates that a previous merge or refactoring step was not cleanly completed. More careful removal of old code during such operations is needed.
-- **Error Correlation:** The `TS2304` (Cannot find name) error, while potentially a scoping issue, can also be a symptom of the parser being confused by earlier, more fundamental errors like redeclarations. Fixing redeclarations first often clarifies subsequent errors.
+- **Completeness of Previous Fixes:** The persistence of duplicated code blocks and the missing `configureMcpServerInstance` function indicate that previous refactoring steps were not fully completed or verified. A more thorough check after applying large changes is necessary.
+- **Code Review:** A careful code review after the previous refactoring attempt might have caught the duplicated blocks and the missing function.
 
 ## What did we learn?
-- **Impact of Code Duplication:** Duplicating large blocks of code, especially those involving variable declarations and server listeners, inevitably leads to redeclaration errors and unpredictable behavior.
-- **Sequential Error Resolution:** Address fundamental errors like redeclarations (TS2451) before tackling "Cannot find name" (TS2304) errors, as the former can cause the latter.
-- **Importance of Clean Refactoring:** When refactoring, it's as important to remove or correctly modify old code as it is to add new code. Leaving remnants of old logic is a common source of bugs.
+- **Impact of Incomplete Refactoring:** Leaving significant duplicated code blocks or missing essential helper functions will inevitably lead to build failures.
+- **Importance of Helper Functions:** For complex setups like per-session server instances, helper functions are crucial for modularity and correctness. Their absence or incorrect placement breaks the logic.
+- **Sequential Debugging:** When faced with multiple errors, addressing structural issues (like missing functions or large duplicated blocks) often resolves a cascade of subsequent errors (like "cannot find name" if the parser is already confused).
 
 ## Action Items / Follow-ups
-- After significant refactoring or merging, perform a careful visual scan or use diff tools to ensure that old code blocks have been fully removed or correctly integrated, and that no unintended duplications exist.
-- Prioritize fixing redeclaration errors during troubleshooting, as they can have cascading effects on how the TypeScript parser interprets the rest of the file.
+- After applying significant refactoring, always perform a full build and run tests to verify the changes comprehensively.
+- Ensure that all necessary helper functions are correctly defined and scoped.
+- When deleting large code blocks, be precise to avoid removing necessary parts or leaving remnants of the deleted logic.
 
 ---
