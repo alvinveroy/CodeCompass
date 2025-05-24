@@ -136,18 +136,18 @@ describe('CLI with yargs (index.ts)', () => {
     }));
     
     await import('../index.js'); 
-
+    
     // Dynamically resolve paths as src/index.ts would
     // require.resolve needs a path that exists relative to this test file to find index.js
     // Assuming index.js is in dist/ and tests are in dist/tests/
     // If src/index.ts is run directly (e.g. via ts-node for tests), then '../index.js' might point to src/index.js
     // Let's assume the compiled output structure where index.js is at a level accessible via '../index.js' from 'dist/tests/index.js'
     // And 'lib' is a sibling to 'index.js'
-    const indexPath = require.resolve('../index.js'); // Get absolute path to index.js
-    const SUT_distPath = path.dirname(indexPath); // Get directory of index.js (e.g., /path/to/project/dist)
-    const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
-
-    vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
+    // const indexPath = require.resolve('../index.js'); // Get absolute path to index.js - This block was duplicated
+    // const SUT_distPath = path.dirname(indexPath); // Get directory of index.js (e.g., /path/to/project/dist) - This block was duplicated
+    // const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir - This block was duplicated
+    
+    // vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({ // This vi.doMock block was duplicated
       configService: currentMockConfigServiceInstance, // Use the current, fresh mock
       logger: currentMockLoggerInstance,             // Use the current, fresh mock
     }));
