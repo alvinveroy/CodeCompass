@@ -102,7 +102,10 @@ codecompass /path/to/your/project
 # Start server for the current directory on port 3005
 codecompass --port 3005
 ```
-Once started, CodeCompass will begin indexing your repository (if it hasn't already) and will be available for MCP clients (like Cursor) or direct CLI tool execution.
+Once started, CodeCompass will begin indexing your repository (if it hasn't already). MCP communication is primarily handled via `stdio`. A utility HTTP server also runs on the configured port (default 3001) for health checks, indexing status, and to receive repository update notifications from Git hooks.
+
+**Port Conflicts for Utility HTTP Server:**
+If the configured utility HTTP port is in use by another CodeCompass instance, the new instance will disable its own utility HTTP server and run with `stdio` MCP. Its utility-related MCP tools (like `get_indexing_status`, `trigger_repository_update`) will automatically relay requests to the existing instance's HTTP utility endpoints. If the port is taken by a non-CodeCompass service, the new instance will log an error and exit. Git hooks should generally target the HTTP port of the primary running CodeCompass instance.
 
 **2. Executing Tools via CLI Client Mode:**
 
