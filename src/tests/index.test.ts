@@ -81,7 +81,7 @@ describe('CLI with yargs (index.ts)', () => {
     vi.resetAllMocks();
     originalProcessEnv = { ...process.env };
     originalArgv = [...process.argv];
-
+    
     // Reset the mutable mockConfigServiceInstance to its original state by creating fresh copies
     currentMockConfigServiceInstance = { ...originalMockConfigServiceInstance };
     currentMockLoggerInstance = {
@@ -109,10 +109,33 @@ describe('CLI with yargs (index.ts)', () => {
     process.argv = originalArgv;
     vi.restoreAllMocks();
   });
-
+    
   async function runMainWithArgs(args: string[]) {
     process.argv = ['node', 'index.js', ...args];
     vi.resetModules(); 
+    
+    // Dynamically resolve paths as src/index.ts would
+    const indexPath = require.resolve('../index.js'); 
+    const SUT_distPath = path.dirname(indexPath); 
+    const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); 
+    
+    vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
+      configService: currentMockConfigServiceInstance, 
+      logger: currentMockLoggerInstance,             
+    }));
+    vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({
+      startServer: mockStartServer,
+      startProxyServer: mockStartProxyServer,
+      ServerStartupError: ServerStartupError,
+    }));
+    vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
+      Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
+    }));
+    vi.doMock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
+      StreamableHTTPClientTransport: vi.fn(),
+    }));
+    
+    await import('../index.js'); 
 
     // Dynamically resolve paths as src/index.ts would
     // require.resolve needs a path that exists relative to this test file to find index.js
