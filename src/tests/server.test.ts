@@ -143,6 +143,7 @@ vi.mock('http', async (importOriginal) => {
   const createNewMockServerObject = () => ({
     listen: mockHttpServerListenFn,
     on: mockHttpServerOnFn,
+    once: mockHttpServerOnFn, // Added 'once'
     close: mockHttpServerCloseFn,
     address: mockHttpServerAddressFn,
     setTimeout: mockHttpServerSetTimeoutFn,
@@ -190,6 +191,8 @@ vi.mock('../lib/llm-provider', async (importOriginal) => {
     getLLMProvider: vi.fn<() => Promise<Partial<LLMProvider>>>().mockResolvedValue({
       checkConnection: vi.fn().mockResolvedValue(true),
       generateText: vi.fn().mockResolvedValue('mock llm text'),
+      generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]), // Added
+      processFeedback: vi.fn().mockResolvedValue("mocked feedback response"), // Added
     }),
     switchSuggestionModel: vi.fn().mockResolvedValue(true),
   };
@@ -476,11 +479,11 @@ describe('Server Startup and Port Handling', () => {
           }
           // If listeningListenerOrError is the listener, it would be called by a successful listen
           // but here we are forcing EADDRINUSE path.
-          return currentMockHttpServerInstance as unknown as httpModule.Server;
+          return this as unknown as httpModule.Server; // Changed to 'this'
         }
       );
       
-      vi.mocked(axios.get).mockImplementation(async (url: string) => {
+      vi.mocked(axios.get).mockImplementation(async (url: string): Promise<any> => { // Added Promise<any>
         if (url.endsWith('/api/ping')) {
           return { status: 200, data: { service: "CodeCompass", status: "ok", version: existingServerPingVersion } };
         }
@@ -531,13 +534,13 @@ describe('Server Startup and Port Handling', () => {
           const error = new Error('listen EADDRINUSE: address already in use') as NodeJS.ErrnoException;
           error.code = 'EADDRINUSE';
           errorHandler(error);
-        }
-        return currentMockHttpServerInstance as unknown as httpModule.Server;
+        }        
+        return this as unknown as httpModule.Server; // Changed to 'this'
       });
 
     // Mock axios.get for /api/ping
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    vi.mocked(axios.get).mockImplementation((url: string) => {
+    vi.mocked(axios.get).mockImplementation((url: string): Promise<any> => { // Added Promise<any>
       if (url.endsWith('/api/ping')) { // Ping returns non-CodeCompass response or error
         return Promise.resolve({ status: 200, data: { service: "OtherService" } });
       }
@@ -587,8 +590,8 @@ describe('Server Startup and Port Handling', () => {
           const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
           error.code = 'EADDRINUSE';
           errorHandler(error); // Simulate EADDRINUSE
-        }
-        return currentMockHttpServerInstance as unknown as httpModule.Server;
+        }        
+        return this as unknown as httpModule.Server; // Changed to 'this'
       }
     );
 
@@ -648,13 +651,13 @@ describe('Server Startup and Port Handling', () => {
         const error = new Error('listen EADDRINUSE') as NodeJS.ErrnoException;
         error.code = 'EADDRINUSE';
         errorHandler(error); // Simulate EADDRINUSE
-      }
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+      }      
+      return this as unknown as httpModule.Server; // Changed to 'this'
     });
 
     // Mock axios.get for /api/ping
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    vi.mocked(axios.get).mockImplementation((url: string) => {
+    vi.mocked(axios.get).mockImplementation((url: string): Promise<any> => { // Added Promise<any>
       if (url.endsWith('/api/ping')) {
         return Promise.resolve({ status: 200, data: { service: "CodeCompass", status: "ok", version: "test-version" } }); // Ping success
       }
@@ -668,7 +671,7 @@ describe('Server Startup and Port Handling', () => {
      
     const pingSuccessData = { service: "CodeCompass", status: "ok", version: "test-version" };
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    vi.mocked(axios.get).mockImplementation((url: string) => {
+    vi.mocked(axios.get).mockImplementation((url: string): Promise<any> => { // Added Promise<any>
       if (url.endsWith('/api/ping')) {
         return Promise.resolve({ status: 200, data: pingSuccessData }); // Ping success
       }
@@ -708,8 +711,8 @@ describe('Server Startup and Port Handling', () => {
       if (errorArgs && typeof errorArgs[1] === 'function') {
         const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         errorHandler(otherError);
-      }
-      return currentMockHttpServerInstance as unknown as httpModule.Server;
+      }      
+      return this as unknown as httpModule.Server; // Changed to 'this'
     });
     
     // We need to ensure listen is called to trigger the 'on' setup
@@ -1201,9 +1204,11 @@ describe('MCP Tool Relaying', () => {
     // Minimal mock for getLLMProvider for tool registration
     const { getLLMProvider: getLLMProviderActual } = await import('../lib/llm-provider.js');
     vi.mocked(getLLMProviderActual).mockResolvedValue({
-        checkConnection: vi.fn().mockResolvedValue(true),
-        generateText: vi.fn().mockResolvedValue("mocked text"),
-    } as Partial<LLMProvider>);
+      checkConnection: vi.fn().mockResolvedValue(true),
+      generateText: vi.fn().mockResolvedValue("mocked text"),
+      generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+      processFeedback: vi.fn().mockResolvedValue("mocked feedback response"),
+    } as LLMProvider); // Changed to full LLMProvider
 
 
     // This is tricky. `startServer` is complex.
@@ -1218,7 +1223,7 @@ describe('MCP Tool Relaying', () => {
     // The `mainStdioMcpServer.tool` calls happen during `startServer`.
     // So, to get handlers, we must call `startServer`.
     // To prevent `startServer` from fully running or hanging, we can mock `httpServer.listen` to do nothing or resolve immediately.
-    mockHttpServerListenFn.mockImplementation((_port, _hostname, cb) => { if (cb) cb(); return currentMockHttpServerInstance as any; });
+    mockHttpServerListenFn.mockImplementation((_port, _hostname, cb) => { if (cb) cb(); return this as any; }); // Changed currentMockHttpServerInstance to this
     await startServer(repoPath); // This will call registerTools
   });
 

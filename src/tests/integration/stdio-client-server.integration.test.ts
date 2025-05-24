@@ -200,10 +200,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       // For StdioClientTransport:
       // - `stdin` is the stream to write client requests TO (which is the server's stdin)
-      // - `stdout` is the stream to read server responses FROM (which is the server's stdout)
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      // - `writableStream` is the stream to write client requests TO (server's stdin)
+      // - `readableStream` is the stream to read server responses FROM (server's stdout)
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any' to bypass TS2353, similar to src/index.ts
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
 
     await client.connect(transport);
@@ -233,9 +234,9 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     // 1. Trigger indexing explicitly via the tool to ensure it runs for the test.
@@ -316,9 +317,9 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
     
     // Ensure LLM generateText is mocked for the agent's synthesis step
@@ -343,9 +344,9 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     const changelogResult = await client.callTool({ name: 'get_changelog', arguments: {} });
@@ -371,9 +372,9 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     // Clear any calls from initial auto-indexing if it happened
@@ -414,9 +415,9 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     const modelSwitchArgs = { model: 'deepseek-coder', provider: 'deepseek' };
@@ -449,9 +450,9 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     const sessionId = `test-session-${Date.now()}`;
@@ -529,9 +530,9 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      readableStream: serverProcess.stdout!,
       writableStream: serverProcess.stdin!,
-    });
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     // Wait for indexing

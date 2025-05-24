@@ -3,7 +3,7 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 // If the SDK's "exports" map points these subpaths to .js files, add .js here.
 // If they are re-exported from the main SDK entry, use that.
 // import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"; // Replaced by StdioServerTransport
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"; // Added for stdio MCP
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 // SessionManager import removed as it's not used or found at the specified path.
 // Session handling is managed by StreamableHTTPServerTransport options.
 // import { randomUUID } from "crypto"; // No longer needed for stdio transport
@@ -11,7 +11,7 @@ import express from 'express';
 import http from 'http';
 import axios from 'axios'; // Add this import
 // import { ServerRequest, ServerNotification, isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"; // No longer needed for stdio transport
-import { type RequestHandlerExtra, type ServerRequest, type ServerNotification, type Variables } from "@modelcontextprotocol/sdk"; // Updated import path
+import { type RequestHandlerExtra, type ServerRequest, type ServerNotification, type Variables } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
@@ -467,15 +467,10 @@ export async function startServer(repoPath: string): Promise<void> {
     });
     await configureMcpServerInstance(mainStdioMcpServer, qdrantClient, repoPath, suggestionModelAvailable);
 
-    const stdioTransport = new StdioServerTransport({
-      readableStream: process.stdin,
-      writableStream: process.stdout,
-    });
     // StdioServerTransport constructor expects stdin and stdout properties
-    const transportForStdio = new StdioServerTransport({
-        stdin: process.stdin,
-        stdout: process.stdout,
-    });
+    // Assuming StdioServerTransport defaults to process.stdin/stdout if no args are provided,
+    // based on SDK examples.
+    const transportForStdio = new StdioServerTransport();
     await mainStdioMcpServer.connect(transportForStdio); // Connect the main server instance
     logger.info("CodeCompass MCP server connected to stdio transport. Ready for MCP communication over stdin/stdout.");
 
