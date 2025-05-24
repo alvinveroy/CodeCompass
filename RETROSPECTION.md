@@ -665,3 +665,23 @@
 - Reinforce the practice of updating unit tests as an integral part of any pull request that modifies the behavior of the code under test.
 - When reviewing pull requests, pay attention to whether tests for modified components have also been updated.
 
+# Retrospection for Build Fix (SDK Import Paths) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The TypeScript (`TS2307`) and Vitest build errors clearly indicated a module resolution problem.
+- Consulting the official `@modelcontextprotocol/typescript-sdk` README provided the correct import path patterns.
+
+## What could be improved?
+- **SDK Import Path Verification:** When integrating or updating SDKs, especially if module resolution errors occur, the first step should be to consult the SDK's own documentation for import examples. Previous assumptions about general module resolution patterns (e.g., NodeNext always preferring extensionless paths) were incorrect for this specific SDK.
+- **Iterative Debugging:** The previous fix (commit `8684429`) attempted to resolve this by removing `.js` suffixes. This was based on a common pattern but was not correct for this SDK. A more direct check of the SDK's documentation earlier could have saved an iteration.
+
+## What did we learn?
+- **SDK-Specific Import Patterns:** The `@modelcontextprotocol/typescript-sdk` uses `.js` suffixes in its documented import paths for submodules (e.g., `@modelcontextprotocol/sdk/server/streamableHttp.js`). This overrides general assumptions about module resolution.
+- **Documentation is Key:** For external dependencies, the library's own documentation is the primary source of truth for usage patterns, including import paths.
+- **Module Path Specificity:** The path segment for `StreamableHttpServerTransport` was also corrected from `/server/transport/http` to `/server/streamableHttp.js`, highlighting the need for exact path matching.
+
+## Action Items / Follow-ups
+- When encountering `TS2307` (Cannot find module) errors with an SDK, always prioritize checking the SDK's official documentation for correct import paths and patterns before applying general module resolution assumptions.
+- If `SessionManager` from `@modelcontextprotocol/sdk/server/session.js` is not found after this path correction, or if its usage with `StreamableHttpServerTransport` causes new type errors, further investigation into the SDK's intended session management mechanism for HTTP transports will be required, referencing its examples.
+
+---

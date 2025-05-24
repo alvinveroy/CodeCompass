@@ -2,8 +2,8 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 // Assuming these are correctly exported by the SDK, either from root or via defined subpaths.
 // If the SDK's "exports" map points these subpaths to .js files, add .js here.
 // If they are re-exported from the main SDK entry, use that.
-import { StreamableHttpServerTransport } from "@modelcontextprotocol/sdk/server/transport/http";
-import { SessionManager } from "@modelcontextprotocol/sdk/server/session";
+import { StreamableHttpServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SessionManager } from "@modelcontextprotocol/sdk/server/session.js";
 import { randomUUID } from "crypto";
 import express from 'express';
 import http from 'http';
