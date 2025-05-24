@@ -105,9 +105,9 @@ interface ClientCommandArgs {
 
 async function handleClientCommand(argv: ClientCommandArgs) {
   const { toolName, params: toolParamsString, outputJson } = argv;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+   
   const { configService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+   
   const { logger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
 
   logger.info(`CLI Client Mode: Attempting to execute tool '${toolName}'`);
@@ -138,9 +138,9 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     if (pingResponse.status === 200 && pingResponse.data?.service === "CodeCompass") {
       logger.info(`CodeCompass server v${pingResponse.data.version || 'unknown'} is running on port ${configService.HTTP_PORT}. Proceeding with tool execution.`);
       
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       const { Client } = require('@modelcontextprotocol/sdk/client/index.js') as typeof import('@modelcontextprotocol/sdk/client/index.js');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js') as typeof import('@modelcontextprotocol/sdk/client/streamableHttp.js');
 
       const transport = new StreamableHTTPClientTransport(new URL(serverUrl));
@@ -211,7 +211,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     }
   } catch (error: unknown) {
     // ... (existing server connection error handling)
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const { logger: localLogger, configService: localConfigService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
     let errorMessage = `Failed to connect to CodeCompass server on port ${localConfigService.HTTP_PORT}.`;
     if (axios.isAxiosError(error)) {
@@ -240,9 +240,9 @@ async function handleClientCommand(argv: ClientCommandArgs) {
 }
 
 async function startServerHandler(repoPath: string) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const { startServer, ServerStartupError: LocalServerStartupError, startProxyServer: localStartProxyServer } = require(path.join(libPath, 'server.js')) as typeof import('./lib/server');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const { logger: localLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
   try {
     await startServer(repoPath);
@@ -341,13 +341,13 @@ async function main() {
       },
       async (argv) => {
         // process.env.HTTP_PORT would have been set by the global 'port' option's 'apply'
-        await startServerHandler(argv.repoPath as string);
+        await startServerHandler(argv.repoPath);
       }
     );
 
   // Dynamically add commands for each known tool
   KNOWN_TOOLS.forEach(toolName => {
-    let commandDescription = `Execute the '${toolName}' tool.`;
+    const commandDescription = `Execute the '${toolName}' tool.`;
     let exampleParams = `'{"some_param": "value"}'`;
     // Customize example params based on tool
     if (toolName === 'get_changelog' || toolName === 'get_indexing_status') {
@@ -379,8 +379,8 @@ async function main() {
         // Pass the full argv to handleClientCommand so it can access --json
         await handleClientCommand({
             toolName, 
-            params: argv.params as string | undefined, 
-            outputJson: argv.json as boolean // Pass the new flag
+            params: argv.params, 
+            outputJson: argv.json // Pass the new flag
         });
       }
     );
@@ -398,7 +398,7 @@ async function main() {
     .fail((msg, err, _yargsInstance) => {
       // Dynamically import logger for failure messages if possible
       try {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
+           
           const { logger: failLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
           if (err) {
               failLogger.error('CLI Error (yargs.fail):', { message: err.message, stack: err.stack });
@@ -422,7 +422,7 @@ async function main() {
     // This catch block is for errors thrown from command handlers
     // that yargs' .fail() might not have caught or for truly unexpected issues.
     try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const { logger: critLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
         critLogger.error('Critical unhandled error in CLI execution:', error);
     } catch (e) {

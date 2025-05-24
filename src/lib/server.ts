@@ -1471,7 +1471,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 // Add this function definition, e.g., before startProxyServer
 async function findFreePort(startPort: number): Promise<number> {
   let port = startPort;
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const server = http.createServer();
     try {
