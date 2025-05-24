@@ -2,14 +2,15 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 // Assuming these are correctly exported by the SDK, either from root or via defined subpaths.
 // If the SDK's "exports" map points these subpaths to .js files, add .js here.
 // If they are re-exported from the main SDK entry, use that.
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+// import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"; // Replaced by StdioServerTransport
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"; // Added for stdio MCP
 // SessionManager import removed as it's not used or found at the specified path.
 // Session handling is managed by StreamableHTTPServerTransport options.
-import { randomUUID } from "crypto";
+// import { randomUUID } from "crypto"; // No longer needed for stdio transport
 import express from 'express';
 import http from 'http';
 import axios from 'axios'; // Add this import
-import { ServerRequest, ServerNotification, isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+// import { ServerRequest, ServerNotification, isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"; // No longer needed for stdio transport
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
 import fs from "fs/promises";
@@ -35,11 +36,7 @@ import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 
-// Define this interface at the top level of the file, e.g., after imports
-interface RequestBodyWithId {
-  id?: unknown; // id can be string, number, or null
-  [key: string]: unknown; // Allow other properties
-}
+// RequestBodyWithId removed as it was only used by the /mcp HTTP endpoint
 
 interface PingResponseData {
   service?: string;
@@ -457,13 +454,26 @@ export async function startServer(repoPath: string): Promise<void> {
 
     // This McpServer instance is primarily for defining capabilities.
     // Per-session instances will be created for actual MCP communication.
-    const _globalMcpServer = new McpServer({
-      name: "CodeCompass", version: VERSION, vendor: "CodeCompass", capabilities: serverCapabilities,
-    });
+    // const _globalMcpServer = new McpServer({
+    //   name: "CodeCompass", version: VERSION, vendor: "CodeCompass", capabilities: serverCapabilities,
+    // });
     // Resource/tool/prompt registration for the global server instance is not strictly necessary
     // if all MCP communication goes through per-session instances that are configured individually.
     // However, if any global handlers were intended, they would be registered on _globalMcpServer.
     // For now, configureMcpServerInstance will be called on per-session servers.
+    // With stdio, we will have one main McpServer instance.
+
+    const mainStdioMcpServer = new McpServer({
+      name: "CodeCompass", version: VERSION, vendor: "CodeCompass", capabilities: serverCapabilities,
+    });
+    await configureMcpServerInstance(mainStdioMcpServer, qdrantClient, repoPath, suggestionModelAvailable);
+
+    const stdioTransport = new StdioServerTransport({
+      // Assuming default options are sufficient (e.g., uses process.stdin/stdout)
+      // Consult MCP SDK documentation for StdioServerTransport options if needed.
+    });
+    await mainStdioMcpServer.connect(stdioTransport);
+    logger.info("CodeCompass MCP server connected to stdio transport. Ready for MCP communication over stdin/stdout.");
 
     const finalDeclaredTools = Object.keys(serverCapabilities.tools);
     logger.info(`Declared tools in capabilities: ${finalDeclaredTools.join(', ')}`);
@@ -489,82 +499,8 @@ export async function startServer(repoPath: string): Promise<void> {
       res.status(202).json({ message: 'Re-indexing initiated.' });
     });
 
-    const activeSessionTransports: Map<string, StreamableHTTPServerTransport> = new Map();
-
-     
-    expressApp.post('/mcp', async (req: express.Request, res: express.Response) => {
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
-      let transport: StreamableHTTPServerTransport | undefined = sessionId ? activeSessionTransports.get(sessionId) : undefined;
-
-      if (transport) {
-        logger.debug(`MCP POST: Reusing transport for session ${sessionId}`);
-      } else if (isInitializeRequest(req.body)) {
-        logger.info('MCP POST: Initialization request, creating new transport and server instance.');
-        const newTransport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: randomUUID,
-          onsessioninitialized: (newSessionId) => {
-            activeSessionTransports.set(newSessionId, newTransport);
-            logger.info(`MCP Session initialized: ${newSessionId}`);
-          }
-        });
-        newTransport.onclose = () => {
-          if (newTransport.sessionId) {
-            activeSessionTransports.delete(newTransport.sessionId);
-            logger.info(`MCP Session closed and transport removed: ${newTransport.sessionId}`);
-          }
-        };
-        const sessionServer = new McpServer({
-          name: "CodeCompass", version: VERSION, vendor: "CodeCompass", capabilities: serverCapabilities,
-        });
-        await configureMcpServerInstance(sessionServer, qdrantClient, repoPath, suggestionModelAvailable);
-        await sessionServer.connect(newTransport);
-        transport = newTransport;
-      } else {
-        logger.warn(`MCP POST: Bad Request. No valid session ID and not an init request.`);
-        const bodyWithId = req.body as RequestBodyWithId;
-        res.status(400).json({
-          jsonrpc: '2.0',
-          error: { code: -32000, message: 'Bad Request: No valid session ID or not an init request.' },
-          id: (typeof bodyWithId === 'object' && bodyWithId !== null && 'id' in bodyWithId) ? bodyWithId.id : null,
-        });
-        return;
-      }
-      try {
-        await transport.handleRequest(req, res, req.body);
-      } catch (transportError) {
-        logger.error("Error handling MCP POST request via transport:", transportError);
-        if (!res.headersSent) {
-          const bodyWithId = req.body as RequestBodyWithId;
-          res.status(500).json({
-            jsonrpc: '2.0', error: { code: -32000, message: 'Internal MCP transport error.' }, id: (typeof bodyWithId === 'object' && bodyWithId !== null && 'id' in bodyWithId) ? bodyWithId.id : null,
-          });
-        }
-      }
-    });
-
-    const handleSessionRequest = async (req: express.Request, res: express.Response) => {
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
-      if (!sessionId || !activeSessionTransports.has(sessionId)) {
-        logger.warn(`MCP ${req.method}: Invalid or missing session ID: ${sessionId}.`);
-        res.status(400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Invalid or missing session ID.' }, id: null });
-        return;
-      }
-      const transport = activeSessionTransports.get(sessionId)!;
-      logger.debug(`MCP ${req.method}: Handling request for session ${sessionId}`);
-      try {
-        await transport.handleRequest(req, res);
-      } catch (transportError) {
-        logger.error(`Error handling MCP ${req.method} request for session ${sessionId}:`, transportError);
-        if (!res.headersSent) {
-          res.status(500).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Internal MCP transport error.' }, id: null });
-        }
-      }
-    };
-     
-    expressApp.get('/mcp', handleSessionRequest);
-     
-    expressApp.delete('/mcp', handleSessionRequest);
-    logger.info(`MCP communication will be available at the /mcp endpoint via POST, GET, DELETE.`);
+    // activeSessionTransports and /mcp HTTP routes removed for stdio-first MCP.
+    // MCP communication is now handled by mainStdioMcpServer via StdioServerTransport.
 
     const httpPort = configService.HTTP_PORT;
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
@@ -698,8 +634,9 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     await Promise.race([listenPromise, httpServerSetupPromise]);
-    logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
-    console.error(`CodeCompass v${VERSION} HTTP Server running on port ${httpPort}, with MCP at /mcp`); // Changed to console.error as per user's new code
+    logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath} (MCP via stdio)`);
+    // Updated console message to reflect stdio MCP and utility HTTP server
+    console.error(`CodeCompass v${VERSION} ready. MCP active on stdio. Utility HTTP server running on port ${httpPort}.`);
     
     if (process.env.NODE_ENV === 'test') {
       logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");

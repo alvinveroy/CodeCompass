@@ -85,6 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Corrected a failing assertion in `src/tests/server.test.ts` for the test case "should handle EADDRINUSE, detect a non-CodeCompass server, log error, and exit with 1".
     - The first call to `ml.error` (mocked logger error method) was updated to `expect.stringContaining(\`Port \${mcs.HTTP_PORT} is in use by non-CodeCompass server. Response: {"service":"OtherService"}\`)` to precisely match the actual logged message. This resolved the `AssertionError: expected 1st "spy" call to have been called with [ StringContaining{…} ]` failure.
     - This fix supersedes parts of the previous fix under Git Commit ID `2c47648` related to this specific log message.
+- **Core Architecture Shift to `stdio`-first MCP (Phase 1) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Modified `src/lib/server.ts` to use `StdioServerTransport` for primary MCP communication, replacing the previous HTTP-based `/mcp` endpoint.
+    - The Express.js HTTP server is now dedicated to utility endpoints (`/api/ping`, `/api/indexing-status`, `/api/repository/notify-update`).
+    - Removed `StreamableHTTPServerTransport` and related per-session HTTP MCP logic.
+    - A single `McpServer` instance is now created and connected to `StdioServerTransport` for handling all MCP requests via `stdin`/`stdout`.
+    - Updated server startup logs to reflect that MCP is available via `stdio`.
 - **Server Logic Restoration & Linting (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved ESLint warnings (`@typescript-eslint/no-unused-vars`) for `StreamableHTTPServerTransport`, `randomUUID`, `isInitializeRequest`, and `configureMcpServerInstance` in `src/lib/server.ts`.
     - The fix involved restoring the complete and correct implementation of the `startServer` function, ensuring it properly sets up the Express HTTP server and MCP routes, thereby utilizing these previously flagged components. This addresses an issue where essential logic might have been inadvertently removed or disconnected during prior refactoring.

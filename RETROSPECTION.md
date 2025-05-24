@@ -1009,6 +1009,34 @@
 - Keep "Add comprehensive unit/integration tests for the client mode functionality" as a high-priority follow-up task.
 
 ---
+# Retrospection for Phase 1: Core Architecture Shift to `stdio`-first MCP (server.ts) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- Successfully refactored `src/lib/server.ts` to align with the `stdio`-first MCP architecture outlined in `TODO.md`.
+- `StdioServerTransport` was integrated, and the primary MCP communication was shifted from HTTP to `stdio`.
+- The Express.js server was simplified to only handle utility HTTP endpoints (`/api/ping`, `/api/indexing-status`, `/api/repository/notify-update`), removing the `/mcp` routes and associated per-session HTTP transport logic.
+- A single main `McpServer` instance is now configured for `stdio` communication, simplifying the server structure.
+- Imports and unused code related to HTTP MCP (like `StreamableHTTPServerTransport`, `randomUUID`, `RequestBodyWithId`) were cleaned up.
+- Server startup logging was updated to reflect the new architecture.
+
+## What could be improved?
+- The `StdioServerTransport` instantiation assumes default options. If specific configurations (e.g., custom stream handling) are needed, the MCP SDK documentation would need to be consulted.
+- The `configureMcpServerInstance` function is now used for the single `stdio` `McpServer`. Its existing structure was suitable for this.
+- This change is significant. Thorough testing will be required to ensure all MCP functionalities (tools, resources, prompts) work correctly over `stdio`.
+
+## What did we learn?
+- Shifting from HTTP-based MCP to `stdio`-based MCP involves significant changes to transport handling and server instantiation logic.
+- Simplifying the HTTP server's role to utility-only functions makes its purpose clearer and reduces complexity.
+- Careful management of imports and removal of obsolete code is important during such refactors.
+
+## Action Items / Follow-ups
+- Ensure the Git commit ID placeholder is replaced in `CHANGELOG.md` and this retrospection entry.
+- Proceed with adapting `src/index.ts` to correctly launch and manage this `stdio`-first server (requires adding `src/index.ts` to the chat).
+- Develop comprehensive unit and integration tests for the `stdio`-based MCP server and its interaction with clients.
+- Update `README.md` and other relevant documentation to reflect `stdio` as the primary MCP interface.
+- Implement Phase 3 (Utility HTTP Server Port Conflict Handling - Option C) in `src/lib/server.ts`.
+
+---
 # Retrospection for Expanded Unit Tests for yargs-based CLI (src/tests/index.test.ts) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
