@@ -30,28 +30,51 @@ function displayHelp() {
   console.log(`
 CodeCompass CLI (version ${version})
 
-Usage: codecompass [options] [command|repoPath]
+Usage: codecompass [options] [command|repoPath] [tool_parameters_json]
 
 Description:
   AI-powered MCP server for codebase navigation and LLM prompt optimization.
-  If no command is provided, the server starts with the specified or default repoPath.
+  If no command is provided, or if the first argument is a path, the server starts.
+  If the first command is a recognized tool name, CodeCompass attempts to act as a client.
 
 Options:
   --port <number>     Specify the HTTP port for the server. Overrides HTTP_PORT env var.
 
-Commands:
-  --help, -h          Show this help message and exit.
-  --version, -v       Show version information and exit.
-  --changelog         Show the project changelog and exit.
-                      Supports an optional --verbose flag (e.g., codecompass --changelog --verbose)
-                      for potentially more detailed output in the future.
-
-Arguments:
-  repoPath (optional) Path to the repository to be analyzed by the server.
-                      Defaults to the current directory ('.') if not specified.
+Server Commands:
+  [repoPath]          Start the server with the specified or default repoPath.
                       Example: codecompass /path/to/your/repo
                                codecompass .
                                codecompass --port 3005 /path/to/repo
+
+Client Commands (if a server is running on the configured port):
+  agent_query <json_params>
+                      Execute the 'agent_query' tool.
+                      Example: codecompass agent_query '{"query": "How is auth handled?"}'
+  bb7_search_code <json_params>
+                      Execute the 'bb7_search_code' tool.
+                      Example: codecompass bb7_search_code '{"query": "user login function"}'
+  bb7_get_changelog   Execute the 'bb7_get_changelog' tool (no parameters).
+  bb7_get_indexing_status
+                      Execute the 'bb7_get_indexing_status' tool (no parameters).
+  bb7_switch_suggestion_model <json_params>
+                      Execute the 'bb7_switch_suggestion_model' tool.
+                      Example: codecompass bb7_switch_suggestion_model '{"model": "deepseek-coder", "provider": "deepseek"}'
+  bb7_get_session_history <json_params>
+                      Execute the 'bb7_get_session_history' tool.
+                      Example: codecompass bb7_get_session_history '{"sessionId": "some-id"}'
+  bb7_generate_suggestion <json_params>
+                      Execute the 'bb7_generate_suggestion' tool.
+                      Example: codecompass bb7_generate_suggestion '{"query": "optimize this loop"}'
+  bb7_get_repository_context <json_params>
+                      Execute the 'bb7_get_repository_context' tool.
+                      Example: codecompass bb7_get_repository_context '{"query": "main API components"}'
+
+
+Other Commands:
+  --help, -h          Show this help message and exit.
+  --version, -v       Show version information and exit.
+  --changelog         Show the project changelog and exit.
+                      Supports an optional --verbose flag.
 
 For more information, visit: https://github.com/alvinveroy/codecompass
 `);
@@ -87,26 +110,72 @@ function displayChangelog(verbose: boolean) {
   }
 }
 
+// List of known tools that can be called from the CLI
+// This helps distinguish tool calls from repoPath arguments.
+const KNOWN_TOOLS = [
+  'agent_query',
+  'bb7_search_code',
+  'bb7_get_changelog',
+  'bb7_get_indexing_status',
+  'bb7_switch_suggestion_model',
+  'bb7_get_session_history',
+  'bb7_generate_suggestion',
+  'bb7_get_repository_context',
+  // Add other tools intended for CLI client execution here
+];
+
+async function executeClientCommand(toolName: string, toolParamsString?: string) {
+  // Placeholder for client logic
+  console.log(`CLI Client Mode: Attempting to execute tool '${toolName}'`);
+  if (toolParamsString) {
+    try {
+      const params = JSON.parse(toolParamsString);
+      console.log('With parameters:', params);
+    } catch (e) {
+      console.error(`Error: Invalid JSON parameters for tool ${toolName}: ${toolParamsString}`);
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+  } else {
+    console.log('With no parameters.');
+  }
+  // TODO:
+  // 1. Import configService (dynamically, after env.HTTP_PORT is set if needed by client)
+  // 2. Check if server is running on configService.HTTP_PORT (e.g., /api/ping)
+  // 3. If running:
+  //    a. Import MCP Client from SDK
+  //    b. Create StreamableHTTPClientTransport
+  //    c. Connect client
+  //    d. Call client.callTool({ name: toolName, arguments: parsedParams })
+  //    e. Print result
+  //    f. Exit 0 on success, 1 on client/tool error
+  // 4. If not running:
+  //    a. console.error("CodeCompass server is not running. Please start it first.");
+  //    b. process.exit(1);
+  console.log("Client mode execution is not yet fully implemented.");
+  process.exit(0); // Temporary exit for placeholder
+}
+
+
 async function main() {
   const args = process.argv.slice(2);
   let repoPath = ".";
   let portOverride: string | undefined;
 
-  // Parse arguments
-  const remainingArgs: string[] = [];
+  const remainingArgsForCommandProcessing: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--port') {
       if (i + 1 < args.length) {
         portOverride = args[i + 1];
-        i++; // Skip next argument as it's the port value
+        i++; 
       } else {
         console.error('Error: --port option requires a value.');
         displayHelp();
         process.exit(1);
       }
     } else {
-      remainingArgs.push(arg);
+      remainingArgsForCommandProcessing.push(arg);
     }
   }
 
@@ -120,12 +189,8 @@ async function main() {
     console.log(`Attempting to use port: ${portOverride} (from --port flag)`);
   }
 
-  // Now that process.env.HTTP_PORT might be set, we can import modules that use ConfigService.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { startServer, ServerStartupError } = require('./lib/server') as typeof import('./lib/server');
-
-  const primaryArg = remainingArgs[0];
-  const secondaryArg = remainingArgs[1]; // For flags like --changelog --verbose
+  const primaryArg = remainingArgsForCommandProcessing[0];
+  const secondaryArg = remainingArgsForCommandProcessing[1]; 
 
   if (primaryArg === '--help' || primaryArg === '-h') {
     displayHelp();
@@ -137,7 +202,18 @@ async function main() {
     const verbose = secondaryArg === '--verbose';
     displayChangelog(verbose);
     process.exit(0);
+  } else if (KNOWN_TOOLS.includes(primaryArg)) {
+    // This is a client command execution
+    const toolName = primaryArg;
+    const toolParamsString = secondaryArg; // This is the JSON string of parameters
+    // Any further args (remainingArgsForCommandProcessing[2] onwards) are currently ignored for client commands.
+    await executeClientCommand(toolName, toolParamsString);
   } else {
+    // Default behavior: start the server.
+    // Now import server-related modules as we are in server mode or client mode needs them.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { startServer, ServerStartupError } = require('./lib/server') as typeof import('./lib/server');
+
     if (primaryArg && !primaryArg.startsWith('--')) {
       repoPath = primaryArg;
     } else if (primaryArg && primaryArg.startsWith('--')) {
@@ -152,7 +228,6 @@ async function main() {
         if (error.exitCode !== 0) {
           console.error(`CodeCompass server failed to start. Error: ${error.message}`);
         }
-        // For exitCode 0, startServer already logged info about existing instance.
         process.exit(error.exitCode);
       } else {
         console.error('An unexpected error occurred during server startup:', error);
