@@ -3,7 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';
-import { startServer } from './lib/server';
+// Do not import configService or startServer here yet if we need to set process.env first.
 
 // Initialize cache: stdTTL is 0 (infinite) as we manage staleness via file mtime
 // checkOnPreviousTTL: false, as we don't use individual item TTLs here.
@@ -30,11 +30,14 @@ function displayHelp() {
   console.log(`
 CodeCompass CLI (version ${version})
 
-Usage: codecompass [command|repoPath]
+Usage: codecompass [options] [command|repoPath]
 
 Description:
   AI-powered MCP server for codebase navigation and LLM prompt optimization.
   If no command is provided, the server starts with the specified or default repoPath.
+
+Options:
+  --port <number>     Specify the HTTP port for the server. Overrides HTTP_PORT env var.
 
 Commands:
   --help, -h          Show this help message and exit.
@@ -48,7 +51,7 @@ Arguments:
                       Defaults to the current directory ('.') if not specified.
                       Example: codecompass /path/to/your/repo
                                codecompass .
-                               codecompass
+                               codecompass --port 3005 /path/to/repo
 
 For more information, visit: https://github.com/alvinveroy/codecompass
 `);
@@ -66,49 +69,100 @@ function displayChangelog(verbose: boolean) {
     if (cachedContent && cachedMtime && cachedMtime === currentMtime) {
       console.log(cachedContent);
       if (verbose) {
-        // Future verbose-specific logic can be added here.
+        // Future verbose-specific logic
       }
       return;
     }
 
-    // Cache is stale or doesn't exist, read file
     const changelogContent = fs.readFileSync(changelogPath, 'utf8');
     changelogCache.set(CACHE_KEY_CONTENT, changelogContent);
     changelogCache.set(CACHE_KEY_MTIME, currentMtime);
     
     console.log(changelogContent);
     if (verbose) {
-      // Placeholder for future verbose-specific logic.
-      // For now, verbose output is the same as non-verbose for the full changelog.
+      // Future verbose-specific logic
     }
   } catch (error) {
     console.error('Error reading or caching CHANGELOG.md:', error);
   }
 }
 
-const primaryArg = process.argv[2];
-const secondaryArg = process.argv[3]; // Used for flags like --changelog --verbose
-
-if (primaryArg === '--help' || primaryArg === '-h') {
-  displayHelp();
-} else if (primaryArg === '--version' || primaryArg === '-v') {
-  console.log(getPackageVersion());
-} else if (primaryArg === '--changelog') {
-  const verbose = secondaryArg === '--verbose';
-  displayChangelog(verbose);
-} else {
-  // Default behavior: start the server.
-  // Determine repoPath: use primaryArg if it exists and doesn't start with '--', otherwise default to '.'.
+async function main() {
+  const args = process.argv.slice(2);
   let repoPath = ".";
-  if (primaryArg && !primaryArg.startsWith('--')) {
-    repoPath = primaryArg;
-  } else if (primaryArg && primaryArg.startsWith('--')) {
-    // An unrecognized flag was passed as primaryArg.
-    // The server will start with the default repoPath '.'.
-    console.warn(`Warning: Unrecognized flag "${primaryArg}". Starting server with default repository path "${repoPath}".`);
-    console.warn(`Run 'codecompass --help' for available commands.`);
-  }
-  // If primaryArg is undefined (no arguments given), repoPath remains '.'.
+  let portOverride: string | undefined;
 
-  void startServer(repoPath);
+  // Parse arguments
+  const remainingArgs: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--port') {
+      if (i + 1 < args.length) {
+        portOverride = args[i + 1];
+        i++; // Skip next argument as it's the port value
+      } else {
+        console.error('Error: --port option requires a value.');
+        displayHelp();
+        process.exit(1);
+      }
+    } else {
+      remainingArgs.push(arg);
+    }
+  }
+
+  if (portOverride) {
+    const portNum = parseInt(portOverride, 10);
+    if (isNaN(portNum) || portNum <= 0 || portNum > 65535) {
+      console.error(`Error: Invalid port number "${portOverride}". Port must be between 1 and 65535.`);
+      process.exit(1);
+    }
+    process.env.HTTP_PORT = portOverride; // Set env var before ConfigService is loaded
+    console.log(`Attempting to use port: ${portOverride} (from --port flag)`);
+  }
+
+  // Now that process.env.HTTP_PORT might be set, we can import modules that use ConfigService.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { startServer, ServerStartupError } = require('./lib/server') as typeof import('./lib/server');
+
+  const primaryArg = remainingArgs[0];
+  const secondaryArg = remainingArgs[1]; // For flags like --changelog --verbose
+
+  if (primaryArg === '--help' || primaryArg === '-h') {
+    displayHelp();
+    process.exit(0);
+  } else if (primaryArg === '--version' || primaryArg === '-v') {
+    console.log(getPackageVersion());
+    process.exit(0);
+  } else if (primaryArg === '--changelog') {
+    const verbose = secondaryArg === '--verbose';
+    displayChangelog(verbose);
+    process.exit(0);
+  } else {
+    if (primaryArg && !primaryArg.startsWith('--')) {
+      repoPath = primaryArg;
+    } else if (primaryArg && primaryArg.startsWith('--')) {
+      console.warn(`Warning: Unrecognized flag "${primaryArg}" after --port processing. Starting server with default repository path "${repoPath}".`);
+      console.warn(`Run 'codecompass --help' for available commands.`);
+    }
+
+    try {
+      await startServer(repoPath);
+    } catch (error: unknown) {
+      if (error instanceof ServerStartupError) {
+        if (error.exitCode !== 0) {
+          console.error(`CodeCompass server failed to start. Error: ${error.message}`);
+        }
+        // For exitCode 0, startServer already logged info about existing instance.
+        process.exit(error.exitCode);
+      } else {
+        console.error('An unexpected error occurred during server startup:', error);
+        process.exit(1);
+      }
+    }
+  }
 }
+
+main().catch(error => {
+  console.error('Critical error in CLI execution:', error);
+  process.exit(1);
+});
