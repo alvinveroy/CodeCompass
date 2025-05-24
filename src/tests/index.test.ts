@@ -196,26 +196,19 @@ describe('CLI with yargs (index.ts)', () => {
       expect(mockStartServer).toHaveBeenCalledWith('/my/repo/path');
     });
 
-    it('should handle startServer failure and log via yargs .fail()', async () => {
-      const startupError = new ServerStartupError("Server failed to boot", 1);
+    it('should handle startServer failure (fatal error, exitCode 1) and log via yargs .fail()', async () => {
+      const startupError = new ServerStartupError("Server failed to boot with fatal error", 1);
       mockStartServer.mockRejectedValue(startupError);
-      process.env.VITEST_TESTING_FAIL_HANDLER = "true"; // To ensure error is caught by .fail() and not rethrown by runMainWithArgs
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true"; 
       await runMainWithArgs(['start']);
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: "Server failed to boot" }));
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: "Server failed to boot with fatal error" }));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
-    it('should handle startServer EADDRINUSE with exitCode 0 and attempt proxy start', async () => {
-      const eaddrinuseError = new ServerStartupError('Port in use by CC', 0, { requestedPort: 3001, detectedServerPort: 3001, existingServerStatus: { service: "CodeCompass", version: "prev" }});
-      mockStartServer.mockRejectedValue(eaddrinuseError);
-      mockStartProxyServer.mockResolvedValue(undefined); // Proxy starts successfully
-
-      await runMainWithArgs(['start']);
-      expect(mockStartProxyServer).toHaveBeenCalledWith(3001, 3001, "prev");
-      expect(mockLoggerInstance.error).not.toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.anything());
-      expect(mockProcessExit).not.toHaveBeenCalled(); // Proxy keeps process alive
-    });
+    // Removed test for startProxyServer as startServerHandler no longer calls it.
+    // If startServer resolves (even with utility server disabled), it's a success for startServerHandler.
+    // If startServer rejects, it's a fatal error (exitCode 1), handled by the test above.
   });
 
   describe('Client Tool Commands', () => {
@@ -235,6 +228,12 @@ describe('CLI with yargs (index.ts)', () => {
     it('should call handleClientCommand for "get_indexing_status" (params string provided as empty JSON)', async () => {
       await runMainWithArgs(['get_indexing_status', '{}']);
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'get_indexing_status', arguments: {} });
+    });
+
+    it('should call handleClientCommand for "trigger_repository_update" (no params string needed, defaults to {})', async () => {
+      await runMainWithArgs(['trigger_repository_update']);
+      expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'trigger_repository_update', arguments: {} });
+      expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
     });
 
     it('should handle client command failure (server not running) and log via yargs .fail()', async () => {

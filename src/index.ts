@@ -62,6 +62,7 @@ const KNOWN_TOOLS = [
   'get_session_history',
   'generate_suggestion',
   'get_repository_context',
+  'trigger_repository_update', // Added
 ];
 
 interface PingResponseData {
@@ -242,47 +243,24 @@ async function handleClientCommand(argv: ClientCommandArgs) {
 
 async function startServerHandler(repoPath: string) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const { startServer, ServerStartupError: LocalServerStartupError, startProxyServer: localStartProxyServer } = require(path.join(libPath, 'server.js')) as typeof import('./lib/server');
+    const { startServer, ServerStartupError: LocalServerStartupError } = require(path.join(libPath, 'server.js')) as typeof import('./lib/server');
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     const { logger: localLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
   try {
     await startServer(repoPath);
+    // If startServer resolves, it means stdio MCP is up. Utility HTTP server might be disabled
+    // due to a conflict (Option C), but the instance is operational.
+    // No specific action needed here; server will continue to run.
   } catch (error: unknown) {
-    // Ensure LocalServerStartupError is correctly typed to include the new fields
-    const typedError = error as import('./lib/server').ServerStartupError;
-
-    if (error instanceof LocalServerStartupError) { // Keep using LocalServerStartupError for type guard
-      if (typedError.exitCode === 0) {
-        // Existing CodeCompass server found
-        const existingVersion = (typedError.existingServerStatus as PingResponseData)?.version;
-
-        // An existing CodeCompass server was detected on the utility HTTP port.
-        // src/lib/server.ts has already logged detailed status of the existing instance.
-        // Log a summary message here and exit gracefully.
-        // The HTTP-to-HTTP MCP proxy (`localStartProxyServer`) is deprioritized with stdio-first MCP.
-        localLogger.info(
-          `Another CodeCompass instance is active on port ${typedError.detectedServerPort || typedError.requestedPort || 'unknown'}. This instance will exit.`
-        );
-        // Ensure this exit is handled correctly, yargs might interfere if we just throw.
-        // Direct exit is cleaner here as this is not an "error" for yargs to report loudly.
-        if (process.env.NODE_ENV !== 'test') {
-          process.exit(0);
-        } else {
-          // For testing, re-throw so the test can assert the error type and exitCode.
-          // The test environment should catch this and not actually exit.
-          throw typedError;
-        }
-      } else {
-        // Other ServerStartupError (e.g., non-CodeCompass server on port, or other startup failure)
-        localLogger.error(`CodeCompass server failed to start. Error: ${typedError.message}. Exiting with code ${typedError.exitCode}.`);
-        // yargs.fail will handle process.exit if this function is a yargs command handler and throws
-        throw typedError; // Re-throw for yargs to handle exit
-      }
+    // This block will only be hit if startServer throws an error.
+    // For Option C, ServerStartupError should only be thrown for fatal issues (exitCode=1).
+    if (error instanceof LocalServerStartupError) {
+      localLogger.error(`CodeCompass server failed to start. Error: ${error.message}. Exiting with code ${error.exitCode}.`);
     } else {
-      // Generic error not of ServerStartupError type
       localLogger.error('An unexpected error occurred during server startup:', error);
-      throw error; // Re-throw for yargs
     }
+    // Re-throw for yargs.fail() to handle process exit.
+    throw error;
   }
 }
 
