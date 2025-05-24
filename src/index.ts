@@ -3,6 +3,8 @@
 import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';
+import axios from 'axios'; // Import axios
+// SDK imports will be done dynamically within executeClientCommand
 // Do not import configService or startServer here yet if we need to set process.env first.
 
 // Initialize cache: stdTTL is 0 (infinite) as we manage staleness via file mtime
@@ -124,38 +126,123 @@ const KNOWN_TOOLS = [
   // Add other tools intended for CLI client execution here
 ];
 
+interface PingResponseData {
+  service?: string;
+  status?: string;
+  version?: string;
+}
+
 async function executeClientCommand(toolName: string, toolParamsString?: string) {
-  // Placeholder for client logic
-  console.log(`CLI Client Mode: Attempting to execute tool '${toolName}'`);
+  // Dynamically import configService and logger here to ensure process.env.HTTP_PORT is set
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { configService } = require('./lib/config-service') as typeof import('./lib/config-service');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { logger } = require('./lib/config-service') as typeof import('./lib/config-service');
+
+  logger.info(`CLI Client Mode: Attempting to execute tool '${toolName}'`);
+  
+  let parsedParams: Record<string, unknown> = {};
   if (toolParamsString) {
     try {
-      const params = JSON.parse(toolParamsString);
-      console.log('With parameters:', params);
+      parsedParams = JSON.parse(toolParamsString) as Record<string, unknown>;
+      logger.info('With parameters:', parsedParams);
     } catch (e) {
-      console.error(`Error: Invalid JSON parameters for tool ${toolName}: ${toolParamsString}`);
-      console.error((e as Error).message);
+      logger.error(`Error: Invalid JSON parameters for tool ${toolName}: ${toolParamsString}`);
+      logger.error((e as Error).message);
+      console.error(`Error: Invalid JSON parameters for tool ${toolName}. Please provide a valid JSON string.`);
       process.exit(1);
     }
   } else {
-    console.log('With no parameters.');
+    logger.info('With no parameters.');
   }
-  // TODO:
-  // 1. Import configService (dynamically, after env.HTTP_PORT is set if needed by client)
-  // 2. Check if server is running on configService.HTTP_PORT (e.g., /api/ping)
-  // 3. If running:
-  //    a. Import MCP Client from SDK
-  //    b. Create StreamableHTTPClientTransport
-  //    c. Connect client
-  //    d. Call client.callTool({ name: toolName, arguments: parsedParams })
-  //    e. Print result
-  //    f. Exit 0 on success, 1 on client/tool error
-  // 4. If not running:
-  //    a. console.error("CodeCompass server is not running. Please start it first.");
-  //    b. process.exit(1);
-  console.log("Client mode execution is not yet fully implemented.");
-  process.exit(0); // Temporary exit for placeholder
-}
 
+  const serverUrl = `http://localhost:${configService.HTTP_PORT}`;
+  
+  try {
+    logger.debug(`Pinging server at ${serverUrl}/api/ping`);
+    const pingResponse = await axios.get<PingResponseData>(`${serverUrl}/api/ping`, { timeout: 2000 });
+
+    if (pingResponse.status === 200 && pingResponse.data?.service === "CodeCompass") {
+      logger.info(`CodeCompass server v${pingResponse.data.version || 'unknown'} is running on port ${configService.HTTP_PORT}. Proceeding with tool execution.`);
+      
+      // Dynamically import MCP SDK Client components
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { Client } = require('@modelcontextprotocol/sdk/client/index.js') as typeof import('@modelcontextprotocol/sdk/client/index.js');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js') as typeof import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+
+      const transport = new StreamableHTTPClientTransport(new URL(serverUrl));
+      const client = new Client({ name: "codecompass-cli-client", version: getPackageVersion() });
+
+      try {
+        await client.connect(transport);
+        logger.info("MCP Client connected to server.");
+
+        // Add sessionId to parameters if not already present, for tools that might use it.
+        // This is a simple approach; more sophisticated session management might be needed later.
+        if (!parsedParams.sessionId) {
+            // For simplicity, we can generate a new one or leave it out.
+            // Some tools might implicitly create/use sessions on the server.
+            // For now, let's not add one automatically unless a tool specifically requires it
+            // and the user hasn't provided one.
+            // parsedParams.sessionId = `cli-session-${Date.now()}`;
+        }
+
+
+        logger.info(`Calling tool '${toolName}' with params:`, parsedParams);
+        const result = await client.callTool({ name: toolName, arguments: parsedParams });
+        logger.info("Tool execution successful. Result:", result);
+
+        // Output the result in a user-friendly way
+        // Assuming result.content is an array of { type: "text", text: "..." }
+        if (result.content && Array.isArray(result.content)) {
+          result.content.forEach(item => {
+            if (item.type === 'text' && typeof item.text === 'string') {
+              console.log(item.text);
+            } else {
+              // Fallback for other content types or structures
+              console.log(JSON.stringify(item, null, 2));
+            }
+          });
+        } else {
+          console.log(JSON.stringify(result, null, 2));
+        }
+        
+        await client.close();
+        process.exit(0);
+
+      } catch (clientError) {
+        logger.error("MCP Client error:", clientError);
+        const errorMessage = clientError instanceof Error ? clientError.message : String(clientError);
+        // Check if it's a JSON-RPC error from the server
+        if (typeof clientError === 'object' && clientError !== null && 'error' in clientError) {
+            const rpcError = (clientError as { error: { message?: string, data?: unknown } }).error;
+            console.error(`Error executing tool '${toolName}': ${rpcError.message || 'Unknown server error'}`);
+            if (rpcError.data) {
+                console.error(`Details: ${JSON.stringify(rpcError.data)}`);
+            }
+        } else {
+            console.error(`Error executing tool '${toolName}': ${errorMessage}`);
+        }
+        process.exit(1);
+      }
+
+    } else {
+      logger.warn(`Service on port ${configService.HTTP_PORT} is not a CodeCompass server or responded unexpectedly. Ping response:`, pingResponse.data);
+      console.error(`A service is running on port ${configService.HTTP_PORT}, but it's not a CodeCompass server or it's unresponsive.`);
+      process.exit(1);
+    }
+  } catch (error) {
+    if (axios.isAxiosError(error) && (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT')) {
+      logger.warn(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Connection refused or timed out.`);
+      console.error(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Please start the server first.`);
+    } else {
+      logger.error(`Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}:`, error);
+      console.error(`Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}.`);
+    }
+    process.exit(1);
+  }
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -185,9 +272,10 @@ async function main() {
       console.error(`Error: Invalid port number "${portOverride}". Port must be between 1 and 65535.`);
       process.exit(1);
     }
-    process.env.HTTP_PORT = portOverride; // Set env var before ConfigService is loaded
-    console.log(`Attempting to use port: ${portOverride} (from --port flag)`);
+    process.env.HTTP_PORT = portOverride; 
+    // console.log(`Attempting to use port: ${portOverride} (from --port flag)`); // Logged by configService now
   }
+
 
   const primaryArg = remainingArgsForCommandProcessing[0];
   const secondaryArg = remainingArgsForCommandProcessing[1]; 
@@ -209,27 +297,32 @@ async function main() {
     // Any further args (remainingArgsForCommandProcessing[2] onwards) are currently ignored for client commands.
     await executeClientCommand(toolName, toolParamsString);
   } else {
-    // Default behavior: start the server.
-    // Now import server-related modules as we are in server mode or client mode needs them.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { startServer, ServerStartupError } = require('./lib/server') as typeof import('./lib/server');
 
     if (primaryArg && !primaryArg.startsWith('--')) {
       repoPath = primaryArg;
     } else if (primaryArg && primaryArg.startsWith('--')) {
-      console.warn(`Warning: Unrecognized flag "${primaryArg}" after --port processing. Starting server with default repository path "${repoPath}".`);
-      console.warn(`Run 'codecompass --help' for available commands.`);
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { logger: localLogger } = require('./lib/config-service') as typeof import('./lib/config-service');
+      localLogger.warn(`Warning: Unrecognized flag "${primaryArg}" after --port processing. Starting server with default repository path "${repoPath}".`);
+      localLogger.warn(`Run 'codecompass --help' for available commands.`);
     }
 
     try {
       await startServer(repoPath);
     } catch (error: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { logger: localLogger } = require('./lib/config-service') as typeof import('./lib/config-service');
       if (error instanceof ServerStartupError) {
         if (error.exitCode !== 0) {
+          // ServerStartupError with exitCode 0 means existing instance found, already logged by server.ts
+          localLogger.error(`CodeCompass server failed to start. Error: ${error.message}`);
           console.error(`CodeCompass server failed to start. Error: ${error.message}`);
         }
         process.exit(error.exitCode);
       } else {
+        localLogger.error('An unexpected error occurred during server startup:', error);
         console.error('An unexpected error occurred during server startup:', error);
         process.exit(1);
       }
@@ -238,6 +331,15 @@ async function main() {
 }
 
 main().catch(error => {
+  // This catch is a fallback. We try to import logger, but if configService itself fails,
+  // console.error is the only option.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { logger } = require('./lib/config-service') as typeof import('./lib/config-service');
+    logger.error('Critical error in CLI execution:', error);
+  } catch (_ignored) {
+    // Ignored
+  }
   console.error('Critical error in CLI execution:', error);
   process.exit(1);
 });
