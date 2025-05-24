@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Stdio-first MCP Architecture & Utility HTTP Server Port Conflict Handling (Phases 1 & 3) (Git Commit ID: 062f045, 3a651fb):**
+    - **`stdio`-first MCP (Phase 1):**
+        - Refactored `src/lib/server.ts` to use `StdioServerTransport` for primary MCP communication.
+        - Removed the HTTP `/mcp` endpoint and `StreamableHTTPServerTransport`.
+        - A single `McpServer` instance now handles all MCP requests via `stdin`/`stdout`.
+        - The Express.js HTTP server is now dedicated to utility endpoints: `/api/ping`, `/api/indexing-status`, `/api/repository/notify-update`.
+    - **Utility HTTP Server Port Conflict Handling (Phase 3 - Option C):**
+        - Implemented port conflict handling (Option C from `TODO.md`) in `src/lib/server.ts`.
+        - On `EADDRINUSE` for the utility HTTP port:
+            - If another CodeCompass instance is detected: The current instance disables its own utility HTTP server, sets `configService.IS_UTILITY_SERVER_DISABLED = true` and `configService.RELAY_TARGET_UTILITY_PORT`. `startServer` resolves successfully, allowing `stdio` MCP to function.
+            - If a non-CodeCompass service or unhealthy CC instance is on the port: `startServer` throws a `ServerStartupError`, causing the current instance to exit.
+    - **MCP Tool Updates:**
+        - Modified `get_indexing_status` tool: If `IS_UTILITY_SERVER_DISABLED` is true, relays the request to the active instance's `/api/indexing-status` endpoint.
+        - Added new MCP tool `trigger_repository_update`: If `IS_UTILITY_SERVER_DISABLED` is true, relays a POST request to the active instance's `/api/repository/notify-update`. Otherwise, triggers local re-indexing.
+    - **CLI Updates (`src/index.ts`):**
+        - Updated `KNOWN_TOOLS` to include `trigger_repository_update`.
+        - Simplified `startServerHandler` to correctly handle `startServer` resolving (even if utility HTTP server is disabled) or throwing a fatal `ServerStartupError`.
+    - Server startup logs now indicate if the utility HTTP server is disabled and if utility MCP tools will relay.
+    - Updated unit tests in `src/tests/server.test.ts` for new port conflict logic and tool relaying.
+    - Updated unit tests in `src/tests/index.test.ts` to reflect new server startup behavior.
 - **CLI Port Configuration (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Added a `--port <number>` command-line argument to `src/index.ts`.
     - This allows users to specify the HTTP port for the server at runtime, overriding the `HTTP_PORT` environment variable and the default port.

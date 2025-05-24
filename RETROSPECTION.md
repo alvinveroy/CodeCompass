@@ -1,3 +1,34 @@
+# Retrospection for Stdio-first MCP & Utility HTTP Port Conflict Handling (Phases 1 & 3) (Git Commit ID: 062f045, 3a651fb)
+
+## What went well?
+- Successfully refactored `src/lib/server.ts` to implement the `stdio`-first MCP architecture (Phase 1) and utility HTTP server port conflict handling (Phase 3, Option C).
+- `StdioServerTransport` is now used for primary MCP communication.
+- The utility HTTP server is correctly limited to `/api/ping`, `/api/indexing-status`, and `/api/repository/notify-update`. The `/mcp` HTTP endpoint was removed.
+- Port conflict logic in `startServer`:
+    - Correctly detects if another CodeCompass instance is running on the utility port.
+    - If so, disables the local utility HTTP server, sets `configService.IS_UTILITY_SERVER_DISABLED = true` and `configService.RELAY_TARGET_UTILITY_PORT`. `startServer` resolves successfully, allowing `stdio` MCP to proceed.
+    - If a non-CodeCompass service or unhealthy/unresponsive CC instance is on the port, `startServer` throws a `ServerStartupError` leading to instance exit.
+- MCP tools `get_indexing_status` and the new `trigger_repository_update` correctly relay requests via `axios` to the existing instance if the local utility server is disabled.
+- `src/index.ts` was updated (`KNOWN_TOOLS`, simplified `startServerHandler`) to be compatible with the new server logic.
+- Server startup logs were updated to reflect the new operational modes.
+- Unit tests in `src/tests/server.test.ts` were updated/added to cover the new port conflict logic and tool relaying.
+- Unit tests in `src/tests/index.test.ts` were updated to reflect the new server startup behavior in the CLI.
+
+## What could be improved?
+- The logic within `startServer` to manage the conditional startup of the utility HTTP server (using `httpServerSetupOutcomePromise` and `Promise.race`) is somewhat complex. While functional, further simplification could be explored in the future.
+- Error handling for `axios` calls in the relaying logic is basic. More specific error parsing from the relayed instance could be added if needed.
+
+## What did we learn?
+- Implementing conditional server component startup requires careful promise management to ensure the main server function (`startServer`) resolves or rejects correctly based on the overall desired state.
+- Designing MCP tools to be "context-aware" (e.g., knowing if they should operate locally or relay) adds a layer of sophistication but enables more flexible deployment scenarios.
+- `configService` is effective for managing global state flags like `IS_UTILITY_SERVER_DISABLED`.
+- Adapting unit tests for significant architectural changes (like stdio-first and new error handling paths) is a substantial but necessary part of the refactoring process.
+
+## Action Items / Follow-ups
+- Proceed with adapting Phase 2 (CLI client mode) for `stdio` communication.
+- Consider integration tests for the `stdio` MCP communication flow.
+
+---
 # Retrospection for CLI Refactor to `yargs` (Git Commit ID: f9dd914)
 
 ## What went well?
