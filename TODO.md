@@ -36,17 +36,15 @@ This document outlines the tasks required to enhance CodeCompass.
 
 ## Client Mode Functionality
 ### Phase 2: Enhance CLI for Client Mode (Adaptation for `stdio`)
-- **Goal**: If the CodeCompass CLI is invoked with a command intended for client-side execution (e.g., `codecompass agent_query "..."`), it should execute the command as an MCP client against a running CodeCompass instance, primarily using `stdio`.
+- **Goal**: If the CodeCompass CLI is invoked with a command intended for client-side execution (e.g., `codecompass agent_query "..."`), it should execute the command as an MCP client, primarily using `stdio`.
 - **Tasks for `src/index.ts`**:
     - **Argument Parsing for Client Mode**: (Completed) Implemented logic in `src/index.ts` to parse CLI arguments and distinguish "client execution" commands (based on `KNOWN_TOOLS`) from "start server" commands.
-    - **Adapt `executeClientCommand` for `stdio` MCP**:
-        - **Primary Communication via `stdio`**: Modify `executeClientCommand` to attempt MCP communication via `stdio` first. This will involve:
-            - Using an MCP SDK `StdioClientTransport` (or equivalent).
-            - Directly launching a CodeCompass server process if one isn't running and piping `stdio` for communication. (This needs careful design: does the CLI *become* the server temporarily, or does it spawn a separate server process and connect via `stdio`?)
-            - Alternatively, if a CodeCompass server process is already running and configured for `stdio` MCP, the CLI client needs a mechanism to connect to its `stdio` streams. This is non-trivial for arbitrary existing processes and might imply the CLI always spawns its own dedicated server instance for the command.
-        - **Fallback/Utility Server Check**: The `/api/ping` check on the utility HTTP port can still be used to see if *any* CodeCompass instance (and its utility HTTP server) is running, which might inform the CLI's behavior (e.g., not trying to start a new full server if one is already handling sync).
-        - Update MCP client setup to use the appropriate `stdio`-based transport.
-        - Ensure `client.callTool()` works correctly over `stdio`.
+    - **Adapt `executeClientCommand` for `stdio` MCP**: (Completed)
+        - **Primary Communication via `stdio`**: (Completed) `executeClientCommand` now spawns a dedicated CodeCompass server process and communicates with it over `stdio` using `StdioClientTransport`.
+            - The CLI always spawns its own dedicated server instance for the command.
+        - **Fallback/Utility Server Check**: (Removed) The HTTP server ping logic was removed from `executeClientCommand` in favor of always spawning a server for `stdio` communication for client tool calls.
+        - MCP client setup uses `StdioClientTransport`. (Completed)
+        - `client.callTool()` works over `stdio`. (Completed)
     - **Session ID Management for Client Calls**: (Considered/Supported) The current mechanism allows users to pass `sessionId` within the JSON parameters for tools that support it. Help text updated to reflect this. No further client-side generation or automatic management of session IDs is planned for this phase.
     - **Further Enhancements (Future)**:
         - **Add comprehensive unit/integration tests for the `stdio`-based client mode functionality.**
@@ -83,10 +81,10 @@ This document outlines the tasks required to enhance CodeCompass.
 
 ## Next Steps (Immediate Focus)
 - **Implement Phase 1 & 3**: (Completed) Core architecture shifted to `stdio`-first MCP, and utility HTTP server port conflict handling (Option C) implemented. Unit tests updated/added.
-- **Adapt Phase 2: Enhance CLI for Client Mode for `stdio`**:
-    - Design and implement `stdio`-based client communication in `executeClientCommand`.
-- **Update Documentation**: (Completed for Phase 1 & 3) `README.md` and `TODO.md` updated for `stdio`-first architecture and port conflict behavior. `CHANGELOG.md` and `RETROSPECTION.md` to be updated next.
+- **Adapt Phase 2: Enhance CLI for Client Mode for `stdio`**: (Implementation Completed)
+    - `stdio`-based client communication in `executeClientCommand` implemented (spawns server process).
+- **Update Documentation**: (Completed for Phase 1, 2 & 3) `README.md`, `TODO.md`, `CHANGELOG.md`, `RETROSPECTION.md` updated.
 - **Testing**:
     - (Completed) Unit tests for utility HTTP port conflict handling and MCP tool relaying in `src/tests/server.test.ts`.
-    - (Completed) Unit tests for `src/index.ts` CLI behavior updated.
+    - (Completed) Unit tests for `src/index.ts` CLI behavior (including stdio client mode) updated.
     - (Pending) Develop comprehensive integration tests for `stdio` server and client interactions.

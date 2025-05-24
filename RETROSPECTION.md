@@ -29,6 +29,37 @@
 - Consider integration tests for the `stdio` MCP communication flow.
 
 ---
+# Retrospection for CLI Client Mode via Stdio MCP (Git Commit ID: c87c5f1)
+
+## What went well?
+- Successfully refactored `handleClientCommand` in `src/index.ts` to use `stdio` for MCP communication, aligning with Phase 2 goals.
+- The CLI now spawns a dedicated CodeCompass server process for executing tool commands, ensuring a clean environment for each client call.
+- `StdioClientTransport` from the MCP SDK was integrated effectively.
+- The previous HTTP-based client logic (pinging server, `StreamableHTTPClientTransport`) was cleanly removed.
+- A global `--repo` option was added to `yargs` to allow users to specify the repository context for client commands, which is then passed to the spawned server.
+- `startServerHandler` was updated to correctly use this global `--repo` option.
+- Unit tests in `src/tests/index.test.ts` were updated to mock `child_process.spawn` and `StdioClientTransport`, and to cover the new stdio-based execution flow, including the `--repo` option.
+- Error handling for the spawned process (premature exit, spawn errors) was included.
+- The spawned server's `stderr` is piped to the client's `stderr` for better visibility into server-side issues during client command execution.
+
+## What could be improved?
+- **Server Readiness Detection:** The current method for detecting if the spawned server is ready relies on parsing `stderr` for a specific message ("MCP active on stdio") and a timeout. This is a heuristic. A more robust mechanism would involve the spawned server sending an explicit "ready" signal on `stdout` or using a dedicated communication channel.
+- **Complexity of `handleClientCommand`:** The function has grown in complexity due to managing the spawned process lifecycle, `stdio` streams, and readiness checks. Further modularization within `handleClientCommand` could be considered if it becomes harder to maintain.
+- **Resource Management:** Ensuring the spawned server process is always terminated (even on errors or client termination) is critical. The `finally` block with `child.kill()` addresses this, but complex error scenarios could still leave orphaned processes if not handled carefully. The timeout for graceful kill is a good addition.
+
+## What did we learn?
+- Spawning a separate server process for `stdio`-based client commands is a viable approach that isolates client calls.
+- Managing the lifecycle (spawn, readiness, communication, termination) of a child process requires careful attention to event handling and error conditions.
+- `StdioClientTransport` provides a straightforward way to perform MCP over `stdin`/`stdout` with a controlled process.
+- Piping `stderr` from the spawned process is crucial for debugging.
+- Global CLI options (like `--repo`) managed by `yargs` can effectively provide context to different command handlers.
+
+## Action Items / Follow-ups
+- Investigate more robust server readiness signals for the spawned process (e.g., a specific message on `stdout` or a simple handshake).
+- Continue to monitor and refine the error handling and process termination logic in `handleClientCommand`.
+- Proceed with the "Pending" task of developing comprehensive integration tests for the `stdio` server and client interactions, which will further validate this new client mode.
+
+---
 # Retrospection for CLI Refactor to `yargs` (Git Commit ID: f9dd914)
 
 ## What went well?

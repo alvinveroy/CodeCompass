@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **CLI Client Mode via Stdio MCP (Git Commit ID: c87c5f1):**
+    - Refactored `handleClientCommand` in `src/index.ts` to execute CLI tool commands via `stdio` MCP.
+    - The CLI now spawns a dedicated CodeCompass server process for each tool command, communicating with it over `stdin`/`stdout` using `StdioClientTransport`.
+    - Removed the previous HTTP-based client logic (server ping, `StreamableHTTPClientTransport`).
+    - Added a global `--repo <path>` option to `yargs` for specifying the repository context for client tool commands; this path is used when spawning the server.
+    - Updated `startServerHandler` to use the global `--repo` option or the positional argument for determining the repository path.
+    - Updated unit tests in `src/tests/index.test.ts` to mock `child_process.spawn` and `StdioClientTransport`, and to verify the new stdio-based client execution flow.
 - **Stdio-first MCP Architecture & Utility HTTP Server Port Conflict Handling (Phases 1 & 3) (Git Commit ID: 062f045, 3a651fb):**
     - **`stdio`-first MCP (Phase 1):**
         - Refactored `src/lib/server.ts` to use `StdioServerTransport` for primary MCP communication.

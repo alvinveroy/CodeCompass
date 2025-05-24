@@ -109,14 +109,15 @@ If the configured utility HTTP port is in use by another CodeCompass instance, t
 
 **2. Executing Tools via CLI Client Mode:**
 
-If a CodeCompass server is already running, you can use the CLI to execute specific tools directly.
+To execute specific tools, CodeCompass CLI spawns a dedicated server instance and communicates with it via `stdio` using the Model Context Protocol (MCP).
 ```bash
-codecompass <tool_name> [json_parameters] [--json] [--port <number>]
+codecompass <tool_name> [json_parameters] [--repo <path>] [--json] [--port <number>]
 ```
 - `<tool_name>`: The name of the tool to execute (see list below).
 - `[json_parameters]` (optional): A JSON string containing parameters for the tool. For tools that take no parameters, this can be omitted or an empty JSON object `{}` can be used.
+- `--repo <path>` or `-r <path>` (optional): Specify the repository path for the tool's context. Defaults to the current directory (`.`). The spawned server will use this repository.
 - `--json` or `-j` (optional): Output the raw JSON response from the tool. Useful for scripting or debugging.
-- `--port <number>` (optional): Specify the port of the running CodeCompass server if it's not the default (3001) or not set by `HTTP_PORT` env var.
+- `--port <number>` (optional): Specify the utility HTTP port for the spawned server instance. This is primarily for consistency if the spawned server needs to interact with other instances or if its utility port needs to be specific, though core MCP communication for the tool is via `stdio`.
 
 **Available Tools for CLI Client Execution:**
 
