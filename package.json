@@ -73,7 +73,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.5.9",
     "@types/uuid": "^10.0.0",
-    "@types/yargs": "^17.0.32",
+    "@types/yargs": "^17.0.33",
     "eslint": "^9.8.0",
     "globals": "^15.8.0",
     "ts-node": "^10.9.2",
