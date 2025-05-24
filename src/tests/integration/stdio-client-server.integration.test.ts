@@ -166,7 +166,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     // For now, we assume the top-level vi.mock for configService in unit tests is sufficient or
     // that the server uses defaults that are compatible with these integration tests.
     // If specific config (like EMBEDDING_DIMENSION) is crucial, ensure it's correctly mocked.
-    const { configService: actualConfigService } = require('../../lib/config-service.js');
+    const { configService: actualConfigService } = require('../../lib/config-service'); // Removed .js extension
     vi.spyOn(actualConfigService, 'EMBEDDING_DIMENSION', 'get').mockReturnValue(768);
 
   });

@@ -255,7 +255,7 @@ async function configureMcpServerInstance(
     "get_indexing_status", // Renamed
     "Retrieves the current status of repository indexing. Provides information on whether indexing is idle, in-progress, completed, or failed, along with progress percentage and any error messages.",
     {}, 
-    (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+    (_args: Record<string, never>, _extra: any) => {
       logger.info("Tool 'get_indexing_status' execution started.");
       const currentStatus = getGlobalIndexingStatus();
       return {
@@ -286,7 +286,7 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
       model: z.string().describe("The suggestion model to switch to (e.g., 'llama3.1:8b', 'deepseek-coder', 'gpt-4')."),
       provider: z.string().optional().describe("The LLM provider for the model (e.g., 'ollama', 'deepseek', 'openai', 'gemini', 'claude'). If omitted, an attempt will be made to infer it.")
     },
-    async (args: { model: string; provider?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+    async (args: { model: string; provider?: string }, _extra: any) => {
       // ... (handler logic remains the same, just ensure logs refer to 'switch_suggestion_model')
       logger.info("Received args for switch_suggestion_model", { args });
 
@@ -720,7 +720,7 @@ function registerTools( // Removed async
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       // maxSteps removed
     },
-    async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+    async (args: { query: string; sessionId?: string }, _extra: any) => {
       // ... (handler logic remains the same, ensure logs refer to 'agent_query')
       logger.info(`Tool 'agent_query' execution started with args:`, args);
 
@@ -777,7 +777,7 @@ function registerTools( // Removed async
       query: z.string().describe("The search query to find relevant code in the repository"),
       sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
     },
-    async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+    async (args: { query: string; sessionId?: string }, _extra: any) => {
       // ... (handler logic remains the same, ensure logs refer to 'search_code')
       logger.info(`Tool 'search_code' execution started.`);
       logger.info("Received args for search_code", { args });
@@ -889,7 +889,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     "get_changelog", // Renamed
     "Retrieves the content of the `CHANGELOG.md` file from the root of the repository. This provides a history of changes and versions for the project. \nExample: Call this tool without parameters: `{}`. Title: Get Changelog", 
     {}, 
-    async (_args: Record<string, never>, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { 
+    async (_args: Record<string, never>, _extra: any) => { 
       // ... (handler logic remains the same)
       try {
         const changelogPath = path.join(repoPath, 'CHANGELOG.md');
@@ -925,7 +925,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     {
       sessionId: z.string().describe("The session ID to retrieve history for")
     },
-    (args: { sessionId: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => { 
+    (args: { sessionId: string }, _extra: any) => { 
       // ... (handler logic remains the same, ensure logs refer to 'get_session_history')
       logger.info("Received args for get_session_history", { args });
 
@@ -992,7 +992,7 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
         query: z.string().describe("The query or prompt for generating code suggestions"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
-      async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      async (args: { query: string; sessionId?: string }, _extra: any) => {
         // ... (handler logic remains the same, ensure logs refer to 'generate_suggestion')
         logger.info(`Tool 'generate_suggestion' execution started.`);
         logger.info("Received args for generate_suggestion", { args });
@@ -1240,7 +1240,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         query: z.string().describe("The query to get repository context for"),
         sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
       },
-      async (args: { query: string; sessionId?: string }, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      async (args: { query: string; sessionId?: string }, _extra: any) => {
         // ... (handler logic remains the same, ensure logs refer to 'get_repository_context')
         logger.info("Received args for get_repository_context", { args });
 
