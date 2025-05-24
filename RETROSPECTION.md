@@ -668,22 +668,20 @@
 # Retrospection for Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-- TypeScript errors (`TS2451`, `TS2554`, `TS2339`, `TS2304`) clearly pinpointed the remaining issues from the refactor.
-- The SDK's examples and source code for `StreamableHTTPServerTransport` continued to be a reliable guide for correct usage.
-- The per-session `McpServer` model was correctly implemented, but remnants of the old single-server approach caused conflicts.
+- TypeScript errors (`TS2451`, `TS2304`) clearly identified the structural problems in `src/lib/server.ts` related to duplicated code blocks and potentially mis-scoped helper functions.
+- The previous refactoring steps correctly established the per-session `McpServer` model and the use of `configureMcpServerInstance`.
 
 ## What could be improved?
-- **Refactoring Completeness:** During large refactors (like moving from a single MCP server instance to per-session instances), it's crucial to meticulously remove all old code paths and declarations related to the previous approach. Lingering remnants can cause redeclaration errors and runtime confusion.
-- **Code Review Focus:** When reviewing refactoring changes, pay special attention to variable declarations and ensure that old, now-unused logic is fully excised.
+- **Merge/Refactor Cleanliness:** The duplication of the HTTP server setup block indicates that a previous merge or refactoring step was not cleanly completed. More careful removal of old code during such operations is needed.
+- **Error Correlation:** The `TS2304` (Cannot find name) error, while potentially a scoping issue, can also be a symptom of the parser being confused by earlier, more fundamental errors like redeclarations. Fixing redeclarations first often clarifies subsequent errors.
 
 ## What did we learn?
-- **Redeclaration Errors (`TS2451`):** These are straightforward indicators that a variable has been declared multiple times in the same scope, often a symptom of incomplete refactoring.
-- **SDK Constructor Signatures & Usage:** Re-confirmed that `StreamableHTTPServerTransport` expects a single options object and that `McpServer` instances connect to it via `server.connect()`.
-- **Clean Code after Refactor:** A successful refactor includes not just adding new logic but also diligently cleaning up the old.
-- **Parser Confusion:** Multiple declaration errors can sometimes mask or lead to subsequent errors (like `Cannot find name`) if the parser gets into an inconsistent state. Fixing the primary declaration errors often resolves these secondary issues.
+- **Impact of Code Duplication:** Duplicating large blocks of code, especially those involving variable declarations and server listeners, inevitably leads to redeclaration errors and unpredictable behavior.
+- **Sequential Error Resolution:** Address fundamental errors like redeclarations (TS2451) before tackling "Cannot find name" (TS2304) errors, as the former can cause the latter.
+- **Importance of Clean Refactoring:** When refactoring, it's as important to remove or correctly modify old code as it is to add new code. Leaving remnants of old logic is a common source of bugs.
 
 ## Action Items / Follow-ups
-- After significant refactoring, perform a thorough code review specifically looking for and removing any vestigial code, including unused variables, functions, or old logic paths.
-- Use "Find in Files" or IDE search tools to ensure that concepts or variable names from a previous design are fully removed or correctly updated in the new design.
+- After significant refactoring or merging, perform a careful visual scan or use diff tools to ensure that old code blocks have been fully removed or correctly integrated, and that no unintended duplications exist.
+- Prioritize fixing redeclaration errors during troubleshooting, as they can have cascading effects on how the TypeScript parser interprets the rest of the file.
 
 ---

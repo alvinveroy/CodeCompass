@@ -14,17 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - **Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
-    - Resolved TypeScript build errors (`TS2451` - redeclared variables, `TS2554` - wrong constructor arguments for `StreamableHTTPServerTransport`, `TS2339` - missing `createExpressMiddleware` method, `TS2304` - cannot find name) and Vitest test failures related to `@modelcontextprotocol/sdk` integration and variable scoping in `src/lib/server.ts`.
-    - Removed redundant declarations of `finalDeclaredTools`, `finalDeclaredPrompts`, and `expressApp`.
-    - Removed vestigial code related to a single, global `mcpHttpTransport` and its `createExpressMiddleware` method.
-    - Ensured `configureMcpServerInstance` is correctly defined and accessible for per-session MCP server setup.
-    - Corrected `StreamableHTTPServerTransport` instantiation within the per-session logic to take a single options object. The `McpServer` instance is now connected to the transport using `server.connect(transport)`.
-    - MCP request handling is correctly managed by the explicit Express route handlers (`POST`, `GET`, `DELETE` for `/mcp`) that use `transport.handleRequest()`.
-    - Maintained the session management logic:
-        - Stores active `StreamableHTTPServerTransport` instances in a map keyed by session ID.
-        - Creates a new `McpServer` instance and a new `StreamableHTTPServerTransport` for each new client session initiated via an `initialize` request.
-        - Each new `McpServer` instance is configured with resources, tools, and prompts via a helper function `configureMcpServerInstance`.
-    - Imported `isInitializeRequest` from `@modelcontextprotocol/sdk/types.js`.
+    - Resolved TypeScript build errors (`TS2451` - redeclared variables `httpPort`, `httpServer`, `listenPromise`; `TS2304` - cannot find name `configureMcpServerInstance`) and Vitest test failures in `src/lib/server.ts`.
+    - Removed a duplicated block of HTTP server setup code, resolving the redeclaration errors. The primary HTTP server setup now correctly occurs once.
+    - Ensured `configureMcpServerInstance` is correctly defined at the module level and accessible for per-session MCP server setup, resolving the `TS2304` error.
+    - Maintained correct `StreamableHTTPServerTransport` instantiation (single options object) and `McpServer.connect(transport)` usage.
+    - MCP request handling remains correctly managed by explicit Express route handlers (`POST`, `GET`, `DELETE` for `/mcp`).
 - **Build Fix (SDK Imports & Server Property Access) (Git Commit ID: 8684429):**
     - (Note: The part of this fix regarding `.js` suffix removal for SDK imports was found to be incorrect for `@modelcontextprotocol/sdk` and is superseded by the fix above. The SDK's documentation indicates `.js` suffixes are used.)
     - Corrected TypeScript errors `TS2551` (Property does not exist) in `src/lib/server.ts` by changing `server.tools.keys()` and `server.prompts.keys()` to `Object.keys(serverCapabilities.tools)` and `Object.keys(serverCapabilities.prompts)` respectively. This logs the tools and prompts declared in `serverCapabilities` rather than attempting to access non-existent public collections on the `McpServer` instance.
