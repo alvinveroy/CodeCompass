@@ -159,13 +159,14 @@ async function handleClientCommand(argv: ClientCommandArgs) {
         } else {
           if (result.content && Array.isArray(result.content)) {
             result.content.forEach(item => {
-              if (item && item.type === 'text' && typeof item.text === 'string') {
+              // Assuming item is ToolResponseContentItem from SDK
+              if (item && typeof item === 'object' && 'type' in item && item.type === 'text' && 'text' in item && typeof item.text === 'string') {
                 console.log(item.text);
               } else {
                 console.log(JSON.stringify(item, null, 2));
               }
             });
-          } else if (result) {
+          } else if (result) { // result itself might be the content if not structured with `content` array
             console.log(JSON.stringify(result, null, 2));
           } else {
             logger.info("Tool executed, but no content was returned in the response.");
@@ -439,4 +440,4 @@ async function main() {
 }
 
 // Execute the main function
-main();
+void main(); // Mark as void to satisfy no-floating-promises

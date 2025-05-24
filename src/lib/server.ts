@@ -569,8 +569,7 @@ export async function startServer(repoPath: string): Promise<void> {
     const httpPort = configService.HTTP_PORT;
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
 
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    httpServer.on('error', async (error: NodeJS.ErrnoException) => {
+    httpServer.on('error', async (error: NodeJS.ErrnoException) => { // eslint-disable-line @typescript-eslint/no-misused-promises -- Event handler, promise settlement not directly used by emitter
       if (error.code === 'EADDRINUSE') {
         logger.warn(`HTTP Port ${httpPort} is already in use. Attempting to ping...`);
         try {
@@ -1493,7 +1492,7 @@ async function findFreePort(startPort: number): Promise<number> {
             } else {
               // Signal success by rejecting with a special marker object containing the port.
               // This allows the catch block to identify a successful port discovery.
-              // eslint-disable-next-line @typescript-eslint/no-throw-literal
+              // eslint-disable-next-line @typescript-eslint/no-throw-literal, @typescript-eslint/prefer-promise-reject-errors -- Custom rejection for control flow
               reject({ _isPortFoundMarker: true, port });
             }
           });
@@ -1505,14 +1504,14 @@ async function findFreePort(startPort: number): Promise<number> {
       if (port > 65535) {
         throw new Error('No free ports available.');
       }
-    } catch (error: any) {
+    } catch (error: unknown) { // Changed from any to unknown
       // Check for our custom marker that indicates a port was successfully found and server closed.
-      if (error && error._isPortFoundMarker === true && typeof error.port === 'number') {
-        return error.port; // Port found
+      if (typeof error === 'object' && error !== null && '_isPortFoundMarker' in error && (error as {_isPortFoundMarker:boolean})._isPortFoundMarker === true && 'port' in error && typeof (error as {port:unknown}).port === 'number') {
+        return (error as {port:number}).port; // Port found
       }
       // If it's a genuine EADDRINUSE (e.g., from a race condition not caught by 'error' listener,
       // or if the 'error' listener itself resolved to continue the loop), try next port.
-      if (error && error.code === 'EADDRINUSE') {
+      if (typeof error === 'object' && error !== null && 'code' in error && (error as {code:string}).code === 'EADDRINUSE') {
          port++;
          if (port > 65535) {
            throw new Error('No free ports available.');
@@ -1520,7 +1519,7 @@ async function findFreePort(startPort: number): Promise<number> {
          // Continue to next iteration of the while loop
       } else {
         // Other unexpected error
-        throw error;
+        throw error; // Re-throw if it's not our marker or EADDRINUSE
       }
     } finally {
         // Ensure listeners are cleaned up in all cases for the current server instance
@@ -1529,15 +1528,15 @@ async function findFreePort(startPort: number): Promise<number> {
   }
 }
 // Helper to convert stream to string for logging errors, place it before startProxyServer or inside if preferred
-async function streamToString(stream: any): Promise<string> {
-  if (!stream || typeof stream.pipe !== 'function') { // Check if stream is null/undefined or not a stream
+async function streamToString(stream: NodeJS.ReadableStream | unknown): Promise<string> {
+  if (!stream || typeof (stream as NodeJS.ReadableStream).pipe !== 'function') { // Check if stream is null/undefined or not a stream
     return String(stream); // If not a stream, convert directly
   }
   return new Promise((resolve, reject) => {
     const chunks: Uint8Array[] = [];
-    stream.on('data', (chunk: Uint8Array) => chunks.push(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    (stream as NodeJS.ReadableStream).on('data', (chunk: Uint8Array) => chunks.push(chunk));
+    (stream as NodeJS.ReadableStream).on('error', reject);
+    (stream as NodeJS.ReadableStream).on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
   });
 }
 
@@ -1581,42 +1580,39 @@ export async function startProxyServer(
 
       res.status(mcpResponse.status);
       // Forward relevant headers from target server's response
-      if (mcpResponse.headers['content-type']) res.setHeader('Content-Type', mcpResponse.headers['content-type']);
-      if (mcpResponse.headers['mcp-session-id']) res.setHeader('mcp-session-id', mcpResponse.headers['mcp-session-id']);
-      // Add other headers as needed, e.g., cache-control, connection for SSE
-      if (mcpResponse.headers['cache-control']) res.setHeader('Cache-Control', mcpResponse.headers['cache-control']);
-      if (mcpResponse.headers['connection']) res.setHeader('Connection', mcpResponse.headers['connection']);
+      if (mcpResponse.headers['content-type']) res.setHeader('Content-Type', mcpResponse.headers['content-type'] as string);
+      if (mcpResponse.headers['mcp-session-id']) res.setHeader('mcp-session-id', mcpResponse.headers['mcp-session-id'] as string);
+      if (mcpResponse.headers['cache-control']) res.setHeader('Cache-Control', mcpResponse.headers['cache-control'] as string);
+      if (mcpResponse.headers['connection']) res.setHeader('Connection', mcpResponse.headers['connection'] as string);
 
+      (mcpResponse.data as NodeJS.ReadableStream).pipe(res); // Pipe the stream
 
-      mcpResponse.data.pipe(res); // Pipe the stream
-
-    } catch (error: any) {
-      const errorResponseData = error.response?.data ? await streamToString(error.response.data) : undefined;
+    } catch (error: unknown) { // Changed from any to unknown
+      const axiosError = error as import('axios').AxiosError; // Type assertion
+      const errorResponseData = axiosError.response?.data ? await streamToString(axiosError.response.data as NodeJS.ReadableStream) : undefined;
       logger.error('Proxy: Error proxying MCP request to target server.', {
-        message: error.message,
+        message: axiosError.message,
         targetUrl,
         requestMethod: req.method,
-        responseStatus: error.response?.status,
+        responseStatus: axiosError.response?.status,
         responseDataPreview: errorResponseData?.substring(0, 500), // Log a preview
       });
 
-      if (error.response) {
-        res.status(error.response.status);
-        if (error.response.headers['content-type']) res.setHeader('Content-Type', error.response.headers['content-type']);
-        // If error.response.data was already converted to string for logging, send that.
-        // Otherwise, if it's a stream, pipe it.
+      if (axiosError.response) {
+        res.status(axiosError.response.status);
+        if (axiosError.response.headers['content-type']) res.setHeader('Content-Type', axiosError.response.headers['content-type'] as string);
         if (errorResponseData) {
             res.send(errorResponseData);
-        } else if (error.response.data && typeof error.response.data.pipe === 'function') {
-             error.response.data.pipe(res);
-        } else if (error.response.data) { // Fallback for non-stream data
-             res.send(error.response.data);
+        } else if (axiosError.response.data && typeof (axiosError.response.data as NodeJS.ReadableStream).pipe === 'function') {
+             (axiosError.response.data as NodeJS.ReadableStream).pipe(res);
+        } else if (axiosError.response.data) { 
+             res.send(axiosError.response.data);
         } else {
              res.end();
         }
       } else {
         // Network error or other issue before getting a response from target
-        res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: error.message }, id: null });
+        res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: axiosError.message }, id: null });
       }
     }
   });
@@ -1627,9 +1623,10 @@ export async function startProxyServer(
       logger.debug(`Proxy: GET /api/ping -> ${targetBaseUrl}/api/ping`);
       const pingResponse = await axios.get(`${targetBaseUrl}/api/ping`, { timeout: 2000 });
       res.status(pingResponse.status).json(pingResponse.data);
-    } catch (error: any) {
-      logger.error('Proxy: Error proxying /api/ping.', { message: error.message, responseStatus: error.response?.status });
-      res.status(error.response?.status || 502).json({ error: 'Proxy error for /api/ping', details: error.message });
+    } catch (error: unknown) { // Changed from any to unknown
+      const axiosError = error as import('axios').AxiosError; // Type assertion
+      logger.error('Proxy: Error proxying /api/ping.', { message: axiosError.message, responseStatus: axiosError.response?.status });
+      res.status(axiosError.response?.status || 502).json({ error: 'Proxy error for /api/ping', details: axiosError.message });
     }
   });
 
@@ -1639,9 +1636,10 @@ export async function startProxyServer(
       logger.debug(`Proxy: GET /api/indexing-status -> ${targetBaseUrl}/api/indexing-status`);
       const statusResponse = await axios.get(`${targetBaseUrl}/api/indexing-status`, { timeout: 5000 });
       res.status(statusResponse.status).json(statusResponse.data);
-    } catch (error: any) {
-      logger.error('Proxy: Error proxying /api/indexing-status.', { message: error.message, responseStatus: error.response?.status });
-      res.status(error.response?.status || 502).json({ error: 'Proxy error for /api/indexing-status', details: error.message });
+    } catch (error: unknown) { // Changed from any to unknown
+      const axiosError = error as import('axios').AxiosError; // Type assertion
+      logger.error('Proxy: Error proxying /api/indexing-status.', { message: axiosError.message, responseStatus: axiosError.response?.status });
+      res.status(axiosError.response?.status || 502).json({ error: 'Proxy error for /api/indexing-status', details: axiosError.message });
     }
   });
 

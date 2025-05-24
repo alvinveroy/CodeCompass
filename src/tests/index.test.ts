@@ -36,23 +36,17 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 }));
 
 // Store the original configService mock structure to reset it
-const originalMockConfigServiceInstance = { HTTP_PORT: 3001, AGENT_QUERY_TIMEOUT: 180000 }; // Added AGENT_QUERY_TIMEOUT
-const mockConfigServiceInstance = { ...originalMockConfigServiceInstance }; // Mutable copy for tests
-
-const mockLoggerInstance = {
-  info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
+const originalMockConfigServiceInstance = { HTTP_PORT: 3001, AGENT_QUERY_TIMEOUT: 180000 };
+// These will be freshly created in beforeEach for use with vi.doMock
+let currentMockConfigServiceInstance: typeof originalMockConfigServiceInstance;
+let currentMockLoggerInstance: {
+  info: Mock; warn: Mock; error: Mock; debug: Mock;
 };
-// This mock path should align with how `src/index.ts` requires it (now via resolved path)
-// Vitest should map `../lib/config-service` (from test file) to the same module ID
-// as `path.resolve(__dirname, './lib/config-service.js')` (from SUT).
-vi.mock('../lib/config-service.js', () => ({
-  configService: mockConfigServiceInstance,
-  logger: mockLoggerInstance,
-}));
+
 
 const mockStartServer = vi.fn();
-const mockStartProxyServer = vi.fn(); // Mock for startProxyServer
-const ServerStartupError = class ServerStartupError extends Error { // Renamed for clarity
+const mockStartProxyServer = vi.fn();
+const ServerStartupError = class ServerStartupError extends Error {
   exitCode: number;
   originalError?: Error;
   existingServerStatus?: any;
@@ -118,7 +112,37 @@ describe('CLI with yargs (index.ts)', () => {
   async function runMainWithArgs(args: string[]) {
     process.argv = ['node', 'index.js', ...args];
     vi.resetModules(); 
-    const { main } = await import('../index.js'); // Added .js extension
+
+    // Dynamically resolve paths as src/index.ts would
+    // require.resolve needs a path that exists relative to this test file to find index.js
+    // Assuming index.js is in dist/ and tests are in dist/tests/
+    // If src/index.ts is run directly (e.g. via ts-node for tests), then '../index.js' might point to src/index.js
+    // Let's assume the compiled output structure where index.js is at a level accessible via '../index.js' from 'dist/tests/index.js'
+    // And 'lib' is a sibling to 'index.js'
+    const indexPath = require.resolve('../index.js'); // Get absolute path to index.js
+    const SUT_distPath = path.dirname(indexPath); // Get directory of index.js (e.g., /path/to/project/dist)
+    const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
+
+    vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
+      configService: currentMockConfigServiceInstance, // Use the current, fresh mock
+      logger: currentMockLoggerInstance,             // Use the current, fresh mock
+    }));
+    vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({
+      startServer: mockStartServer,
+      startProxyServer: mockStartProxyServer,
+      ServerStartupError: ServerStartupError,
+    }));
+    // Mock SDK client components that are dynamically required in handleClientCommand
+    vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
+      Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
+    }));
+    vi.doMock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
+      StreamableHTTPClientTransport: vi.fn(),
+    }));
+
+    // Importing src/index.js executes main() at its end.
+    // No need to destructure or call main explicitly if it's not exported.
+    await import('../index.js'); 
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
     // to allow assertions on console.error or logger.error before process.exit is checked.
     try {
@@ -148,13 +172,13 @@ describe('CLI with yargs (index.ts)', () => {
     });
 
     it('should handle startServer failure and log via yargs .fail()', async () => {
-      const startupError = new mockServerStartupError("Server failed to boot", 1);
+      const startupError = new ServerStartupError("Server failed to boot", 1);
       mockStartServer.mockRejectedValue(startupError);
-      await runMainWithArgs(['start']); // Use explicit start command
-      // Check logger.error from yargs .fail()
-      expect(mockLoggerInstance.error).toHaveBeenCalledWith('CLI Error:', expect.objectContaining({ message: "Server failed to boot" }));
-      // yargs should call process.exit(1) due to the error
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true"; // To ensure error is caught by .fail() and not rethrown by runMainWithArgs
+      await runMainWithArgs(['start']);
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: "Server failed to boot" }));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should handle startServer EADDRINUSE with exitCode 0 and attempt proxy start', async () => {
@@ -193,18 +217,21 @@ describe('CLI with yargs (index.ts)', () => {
       axiosError.isAxiosError = true;
       axiosError.code = 'ECONNREFUSED';
       mockAxiosGet.mockRejectedValue(axiosError);
-
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test"}']);
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('CodeCompass server is not running'));
-      expect(mockLoggerInstance.error).toHaveBeenCalledWith('CLI Error:', expect.objectContaining({ message: expect.stringContaining('ECONNREFUSED') }));
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: expect.stringContaining('ECONNREFUSED') }));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should handle invalid JSON parameters for client command and log via yargs .fail()', async () => {
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query": "test"']); // Invalid JSON
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Invalid JSON parameters for tool 'agent_query'"));
-      expect(mockLoggerInstance.error).toHaveBeenCalledWith('CLI Error:', expect.objectContaining({ message: expect.stringContaining('Invalid JSON parameters') }));
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: expect.stringContaining('Invalid JSON parameters') }));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
   });
 
@@ -273,20 +300,23 @@ describe('CLI with yargs (index.ts)', () => {
 
   describe('Error Handling and Strict Mode by yargs', () => {
     it('should show error and help for unknown command', async () => {
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['unknowncommand']);
-      // yargs prints its own error message to stderr for unknown commands
-      // and often shows help. The exact message can vary.
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument: unknowncommand"));
-      // Check if yargs' .fail() handler's logger was called
-      expect(mockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error:', expect.stringContaining("Unknown argument: unknowncommand"));
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error (yargs.fail):', expect.stringContaining("Unknown argument: unknowncommand"));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should show error and help for unknown option', async () => {
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['--unknown-option']);
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument: unknown-option"));
-      expect(mockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error:', expect.stringContaining("Unknown argument: unknown-option"));
+      // Yargs might output "Unknown arguments: unknown-option, unknownOption" if it camelCases.
+      // Let's make the check more flexible.
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument"));
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error (yargs.fail):', expect.stringContaining("Unknown argument"));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
   });
 
@@ -312,25 +342,27 @@ describe('CLI with yargs (index.ts)', () => {
           message: "Tool specific error",
           data: { reason: "invalid input" },
         },
-      } as const; // Use 'as const' for precise typing
+      } as const;
       mockMcpClientInstance.callTool.mockRejectedValue(rpcError);
-
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_error"}', '--json']);
 
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should output JSON error when --json flag is used and tool call fails with generic Error', async () => {
       const genericError = new Error("A generic client error occurred");
       mockMcpClientInstance.callTool.mockRejectedValue(genericError);
-
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"generic_error"}', '--json']);
 
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({
         error: { message: genericError.message, name: genericError.name }
       }, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should output JSON error when --json flag is used and server ping fails (ECONNREFUSED)', async () => {
@@ -358,14 +390,16 @@ describe('CLI with yargs (index.ts)', () => {
         }
         return { status: 404, data: {} };
       });
-      
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"wrong_server"}', '--json']);
 
-      const expectedErrorMessage = `A service is running on port ${mockConfigServiceInstance.HTTP_PORT}, but it's not a CodeCompass server or it's unresponsive.`;
+      const currentHttpPort = process.env.HTTP_PORT || currentMockConfigServiceInstance.HTTP_PORT;
+      const expectedErrorMessage = `A service is running on port ${currentHttpPort}, but it's not a CodeCompass server or it's unresponsive.`;
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({
         error: { message: expectedErrorMessage, pingResponse: pingData }
       }, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
   });
 });

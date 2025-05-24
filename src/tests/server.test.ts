@@ -635,7 +635,7 @@ describe('Server Startup and Port Handling', () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${pingError.message}`,
+        message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`, // Use localPingError
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
         existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' })
