@@ -1,3 +1,4 @@
+import path from 'path';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
 import fs from 'fs'; // For mocking fs in changelog test

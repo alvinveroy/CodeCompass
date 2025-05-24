@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterAll, beforeAll, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll, type Mock } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
 import { Client as MCPClient } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
