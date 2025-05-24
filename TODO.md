@@ -90,4 +90,7 @@ This document outlines the tasks required to enhance CodeCompass.
     - (In Progress) Develop comprehensive integration tests for `stdio` server and client interactions.
         - Initial test file structure and basic connection test created. (a52448e)
         - Mocks for Qdrant, Ollama, and LLMProvider set up. (a52448e)
-        - Added integration tests for indexing, search_code, and agent_query.
+        - Added integration tests for indexing, search_code, and agent_query. (212f0ff)
+        - Unmocked `indexRepository` and `getGlobalIndexingStatus` in integration tests for more realistic testing.
+        - Added integration tests for `get_changelog` and `trigger_repository_update`.
+        - Enhanced Qdrant client mock in integration tests to support `scroll` and `delete` methods for stale entry cleanup.

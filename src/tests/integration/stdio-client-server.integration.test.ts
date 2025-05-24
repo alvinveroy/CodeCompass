@@ -22,7 +22,9 @@ const mockQdrantClientInstance = {
       }
     }
   }),
-  // Add other methods if they are called during indexing/search
+  scroll: vi.fn().mockResolvedValue({ points: [], next_page_offset: null }), // Added for stale entry cleanup
+  delete: vi.fn().mockResolvedValue({ status: 'ok' }), // Added for stale entry cleanup (deleting points)
+  deleteCollection: vi.fn().mockResolvedValue(undefined), 
 };
 vi.mock('../../lib/qdrant', () => ({
   initializeQdrant: vi.fn().mockResolvedValue(mockQdrantClientInstance),
@@ -57,6 +59,17 @@ vi.mock('../../lib/llm-provider', () => ({
   clearProviderCache: vi.fn(),
   // Export LLMProvider type if needed by other mocks, though not strictly for this file.
 }));
+
+// Partially mock repository.ts: use actual indexRepository and getGlobalIndexingStatus
+vi.mock('../../lib/repository', async () => {
+  const actualRepository = await vi.importActual('../../lib/repository') as typeof import('../../lib/repository');
+  return {
+    ...actualRepository, // Use actual implementations by default
+    validateGitRepository: vi.fn().mockResolvedValue(true), // Mock specific functions
+    getRepositoryDiff: vi.fn().mockResolvedValue('+ test\n- test2'), // Mock specific functions
+    // indexRepository and getGlobalIndexingStatus will be the actual implementations
+  };
+});
 
 
 // Helper function to wait for server readiness
@@ -117,6 +130,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await fs.writeFile(path.join(testRepoPath, 'file2.txt'), 'This is a test file with some text content.');
     await fs.ensureDir(path.join(testRepoPath, 'subdir'));
     await fs.writeFile(path.join(testRepoPath, 'subdir', 'file3.ts'), 'export function greet() { return "Hello from subdir"; }');
+    await fs.writeFile(path.join(testRepoPath, 'CHANGELOG.md'), '# Test Changelog\n\n- Initial setup for integration tests.');
     
     // Make an initial commit
     await git.add({ fs, dir: testRepoPath, filepath: '.' });
@@ -172,6 +186,11 @@ describe('Stdio Client-Server Integration Tests', () => {
   });
 
   it('should start the server, connect a client via stdio, and call get_indexing_status', async () => {
+    // Ensure Qdrant's getCollection is mocked for the initial check in initializeQdrant
+    // This might be called if indexRepository runs automatically on start.
+    // The collection name will be derived from configService.COLLECTION_NAME.
+    // The mock for initializeQdrant already handles getCollection.
+
     serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
     
     // serverProcess.stderr?.pipe(process.stderr); // For debugging server output
@@ -193,9 +212,13 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(statusResult.content![0].type).toBe('text');
     // Depending on how fast initial indexing is, status could be 'idle' or 'indexing_...'
     // For a small repo, it might complete very quickly.
-    // Let's check for key phrases.
-    expect(statusResult.content![0].text).toContain('# Indexing Status');
-    // Add more specific assertions based on expected initial state if necessary
+    // The real getGlobalIndexingStatus will be called.
+    const statusText = statusResult.content![0].text as string;
+    expect(statusText).toContain('# Indexing Status');
+    // Initial status could be 'idle' if indexing is super fast, or 'initializing', 'listing_files', etc.
+    // A more robust check might be to see if it eventually becomes 'idle' or 'completed'.
+    // For this basic test, just checking the header is fine.
+    console.log("Initial get_indexing_status result:", statusText.split('\n')[1]); // Log the status line
 
     await client.close();
     expect(client.state).toBe('closed');
@@ -212,12 +235,17 @@ describe('Stdio Client-Server Integration Tests', () => {
     });
     await client.connect(transport);
 
-    // 1. Trigger indexing (or assume initial indexing will pick it up)
-    // For a more robust test, explicitly trigger and wait.
-    // However, initial indexing might be fast enough for a small repo.
-    // Let's try relying on initial indexing first, then add trigger_repository_update if needed.
+    // 1. Trigger indexing explicitly via the tool to ensure it runs for the test.
+    // The server might start initial indexing automatically, this ensures we test the tool.
+    console.log("Integration test: Triggering repository update for search_code test.");
+    await client.callTool({ name: 'trigger_repository_update', arguments: {} });
+    
+    // Give a brief moment for the trigger to take effect and status to change
+    await new Promise(resolve => setTimeout(resolve, 200));
+
 
     // 2. Wait for indexing to complete by polling get_indexing_status
+    // This now uses the REAL getGlobalIndexingStatus.
     let indexingComplete = false;
     let attempts = 0;
     const maxAttempts = 60; // Wait up to 30 seconds (60 * 500ms)
@@ -302,6 +330,77 @@ describe('Stdio Client-Server Integration Tests', () => {
     // The exact content depends on the agent's internal plan and capabilities it calls.
     // For this test, we're primarily interested that it ran and the LLM mock was hit for synthesis.
     expect(agentResultText).toContain("This is the agent's plan and summary based on the query about file1.");
+
+    await client.close();
+  }, 45000);
+
+  it('should call get_changelog and retrieve content from the test CHANGELOG.md', async () => {
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    await waitForServerReady(serverProcess);
+
+    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    const transport = new StdioClientTransport({
+      readableStream: serverProcess.stdout!,
+      writableStream: serverProcess.stdin!,
+    });
+    await client.connect(transport);
+
+    const changelogResult = await client.callTool({ name: 'get_changelog', arguments: {} });
+    expect(changelogResult).toBeDefined();
+    expect(changelogResult.content).toBeInstanceOf(Array);
+    const changelogText = changelogResult.content![0].text as string;
+
+    expect(changelogText).toContain('# Test Changelog');
+    expect(changelogText).toContain('- Initial setup for integration tests.');
+    // It also includes the version from configService.VERSION (mocked as 'test-version')
+    // The spawned server will use its own configService, which gets VERSION from lib/version.ts
+    // Let's import the real VERSION to check against.
+    const { VERSION: actualVersion } = await import('../../lib/version');
+    expect(changelogText).toContain(`(v${actualVersion})`);
+
+
+    await client.close();
+  }, 40000);
+
+  it('should call trigger_repository_update and verify indexing starts', async () => {
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    await waitForServerReady(serverProcess);
+
+    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    const transport = new StdioClientTransport({
+      readableStream: serverProcess.stdout!,
+      writableStream: serverProcess.stdin!,
+    });
+    await client.connect(transport);
+
+    // Clear any calls from initial auto-indexing if it happened
+    mockQdrantClientInstance.upsert.mockClear();
+    mockQdrantClientInstance.search.mockClear(); 
+    
+    // The mock for qdrant.ts has batchUpsertVectors at the module level
+    const qdrantModule = await import('../../lib/qdrant');
+    vi.mocked(qdrantModule.batchUpsertVectors).mockClear();
+
+
+    // Call trigger_repository_update
+    const triggerResult = await client.callTool({ name: 'trigger_repository_update', arguments: {} });
+    expect(triggerResult.content![0].text).toContain('# Repository Update Triggered (Locally)');
+
+    // Wait a bit for indexing to potentially start and make calls
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
+
+    // Verify that batchUpsertVectors was called, indicating indexing ran
+    // This relies on the real indexRepository calling the mocked batchUpsertVectors
+    expect(qdrantModule.batchUpsertVectors).toHaveBeenCalled();
+    
+    // Optionally, check status
+    const statusResult = await client.callTool({ name: 'get_indexing_status', arguments: {} });
+    const statusText = statusResult.content![0].text as string;
+    console.log("Indexing status after trigger_repository_update:", statusText.split('\n')[1]);
+    // Status might be 'indexing_file_content', 'indexing_commits_diffs', or quickly back to 'idle'/'completed'
+    // A more robust check would be to see it transition through states if possible, or just that it's not 'error'.
+    expect(statusText).not.toContain("Status: error");
+
 
     await client.close();
   }, 45000);
