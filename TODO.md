@@ -33,9 +33,12 @@ This document outlines the tasks required to enhance CodeCompass.
         - Logging and console output should clearly indicate that MCP is available via `stdio` and utility HTTP endpoints are on the configured port.
     - **Port Conflict Handling for Utility HTTP Server**:
         - If the utility HTTP server (on `HTTP_PORT`) encounters an `EADDRINUSE` error:
-            - If another CodeCompass utility server is detected, log its presence and exit gracefully (similar to current behavior but without proxying).
-            - If a non-CodeCompass service is on the port, log an error and exit.
-            - The `findFreePort` utility might still be useful if the decision is to try an alternative port for the *utility* HTTP server, but this is secondary to `stdio` MCP.
+            - **If another CodeCompass utility server is detected:**
+                - This new instance **does not start its own utility HTTP server.** Log this decision.
+                - The `stdio` MCP server of this new instance will handle relevant MCP tool requests (e.g., for indexing status, triggering updates) by making HTTP client calls to the *existing* utility HTTP server on the original `HTTP_PORT`.
+                - This effectively makes the `stdio` MCP server a relay for utility functions to the primary running instance.
+            - **If a non-CodeCompass service is on the port:** Log an error and exit (as utility functions cannot be provided by this instance, and relaying is not possible).
+            - The `findFreePort` utility is **not used** by this instance to find an alternative port for its own utility HTTP server in this conflict scenario.
     - **Documentation**:
         - Update `README.md` to reflect `stdio` as the primary MCP interface.
         - Document how clients (e.g., editor extensions) should connect via `stdio`.
@@ -62,15 +65,29 @@ This document outlines the tasks required to enhance CodeCompass.
 
 ## Phase 3: Utility HTTP Server Port Conflict Handling (Replaces previous Phase 4)
 - **Goal**: Define behavior when the utility HTTP server (responsible for sync, status) encounters a port conflict.
-- **Status**: Design and implementation pending.
+- **Status**: Option C selected. Implementation pending.
 - **Tasks**:
     - **Decision on Conflict Resolution**:
-        - Option A: Exit gracefully if another CodeCompass utility HTTP server is detected (similar to current `ServerStartupError` with `exitCode: 0` but without starting a proxy).
-        - Option B: Attempt to find a new free port for the utility HTTP server using `findFreePort` and start it there.
-        - Option C: Other (e.g., disable utility HTTP server if port is taken).
+        - **Option C selected**: If the configured utility HTTP port is in use by another CodeCompass utility server, the current instance **will not start its own utility HTTP server**. Instead, its `stdio`-based MCP server will handle relevant MCP tool requests (e.g., for indexing status or triggering updates) by making HTTP client calls to the *existing* utility HTTP server on the original `HTTP_PORT`. If the port is used by a non-CodeCompass service, this instance will log an error and exit.
     - **Implementation**: Implement the chosen conflict resolution strategy in `src/lib/server.ts` and `src/index.ts`.
+        - Modify `startServer` in `src/lib/server.ts` to implement this logic:
+            - On `EADDRINUSE` for the utility HTTP port, ping the port.
+            - If a CodeCompass server responds:
+                - Do not start the Express app for utility HTTP endpoints in the current instance.
+                - Log that utility HTTP server is disabled for this instance and requests will be relayed via `stdio` MCP to the existing server on `HTTP_PORT`.
+                - The `stdio` MCP server (initialized in `startServer`) must be aware of the `HTTP_PORT` of the existing utility server (e.g., from `configService`).
+            - If a non-CodeCompass service responds or ping fails (indicating the port is blocked by something else):
+                - Throw a `ServerStartupError` to cause the instance to exit, as utility functions cannot be provided or relayed.
+        - Modify/Ensure MCP tool handlers in `src/lib/server.ts` (e.g., for `get_indexing_status`, and a potential new `trigger_repository_update` tool):
+            - These handlers, when executed in an instance where the local utility HTTP server is disabled due to conflict, should use an HTTP client (e.g., `axios`) to make requests to the *existing* (other instance's) utility server's API endpoints (e.g., `http://localhost:<HTTP_PORT>/api/indexing-status`, `http://localhost:<HTTP_PORT>/api/repository/notify-update`).
     - **Testing**: Add unit tests for the chosen utility HTTP port conflict handling.
+        - Test the scenario where the utility HTTP port is taken by another CodeCompass instance:
+            - Verify that the utility HTTP server for the new instance is not started.
+            - Verify that MCP tools (like `get_indexing_status`) on the new instance's `stdio` interface correctly relay requests to (and responses from) the mocked existing utility HTTP server.
+        - Test the scenario where the port is taken by a non-CodeCompass service (new instance should exit with an error).
     - **Documentation**: Update `README.md` and CLI help text regarding utility HTTP port conflicts.
+        - Explain that if the utility HTTP port is taken by another CodeCompass instance, the new instance runs in `stdio`-MCP-only mode for core queries. Its utility-related MCP tools will communicate with the existing instance's HTTP utility endpoints.
+        - Clarify that Git hooks should generally target the primary running instance's HTTP port.
 
 ## Deprioritized / Replaced Features
 ### HTTP-to-HTTP MCP Proxy (Previously Phase 4)
@@ -81,7 +98,7 @@ This document outlines the tasks required to enhance CodeCompass.
     - `findFreePort` utility.
     - `startProxyServer` function (HTTP-to-HTTP proxy).
     - `startServerHandler` logic to call `startProxyServer`.
-- **Reason for Deprioritization**: The primary MCP interface will be `stdio`. The utility HTTP server port conflict will be handled differently (see Phase 3 above). Tests for `findFreePort` might still be relevant for the utility server. Tests for `startProxyServer` (HTTP-to-HTTP MCP proxy) are no longer a priority.
+-- **Reason for Deprioritization**: The primary MCP interface will be `stdio`. The utility HTTP server port conflict will be handled differently (see Phase 3 above, Option C does not use `findFreePort` for the utility server). Tests for `findFreePort` are primarily relevant to the deprioritized HTTP-to-HTTP proxy. Tests for `startProxyServer` (HTTP-to-HTTP MCP proxy) are no longer a priority.
 
 ## Next Steps (Immediate Focus)
 - **Implement Phase 1: Core Architecture Shift to `stdio`-first MCP**:
