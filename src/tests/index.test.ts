@@ -6,14 +6,16 @@ import fs from 'fs'; // For mocking fs in changelog test
 // axios mock removed as it's no longer directly used by handleClientCommand's primary path
 
 // Mock fs for changelog command - ensure it's correctly structured
+const mockFsFunctions = {
+  statSync: vi.fn(),
+  readFileSync: vi.fn(),
+  // Add any other fs functions if index.ts uses them, e.g. existsSync
+  // For changelog, only statSync and readFileSync are directly used by displayChangelog
+};
+
 vi.mock('fs', () => ({
-  // default: { // If displayChangelog uses import fs from 'fs' and esModuleInterop is tricky
-    statSync: vi.fn(),
-    readFileSync: vi.fn(),
-  // },
-  // Provide them at the root if displayChangelog uses import { statSync } from 'fs'
-  // For `import fs from 'fs'`, Vitest usually handles making these available on `fs.default` or `fs` directly.
-  // Let's assume direct availability for now.
+  default: mockFsFunctions,
+  ...mockFsFunctions, // Also make them available at the root for easier test access if needed
 }));
 
 vi.mock('child_process', async () => {
@@ -235,10 +237,6 @@ describe('CLI with yargs (index.ts)', () => {
   });
 
   describe('Client Tool Commands (stdio based)', () => {
-    let mockSpawnInstance: {
-      on: Mock; kill: Mock; pid?: number; stdin: any; stdout: any; stderr: any;
-    };
-
     beforeEach(() => {
       // Initialize mockSpawnInstance (it's declared at a higher scope)
       mockSpawnInstance = {
