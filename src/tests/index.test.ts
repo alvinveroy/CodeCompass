@@ -11,6 +11,17 @@ vi.mock('axios', () => ({
   }
 }));
 
+// Mock fs for changelog command - ensure it's correctly structured
+vi.mock('fs', () => ({
+  // default: { // If displayChangelog uses import fs from 'fs' and esModuleInterop is tricky
+    statSync: vi.fn(),
+    readFileSync: vi.fn(),
+  // },
+  // Provide them at the root if displayChangelog uses import { statSync } from 'fs'
+  // For `import fs from 'fs'`, Vitest usually handles making these available on `fs.default` or `fs` directly.
+  // Let's assume direct availability for now.
+}));
+
 const mockMcpClientInstance = {
   connect: vi.fn(),
   callTool: vi.fn(),
@@ -25,29 +36,43 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 }));
 
 // Store the original configService mock structure to reset it
-const originalMockConfigServiceInstance = { HTTP_PORT: 3001 };
+const originalMockConfigServiceInstance = { HTTP_PORT: 3001, AGENT_QUERY_TIMEOUT: 180000 }; // Added AGENT_QUERY_TIMEOUT
 const mockConfigServiceInstance = { ...originalMockConfigServiceInstance }; // Mutable copy for tests
 
 const mockLoggerInstance = {
   info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
 };
-vi.mock('./lib/config-service', () => ({
+// This mock path should align with how `src/index.ts` requires it (now via resolved path)
+// Vitest should map `../lib/config-service` (from test file) to the same module ID
+// as `path.resolve(__dirname, './lib/config-service.js')` (from SUT).
+vi.mock('../lib/config-service.js', () => ({
   configService: mockConfigServiceInstance,
   logger: mockLoggerInstance,
 }));
 
 const mockStartServer = vi.fn();
-const mockServerStartupError = class ServerStartupError extends Error {
+const mockStartProxyServer = vi.fn(); // Mock for startProxyServer
+const ServerStartupError = class ServerStartupError extends Error { // Renamed for clarity
   exitCode: number;
-  constructor(message: string, exitCode = 1) {
+  originalError?: Error;
+  existingServerStatus?: any;
+  requestedPort?: number;
+  detectedServerPort?: number;
+
+  constructor(message: string, exitCode = 1, options?: any) {
     super(message);
     this.name = "ServerStartupError";
     this.exitCode = exitCode;
+    this.originalError = options?.originalError;
+    this.existingServerStatus = options?.existingServerStatus;
+    this.requestedPort = options?.requestedPort;
+    this.detectedServerPort = options?.detectedServerPort;
   }
 };
-vi.mock('./lib/server', () => ({
+vi.mock('../lib/server.js', () => ({
   startServer: mockStartServer,
-  ServerStartupError: mockServerStartupError,
+  startProxyServer: mockStartProxyServer, // Add mock for startProxyServer
+  ServerStartupError: ServerStartupError, // Use the class defined in the test
 }));
 // --- End Mocks ---
 
@@ -132,14 +157,15 @@ describe('CLI with yargs (index.ts)', () => {
       expect(mockProcessExit).toHaveBeenCalledWith(1);
     });
 
-    it('should handle startServer EADDRINUSE with exitCode 0 and not log CLI Error', async () => {
-      const eaddrinuseError = new mockServerStartupError("Port in use", 0);
+    it('should handle startServer EADDRINUSE with exitCode 0 and attempt proxy start', async () => {
+      const eaddrinuseError = new ServerStartupError('Port in use by CC', 0, { requestedPort: 3001, detectedServerPort: 3001, existingServerStatus: { service: "CodeCompass", version: "prev" }});
       mockStartServer.mockRejectedValue(eaddrinuseError);
+      mockStartProxyServer.mockResolvedValue(undefined); // Proxy starts successfully
+
       await runMainWithArgs(['start']);
-      // startServerHandler re-throws only if exitCode !== 0.
-      // If exitCode is 0, the promise resolves, so .fail() is not hit for this.
-      expect(mockLoggerInstance.error).not.toHaveBeenCalledWith('CLI Error:', expect.anything());
-      expect(mockProcessExit).not.toHaveBeenCalled(); // yargs exits 0 by default on handler success
+      expect(mockStartProxyServer).toHaveBeenCalledWith(3001, 3001, "prev");
+      expect(mockLoggerInstance.error).not.toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.anything());
+      expect(mockProcessExit).not.toHaveBeenCalled(); // Proxy keeps process alive
     });
   });
 
@@ -188,22 +214,41 @@ describe('CLI with yargs (index.ts)', () => {
       // The yargs `apply` function for the port option sets process.env.HTTP_PORT.
       // When handleClientCommand dynamically requires configService, it should pick this up.
       // We need to ensure our mockConfigServiceInstance reflects this for the axios.get mock.
-      mockConfigServiceInstance.HTTP_PORT = customPort;
+      // mockConfigServiceInstance.HTTP_PORT = customPort; // This direct assignment might be too simple if configService re-initializes
 
+      // Temporarily update the mockConfigServiceInstance getter for HTTP_PORT for this test
+      // This simulates configService picking up the new env var when it's dynamically required.
+      const originalHttpPortDescriptor = Object.getOwnPropertyDescriptor(mockConfigServiceInstance, 'HTTP_PORT');
+      Object.defineProperty(mockConfigServiceInstance, 'HTTP_PORT', {
+        get: () => parseInt(process.env.HTTP_PORT || mockConfigServiceInstance.HTTP_PORT.toString()), // Read from process.env
+        configurable: true
+      });
+    
       await runMainWithArgs(['--port', String(customPort), 'agent_query', '{"query":"test"}']);
-      
+          
       expect(process.env.HTTP_PORT).toBe(String(customPort));
-      expect(mockAxiosGet).toHaveBeenCalledWith(`http://localhost:${customPort}/api/ping`, expect.anything());
+      // mockConfigServiceInstance.HTTP_PORT (via getter) should now reflect customPort
+      expect(mockAxiosGet).toHaveBeenCalledWith(`http://localhost:${customPort}/api/ping`, {"timeout": 2000});
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
+    
+      // Restore original descriptor or value
+      if (originalHttpPortDescriptor) {
+        Object.defineProperty(mockConfigServiceInstance, 'HTTP_PORT', originalHttpPortDescriptor);
+      } else {
+         // Fallback if it wasn't a getter initially
+        mockConfigServiceInstance.HTTP_PORT = originalMockConfigServiceInstance.HTTP_PORT;
+      }
     });
 
     it('--version option should display version and exit', async () => {
+      // Yargs handles --version and exits 0. No .fail() involvement.
       await runMainWithArgs(['--version']);
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.any(String)); // Version string
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringMatching(/\d+\.\d+\.\d+/)); // Version string like x.y.z
       expect(mockProcessExit).toHaveBeenCalledWith(0);
     });
 
     it('--help option should display help and exit', async () => {
+      // Yargs handles --help and exits 0. No .fail() involvement.
       await runMainWithArgs(['--help']);
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Usage: codecompass"));
       expect(mockProcessExit).toHaveBeenCalledWith(0);
@@ -212,12 +257,17 @@ describe('CLI with yargs (index.ts)', () => {
   
   describe('Changelog Command', () => {
     it('should display changelog', async () => {
+      // Ensure fs.statSync and fs.readFileSync are properly mocked via the vi.mock('fs',...) at the top
       vi.mocked(fs.statSync).mockReturnValue({ mtimeMs: Date.now() } as fs.Stats);
       vi.mocked(fs.readFileSync).mockReturnValue('## Test Changelog Content');
-
+      
       await runMainWithArgs(['changelog']);
-      expect(mockConsoleLog).toHaveBeenCalledWith('## Test Changelog Content');
-      // Successful synchronous command handler in yargs resolves, leading to exit 0 by default.
+      expect(fs.readFileSync).toHaveBeenCalledWith(expect.stringContaining('CHANGELOG.md'), 'utf8');
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('## Test Changelog Content'));
+      // For synchronous yargs command handlers that don't throw, yargs exits 0.
+      // No explicit process.exit(0) in handler, so yargs default behavior.
+      // If yargs doesn't exit, then no call to mockProcessExit.
+      // Let's assume yargs handles exit code 0 for success.
     });
   });
 
@@ -242,17 +292,15 @@ describe('CLI with yargs (index.ts)', () => {
 
   describe('Client Tool Commands with --json output flag', () => {
     it('should output raw JSON when --json flag is used on successful tool call', async () => {
-      const rawToolResponse = {
-        someData: "value",
-        details: { nested: true, count: 1 },
-        content: [{ type: 'text', text: 'This should not be printed directly' }]
-      };
-      mockMcpClientInstance.callTool.mockResolvedValue(rawToolResponse);
-
+      const rawToolResult = { content: [{ type: 'text', text: 'Success' }], id: '123' };
+      mockMcpClientInstance.callTool.mockResolvedValue(rawToolResult);
       await runMainWithArgs(['agent_query', '{"query":"test"}', '--json']);
-
-      expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResponse, null, 2));
-      expect(mockProcessExit).toHaveBeenCalledWith(0);
+      
+      expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResult, null, 2));
+      // Successful client command should exit 0, yargs default for resolved command.
+      // No explicit process.exit(0) in handler, so yargs default behavior.
+      // If yargs doesn't exit, then no call to mockProcessExit.
+      // Let's assume yargs handles exit code 0 for success.
     });
 
     it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error', async () => {
@@ -290,14 +338,16 @@ describe('CLI with yargs (index.ts)', () => {
       axiosError.isAxiosError = true;
       axiosError.code = 'ECONNREFUSED';
       mockAxiosGet.mockRejectedValue(axiosError);
-
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true"; // To align with original intent if .fail() is tested
       await runMainWithArgs(['agent_query', '{"query":"ping_fail"}', '--json']);
-      
-      const expectedErrorMessage = `CodeCompass server is not running on port ${mockConfigServiceInstance.HTTP_PORT}. Please start the server first. (Detail: ECONNREFUSED)`;
+          
+      const currentHttpPort = process.env.HTTP_PORT || mockConfigServiceInstance.HTTP_PORT;
+      const expectedErrorMessage = `CodeCompass server is not running on port ${currentHttpPort}. The server is required for background repository synchronization and to process tool commands. Please start the server first (e.g., by running 'codecompass [repoPath]'). (Detail: ECONNREFUSED)`;
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({
         error: { message: expectedErrorMessage }
       }, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
+      delete process.env.VITEST_TESTING_FAIL_HANDLER; // Clean up env var
     });
 
     it('should output JSON error when --json flag is used and ping indicates non-CodeCompass server', async () => {

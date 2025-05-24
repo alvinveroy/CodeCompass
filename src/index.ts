@@ -212,14 +212,14 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   } catch (error: unknown) {
     // ... (existing server connection error handling)
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { logger: localLogger } = require('./lib/config-service') as typeof import('./lib/config-service');
-    let errorMessage = `Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}.`;
+    const { logger: localLogger, configService: localConfigService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
+    let errorMessage = `Failed to connect to CodeCompass server on port ${localConfigService.HTTP_PORT}.`;
     if (axios.isAxiosError(error)) {
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        errorMessage = `CodeCompass server is not running on port ${configService.HTTP_PORT}. Please start the server first. (Detail: ${error.code})`;
+        errorMessage = `CodeCompass server is not running on port ${localConfigService.HTTP_PORT}. The server is required for background repository synchronization and to process tool commands. Please start the server first (e.g., by running 'codecompass [repoPath]'). (Detail: ${error.code})`;
         localLogger.warn(errorMessage);
       } else {
-        errorMessage = `Failed to connect to CodeCompass server (AxiosError) on port ${configService.HTTP_PORT}: ${error.message}`;
+        errorMessage = `Failed to connect to CodeCompass server (AxiosError) on port ${localConfigService.HTTP_PORT}: ${error.message}`;
         localLogger.error(errorMessage, { code: error.code, response: error.response?.data });
       }
     } else if (error instanceof Error) {
