@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- **Server Startup Error Handling Refactor (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Modified `src/lib/server.ts`:
+        - The main `catch` block in `startServer` no longer calls `process.exit()`.
+        - `startServer` now throws a `ServerStartupError` (wrapping original errors if necessary) to report failures. This error includes an `exitCode`.
+        - `ServerStartupError` class is now exported.
+    - Modified `src/index.ts`:
+        - The main CLI logic now catches `ServerStartupError` from `startServer`.
+        - `process.exit()` is called from `src/index.ts` based on the `exitCode` in the caught `ServerStartupError`.
+        - If `exitCode` is `0` (e.g., existing CodeCompass instance found), it exits gracefully.
+        - If `exitCode` is non-zero, it logs an error message and exits with that code.
+    - This refactor decouples server startup logic from process termination, allowing the CLI entry point (`src/index.ts`) to manage exit behavior and paving the way for more advanced CLI features like acting as a client.
 - **Server Startup Behavior on Port Conflict (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Modified server startup logic in `src/lib/server.ts` for `EADDRINUSE` (port already in use) errors.
     - If CodeCompass attempts to start on a port already occupied by another CodeCompass instance, it will now:

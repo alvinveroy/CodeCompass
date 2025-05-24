@@ -18,6 +18,30 @@
 - Consider if parts of `startServer`'s non-MCP HTTP setup (like EADDRINUSE handling) could be further modularized to improve readability, though its current state is functional.
 
 ---
+# Retrospection for Server Startup Error Handling Refactor (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The refactoring successfully decouples `startServer` from direct process termination (`process.exit`).
+- `startServer` now communicates success by resolving its promise and failure by throwing a typed `ServerStartupError` which includes an appropriate `exitCode`.
+- `src/index.ts` now correctly handles these errors and manages the process exit, making the CLI's behavior more explicit and controllable.
+- This change aligns with the goal of making the CLI more robust and prepares for future enhancements like client-mode operations.
+- The changes were well-contained within `src/lib/server.ts` (main error handling) and `src/index.ts` (CLI logic).
+
+## What could be improved?
+- The `ServerStartupError` is a good step. For very distinct failure modes (e.g., "existing instance found" vs. "Qdrant unavailable"), even more specific error subclasses could be used in the future if finer-grained error handling in `index.ts` becomes necessary. For now, `exitCode` differentiation is sufficient.
+- The logging within `startServer` for various error conditions is generally good. Ensuring consistency in how much detail is logged in `startServer` versus what `index.ts` might add could be reviewed, but the current balance seems reasonable (server logs details, index.ts logs a summary for fatal errors).
+
+## What did we learn?
+- Separating core library functions (like `startServer`) from application lifecycle concerns (like `process.exit`) improves modularity and testability.
+- Custom error types (like `ServerStartupError`) are effective for communicating specific failure states and associated data (like `exitCode`) between different parts of an application.
+- The CLI entry point (`src/index.ts`) is the appropriate place to handle top-level errors from core services and make decisions about process termination.
+
+## Action Items / Follow-ups
+- Ensure the Git commit ID placeholder is replaced in `CHANGELOG.md` and this retrospection entry.
+- Review unit tests for `src/index.ts` (if any exist that cover its main execution flow) to ensure they account for the new error handling logic. (Note: `src/tests/server.test.ts` already covers `startServer`'s error throwing behavior).
+- Proceed with planning and implementing Phase 2 (CLI acting as a client) which builds upon this refactoring.
+
+---
 # Retrospection for Unit Test Fix (server.test.ts - EADDRINUSE Non-CodeCompass Server Log Assertions) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
