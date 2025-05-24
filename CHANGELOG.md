@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - If no server is running, or if the command is not a known tool, the CLI proceeds with server startup or other commands as before.
     - Updated `displayHelp()` in `src/index.ts` with examples for client command usage.
 ### Changed
+- **CLI Refactor to `yargs` (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Refactored `src/index.ts` to use the `yargs` library for command-line argument parsing.
+    - Replaced manual argument parsing and `displayHelp()` function with `yargs`'s capabilities.
+    - Defined commands for server startup, client tool execution (dynamically for each known tool), and changelog display.
+    - Global options like `--port`, `--version`, and `--help` are now managed by `yargs`.
+    - This provides a more robust, maintainable, and extensible CLI structure.
 - **CLI Client Mode Enhancements (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Improved error reporting and output formatting in `executeClientCommand` within `src/index.ts`.
     - Clarified in `--help` output that `sessionId` can be included in the JSON parameters for client tool calls that support session context. The existing parameter parsing mechanism already supports passing this through.
