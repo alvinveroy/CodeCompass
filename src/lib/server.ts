@@ -11,7 +11,7 @@ import express from 'express';
 import http from 'http';
 import axios from 'axios'; // Add this import
 // import { ServerRequest, ServerNotification, isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"; // No longer needed for stdio transport
-import { type RequestHandlerExtra, type ServerRequest, type ServerNotification, type Variables } from "@modelcontextprotocol/sdk/types.js";
+import { type ServerRequest, type ServerNotification } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import path from "path";
 import git from "isomorphic-git";
@@ -193,7 +193,7 @@ async function configureMcpServerInstance(
     "Repository File Content",
     new ResourceTemplate("repo://files/{filepath}", { list: undefined }),
     {}, 
-    async (uri: URL, variables: Variables, _extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+    async (uri: URL, variables: any, _extra: any) => {
     const rawFilepathValue = variables.filepath;
     let relativeFilepath = '';
     if (typeof rawFilepathValue === 'string') {

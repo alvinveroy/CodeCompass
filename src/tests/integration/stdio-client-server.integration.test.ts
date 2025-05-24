@@ -490,9 +490,9 @@ describe('Stdio Client-Server Integration Tests', () => {
     
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Using as any to align with other instances and bypass potential strict type issues for now
     await client.connect(transport);
 
     // Wait for indexing (similar to search_code test)

@@ -745,8 +745,8 @@ describe('Server Startup and Port Handling', () => {
 
 describe('findFreePort', () => {
   let mockedHttp: {
-    createServer: Mock<() => typeof currentMockHttpServerInstance>;
-    default?: { createServer: Mock<() => typeof currentMockHttpServerInstance> }; // Optional default
+    createServer: Mock<() => httpModule.Server>;
+    default?: { createServer: Mock<() => httpModule.Server> }; // Optional default
   };
   let portCounter: number;
 
@@ -755,8 +755,8 @@ describe('findFreePort', () => {
     // Dynamically import http to get the mocked version
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     mockedHttp = await import('http') as unknown as {
-      createServer: Mock<() => typeof currentMockHttpServerInstance>;
-      default?: { createServer: Mock<() => typeof currentMockHttpServerInstance> };
+      createServer: Mock<() => httpModule.Server>;
+      default?: { createServer: Mock<() => httpModule.Server> };
     };
     // Ensure we are using the default export if that's how server.ts imports it
     // Based on server.ts `import http from 'http'`, it uses the default export.
