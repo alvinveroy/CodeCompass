@@ -9,6 +9,7 @@ import axios from 'axios'; // Import axios
 
 // Initialize cache: stdTTL is 0 (infinite) as we manage staleness via file mtime
 // checkOnPreviousTTL: false, as we don't use individual item TTLs here.
+// Note: PingResponseData interface is defined below, before executeClientCommand
 const changelogCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 const CACHE_KEY_CONTENT = 'changelogContent';
 const CACHE_KEY_MTIME = 'changelogMtime';
