@@ -44,10 +44,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Mocks include `axios` (for server ping), MCP SDK client components, `configService`, `logger`, `process.exit`, and `console` methods.
     - **Expanded test coverage to include:**
         - Execution of tools with no parameters (e.g., `get_changelog`).
+        - Verification of `yargs.fail()` behavior for error propagation from command handlers.
+        - More detailed testing of the `--port` option's interaction with dynamically loaded `configService`.
+        - Confirmation of correct exit codes for various success and failure scenarios managed by `yargs`.
+        - Testing of parameter variations for client tool commands.
         - Execution of tools with specific required parameters (e.g., `get_session_history` with `sessionId`).
         - Handling of server ping responses that are 200 OK but indicate a non-CodeCompass service or missing expected data.
         - Handling of generic `Error` instances rejected by `client.callTool()`.
         - Handling of errors during `client.connect()`.
+- **CLI Test Suite Enhancements for `yargs` (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Expanded `src/tests/index.test.ts` to more comprehensively cover the `yargs`-based CLI.
+    - Added tests for `yargs.fail()` behavior, ensuring errors from command handlers propagate correctly and lead to appropriate logging and exit codes.
+    - Refined testing for the `--port` option to better verify its effect on `process.env.HTTP_PORT` and subsequent usage by dynamically loaded services.
+    - Included test cases for various tool parameter scenarios (e.g., no parameters, empty JSON).
+    - Verified correct exit codes for successful commands and different failure modes managed by `yargs`.
 - **Tool and Prompt Name Refactoring (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Removed the `bb7_` prefix from all tool and prompt names for brevity and cleaner naming.
     - Updated tool registration and capability definitions in `src/lib/server.ts`.

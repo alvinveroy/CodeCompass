@@ -984,3 +984,31 @@
 - Keep "Add comprehensive unit/integration tests for the client mode functionality" as a high-priority follow-up task.
 
 ---
+# Retrospection for Expanded Unit Tests for yargs-based CLI (src/tests/index.test.ts) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The existing test structure in `src/tests/index.test.ts` served as a solid foundation for expansion.
+- The `runMainWithArgs` helper function, combined with `vi.resetModules()`, effectively allowed testing of the `yargs` CLI as if invoked from the command line.
+- Mocking of dynamically `require`'d modules (`configService`, `server`, SDK client components) within the test setup proved to be robust.
+- Test coverage was successfully expanded to include:
+    - More detailed verification of `yargs` command routing and argument parsing for various commands (default, `start`, `changelog`, and `KNOWN_TOOLS`).
+    - Specific testing of the `--port` option's interaction with `process.env.HTTP_PORT` and its effect on dynamically loaded `configService` (simulated via mock updates).
+    - Verification of `--version` and `--help` options.
+    - Testing of `yargs.fail()` behavior, ensuring errors from command handlers propagate correctly, trigger appropriate logging (e.g., `logger.error` from the `.fail()` handler), and result in correct exit codes.
+    - Scenarios for client tool commands with different parameter styles (e.g., no parameters needed, empty JSON).
+    - Handling of `ServerStartupError` with `exitCode: 0` to ensure graceful exits without CLI error logging.
+
+## What could be improved?
+- **Mocking `configService` for `--port`:** The test for the `--port` option involves directly mutating `mockConfigServiceInstance.HTTP_PORT` to simulate the effect of `process.env.HTTP_PORT` being set. While this works for the current simple mock, a more sophisticated `configService` mock that re-initializes from `process.env` upon dynamic `require` could make this test even more reflective of the real `configService` behavior. However, the current approach is a pragmatic way to test the interaction.
+- **Complexity of `runMainWithArgs`:** The `try...catch` block within `runMainWithArgs` to suppress errors (allowing `yargs.fail()` to be tested) is a bit of a workaround. Ideally, `yargs.parseAsync()` might offer a way to test failure paths without unhandled promise rejections in the test runner, but the current solution is functional.
+
+## What did we learn?
+- Testing `yargs`-based CLIs requires careful management of `process.argv` and often `vi.resetModules()` to ensure `yargs` re-evaluates arguments for each test case.
+- Verifying the interaction between CLI options (like `--port`) and dynamically loaded configurations needs attention to how mocks are updated or how the real configuration service would pick up environment changes.
+- Testing `yargs.fail()` involves ensuring that errors thrown by command handlers are caught and processed by the `.fail()` handler, leading to expected side effects like logging and `process.exit`.
+- It's important to test not just successful command execution but also various failure modes and how the CLI framework (yargs) handles them.
+
+## Action Items / Follow-ups
+- Ensure the Git commit ID placeholder is replaced in `CHANGELOG.md` and this retrospection entry.
+- Monitor if the `configService` mock for `--port` testing becomes a point of friction; if so, explore more advanced mock re-initialization strategies.
+- Continue to expand tests as new CLI commands, options, or error handling paths are introduced.
