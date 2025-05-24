@@ -82,25 +82,26 @@ describe('CLI with yargs (index.ts)', () => {
     originalProcessEnv = { ...process.env };
     originalArgv = [...process.argv];
 
-    // Reset the mutable mockConfigServiceInstance to its original state
-    Object.assign(mockConfigServiceInstance, originalMockConfigServiceInstance);
-    delete process.env.HTTP_PORT; // Ensure HTTP_PORT env var is clean before each test
-
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as typeof process.exit);
-    mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
-    mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    
-    mockAxiosGet.mockImplementation(async (url: string) => {
-      // Use the current HTTP_PORT from mockConfigServiceInstance for ping URL construction
-      if (url === `http://localhost:${mockConfigServiceInstance.HTTP_PORT}/api/ping`) {
+    // Reset the mutable mockConfigServiceInstance to its original state by creating fresh copies
+    currentMockConfigServiceInstance = { ...originalMockConfigServiceInstance };
+    currentMockLoggerInstance = {
+      info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
+    };
+    // Reset other top-level mocks that might be stateful
+    mockStartServer.mockReset().mockResolvedValue(undefined);
+    mockStartProxyServer.mockReset().mockResolvedValue(undefined);
+    mockAxiosGet.mockReset().mockImplementation(async (url: string) => {
+      // Use currentMockConfigServiceInstance for port, as it's fresh for each test
+      if (url === `http://localhost:${currentMockConfigServiceInstance.HTTP_PORT}/api/ping`) {
         return { status: 200, data: { service: "CodeCompass", version: "test-server" } };
       }
       return { status: 404, data: {} };
     });
-    mockMcpClientInstance.callTool.mockResolvedValue({ content: [{ type: 'text', text: 'Tool call success' }] });
-    mockStartServer.mockResolvedValue(undefined);
-    mockMcpClientInstance.connect.mockResolvedValue(undefined);
-    mockMcpClientInstance.close.mockResolvedValue(undefined);
+    mockMcpClientInstance.callTool.mockReset().mockResolvedValue({ content: [{ type: 'text', text: 'Tool call success' }] });
+    mockMcpClientInstance.connect.mockReset().mockResolvedValue(undefined);
+    mockMcpClientInstance.close.mockReset().mockResolvedValue(undefined);
+    
+    delete process.env.HTTP_PORT;
   });
 
   afterEach(() => {

@@ -105,9 +105,9 @@ interface ClientCommandArgs {
 
 async function handleClientCommand(argv: ClientCommandArgs) {
   const { toolName, params: toolParamsString, outputJson } = argv;
-   
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
   const { configService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
-   
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
   const { logger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
 
   logger.info(`CLI Client Mode: Attempting to execute tool '${toolName}'`);
@@ -212,19 +212,19 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     }
   } catch (error: unknown) {
     // ... (existing server connection error handling)
-     
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     const { logger: localLogger, configService: localConfigService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
     let errorMessage = `Failed to connect to CodeCompass server on port ${localConfigService.HTTP_PORT}.`;
     if (axios.isAxiosError(error)) {
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        errorMessage = `CodeCompass server is not running on port ${localConfigService.HTTP_PORT}. The server is required for background repository synchronization and to process tool commands. Please start the server first (e.g., by running 'codecompass [repoPath]'). (Detail: ${error.code})`;
+        errorMessage = `CodeCompass server is not running on port ${localConfigService.HTTP_PORT}. The server is required for background repository synchronization and to process tool commands. Please start the server first (e.g., by running 'codecompass [repoPath]'). (Detail: ${error.code})`; // Keep detailed message
         localLogger.warn(errorMessage);
       } else {
         errorMessage = `Failed to connect to CodeCompass server (AxiosError) on port ${localConfigService.HTTP_PORT}: ${error.message}`;
         localLogger.error(errorMessage, { code: error.code, response: error.response?.data });
       }
     } else if (error instanceof Error) {
-        errorMessage = `Failed to connect to CodeCompass server (Error) on port ${configService.HTTP_PORT}: ${error.message}`;
+        errorMessage = `Failed to connect to CodeCompass server (Error) on port ${localConfigService.HTTP_PORT}: ${error.message}`; // Use localConfigService
         localLogger.error(errorMessage, error);
     } else {
         errorMessage = `Failed to connect to CodeCompass server (UnknownError) on port ${configService.HTTP_PORT}.`;
@@ -241,9 +241,9 @@ async function handleClientCommand(argv: ClientCommandArgs) {
 }
 
 async function startServerHandler(repoPath: string) {
-     
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     const { startServer, ServerStartupError: LocalServerStartupError, startProxyServer: localStartProxyServer } = require(path.join(libPath, 'server.js')) as typeof import('./lib/server');
-     
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     const { logger: localLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
   try {
     await startServer(repoPath);
@@ -399,14 +399,14 @@ async function main() {
     .fail((msg, err, _yargsInstance) => {
       // Dynamically import logger for failure messages if possible
       try {
-           
+          // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
           const { logger: failLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
           if (err) {
               failLogger.error('CLI Error (yargs.fail):', { message: err.message, stack: err.stack });
           } else if (msg) {
               failLogger.error('CLI Usage Error (yargs.fail):', msg);
           }
-      } catch (e) {
+      } catch (_e) { // Use _e if error object 'e' is not used
           console.error("Fallback yargs.fail (logger unavailable): ", msg || err);
       }
 
@@ -423,10 +423,10 @@ async function main() {
     // This catch block is for errors thrown from command handlers
     // that yargs' .fail() might not have caught or for truly unexpected issues.
     try {
-         
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
         const { logger: critLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
         critLogger.error('Critical unhandled error in CLI execution:', error);
-    } catch (e) {
+    } catch (_e) { // Use _e if error object 'e' is not used
         console.error('Fallback critical error logger (logger unavailable): Critical error in CLI execution:', error);
     }
     // If an error reaches here, it's likely something yargs didn't handle, so exit.

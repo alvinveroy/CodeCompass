@@ -609,22 +609,23 @@ describe('Server Startup and Port Handling', () => {
       }
     );
 
-    const pingError = new Error('Connection refused') as NodeJS.ErrnoException;
-    pingError.code = 'ECONNREFUSED';
+    // This const pingError was redeclared. Removed the second declaration.
+    // const pingError = new Error('Connection refused') as NodeJS.ErrnoException; 
+    // pingError.code = 'ECONNREFUSED';
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    vi.mocked(axios.get).mockImplementation((url: string) => {
-      if (url.endsWith('/api/ping')) {
-        return Promise.reject(pingError);
-      }
-      return Promise.resolve({ status: 404, data: {} });
-    });
-    
-     
-    const pingError = new Error('Connection refused') as NodeJS.ErrnoException;
-    pingError.code = 'ECONNREFUSED';
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    vi.mocked(axios.get).mockImplementation((url: string) => {
-      if (url.endsWith('/api/ping')) {
+    // vi.mocked(axios.get).mockImplementation((url: string) => {
+    //   if (url.endsWith('/api/ping')) {
+    //     return Promise.reject(pingError);
+    //   }
+    //   return Promise.resolve({ status: 404, data: {} });
+    // });
+    // This setup is now done inside the test below.
+    // The following duplicate declaration of pingError and its mock setup is removed.
+    // const pingError = new Error('Connection refused') as NodeJS.ErrnoException;
+    // pingError.code = 'ECONNREFUSED';
+    // // eslint-disable-next-line @typescript-eslint/unbound-method
+    // vi.mocked(axios.get).mockImplementation((url: string) => {
+    //   if (url.endsWith('/api/ping')) {
         return Promise.reject(pingError);
       }
       return Promise.resolve({ status: 404, data: {} });
