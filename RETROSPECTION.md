@@ -767,3 +767,24 @@
 - Continue to use `eslint-disable-next-line @typescript-eslint/require-await` with justification for functions that are intentionally `async` without current `await` expressions for API consistency or future-proofing.
 
 ---
+# Retrospection for ESLint Fixes (server.ts - Empty Function & Unsafe Access) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- ESLint clearly identified the specific lines and rules causing the warnings and errors.
+- The `no-empty-function` warning was correctly identified as a case where disabling the rule for a specific pattern (promise rejector initialization) is appropriate.
+- The `no-unsafe-assignment` and `no-unsafe-member-access` errors highlighted a genuine type safety concern with accessing `req.body.id` without proper checks.
+
+## What could be improved?
+- **Type Safety for `req.body`:** While `express.json()` middleware parses the body, its type remains `any` by default. Consistently applying type guards or casting to a known interface (like `RequestBodyWithId`) for `req.body` access improves type safety throughout the Express route handlers.
+- **ESLint Rule Configuration:** For `no-empty-function`, if this pattern of initializing promise rejectors is common, a more global ESLint configuration (e.g., allowing empty functions with specific names or in specific contexts) could be considered, though targeted disables are also fine.
+
+## What did we learn?
+- **`no-empty-function`:** This rule is generally useful but has valid exceptions, such as initializing placeholder functions that will be reassigned. `eslint-disable` is appropriate here.
+- **`no-unsafe-assignment` / `no-unsafe-member-access`:** These rules are crucial for maintaining type safety when dealing with `any` types. Accessing properties on `req.body` (which is often `any` after middleware parsing) requires careful type checking or casting to a more specific type.
+- **Type Guards/Checks for `req.body`:** Before accessing properties like `id` on `req.body`, it's important to verify that `req.body` is an object and actually contains the property. This prevents runtime errors and satisfies ESLint's safety rules.
+
+## Action Items / Follow-ups
+- Review other instances of `req.body` access in Express route handlers to ensure similar type safety measures (type guards or casting with checks) are applied.
+- Consider if a project-wide helper type or type guard for Express request bodies that might contain an `id` would be beneficial for consistency.
+
+---

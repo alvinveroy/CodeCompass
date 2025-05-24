@@ -36,6 +36,11 @@ import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
 
 // Define this interface at the top level of the file, e.g., after imports
+interface RequestBodyWithId {
+  id?: unknown; // id can be string, number, or null
+  [key: string]: unknown; // Allow other properties
+}
+
 interface PingResponseData {
   service?: string;
   status?: string;
@@ -359,7 +364,8 @@ export async function startServer(repoPath: string): Promise<void> {
   
   logger.info("Starting CodeCompass MCP server...");
 
-  let httpServerSetupReject: (reason?: unknown) => void = () => {}; // Initialize with a no-op
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- Initializing with a no-op, will be reassigned.
+  let httpServerSetupReject: (reason?: unknown) => void = () => {}; 
   const httpServerSetupPromise = new Promise<void>((_resolve, reject) => {
     httpServerSetupReject = reject;
   });
@@ -490,10 +496,11 @@ export async function startServer(repoPath: string): Promise<void> {
         transport = newTransport;
       } else {
         logger.warn(`MCP POST: Bad Request. No valid session ID and not an init request.`);
+        const bodyWithId = req.body as RequestBodyWithId;
         res.status(400).json({
           jsonrpc: '2.0',
           error: { code: -32000, message: 'Bad Request: No valid session ID or not an init request.' },
-          id: req.body?.id || null,
+          id: (typeof bodyWithId === 'object' && bodyWithId !== null && 'id' in bodyWithId) ? bodyWithId.id : null,
         });
         return;
       }
@@ -502,8 +509,9 @@ export async function startServer(repoPath: string): Promise<void> {
       } catch (transportError) {
         logger.error("Error handling MCP POST request via transport:", transportError);
         if (!res.headersSent) {
+          const bodyWithId = req.body as RequestBodyWithId;
           res.status(500).json({
-            jsonrpc: '2.0', error: { code: -32000, message: 'Internal MCP transport error.' }, id: req.body?.id || null,
+            jsonrpc: '2.0', error: { code: -32000, message: 'Internal MCP transport error.' }, id: (typeof bodyWithId === 'object' && bodyWithId !== null && 'id' in bodyWithId) ? bodyWithId.id : null,
           });
         }
       }
