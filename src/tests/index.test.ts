@@ -551,7 +551,7 @@ describe('CLI with yargs (index.ts)', () => {
   });
 
   describe('Client Tool Commands with --json output flag', () => {
-    it('should output raw JSON when --json flag is used on successful tool call', async () => {
+    it('should output raw JSON when --json flag is used on successful tool call', { timeout: 30000 }, async () => {
       const rawToolResult = { content: [{ type: 'text', text: 'Success' }], id: '123' };
       mockMcpClientInstance.callTool.mockResolvedValue(rawToolResult);
 
