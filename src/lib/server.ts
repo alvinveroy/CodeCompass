@@ -48,10 +48,34 @@ interface PingResponseData {
 }
 
 // Helper type for server startup errors
-class ServerStartupError extends Error {
-  constructor(message: string, public exitCode = 1) { // Remove : number type annotation
+// Ensure IndexingStatusReport is imported if you intend to pass the full status,
+// otherwise PingResponseData might be sufficient for existingServerStatus.
+// import { IndexingStatusReport } from './repository'; // Already imported
+// PingResponseData is already defined in this file.
+
+export class ServerStartupError extends Error {
+  public readonly originalError?: Error;
+  // Use PingResponseData or a union if more detailed status is needed from IndexingStatusReport
+  public readonly existingServerStatus?: PingResponseData | IndexingStatusReport;
+  public readonly requestedPort?: number;
+  public readonly detectedServerPort?: number; // Port of the existing CodeCompass server
+
+  constructor(
+    message: string,
+    public exitCode = 1,
+    options?: {
+      originalError?: Error;
+      existingServerStatus?: PingResponseData | IndexingStatusReport;
+      requestedPort?: number;
+      detectedServerPort?: number;
+    }
+  ) {
     super(message);
     this.name = "ServerStartupError";
+    this.originalError = options?.originalError;
+    this.existingServerStatus = options?.existingServerStatus;
+    this.requestedPort = options?.requestedPort;
+    this.detectedServerPort = options?.detectedServerPort;
   }
 }
 
@@ -592,16 +616,34 @@ export async function startServer(repoPath: string): Promise<void> {
               } else {
                 logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${String(statusError)}`);
               }
-              httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use, status fetch error.`, 1));
+              httpServerSetupReject(new ServerStartupError(
+                `Port ${httpPort} in use by existing CodeCompass server, but status fetch error occurred.`,
+                1,
+                {
+                  originalError: error, // Original EADDRINUSE
+                  existingServerStatus: pingResponse.data, // Ping data is still relevant
+                  requestedPort: httpPort,
+                  detectedServerPort: httpPort, // We know it's a CC server
+                }
+              ));
             }
           } else {
             logger.error(`Port ${httpPort} is in use by non-CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`);
             logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
-            httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use by non-CodeCompass server.`, 1));
+            httpServerSetupReject(new ServerStartupError(
+              `Port ${httpPort} is in use by non-CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`,
+              1,
+              {
+                originalError: error, // The original EADDRINUSE error
+                existingServerStatus: pingResponse.data,
+                requestedPort: httpPort,
+              }
+            ));
           }
         } catch (pingError) {
-          logger.error(`Port ${httpPort} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
+          let pingErrorMessage = "Unknown ping error";
           if (axios.isAxiosError(pingError)) {
+            pingErrorMessage = pingError.message;
             if (pingError.code === 'ECONNREFUSED') {
               logger.error(`Connection refused on port ${httpPort}.`);
             } else if (pingError.code === 'ETIMEDOUT' || pingError.code === 'ECONNABORTED') {
@@ -610,10 +652,20 @@ export async function startServer(repoPath: string): Promise<void> {
               logger.error(`Ping error details: ${pingError.message}`);
             }
           } else {
-             logger.error(`Ping error details: ${String(pingError)}`);
+             pingErrorMessage = String(pingError);
+             logger.error(`Ping error details: ${pingErrorMessage}`);
           }
+          logger.error(`Port ${httpPort} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
           logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
-          httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use or ping failed.`, 1));
+          httpServerSetupReject(new ServerStartupError(
+            `Port ${httpPort} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${pingErrorMessage}`,
+            1,
+            {
+              originalError: error, // The original EADDRINUSE error
+              existingServerStatus: { service: 'Unknown or non-responsive to pings' },
+              requestedPort: httpPort,
+            }
+          ));
         }
       } else {
         logger.error(`Failed to start HTTP server on port ${httpPort}: ${error.message}`);
@@ -1396,4 +1448,184 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     });
     
   }
+}
+
+// Add this function definition, e.g., before startProxyServer
+async function findFreePort(startPort: number): Promise<number> {
+  let port = startPort;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const server = http.createServer();
+        server.listen(port, 'localhost', () => {
+          server.close(resolve);
+        });
+        server.on('error', (err: NodeJS.ErrnoException) => { // Add type for err
+          if (err.code === 'EADDRINUSE') {
+            resolve(); // Resolve to try next port, not reject
+          } else {
+            reject(err);
+          }
+        });
+      });
+      // If we are here, server.listen didn't throw EADDRINUSE immediately,
+      // but we need to re-check if it was actually free by trying to listen again
+      // A simpler way is to attempt to listen and catch EADDRINUSE
+      const tempServer = http.createServer();
+      await new Promise<void>((resolve, reject) => {
+        tempServer.once('error', reject);
+        tempServer.once('listening', () => {
+          tempServer.close(resolve);
+        });
+        tempServer.listen(port, 'localhost');
+      });
+      return port; // Port is free
+    } catch (error: any) {
+      if (error.code === 'EADDRINUSE') {
+        port++;
+        if (port > 65535) {
+          throw new Error('No free ports available.');
+        }
+        // Continue to next iteration
+      } else {
+        throw error; // Other error
+      }
+    }
+  }
+}
+
+// Add this new function, e.g., at the end of the file or after startServer
+// Helper to convert stream to string for logging errors, place it before startProxyServer or inside if preferred
+async function streamToString(stream: any): Promise<string> {
+  if (!stream || typeof stream.pipe !== 'function') { // Check if stream is null/undefined or not a stream
+    return String(stream); // If not a stream, convert directly
+  }
+  return new Promise((resolve, reject) => {
+    const chunks: Uint8Array[] = [];
+    stream.on('data', (chunk: Uint8Array) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+  });
+}
+
+export async function startProxyServer(
+  requestedPort: number, // The port this instance originally tried to use
+  targetServerPort: number, // The port the existing CodeCompass server is running on
+  existingServerVersion?: string
+): Promise<void> {
+  // Attempt to find a free port starting from requestedPort + 1, or a fixed offset
+  const proxyListenPort = await findFreePort(requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50); // Adjust starting logic if needed
+  const targetBaseUrl = `http://localhost:${targetServerPort}`;
+
+  const app = express();
+
+  // Middleware to get raw body for POST/PUT etc.
+  // MCP requests can be large, adjust limit as needed.
+  // Use express.raw for all content types going to /mcp
+  app.use('/mcp', express.raw({ type: '*/*', limit: '50mb' })); // Increased limit
+
+  app.all('/mcp', async (req, res) => {
+    const targetUrl = `${targetBaseUrl}/mcp`;
+    logger.info(`Proxy: ${req.method} /mcp from client ${req.ip} -> ${targetUrl}`);
+
+    const headersToForward: Record<string, string | string[] | undefined> = {};
+    // Standard headers
+    if (req.headers['content-type']) headersToForward['Content-Type'] = req.headers['content-type'];
+    if (req.headers['accept']) headersToForward['Accept'] = req.headers['accept'];
+    // MCP specific headers
+    if (req.headers['mcp-session-id']) headersToForward['mcp-session-id'] = req.headers['mcp-session-id'];
+    if (req.headers['authorization']) headersToForward['Authorization'] = req.headers['authorization']; // Forward auth
+
+    try {
+      const mcpResponse = await axios({
+        method: req.method as 'GET' | 'POST' | 'DELETE', // Cast for Axios
+        url: targetUrl,
+        data: (req.method !== 'GET' && req.method !== 'DELETE' && req.body && Object.keys(req.body).length > 0) ? req.body : undefined,
+        headers: headersToForward,
+        responseType: 'stream', // Important for piping the response
+        timeout: configService.AGENT_QUERY_TIMEOUT + 10000, // Slightly more than agent timeout
+      });
+
+      res.status(mcpResponse.status);
+      // Forward relevant headers from target server's response
+      if (mcpResponse.headers['content-type']) res.setHeader('Content-Type', mcpResponse.headers['content-type']);
+      if (mcpResponse.headers['mcp-session-id']) res.setHeader('mcp-session-id', mcpResponse.headers['mcp-session-id']);
+      // Add other headers as needed, e.g., cache-control, connection for SSE
+      if (mcpResponse.headers['cache-control']) res.setHeader('Cache-Control', mcpResponse.headers['cache-control']);
+      if (mcpResponse.headers['connection']) res.setHeader('Connection', mcpResponse.headers['connection']);
+
+
+      mcpResponse.data.pipe(res); // Pipe the stream
+
+    } catch (error: any) {
+      const errorResponseData = error.response?.data ? await streamToString(error.response.data) : undefined;
+      logger.error('Proxy: Error proxying MCP request to target server.', {
+        message: error.message,
+        targetUrl,
+        requestMethod: req.method,
+        responseStatus: error.response?.status,
+        responseDataPreview: errorResponseData?.substring(0, 500), // Log a preview
+      });
+
+      if (error.response) {
+        res.status(error.response.status);
+        if (error.response.headers['content-type']) res.setHeader('Content-Type', error.response.headers['content-type']);
+        // If error.response.data was already converted to string for logging, send that.
+        // Otherwise, if it's a stream, pipe it.
+        if (errorResponseData) {
+            res.send(errorResponseData);
+        } else if (error.response.data && typeof error.response.data.pipe === 'function') {
+             error.response.data.pipe(res);
+        } else if (error.response.data) { // Fallback for non-stream data
+             res.send(error.response.data);
+        } else {
+             res.end();
+        }
+      } else {
+        // Network error or other issue before getting a response from target
+        res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: error.message }, id: null });
+      }
+    }
+  });
+
+  // Proxy /api/ping
+  app.get('/api/ping', async (_req, res) => {
+    try {
+      logger.debug(`Proxy: GET /api/ping -> ${targetBaseUrl}/api/ping`);
+      const pingResponse = await axios.get(`${targetBaseUrl}/api/ping`, { timeout: 2000 });
+      res.status(pingResponse.status).json(pingResponse.data);
+    } catch (error: any) {
+      logger.error('Proxy: Error proxying /api/ping.', { message: error.message, responseStatus: error.response?.status });
+      res.status(error.response?.status || 502).json({ error: 'Proxy error for /api/ping', details: error.message });
+    }
+  });
+
+  // Proxy /api/indexing-status
+  app.get('/api/indexing-status', async (_req, res) => {
+     try {
+      logger.debug(`Proxy: GET /api/indexing-status -> ${targetBaseUrl}/api/indexing-status`);
+      const statusResponse = await axios.get(`${targetBaseUrl}/api/indexing-status`, { timeout: 5000 });
+      res.status(statusResponse.status).json(statusResponse.data);
+    } catch (error: any) {
+      logger.error('Proxy: Error proxying /api/indexing-status.', { message: error.message, responseStatus: error.response?.status });
+      res.status(error.response?.status || 502).json({ error: 'Proxy error for /api/indexing-status', details: error.message });
+    }
+  });
+
+  return new Promise<void>((resolveProxyStart, rejectProxyStart) => {
+    const proxyServer = http.createServer(app); // Use http.createServer with the express app
+    proxyServer.listen(proxyListenPort, 'localhost', () => {
+      logger.info(`Original CodeCompass server (v${existingServerVersion || 'N/A'}) is running on port ${targetServerPort}.`);
+      logger.info(`This instance (CodeCompass Proxy) is running on port ${proxyListenPort}.`);
+      logger.info(`MCP requests to http://localhost:${proxyListenPort}/mcp will be forwarded to ${targetBaseUrl}/mcp`);
+      logger.info(`API endpoints /api/ping and /api/indexing-status are also proxied.`);
+      console.error(`CodeCompass Proxy running on port ${proxyListenPort}, forwarding to main server on ${targetServerPort}.`);
+      resolveProxyStart();
+    });
+    proxyServer.on('error', (err: NodeJS.ErrnoException) => {
+      logger.error(`Proxy server failed to start on port ${proxyListenPort}: ${err.message}`);
+      rejectProxyStart(err); // Reject the promise if proxy fails to start
+    });
+  });
 }

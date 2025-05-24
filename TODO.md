@@ -36,3 +36,28 @@ This document outlines the tasks required to enhance CodeCompass.
         - **Add comprehensive unit/integration tests for the client mode functionality.** (In Progress - Initial tests added, will need significant updates after yargs refactor)
         - **Refactor CLI to use `yargs` library**: (Completed) `src/index.ts` refactored to use `yargs` for argument parsing, command handling, and help generation. This addresses the evaluation of needing a dedicated CLI library.
         - Explore more advanced output formatting options if needed for specific tools.
+
+## Phase 4: MCP Client Bridge on Port Conflict
+- **Goal**: If CodeCompass CLI attempts to start a server on a port already occupied by another CodeCompass instance, instead of just exiting, the new instance should start a lightweight proxy server on a *different*, free port. This proxy will forward MCP requests and key API calls (like `/api/ping`, `/api/indexing-status`) to the original, running CodeCompass server.
+- **Tasks**:
+    - **`src/lib/server.ts` Modifications**:
+        - **`ServerStartupError` Enhancement**: Update `ServerStartupError` to include `originalError`, `existingServerStatus` (e.g., `PingResponseData`), `requestedPort`, and `detectedServerPort` (port of the existing CodeCompass server).
+        - **Populate Enhanced `ServerStartupError`**: In `startServer`, when an `EADDRINUSE` error occurs and an existing CodeCompass instance is detected, populate the new fields in the `ServerStartupError` (with `exitCode: 0`).
+        - **`findFreePort` Utility**: Add a helper function `async findFreePort(startPort: number): Promise<number>` to find an available port by incrementally checking from `startPort`.
+        - **`startProxyServer` Function**: Implement `async function startProxyServer(requestedPort: number, targetServerPort: number, existingServerVersion?: string): Promise<void>`. This function will:
+            - Use `findFreePort` to get a port for the proxy.
+            - Create an Express app.
+            - Proxy `/mcp` requests (all methods: GET, POST, DELETE) to `http://localhost:<targetServerPort>/mcp`. Ensure headers (including `mcp-session-id`, `Content-Type`, `Accept`, `Authorization`) and body are correctly forwarded. Handle response streaming.
+            - Proxy `/api/ping` and `/api/indexing-status` GET requests.
+            - Listen on the found free port.
+            - Log information about the proxy and the target server.
+    - **`src/index.ts` Modifications**:
+        - **Update `startServerHandler`**: In the `catch` block for `ServerStartupError`:
+            - If `error.exitCode === 0` (existing CodeCompass instance found):
+                - Extract `requestedPort`, `detectedServerPort`, and `existingServerStatus.version` from the error.
+                - Call the new `startProxyServer` function with these details.
+                - If `startProxyServer` resolves, the CLI process should remain running (as the proxy is active).
+                - If `startProxyServer` rejects, log an error and exit.
+            - If `error.exitCode !== 0`, handle as a standard startup failure (re-throw for yargs).
+    - **Testing**: Add unit/integration tests for `findFreePort` and the proxying behavior of `startProxyServer`. Test the main CLI flow for entering proxy mode.
+    - **Documentation**: Update `README.md` and CLI help text to explain the proxy mode behavior if a port conflict with another CodeCompass instance occurs.

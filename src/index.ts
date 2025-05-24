@@ -245,15 +245,43 @@ async function startServerHandler(repoPath: string) {
   try {
     await startServer(repoPath);
   } catch (error: unknown) {
-    if (error instanceof LocalServerStartupError) {
-      if (error.exitCode !== 0) {
-        localLogger.error(`CodeCompass server failed to start. Error: ${error.message}`);
-        // console.error is now handled by yargs .fail() or if error is re-thrown
+    // Ensure LocalServerStartupError is correctly typed to include the new fields
+    const typedError = error as import('./lib/server').ServerStartupError;
+
+    if (error instanceof LocalServerStartupError) { // Keep using LocalServerStartupError for type guard
+      if (typedError.exitCode === 0) {
+        // Existing CodeCompass server found
+        const existingVersion = (typedError.existingServerStatus as PingResponseData)?.version;
+
+        localLogger.info(
+          `An existing CodeCompass server (v${existingVersion || 'unknown'}) was detected on port ${typedError.detectedServerPort}.`
+        );
+        localLogger.info(`This instance will attempt to start as an MCP proxy.`);
+
+        if (typedError.requestedPort && typedError.detectedServerPort) {
+          try {
+            // Dynamically import startProxyServer
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { startProxyServer } = require('./lib/server') as typeof import('./lib/server');
+            await startProxyServer(typedError.requestedPort, typedError.detectedServerPort, existingVersion);
+            // If startProxyServer resolves, the proxy is running. The process should stay alive.
+            // No process.exit() here.
+          } catch (proxyError: any) {
+            localLogger.error(`Failed to start MCP proxy: ${proxyError.message}. Exiting.`);
+            process.exit(1);
+          }
+        } else {
+          localLogger.error('Proxy: Could not determine necessary port information from ServerStartupError. Exiting.');
+          process.exit(1);
+        }
+      } else {
+        // Other ServerStartupError (e.g., non-CodeCompass server on port, or other startup failure)
+        localLogger.error(`CodeCompass server failed to start. Error: ${typedError.message}. Exiting with code ${typedError.exitCode}.`);
+        // yargs.fail will handle process.exit if this function is a yargs command handler and throws
+        throw typedError; // Re-throw for yargs to handle exit
       }
-      // If exitCode is 0, it means an existing instance was found.
-      // The server.ts logic already logs this. We can let yargs exit gracefully by resolving.
-      if (error.exitCode !== 0) throw error; // Re-throw only for actual errors
     } else {
+      // Generic error not of ServerStartupError type
       localLogger.error('An unexpected error occurred during server startup:', error);
       throw error; // Re-throw for yargs
     }
