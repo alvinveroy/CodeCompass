@@ -239,4 +239,83 @@ describe('CLI with yargs (index.ts)', () => {
       expect(mockProcessExit).toHaveBeenCalledWith(1);
     });
   });
+
+  describe('Client Tool Commands with --json output flag', () => {
+    it('should output raw JSON when --json flag is used on successful tool call', async () => {
+      const rawToolResponse = {
+        someData: "value",
+        details: { nested: true, count: 1 },
+        content: [{ type: 'text', text: 'This should not be printed directly' }]
+      };
+      mockMcpClientInstance.callTool.mockResolvedValue(rawToolResponse);
+
+      await runMainWithArgs(['agent_query', '{"query":"test"}', '--json']);
+
+      expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResponse, null, 2));
+      expect(mockProcessExit).toHaveBeenCalledWith(0);
+    });
+
+    it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error', async () => {
+      const rpcError = {
+        jsonrpc: "2.0",
+        id: "err-123",
+        error: {
+          code: -32001,
+          message: "Tool specific error",
+          data: { reason: "invalid input" },
+        },
+      } as const; // Use 'as const' for precise typing
+      mockMcpClientInstance.callTool.mockRejectedValue(rpcError);
+
+      await runMainWithArgs(['agent_query', '{"query":"test_error"}', '--json']);
+
+      expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
+    });
+
+    it('should output JSON error when --json flag is used and tool call fails with generic Error', async () => {
+      const genericError = new Error("A generic client error occurred");
+      mockMcpClientInstance.callTool.mockRejectedValue(genericError);
+
+      await runMainWithArgs(['agent_query', '{"query":"generic_error"}', '--json']);
+
+      expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({
+        error: { message: genericError.message, name: genericError.name }
+      }, null, 2));
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
+    });
+
+    it('should output JSON error when --json flag is used and server ping fails (ECONNREFUSED)', async () => {
+      const axiosError = new Error('connect ECONNREFUSED') as import('axios').AxiosError;
+      axiosError.isAxiosError = true;
+      axiosError.code = 'ECONNREFUSED';
+      mockAxiosGet.mockRejectedValue(axiosError);
+
+      await runMainWithArgs(['agent_query', '{"query":"ping_fail"}', '--json']);
+      
+      const expectedErrorMessage = `CodeCompass server is not running on port ${mockConfigServiceInstance.HTTP_PORT}. Please start the server first. (Detail: ECONNREFUSED)`;
+      expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({
+        error: { message: expectedErrorMessage }
+      }, null, 2));
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
+    });
+
+    it('should output JSON error when --json flag is used and ping indicates non-CodeCompass server', async () => {
+      const pingData = { service: "OtherService", version: "1.0" };
+      mockAxiosGet.mockImplementation(async (url: string) => {
+        if (url.includes('/api/ping')) {
+          return { status: 200, data: pingData };
+        }
+        return { status: 404, data: {} };
+      });
+      
+      await runMainWithArgs(['agent_query', '{"query":"wrong_server"}', '--json']);
+
+      const expectedErrorMessage = `A service is running on port ${mockConfigServiceInstance.HTTP_PORT}, but it's not a CodeCompass server or it's unresponsive.`;
+      expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({
+        error: { message: expectedErrorMessage, pingResponse: pingData }
+      }, null, 2));
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
+    });
+  });
 });
