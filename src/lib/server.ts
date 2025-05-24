@@ -2,8 +2,9 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 // Assuming these are correctly exported by the SDK, either from root or via defined subpaths.
 // If the SDK's "exports" map points these subpaths to .js files, add .js here.
 // If they are re-exported from the main SDK entry, use that.
-import { StreamableHttpServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { SessionManager } from "@modelcontextprotocol/sdk/server/session.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+// SessionManager import removed as it's not used or found at the specified path.
+// Session handling is managed by StreamableHTTPServerTransport options.
 import { randomUUID } from "crypto";
 import express from 'express';
 import http from 'http';
@@ -486,12 +487,10 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     expressApp.use(express.json()); // Middleware to parse JSON bodies
 
     // MCP Server Setup
-    const sessionManager = new SessionManager({
-      generateSessionId: randomUUID,
-      // You can add other session manager options here if needed
-    });
+    // SessionManager instantiation removed. Session ID generation is handled by StreamableHTTPServerTransport options.
 
-    const mcpHttpTransport = new StreamableHttpServerTransport(server, sessionManager, {
+    const mcpHttpTransport = new StreamableHTTPServerTransport(server, {
+      sessionIdGenerator: randomUUID, // Use sessionIdGenerator as per SDK examples
       // Transport options can be specified here, e.g., custom error handling
       // onError: (error, requestInfo) => {
       //   logger.error("MCP HTTP Transport Error", { error, requestInfo });

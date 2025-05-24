@@ -13,11 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
-- **Build Fix (SDK Import Paths) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
-    - Resolved TypeScript errors `TS2307` (Cannot find module) for `@modelcontextprotocol/sdk` submodules in `src/lib/server.ts`.
-    - Changed import path for `StreamableHttpServerTransport` from `@modelcontextprotocol/sdk/server/transport/http` to `@modelcontextprotocol/sdk/server/streamableHttp.js`.
-    - Changed import path for `SessionManager` from `@modelcontextprotocol/sdk/server/session` to `@modelcontextprotocol/sdk/server/session.js`.
-    - These changes align the import paths with the patterns (including `.js` suffix and specific module paths) demonstrated in the official `@modelcontextprotocol/typescript-sdk` documentation, correcting a previous assumption about NodeNext module resolution for this SDK.
+- **Build Fix (SDK Integration) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Resolved TypeScript build errors and unit test failures in `src/lib/server.ts`:
+        - Corrected `TS2724` by changing the imported name from `StreamableHttpServerTransport` to `StreamableHTTPServerTransport` (case sensitivity) from `@modelcontextprotocol/sdk/server/streamableHttp.js`.
+        - Resolved `TS2307` (Cannot find module) for `@modelcontextprotocol/sdk/server/session.js` by removing the import and usage of `SessionManager`. Session management (specifically session ID generation) is now configured directly via options passed to the `StreamableHTTPServerTransport` constructor (using `sessionIdGenerator: randomUUID`), aligning with SDK examples.
 - **Build Fix (SDK Imports & Server Property Access) (Git Commit ID: 8684429):**
     - (Note: The part of this fix regarding `.js` suffix removal for SDK imports was found to be incorrect for `@modelcontextprotocol/sdk` and is superseded by the fix above. The SDK's documentation indicates `.js` suffixes are used.)
     - Corrected TypeScript errors `TS2551` (Property does not exist) in `src/lib/server.ts` by changing `server.tools.keys()` and `server.prompts.keys()` to `Object.keys(serverCapabilities.tools)` and `Object.keys(serverCapabilities.prompts)` respectively. This logs the tools and prompts declared in `serverCapabilities` rather than attempting to access non-existent public collections on the `McpServer` instance.
