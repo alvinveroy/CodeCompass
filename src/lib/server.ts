@@ -2,8 +2,8 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 // Assuming these are correctly exported by the SDK, either from root or via defined subpaths.
 // If the SDK's "exports" map points these subpaths to .js files, add .js here.
 // If they are re-exported from the main SDK entry, use that.
-import { StreamableHttpServerTransport } from "@modelcontextprotocol/sdk/server/transport/http.js";
-import { SessionManager } from "@modelcontextprotocol/sdk/server/session.js";
+import { StreamableHttpServerTransport } from "@modelcontextprotocol/sdk/server/transport/http";
+import { SessionManager } from "@modelcontextprotocol/sdk/server/session";
 import { randomUUID } from "crypto";
 import express from 'express';
 import http from 'http';
@@ -475,10 +475,10 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
       }
     );
 
-    const finalRegisteredTools = Array.from(server.tools.keys());
-    logger.info(`All registered tools: ${finalRegisteredTools.join(', ')}`);
-    const finalRegisteredPrompts = Array.from(server.prompts.keys());
-    logger.info(`All registered prompts: ${finalRegisteredPrompts.join(', ')}`);
+    const finalDeclaredTools = Object.keys(serverCapabilities.tools);
+    logger.info(`Declared tools in capabilities: ${finalDeclaredTools.join(', ')}`);
+    const finalDeclaredPrompts = Object.keys(serverCapabilities.prompts);
+    logger.info(`Declared prompts in capabilities: ${finalDeclaredPrompts.join(', ')}`);
 
     // Setup Express HTTP server for status, notifications, and MCP
     const expressApp = express();

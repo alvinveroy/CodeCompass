@@ -1,3 +1,24 @@
+# Retrospection for Build Fix (SDK Imports & Server Property Access) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The TypeScript error messages (`TS2307` and `TS2551`) clearly pinpointed the issues related to module resolution and incorrect property access.
+- Identifying the common pattern for `NodeNext` module resolution (relying on `package.json` exports, often without `.js` suffixes in import paths) led to a direct fix for the SDK import errors.
+- Understanding that `McpServer` likely encapsulates its tool/prompt collections rather than exposing them publicly led to the correction of logging logic to use `serverCapabilities`.
+
+## What could be improved?
+- **SDK Import Paths:** When integrating or updating SDKs, especially with modern module systems like `NodeNext`, it's crucial to verify the exact import paths as defined by the SDK's `package.json` `exports` map. Assuming a consistent pattern (like always adding `.js`) can lead to errors if the SDK is inconsistent or uses different mapping for different submodules.
+- **API Understanding:** Before accessing properties of an object from an external library (like `server.tools`), it's important to consult its type definitions or documentation to ensure the property exists and is public.
+
+## What did we learn?
+- **Module Resolution with `NodeNext`:** `TS2307` (Cannot find module) errors often stem from mismatches between the import path string and how the target package defines its entry points in `package.json#exports`. Removing or adding `.js` or adjusting subpaths are common fixes.
+- **Object API Adherence:** `TS2551` (Property does not exist) errors are clear indicators of trying to use an API incorrectly. Always refer to type definitions for correct property and method names.
+- **Logging Intent vs. Actual State:** When logging registered items, logging the items *declared* for registration (from `serverCapabilities`) is a safe approach if the actual registered items aren't easily queryable from the server object. This reflects intent, though it doesn't confirm successful registration of each item if registration itself could fail silently.
+
+## Action Items / Follow-ups
+- When encountering `TS2307` errors with SDKs, the first step should be to check the SDK's `package.json` `exports` and try variations of the import path (e.g., with/without `.js`, different subpaths).
+- For logging or internal tracking of registered components with an SDK, if the SDK doesn't provide a public way to list them, maintain local lists during registration or log based on the configuration/capabilities object that drives the registration.
+
+---
 # Retrospection for Linting Finalization (server.test.ts - Final Unbound Method & Unsafe Argument) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
