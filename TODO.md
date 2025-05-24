@@ -33,6 +33,6 @@ This document outlines the tasks required to enhance CodeCompass.
         - Implemented improved error reporting and output formatting for tool results and connection/tool call failures.
     - **Session ID Management for Client Calls**: (Considered/Supported) The current mechanism allows users to pass `sessionId` within the JSON parameters for tools that support it. Help text updated to reflect this. No further client-side generation or automatic management of session IDs is planned for this phase.
     - **Further Enhancements (Future)**:
-        - Add comprehensive unit/integration tests for the client mode functionality.
+        - **Add comprehensive unit/integration tests for the client mode functionality.** (In Progress - Initial tests added)
         - Evaluate using a dedicated CLI argument parsing library (e.g., `yargs`, `commander`) if CLI complexity grows further.
         - Explore more advanced output formatting options if needed for specific tools.

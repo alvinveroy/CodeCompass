@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI Client Mode Enhancements (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Improved error reporting and output formatting in `executeClientCommand` within `src/index.ts`.
     - Clarified in `--help` output that `sessionId` can be included in the JSON parameters for client tool calls that support session context. The existing parameter parsing mechanism already supports passing this through.
+- **Unit Tests for CLI Client Mode (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Added initial unit tests for the CLI client mode (`executeClientCommand` logic in `src/index.ts`) in `src/tests/index.test.ts`.
+    - Tests cover successful tool execution, various failure scenarios (server not running, non-CodeCompass server, invalid JSON, tool execution errors), and respect for the `--port` argument.
+    - Mocks include `axios` (for server ping), MCP SDK client components, `configService`, `logger`, `process.exit`, and `console` methods.
 - **Tool and Prompt Name Refactoring (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Removed the `bb7_` prefix from all tool and prompt names for brevity and cleaner naming.
     - Updated tool registration and capability definitions in `src/lib/server.ts`.
