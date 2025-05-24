@@ -904,29 +904,33 @@
 - Re-evaluate the need for a dedicated CLI argument parsing library as CLI features expand.
 
 ---
-# Retrospection for CLI Client Mode Unit Tests (Initial Setup) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+# Retrospection for CLI Client Mode Unit Tests (Expanded Coverage) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-- A new test file `src/tests/index.test.ts` was successfully created to house tests for the CLI client mode.
-- The initial set of test cases covers key success and failure paths for `executeClientCommand` (simulated via `runCli` helper).
-- Mocking strategy for dependencies like `axios`, MCP SDK client components, `configService`, `logger`, `process.exit`, and `console` methods was established.
-- The `runCli` helper function provides a viable way to test the `main()` function in `src/index.ts` by manipulating `process.argv` and dynamically importing `main`.
+- The test suite for CLI client mode (`src/tests/index.test.ts`) was successfully expanded to cover more scenarios.
+- New test cases were added for:
+    - Tools requiring no parameters (e.g., `get_changelog`).
+    - Tools requiring specific parameters (e.g., `get_session_history`).
+    - Server ping responses that are successful (HTTP 200) but indicate a non-CodeCompass service or have unexpected data.
+    - Generic `Error` rejections from `client.callTool()`.
+    - Failures during `client.connect()`.
+- The existing mocking strategy and `runCli` helper function proved effective for these new test cases.
+- The use of `mockResolvedValueOnce` for `mockMcpClientInstance.callTool` allows for test-specific responses.
 
 ## What could be improved?
-- **Direct Testing of `executeClientCommand`**: Ideally, `executeClientCommand` would be exported from `src/index.ts` to allow for more direct unit testing without needing to invoke the full `main()` function and mock `process.argv`. This would simplify test setup.
-- **Mock Complexity**: The number of mocks required is significant. Careful management of these mocks in `beforeEach` and `afterEach` is crucial.
-- **Dynamic `require` in `index.ts`**: The dynamic `require` calls within `index.ts` (e.g., for `configService` after `process.env.HTTP_PORT` is set) mean that mocks for these modules must be set up *before* the dynamic import occurs within the test execution path. The current test structure handles this by having `vi.mock` at the top level.
+- **Output Detail Verification:** While calls to `console.log` are verified, the exact content of more complex tool outputs (beyond simple strings) is not deeply asserted. This could be an area for future refinement if specific output structures become critical.
+- **Mocking `configService` for `--port`:** The test for the `--port` argument relies on `index.ts` setting `process.env.HTTP_PORT` and the assumption that the dynamically required `configService` will pick this up. A more direct way to verify `configService.HTTP_PORT` within the test's scope (perhaps by having the `configService` mock read from `process.env` or by allowing the test to directly set the mocked `HTTP_PORT` value before `runCli`) could make this test even more robust, though the current approach is a reasonable integration check.
 
 ## What did we learn?
-- Testing CLI entry points that involve argument parsing and dynamic imports requires careful setup, often involving mocking `process.argv` and ensuring mocks are active when dynamic imports resolve.
-- A helper function like `runCli` can encapsulate the logic for invoking the CLI's main function with specific arguments.
-- Comprehensive testing of CLI client modes needs to cover various network conditions, server responses, and user input errors.
+- Incrementally building up a test suite by adding cases for different tools, parameter variations, and failure modes is an effective way to achieve comprehensive coverage.
+- Testing various error paths and edge cases for client-server interactions (like unexpected ping responses) is crucial for robust CLI behavior.
+- The dynamic import mechanism in `index.ts` requires tests to ensure mocks are in place *before* the dynamic `require()` calls execute, which the current test setup handles well.
 
 ## Action Items / Follow-ups
 - Ensure the Git commit ID placeholder is replaced in `CHANGELOG.md` and this retrospection entry.
-- Consider refactoring `src/index.ts` to export `executeClientCommand` for more direct testing in the future, if the current `runCli` approach becomes too cumbersome.
-- Incrementally add more test cases to `src/tests/index.test.ts` to cover edge cases or specific tool behaviors as the client mode evolves.
-- Update `TODO.md` to reflect that tests for CLI client mode have been initiated.
+- Continue to add tests as new tools are made available via the CLI client mode or as existing tools evolve.
+- Consider the "Mocking `configService` for `--port`" point if further refinement of port-related testing is deemed necessary.
+- Keep the remaining "Further Enhancements" for Phase 2 from `TODO.md` (evaluating CLI parsing libraries, advanced output formatting) in mind for future iterations.
 ---
 # Retrospection for CLI Client Mode Enhancements (Error/Output & Session ID Clarification) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 

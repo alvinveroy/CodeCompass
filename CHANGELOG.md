@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Added initial unit tests for the CLI client mode (`executeClientCommand` logic in `src/index.ts`) in `src/tests/index.test.ts`.
     - Tests cover successful tool execution, various failure scenarios (server not running, non-CodeCompass server, invalid JSON, tool execution errors), and respect for the `--port` argument.
     - Mocks include `axios` (for server ping), MCP SDK client components, `configService`, `logger`, `process.exit`, and `console` methods.
+    - **Expanded test coverage to include:**
+        - Execution of tools with no parameters (e.g., `get_changelog`).
+        - Execution of tools with specific required parameters (e.g., `get_session_history` with `sessionId`).
+        - Handling of server ping responses that are 200 OK but indicate a non-CodeCompass service or missing expected data.
+        - Handling of generic `Error` instances rejected by `client.callTool()`.
+        - Handling of errors during `client.connect()`.
 - **Tool and Prompt Name Refactoring (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Removed the `bb7_` prefix from all tool and prompt names for brevity and cleaner naming.
     - Updated tool registration and capability definitions in `src/lib/server.ts`.
