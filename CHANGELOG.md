@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **Unit Test Fix (server.test.ts - EADDRINUSE Non-CodeCompass Server Log Assertions) (Git Commit ID: 2c47648):**
+    - Corrected failing assertions in `src/tests/server.test.ts` for the test case "should handle EADDRINUSE, detect a non-CodeCompass server, log error, and exit with 1".
+    - Updated `ml.error` (mocked logger error method) assertions to use `toHaveBeenNthCalledWith` and match the precise sequence and content of the three distinct error messages logged in this scenario, resolving the `AssertionError: expected "spy" to be called with arguments: [ StringContaining{…} ]` failure.
 - **Server Logic Restoration & Linting (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved ESLint warnings (`@typescript-eslint/no-unused-vars`) for `StreamableHTTPServerTransport`, `randomUUID`, `isInitializeRequest`, and `configureMcpServerInstance` in `src/lib/server.ts`.
     - The fix involved restoring the complete and correct implementation of the `startServer` function, ensuring it properly sets up the Express HTTP server and MCP routes, thereby utilizing these previously flagged components. This addresses an issue where essential logic might have been inadvertently removed or disconnected during prior refactoring.
