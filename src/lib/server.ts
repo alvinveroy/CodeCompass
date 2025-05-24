@@ -1544,7 +1544,7 @@ export async function startProxyServer(
   requestedPort: number, // The port this instance originally tried to use
   targetServerPort: number, // The port the existing CodeCompass server is running on
   existingServerVersion?: string
-): Promise<void> {
+): Promise<http.Server> { // Changed return type from Promise<void> to Promise<http.Server>
   // Attempt to find a free port starting from requestedPort + 1, or a fixed offset
   const proxyListenPort = await findFreePort(requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50); // Adjust starting logic if needed
   const targetBaseUrl = `http://localhost:${targetServerPort}`;
@@ -1643,19 +1643,20 @@ export async function startProxyServer(
     }
   });
 
-  return new Promise<void>((resolveProxyStart, rejectProxyStart) => {
-    const proxyServer = http.createServer(app); // Use http.createServer with the express app
+  // Replace the existing return new Promise<void> block with:
+  return new Promise<http.Server>((resolveProxyStart, rejectProxyStart) => { // Changed Promise<void> to Promise<http.Server>
+    const proxyServer = http.createServer(app);
     proxyServer.listen(proxyListenPort, 'localhost', () => {
       logger.info(`Original CodeCompass server (v${existingServerVersion || 'N/A'}) is running on port ${targetServerPort}.`);
       logger.info(`This instance (CodeCompass Proxy) is running on port ${proxyListenPort}.`);
       logger.info(`MCP requests to http://localhost:${proxyListenPort}/mcp will be forwarded to ${targetBaseUrl}/mcp`);
       logger.info(`API endpoints /api/ping and /api/indexing-status are also proxied.`);
       console.error(`CodeCompass Proxy running on port ${proxyListenPort}, forwarding to main server on ${targetServerPort}.`);
-      resolveProxyStart();
+      resolveProxyStart(proxyServer); // Resolve with the server instance
     });
     proxyServer.on('error', (err: NodeJS.ErrnoException) => {
       logger.error(`Proxy server failed to start on port ${proxyListenPort}: ${err.message}`);
-      rejectProxyStart(err); // Reject the promise if proxy fails to start
+      rejectProxyStart(err);
     });
   });
 }

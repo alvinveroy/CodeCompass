@@ -376,6 +376,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Added `--verbose` option to `--changelog` for potential future detailed output.
 - Implemented in-memory caching for the `--changelog` command output to improve performance on repeated calls. Cache invalidates if `CHANGELOG.md` is modified. (221d993)
 - Documented the use of CodeCompass `agent_query` for planning changelog updates. (9e201bf)
+- **MCP Client Bridge/Proxy Mode Testing & Documentation (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Implemented comprehensive unit tests for `findFreePort` utility, covering scenarios like port availability, EADDRINUSE, and error conditions.
+    - Implemented unit/integration tests for `startProxyServer`, verifying correct proxying of `/api/ping`, `/api/indexing-status`, and MCP requests (GET, POST, DELETE for `/mcp`), including header and body forwarding, and error handling for target server issues.
+    - Updated `startProxyServer` to return its `http.Server` instance for better testability (allowing graceful shutdown in tests).
+    - Updated `README.md` and CLI help text in `src/index.ts` to explain the automatic proxy mode behavior.
 - Added tests for the `withMetrics` utility. (946bab6)
 - Improved performance by adding caching for LLM responses, batch operations for Qdrant, and a metrics utility. (2950503)
 - New MCP tool: `get_changelog` to access version history programmatically

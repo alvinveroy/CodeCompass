@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock } from 'vitest';
-import { normalizeToolParams, startServer } from '../lib/server'; // Import startServer
+// Add findFreePort to the import from ../lib/server
+import { normalizeToolParams, startServer, findFreePort, ServerStartupError } from '../lib/server';
 import { IndexingStatusReport } from '../lib/repository'; // For mock status
 import type * as httpModule from 'http'; // For types
 // Import actual modules to be mocked
@@ -120,41 +121,48 @@ vi.mock('isomorphic-git', async (importOriginal) => {
 
 // --- START: vi.mock for 'http' and related definitions ---
 // Define shared mock function instances for the http server methods
-const mockHttpServerListenFn = vi.fn((_port, listeningListenerOrHostname?: (() => void) | string, _backlog?: number, listeningListener?: () => void): httpModule.Server => {
-  if (typeof listeningListenerOrHostname === 'function') {
-    listeningListenerOrHostname(); // Call the listener if it's the second argument
-  } else if (typeof listeningListener === 'function') {
-    listeningListener(); // Call the listener if it's the fourth argument
-  }
-  return mockHttpServerInstance; // Return the mock server instance
-}) as Mock<(...args: Parameters<httpModule.Server['listen']>) => ReturnType<httpModule.Server['listen']>>;
-const mockHttpServerOnFn = vi.fn<(event: string | symbol, listener: (...args: unknown[]) => void) => httpModule.Server>();
-const mockHttpServerCloseFn = vi.fn<(...args: Parameters<httpModule.Server['close']>) => ReturnType<httpModule.Server['close']>>();
-const mockHttpServerAddressFn = vi.fn<(...args: Parameters<httpModule.Server['address']>) => ReturnType<httpModule.Server['address']>>();
+const mockHttpServerListenFn = vi.fn(); // Will be configured per test
+const mockHttpServerOnFn = vi.fn();     // Will be configured per test
+const mockHttpServerCloseFn = vi.fn();  // Will be configured per test
+const mockHttpServerAddressFn = vi.fn(); // Will be configured per test
 const mockHttpServerSetTimeoutFn = vi.fn<(...args: Parameters<httpModule.Server['setTimeout']>) => ReturnType<httpModule.Server['setTimeout']>>();
 
 // Define the mock http server instance that createServer will return
-const mockHttpServerInstance = {
-  listen: mockHttpServerListenFn,
-  on: mockHttpServerOnFn,
-  close: mockHttpServerCloseFn,
-  address: mockHttpServerAddressFn,
-  setTimeout: mockHttpServerSetTimeoutFn,
-} as unknown as httpModule.Server; // Cast to satisfy http.Server type
+// This instance's methods will be dynamically reassigned in tests for findFreePort
+let currentMockHttpServerInstance: Partial<httpModule.Server> & {
+    listen: Mock;
+    on: Mock;
+    close: Mock;
+    address: Mock;
+    removeAllListeners: Mock; // Add removeAllListeners
+    _listeners?: Record<string, (...args: any[]) => void>; // For findFreePort tests
+};
 
 vi.mock('http', async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  const actualHttpModule = await importOriginal() as typeof httpModule; // Ensure httpModule is imported as type
+  const actualHttpModule = await importOriginal() as typeof httpModule;
+  const createMockServer = () => ({
+    listen: mockHttpServerListenFn,
+    on: mockHttpServerOnFn,
+    close: mockHttpServerCloseFn,
+    address: mockHttpServerAddressFn,
+    setTimeout: mockHttpServerSetTimeoutFn,
+    removeAllListeners: vi.fn(), // Mock for removeAllListeners
+  });
+  currentMockHttpServerInstance = createMockServer() as any; // Initialize
+
   const mockHttpMethods = {
-    createServer: vi.fn(() => mockHttpServerInstance),
-    Server: vi.fn(() => mockHttpServerInstance) as unknown as typeof httpModule.Server, // Mock constructor
-    IncomingMessage: actualHttpModule.IncomingMessage, // Preserve actual types if needed
-    ServerResponse: actualHttpModule.ServerResponse,   // Preserve actual types if needed
-    // Add any other http members that server.ts might use directly from the http import
+    createServer: vi.fn(() => {
+        // Return a new instance for each createServer call for findFreePort's loop
+        currentMockHttpServerInstance = createMockServer() as any;
+        return currentMockHttpServerInstance;
+    }),
+    Server: vi.fn(() => createMockServer()) as unknown as typeof httpModule.Server,
+    IncomingMessage: actualHttpModule.IncomingMessage,
+    ServerResponse: actualHttpModule.ServerResponse,
   };
   return {
-    ...mockHttpMethods, // Makes methods available for `import * as http from 'http'`
-    default: mockHttpMethods, // This is what `import http from 'http'` will resolve to
+    ...mockHttpMethods,
+    default: mockHttpMethods,
   };
 });
 
@@ -752,5 +760,419 @@ describe('Server Startup and Port Handling', () => {
     expect(ml.error).toHaveBeenCalledWith(`Failed to start HTTP server on port ${mcs.HTTP_PORT}: ${otherError.message}`);
      
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
+  });
+});
+
+// ... (after describe('Server Startup and Port Handling', () => { ... });) ...
+
+describe('findFreePort', () => {
+  let mockedHttp: {
+    createServer: Mock<() => typeof currentMockHttpServerInstance>;
+    default?: { createServer: Mock<() => typeof currentMockHttpServerInstance> }; // Optional default
+  };
+  let portCounter: number;
+
+  beforeEach(async () => {
+    vi.clearAllMocks(); // Clear all mocks
+    // Dynamically import http to get the mocked version
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    mockedHttp = await import('http') as unknown as {
+      createServer: Mock<() => typeof currentMockHttpServerInstance>;
+      default?: { createServer: Mock<() => typeof currentMockHttpServerInstance> };
+    };
+    // Ensure we are using the default export if that's how server.ts imports it
+    // Based on server.ts `import http from 'http'`, it uses the default export.
+    if (mockedHttp.default && mockedHttp.default.createServer) {
+        mockedHttp.createServer = mockedHttp.default.createServer;
+    }
+
+    portCounter = 0; // Reset for EADDRINUSE simulations
+
+    // Reset implementations for each test
+    mockHttpServerListenFn.mockReset();
+    mockHttpServerOnFn.mockReset();
+    mockHttpServerCloseFn.mockReset();
+    mockHttpServerAddressFn.mockReset();
+    if (currentMockHttpServerInstance && currentMockHttpServerInstance.removeAllListeners) {
+      currentMockHttpServerInstance.removeAllListeners.mockReset();
+    }
+
+
+    // Default behavior for mocks, can be overridden in specific tests
+    mockHttpServerOnFn.mockImplementation((event, callback) => {
+      if (!currentMockHttpServerInstance._listeners) {
+        currentMockHttpServerInstance._listeners = {};
+      }
+      currentMockHttpServerInstance._listeners[event] = callback as (...args: any[]) => void;
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
+    });
+
+    mockHttpServerCloseFn.mockImplementation((callback?: (err?: Error) => void) => {
+      if (callback) callback();
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
+    });
+
+    mockHttpServerAddressFn.mockImplementation(() => ({ port: 3000 + portCounter, address: '127.0.0.1', family: 'IPv4' })); // Default, override if needed
+  });
+
+  it('should find the starting port if it is free', async () => {
+    const startPort = 3000;
+    mockHttpServerListenFn.mockImplementation((portToListen, _hostname, callbackOrUndefined) => {
+      expect(portToListen).toBe(startPort);
+      // Simulate successful listen by invoking the 'listening' event handler
+      if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.listening) {
+        currentMockHttpServerInstance._listeners.listening();
+      } else if (typeof callbackOrUndefined === 'function') { // Handle direct callback if provided
+        (callbackOrUndefined as () => void)();
+      }
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
+    });
+    mockHttpServerAddressFn.mockReturnValue({ port: startPort, address: '127.0.0.1', family: 'IPv4' });
+
+    await expect(findFreePort(startPort)).resolves.toBe(startPort);
+    expect(mockedHttp.createServer).toHaveBeenCalledTimes(1);
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost');
+    expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('should find the next port if the first one is in use (EADDRINUSE)', async () => {
+    const startPort = 3001;
+    portCounter = 0; // for address mock
+
+    mockHttpServerListenFn
+      .mockImplementationOnce((_p, _h, _cb) => { // First call (port 3001) - EADDRINUSE
+        portCounter++;
+        if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.error) {
+          const err = new Error('EADDRINUSE') as NodeJS.ErrnoException;
+          err.code = 'EADDRINUSE';
+          currentMockHttpServerInstance._listeners.error(err);
+        }
+        return currentMockHttpServerInstance as unknown as httpModule.Server;
+      })
+      .mockImplementationOnce((portToListen, _h, callbackOrUndefined) => { // Second call (port 3002) - Free
+        expect(portToListen).toBe(startPort + 1);
+        mockHttpServerAddressFn.mockReturnValue({ port: startPort + 1, address: '127.0.0.1', family: 'IPv4' });
+        if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.listening) {
+          currentMockHttpServerInstance._listeners.listening();
+        } else if (typeof callbackOrUndefined === 'function') {
+            (callbackOrUndefined as () => void)();
+        }
+        return currentMockHttpServerInstance as unknown as httpModule.Server;
+      });
+
+    await expect(findFreePort(startPort)).resolves.toBe(startPort + 1);
+    expect(mockedHttp.createServer).toHaveBeenCalledTimes(2);
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost');
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost');
+    expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1); // Only closed on success
+  });
+
+  it('should reject if a non-EADDRINUSE error occurs during listen', async () => {
+    const startPort = 3002;
+    const otherError = new Error('Some other error') as NodeJS.ErrnoException;
+    otherError.code = 'EACCES';
+
+    mockHttpServerListenFn.mockImplementationOnce(() => {
+      if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.error) {
+        currentMockHttpServerInstance._listeners.error(otherError);
+      }
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
+    });
+
+    await expect(findFreePort(startPort)).rejects.toThrow(otherError);
+    expect(mockedHttp.createServer).toHaveBeenCalledTimes(1);
+    expect(mockHttpServerCloseFn).not.toHaveBeenCalled();
+  });
+
+  it('should reject if server.close() itself errors', async () => {
+    const startPort = 3003;
+    const closeError = new Error('Failed to close server');
+
+    mockHttpServerListenFn.mockImplementation((_p, _h, callbackOrUndefined) => {
+      mockHttpServerAddressFn.mockReturnValue({ port: startPort, address: '127.0.0.1', family: 'IPv4' });
+      if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.listening) {
+        currentMockHttpServerInstance._listeners.listening();
+      } else if (typeof callbackOrUndefined === 'function') {
+        (callbackOrUndefined as () => void)();
+      }
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
+    });
+    mockHttpServerCloseFn.mockImplementationOnce((callback?: (err?: Error) => void) => {
+      if (callback) callback(closeError); // Simulate error during close
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
+    });
+
+    await expect(findFreePort(startPort)).rejects.toThrow(closeError);
+    expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('should throw an error if no free ports are available up to 65535', async () => {
+    const startPort = 65530; // Start near the limit
+    let currentPortAttempt = startPort;
+
+    mockHttpServerListenFn.mockImplementation(() => {
+      if (currentPortAttempt > 65535) {
+        // This case should be caught by findFreePort's internal limit before listen is called for >65535
+        // So, we simulate EADDRINUSE for all valid ports
+        const err = new Error('EADDRINUSE test') as NodeJS.ErrnoException;
+        err.code = 'EADDRINUSE';
+        if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.error) {
+            currentMockHttpServerInstance._listeners.error(err);
+        }
+      } else {
+         // Simulate EADDRINUSE for ports up to 65535
+        const err = new Error('EADDRINUSE test') as NodeJS.ErrnoException;
+        err.code = 'EADDRINUSE';
+        if (currentMockHttpServerInstance._listeners && currentMockHttpServerInstance._listeners.error) {
+            currentMockHttpServerInstance._listeners.error(err);
+        }
+      }
+      currentPortAttempt++;
+      return currentMockHttpServerInstance as unknown as httpModule.Server;
+    });
+    // Adjust the number of createServer calls expected based on the loop limit in findFreePort
+    // The loop in findFreePort is `while (true)` but has an internal check `if (port > 65535)`
+    // So it will try ports from startPort up to 65535.
+    // For startPort = 65530, it will try 65530, 65531, 65532, 65533, 65534, 65535 (6 times)
+    const expectedAttempts = (65535 - startPort) + 1;
+
+    await expect(findFreePort(startPort)).rejects.toThrow('No free ports available.');
+    expect(mockedHttp.createServer).toHaveBeenCalledTimes(expectedAttempts);
+  }, 10000); // Increase timeout if needed for many iterations
+});
+
+// Import nock for Mocking Target Server
+import nock from 'nock';
+
+describe('startProxyServer', () => {
+  const targetPort = 3005;
+  const requestedPort = 3000; // Port the main server tried, proxy will use another
+  let proxyServerInstance: httpModule.Server | null = null;
+  let mcs: MockedConfigService;
+  let ml: MockedLogger;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    nock.cleanAll(); // Clean nock interceptors
+
+    const mockedConfigModule = await import('../lib/config-service.js') as unknown as ConfigServiceModuleType;
+    mcs = mockedConfigModule.configService as unknown as MockedConfigService; // Cast to allow property assignment
+    ml = mockedConfigModule.logger as unknown as MockedLogger; // Cast to allow property assignment
+
+
+    // Reset axios mocks
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    vi.mocked(axios.get).mockReset();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    vi.mocked(axios.post).mockReset();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    vi.mocked(axios.delete).mockReset();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    (axios as unknown as Mock).mockReset(); // For the general axios({ method: ... }) call
+  });
+
+  afterEach(async () => {
+    if (proxyServerInstance) {
+      await new Promise<void>(resolve => proxyServerInstance!.close(() => resolve()));
+      proxyServerInstance = null;
+    }
+    nock.restore(); // Restore nock's behavior to allow real HTTP requests if needed elsewhere
+  });
+
+  it('should start the proxy server, log info, and proxy /api/ping', async () => {
+    const proxyListenPort = requestedPort + 100; // Assume findFreePort will give this
+    
+    // Mock findFreePort specifically for startProxyServer tests
+    const serverLib = await import('../lib/server');
+    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+
+    nock(`http://localhost:${targetPort}`)
+      .get('/api/ping')
+      .reply(200, { service: "CodeCompassTarget", status: "ok", version: "1.0.0" });
+
+    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    expect(proxyServerInstance).toBeDefined();
+    
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`This instance (CodeCompass Proxy) is running on port ${proxyListenPort}`));
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`forwarding to main server on ${targetPort}`));
+
+
+    const response = await axios.get(`http://localhost:${proxyListenPort}/api/ping`);
+    expect(response.status).toBe(200);
+    expect(response.data).toEqual({ service: "CodeCompassTarget", status: "ok", version: "1.0.0" });
+    expect(nock.isDone()).toBe(true);
+    findFreePortSpy.mockRestore();
+  });
+
+  it('should proxy POST /mcp with body and headers', async () => {
+    const proxyListenPort = requestedPort + 101;
+    const serverLib = await import('../lib/server');
+    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+
+    const requestBody = { jsonrpc: "2.0", method: "test", params: { data: "value" }, id: 1 };
+    const responseBody = { jsonrpc: "2.0", result: "success", id: 1 };
+    const sessionId = "test-session-id";
+
+    nock(`http://localhost:${targetPort}`, {
+        reqheaders: {
+          'content-type': 'application/json',
+          'mcp-session-id': sessionId,
+          'authorization': 'Bearer testtoken'
+        }
+      })
+      .post('/mcp', requestBody)
+      .reply(200, responseBody, { 'Content-Type': 'application/json', 'mcp-session-id': sessionId });
+
+    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+
+    const response = await axios.post(`http://localhost:${proxyListenPort}/mcp`, requestBody, {
+      headers: { 
+        'Content-Type': 'application/json',
+        'mcp-session-id': sessionId,
+        'Authorization': 'Bearer testtoken'
+      }
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.data).toEqual(responseBody);
+    expect(response.headers['content-type']).toContain('application/json');
+    expect(response.headers['mcp-session-id']).toBe(sessionId);
+    expect(nock.isDone()).toBe(true);
+    findFreePortSpy.mockRestore();
+  });
+
+  it('should proxy GET /mcp for SSE', async () => {
+    const proxyListenPort = requestedPort + 102;
+    const serverLib = await import('../lib/server');
+    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    const sessionId = "sse-session-id";
+
+    nock(`http://localhost:${targetPort}`, {
+        reqheaders: { 'mcp-session-id': sessionId }
+      })
+      .get('/mcp')
+      .reply(200, "event: message\ndata: hello\n\n", { 
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'mcp-session-id': sessionId 
+      });
+    
+    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+
+    const response = await axios.get(`http://localhost:${proxyListenPort}/mcp`, {
+      headers: { 'mcp-session-id': sessionId },
+      responseType: 'text' // Get raw text to check SSE format
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toBe('text/event-stream');
+    expect(response.headers['mcp-session-id']).toBe(sessionId);
+    expect(response.data).toBe("event: message\ndata: hello\n\n");
+    expect(nock.isDone()).toBe(true);
+    findFreePortSpy.mockRestore();
+  });
+  
+  it('should proxy DELETE /mcp', async () => {
+    const proxyListenPort = requestedPort + 103;
+    const serverLib = await import('../lib/server');
+    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    const sessionId = "delete-session-id";
+
+    nock(`http://localhost:${targetPort}`, {
+        reqheaders: { 'mcp-session-id': sessionId }
+      })
+      .delete('/mcp')
+      .reply(204); // Or 200 with a body if applicable
+
+    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+
+    const response = await axios.delete(`http://localhost:${proxyListenPort}/mcp`, {
+      headers: { 'mcp-session-id': sessionId }
+    });
+    
+    expect(response.status).toBe(204);
+    expect(nock.isDone()).toBe(true);
+    findFreePortSpy.mockRestore();
+  });
+
+  it('should proxy /api/indexing-status', async () => {
+    const proxyListenPort = requestedPort + 104;
+    const serverLib = await import('../lib/server');
+    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    const mockStatus = { status: 'idle', message: 'Target server is idle' };
+
+    nock(`http://localhost:${targetPort}`)
+      .get('/api/indexing-status')
+      .reply(200, mockStatus);
+
+    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+
+    const response = await axios.get(`http://localhost:${proxyListenPort}/api/indexing-status`);
+    expect(response.status).toBe(200);
+    expect(response.data).toEqual(mockStatus);
+    expect(nock.isDone()).toBe(true);
+    findFreePortSpy.mockRestore();
+  });
+
+  it('should handle target server unreachable for /mcp', async () => {
+    const proxyListenPort = requestedPort + 105;
+    const serverLib = await import('../lib/server');
+    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+
+    nock(`http://localhost:${targetPort}`)
+      .post('/mcp')
+      .replyWithError({ message: 'Connection refused', code: 'ECONNREFUSED' });
+
+    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    
+    try {
+      await axios.post(`http://localhost:${proxyListenPort}/mcp`, {});
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      expect(error.response.status).toBe(502); // Bad Gateway
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(error.response.data.error.message).toBe('Proxy error: Bad Gateway');
+    }
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Proxy: Error proxying MCP request'), expect.anything());
+    expect(nock.isDone()).toBe(true);
+    findFreePortSpy.mockRestore();
+  });
+
+  it('should forward target server 500 error for /mcp', async () => {
+    const proxyListenPort = requestedPort + 106;
+    const serverLib = await import('../lib/server');
+    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    const errorBody = { jsonrpc: "2.0", error: { code: -32000, message: "Target Internal Error" }, id: null };
+
+    nock(`http://localhost:${targetPort}`)
+      .post('/mcp')
+      .reply(500, errorBody, { 'Content-Type': 'application/json' });
+
+    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+
+    try {
+      await axios.post(`http://localhost:${proxyListenPort}/mcp`, {});
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      expect(error.response.status).toBe(500);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(error.response.data).toEqual(errorBody);
+    }
+    expect(nock.isDone()).toBe(true);
+    findFreePortSpy.mockRestore();
+  });
+   it('should reject if findFreePort fails', async () => {
+    const findFreePortError = new Error("No ports for proxy!");
+    const serverLib = await import('../lib/server');
+    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockRejectedValue(findFreePortError);
+
+    await expect(serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
+      .rejects.toThrow(findFreePortError);
+    
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(ml.error).not.toHaveBeenCalledWith(expect.stringContaining('Proxy server failed to start')); // This log is inside the listen promise
+    findFreePortSpy.mockRestore();
   });
 });

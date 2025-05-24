@@ -348,6 +348,31 @@
 - Re-iterate the importance of meticulously typing the result of `await importOriginal()` in all `vi.mock` factories.
 - After applying fixes for build errors, always perform a clean build (`npm run build` or `tsc`) to confirm resolution before committing.
 - If similar errors appear, the first diagnostic step for `vi.mock` factories should be to check the typing of `await importOriginal()`.
+
+---
+# Retrospection for Phase 4 Completion: MCP Client Bridge (Proxy Server) - Testing & Documentation (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- The `findFreePort` utility was testable with careful mocking of `http.createServer`'s event lifecycle (`on('error')`, `on('listening')`, `close()`).
+- `nock` greatly simplified testing the proxy logic in `startProxyServer` by allowing precise simulation of the target server's responses without needing a real target server.
+- Modifying `startProxyServer` to return its `http.Server` instance was crucial for enabling graceful shutdown of the proxy server in `afterEach` test hooks, preventing port conflicts in subsequent tests.
+- The tests cover various proxy scenarios (different HTTP methods for `/mcp`, different API endpoints) and error conditions (target server unreachable, target server error).
+- Documentation updates clearly explain the proxy mode to users.
+
+## What could be improved?
+- The initial version of `startProxyServer` not returning its server instance made it difficult to write clean tests that could shut down the proxy. This highlights the importance of designing for testability.
+- Mocking Node.js core modules like `http` for testing functions like `findFreePort` can be intricate due to the need to simulate event emissions and callback invocations accurately. The mock setup for `http.createServer` became quite detailed to handle the looping and error/success paths within `findFreePort`.
+- The `findFreePort` tests rely on `currentMockHttpServerInstance._listeners` to trigger events, which is a bit of an internal detail of the mock setup. A more abstract way to trigger these events might be cleaner if the mock was more sophisticated.
+
+## What did we learn?
+- Designing functions to return handles or instances (like `http.Server`) is essential for proper resource management in tests (e.g., closing servers).
+- `nock` is a very powerful tool for testing HTTP client interactions, including proxy scenarios, as it allows full control over the mocked upstream responses.
+- Testing functions that interact with network resources or system-level operations (like finding free ports) requires careful and often complex mocking strategies.
+- Iterative refinement of mocks is common. The `http` mock evolved significantly to support both `startServer` and `findFreePort` tests.
+
+## Action Items / Follow-ups
+- Ensure the `[GIT_COMMIT_ID_PLACEHOLDER]` is updated in `CHANGELOG.md` and this retrospection entry.
+- If more complex port-finding or server management utilities are developed, consider creating more robust, reusable mock helpers for `http.Server` interactions.
 ---
 
 # Retrospection for Build/Test Fixes (server.test.ts - Syntax Error & Mocking Stabilization) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
