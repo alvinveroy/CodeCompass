@@ -14,9 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - **Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
-    - Resolved TypeScript build errors (`TS2554` - wrong constructor arguments for `StreamableHTTPServerTransport`, `TS2339` - missing `createExpressMiddleware` method) and Vitest test failures related to `@modelcontextprotocol/sdk` integration in `src/lib/server.ts`.
-    - Corrected `StreamableHTTPServerTransport` instantiation to take a single options object, not an `McpServer` instance. The `McpServer` instance is now connected to the transport using `server.connect(transport)`.
-    - Removed the incorrect usage of `mcpHttpTransport.createExpressMiddleware()`. MCP request handling is now correctly managed by the explicit Express route handlers (`POST`, `GET`, `DELETE` for `/mcp`) that use `transport.handleRequest()`, aligning with SDK examples and its source code.
+    - Resolved TypeScript build errors (`TS2451` - redeclared variables, `TS2554` - wrong constructor arguments for `StreamableHTTPServerTransport`, `TS2339` - missing `createExpressMiddleware` method, `TS2304` - cannot find name) and Vitest test failures related to `@modelcontextprotocol/sdk` integration and variable scoping in `src/lib/server.ts`.
+    - Removed redundant declarations of `finalDeclaredTools`, `finalDeclaredPrompts`, and `expressApp`.
+    - Removed vestigial code related to a single, global `mcpHttpTransport` and its `createExpressMiddleware` method.
+    - Ensured `configureMcpServerInstance` is correctly defined and accessible for per-session MCP server setup.
+    - Corrected `StreamableHTTPServerTransport` instantiation within the per-session logic to take a single options object. The `McpServer` instance is now connected to the transport using `server.connect(transport)`.
+    - MCP request handling is correctly managed by the explicit Express route handlers (`POST`, `GET`, `DELETE` for `/mcp`) that use `transport.handleRequest()`.
     - Maintained the session management logic:
         - Stores active `StreamableHTTPServerTransport` instances in a map keyed by session ID.
         - Creates a new `McpServer` instance and a new `StreamableHTTPServerTransport` for each new client session initiated via an `initialize` request.

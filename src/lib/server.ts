@@ -486,22 +486,8 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
      
     expressApp.use(express.json()); // Middleware to parse JSON bodies
 
-    // MCP Server Setup
-    // SessionManager instantiation removed. Session ID generation is handled by StreamableHTTPServerTransport options.
-
-    const mcpHttpTransport = new StreamableHTTPServerTransport(server, {
-      sessionIdGenerator: randomUUID, // Use sessionIdGenerator as per SDK examples
-      // Transport options can be specified here, e.g., custom error handling
-      // onError: (error, requestInfo) => {
-      //   logger.error("MCP HTTP Transport Error", { error, requestInfo });
-      // }
-    });
-
-    // Mount MCP transport middleware
-    // This will handle requests to /mcp (or any other path you choose)
-    expressApp.use("/mcp", mcpHttpTransport.createExpressMiddleware());
-    logger.info(`MCP communication will be available at the /mcp endpoint.`);
-
+    // MCP Server Setup is now handled per-session within the /mcp routes.
+    // The global mcpHttpTransport and its direct middleware usage have been removed.
      
     expressApp.get('/api/indexing-status', (_req: express.Request, res: express.Response): void => {
       const currentStatus = getGlobalIndexingStatus();
@@ -640,14 +626,47 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
     // The McpServer instance and its registrations will now be handled per session for HTTP transport.
     // The serverCapabilities object is defined once and used for each new McpServer instance.
 
-    const finalDeclaredTools = Object.keys(serverCapabilities.tools);
-    logger.info(`Declared tools in capabilities: ${finalDeclaredTools.join(', ')}`);
-    const finalDeclaredPrompts = Object.keys(serverCapabilities.prompts);
-    logger.info(`Declared prompts in capabilities: ${finalDeclaredPrompts.join(', ')}`);
+    // This block for finalDeclaredTools, finalDeclaredPrompts, and expressApp is the correct one.
+    // The duplicated block later in the code will be removed.
+    // Note: These logs for finalDeclaredTools and finalDeclaredPrompts are from the *first* (correct) declaration block.
+    // The user's SEARCH block started *after* the first expressApp declaration, but *included* the second (faulty)
+    // declarations of finalDeclaredTools, finalDeclaredPrompts, and expressApp.
+    // The REPLACE block here correctly *omits* these redeclarations.
 
-    // Setup Express HTTP server for status, notifications, and MCP
-    const expressApp = express();
-    expressApp.use(express.json()); // Middleware to parse JSON bodies
+    // --- Start: HTTP API Endpoints (Non-MCP) ---
+    // Note: expressApp here refers to the *first* (correctly scoped) instance.
+    expressApp.get('/api/indexing-status', (_req: express.Request, res: express.Response): void => {
+      const currentStatus = getGlobalIndexingStatus();
+      res.json(currentStatus);
+    });
+
+    expressApp.get('/api/ping', (_req: express.Request, res: express.Response): void => {
+      res.json({ service: "CodeCompass", status: "ok", version: VERSION });
+    });
+     
+    expressApp.post('/api/repository/notify-update', (_req: express.Request, res: express.Response): void => {
+      logger.info('Received notification to update repository via /api/repository/notify-update.');
+      
+      const currentStatus = getGlobalIndexingStatus();
+      if (['initializing', 'validating_repo', 'listing_files', 'cleaning_stale_entries', 'indexing_file_content', 'indexing_commits_diffs'].includes(currentStatus.status)) {
+        logger.warn('Re-indexing request received, but indexing is already in progress.');
+        res.status(409).json({ message: 'Indexing already in progress.' });
+        return;
+      }
+
+      logger.info(`Triggering re-indexing for repository: ${repoPath}`);
+      indexRepository(qdrantClient, repoPath, llmProvider) // llmProvider from outer scope
+        .then(() => {
+          logger.info(`Repository re-indexing completed successfully for ${repoPath}.`);
+        })
+        .catch((error: unknown) => {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.error(`Repository re-indexing failed for ${repoPath}: ${errorMessage}`);
+        });
+      
+      res.status(202).json({ message: 'Re-indexing process initiated.' });
+    });
+    // --- End: HTTP API Endpoints (Non-MCP) ---
 
     // Map to store transports by session ID
     const activeSessionTransports: Map<string, StreamableHTTPServerTransport> = new Map();
@@ -665,8 +684,7 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
         // New initialization request
         logger.info('MCP POST: Initialization request, creating new transport and server instance.');
         
-        // Correct instantiation: only options object
-        const newTransport = new StreamableHTTPServerTransport({
+        const newTransport = new StreamableHTTPServerTransport({ // Corrected: No 'server' argument here
           sessionIdGenerator: randomUUID,
           onsessioninitialized: (newSessionId) => {
             activeSessionTransports.set(newSessionId, newTransport);
@@ -674,7 +692,6 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
           }
         });
 
-        // Clean up transport when closed
         newTransport.onclose = () => {
           if (newTransport.sessionId) {
             activeSessionTransports.delete(newTransport.sessionId);
@@ -682,22 +699,18 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
           }
         };
         
-        // Create and configure a new McpServer instance for this session
         const sessionServer = new McpServer({
           name: "CodeCompass",
           version: VERSION,
           vendor: "CodeCompass",
-          capabilities: serverCapabilities, // Use the predefined capabilities
+          capabilities: serverCapabilities,
         });
         
-        // Pass qdrantClient, repoPath, suggestionModelAvailable from the outer scope
         await configureMcpServerInstance(sessionServer, qdrantClient, repoPath, suggestionModelAvailable);
         
-        // Connect the McpServer instance to the transport
-        await sessionServer.connect(newTransport);
+        await sessionServer.connect(newTransport); // Connect the new server instance to the new transport
         transport = newTransport;
       } else {
-        // Invalid request (not an init request and no valid session ID)
         logger.warn(`MCP POST: Bad Request. No valid session ID and not an init request. Headers: ${JSON.stringify(req.headers)}, Body: ${JSON.stringify(req.body).substring(0,100)}...`);
         res.status(400).json({
           jsonrpc: '2.0',
@@ -707,7 +720,6 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
         return;
       }
 
-      // Handle the request using the identified or new transport
       try {
         await transport.handleRequest(req, res, req.body);
       } catch (transportError) {
@@ -722,7 +734,6 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
       }
     });
 
-    // Reusable handler for GET and DELETE session requests
     const handleSessionRequest = async (req: express.Request, res: express.Response) => {
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
       if (!sessionId || !activeSessionTransports.has(sessionId)) {
@@ -738,40 +749,117 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
       const transport = activeSessionTransports.get(sessionId)!;
       logger.debug(`MCP ${req.method}: Handling request for session ${sessionId}`);
       try {
-        await transport.handleRequest(req, res); // For GET/DELETE, body is not passed to handleRequest
+        await transport.handleRequest(req, res);
       } catch (transportError) {
         logger.error(`Error handling MCP ${req.method} request via transport for session ${sessionId}:`, transportError);
         if (!res.headersSent) {
           res.status(500).json({
             jsonrpc: '2.0',
             error: { code: -32000, message: 'Internal MCP transport error.' },
-            id: null, // GET/DELETE requests in MCP spec don't have body/id
+            id: null,
           });
         }
       }
     };
 
-    // Handle GET requests for server-to-client notifications via SSE
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     expressApp.get('/mcp', handleSessionRequest);
-
-    // Handle DELETE requests for session termination
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     expressApp.delete('/mcp', handleSessionRequest);
-    // The mcpHttpTransport.createExpressMiddleware() line is removed as it's not needed.
-    // The routes above handle /mcp directly.
     logger.info(`MCP communication will be available at the /mcp endpoint via POST, GET, DELETE.`);
 
-    // The console.error message now reflects that MCP is part of the HTTP server
-    console.error(`CodeCompass v${VERSION} HTTP Server running on port ${httpPort}, with MCP at /mcp`);
+    const httpPort = configService.HTTP_PORT;
+    const httpServer = http.createServer(expressApp); // expressApp is already a request handler
+
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    httpServer.on('error', async (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE') {
+        logger.warn(`HTTP Port ${httpPort} is already in use. Attempting to ping...`);
+        try {
+          const pingResponse = await axios.get<PingResponseData>(`http://localhost:${httpPort}/api/ping`, { timeout: 500 });
+          if (pingResponse.status === 200 && pingResponse.data && pingResponse.data.service === "CodeCompass") {
+            logger.info(`Another CodeCompass instance (version ${pingResponse.data.version || 'unknown'}) is running on port ${httpPort}. Fetching its status...`);
+            try {
+              const statusResponse = await axios.get<IndexingStatusReport>(`http://localhost:${httpPort}/api/indexing-status`, { timeout: 1000 });
+              if (statusResponse.status === 200 && statusResponse.data) {
+                const existingStatus = statusResponse.data;
+                console.info(`\n--- Status of existing CodeCompass instance on port ${httpPort} ---`);
+                console.info(`Version: ${pingResponse.data.version || 'unknown'}`);
+                console.info(`Status: ${existingStatus.status}`);
+                console.info(`Message: ${existingStatus.message}`);
+                if (existingStatus.overallProgress !== undefined) {
+                  console.info(`Progress: ${existingStatus.overallProgress}%`);
+                }
+                if (existingStatus.currentFile) {
+                  console.info(`Current File: ${existingStatus.currentFile}`);
+                }
+                if (existingStatus.currentCommit) {
+                  console.info(`Current Commit: ${existingStatus.currentCommit}`);
+                }
+                console.info(`Last Updated: ${existingStatus.lastUpdatedAt}`);
+                console.info(`-----------------------------------------------------------\n`);
+                logger.info("Current instance will exit as another CodeCompass server is already running.");
+                httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use by another CodeCompass instance.`, 0));
+              } else {
+                logger.error(`Failed to retrieve status from existing CodeCompass server on port ${httpPort}. It responded to ping but status endpoint failed. Status: ${statusResponse.status}`);
+                httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use, status fetch failed.`, 1));
+              }
+            } catch (statusError: unknown) {
+              if (axios.isAxiosError(statusError)) {
+                if (statusError.response) {
+                  logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${statusError.message}, Status: ${statusError.response.status}, Data: ${JSON.stringify(statusError.response.data)}`);
+                } else if (statusError.request) {
+                  logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): No response received. ${statusError.message}`);
+                } else {
+                  logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${statusError.message}`);
+                }
+              } else {
+                logger.error(`Error fetching status from existing CodeCompass server (port ${httpPort}): ${String(statusError)}`);
+              }
+              httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use, status fetch error.`, 1));
+            }
+          } else {
+            logger.error(`Port ${httpPort} is in use, but it does not appear to be a CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`);
+            logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
+            httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use by non-CodeCompass server.`, 1));
+          }
+        } catch (pingError: unknown) {
+          logger.error(`Port ${httpPort} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
+          if (axios.isAxiosError(pingError)) {
+            if (pingError.code === 'ECONNREFUSED') {
+              logger.error(`Connection refused on port ${httpPort}.`);
+            } else if (pingError.code === 'ETIMEDOUT' || pingError.code === 'ECONNABORTED') {
+              logger.error(`Ping attempt to port ${httpPort} timed out.`);
+            } else {
+              logger.error(`Ping error details: ${pingError.message}`);
+            }
+          } else {
+             logger.error(`Ping error details: ${String(pingError)}`);
+          }
+          logger.error(`Please free the port or configure a different one (e.g., via HTTP_PORT environment variable or in ~/.codecompass/model-config.json).`);
+          httpServerSetupReject!(new ServerStartupError(`Port ${httpPort} in use or ping failed.`, 1));
+        }
+      } else {
+        logger.error(`Failed to start HTTP server on port ${httpPort}: ${error.message}`);
+        httpServerSetupReject!(new ServerStartupError(`HTTP server error: ${error.message}`, 1));
+      }
+    });
+
+    const listenPromise = new Promise<void>((resolve) => {
+      httpServer.listen(httpPort, () => {
+        logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
+        resolve();
+      });
+    });
+
+    await Promise.race([listenPromise, httpServerSetupPromise]);
     
-    // server.connect(transport) is handled per session now.
+    logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath}`);
+    // Tool stubs logging already done earlier by the first (correct) logging lines.
+    
+    console.error(`CodeCompass v${VERSION} HTTP Server running on port ${httpPort}, with MCP at /mcp`);
     
     if (process.env.NODE_ENV === 'test') {
       logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");
-      // No explicit resolve here, function completes normally if no errors
     } else {
-      // Original block
       await new Promise<void>((resolve) => {
         process.on('SIGINT', () => {
           logger.info("SIGINT received, shutting down server.");

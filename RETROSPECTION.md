@@ -668,22 +668,22 @@
 # Retrospection for Build Fix & MCP HTTP Transport Refactor (SDK Alignment) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?
-- TypeScript errors (`TS2554`, `TS2339`) and Vitest test failures clearly indicated incorrect usage of the `StreamableHTTPServerTransport`.
-- The `@modelcontextprotocol/typescript-sdk` README examples and its source code for "Streamable HTTP with Session Management" provided the correct pattern for instantiating the transport and handling requests with Express.
-- The per-session `McpServer` instance model was correctly identified as the SDK's intended approach.
+- TypeScript errors (`TS2451`, `TS2554`, `TS2339`, `TS2304`) clearly pinpointed the remaining issues from the refactor.
+- The SDK's examples and source code for `StreamableHTTPServerTransport` continued to be a reliable guide for correct usage.
+- The per-session `McpServer` model was correctly implemented, but remnants of the old single-server approach caused conflicts.
 
 ## What could be improved?
-- **SDK Integration Details:** The initial integration of `StreamableHTTPServerTransport` had subtle errors in constructor arguments and Express integration. A closer reading of the SDK's `streamableHttp.ts` source or its detailed examples from the outset would have prevented these.
-- **Iterative Refinement:** While the previous refactor correctly moved towards per-session server instances, the final step of aligning transport instantiation and Express integration with the SDK's exact pattern was missed.
+- **Refactoring Completeness:** During large refactors (like moving from a single MCP server instance to per-session instances), it's crucial to meticulously remove all old code paths and declarations related to the previous approach. Lingering remnants can cause redeclaration errors and runtime confusion.
+- **Code Review Focus:** When reviewing refactoring changes, pay special attention to variable declarations and ensure that old, now-unused logic is fully excised.
 
 ## What did we learn?
-- **SDK Constructor Signatures:** `StreamableHTTPServerTransport` expects a single options object in its constructor. The `McpServer` instance is connected later via `server.connect(transport)`.
-- **SDK Express Integration:** The SDK's `StreamableHTTPServerTransport` uses a `handleRequest()` method within custom Express route handlers, not a dedicated middleware factory like `createExpressMiddleware()`.
-- **Session Management in SDK:** The SDK's pattern for stateful HTTP servers involves creating a new `McpServer` instance for each client session, connected to a dedicated transport.
-- **Source Code as Documentation:** When SDK examples are high-level, consulting the SDK's own source code (like `streamableHttp.ts`) can provide definitive answers on usage.
+- **Redeclaration Errors (`TS2451`):** These are straightforward indicators that a variable has been declared multiple times in the same scope, often a symptom of incomplete refactoring.
+- **SDK Constructor Signatures & Usage:** Re-confirmed that `StreamableHTTPServerTransport` expects a single options object and that `McpServer` instances connect to it via `server.connect()`.
+- **Clean Code after Refactor:** A successful refactor includes not just adding new logic but also diligently cleaning up the old.
+- **Parser Confusion:** Multiple declaration errors can sometimes mask or lead to subsequent errors (like `Cannot find name`) if the parser gets into an inconsistent state. Fixing the primary declaration errors often resolves these secondary issues.
 
 ## Action Items / Follow-ups
-- Thoroughly test the corrected session-based `McpServer` instantiation and transport handling.
-- When integrating SDKs, if documentation is ambiguous or high-level, refer to the SDK's source code for precise usage patterns, especially for constructors and request handling.
+- After significant refactoring, perform a thorough code review specifically looking for and removing any vestigial code, including unused variables, functions, or old logic paths.
+- Use "Find in Files" or IDE search tools to ensure that concepts or variable names from a previous design are fully removed or correctly updated in the new design.
 
 ---
