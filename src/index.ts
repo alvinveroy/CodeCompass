@@ -131,6 +131,32 @@ interface PingResponseData {
   version?: string;
 }
 
+// Define a more specific type for JSON-RPC errors from the server
+interface JsonRpcErrorResponse {
+  jsonrpc: "2.0";
+  id: string | number | null;
+  error: {
+    code: number;
+    message: string;
+    data?: unknown;
+  };
+}
+
+function isJsonRpcErrorResponse(obj: unknown): obj is JsonRpcErrorResponse {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'jsonrpc' in obj &&
+    obj.jsonrpc === '2.0' &&
+    'error' in obj &&
+    typeof (obj as { error: unknown }).error === 'object' &&
+    (obj as { error: object }).error !== null &&
+    'code' in (obj as { error: object }).error &&
+    'message' in (obj as { error: object }).error
+  );
+}
+
+
 async function executeClientCommand(toolName: string, toolParamsString?: string) {
   // Dynamically import configService and logger here to ensure process.env.HTTP_PORT is set
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -148,7 +174,8 @@ async function executeClientCommand(toolName: string, toolParamsString?: string)
     } catch (e) {
       logger.error(`Error: Invalid JSON parameters for tool ${toolName}: ${toolParamsString}`);
       logger.error((e as Error).message);
-      console.error(`Error: Invalid JSON parameters for tool ${toolName}. Please provide a valid JSON string.`);
+      console.error(`Error: Invalid JSON parameters for tool '${toolName}'. Please provide a valid JSON string.`);
+      console.error(`Details: ${(e as Error).message}`);
       process.exit(1);
     }
   } else {
@@ -190,38 +217,51 @@ async function executeClientCommand(toolName: string, toolParamsString?: string)
 
         logger.info(`Calling tool '${toolName}' with params:`, parsedParams);
         const result = await client.callTool({ name: toolName, arguments: parsedParams });
-        logger.info("Tool execution successful. Result:", result);
+        logger.info("Tool execution successful.");
+        logger.debug("Raw tool result:", result);
 
-        // Output the result in a user-friendly way
-        // Assuming result.content is an array of { type: "text", text: "..." }
+
+        // Enhanced Output Formatting
         if (result.content && Array.isArray(result.content)) {
           result.content.forEach(item => {
-            if (item.type === 'text' && typeof item.text === 'string') {
-              console.log(item.text);
+            if (item && item.type === 'text' && typeof item.text === 'string') {
+              console.log(item.text); // Directly print text content, assumes Markdown or plain text
             } else {
-              // Fallback for other content types or structures
+              // Fallback for other content types or structures within the array
               console.log(JSON.stringify(item, null, 2));
             }
           });
-        } else {
+        } else if (result) {
+          // If result.content is not an array, or result itself is the primary data (e.g. for non-standard tool responses)
+          // This path might be hit if a tool returns a single object not in `content` array, or if `content` is not an array.
+          // For standard MCP tools, `result.content` should be an array.
+          // If the tool response itself is the content (e.g. a simple string or number not wrapped in content array)
+          // This is less common for MCP tools but could happen.
+          // A more robust check might be needed if tools deviate significantly from standard MCP response structure.
           console.log(JSON.stringify(result, null, 2));
+        } else {
+          logger.info("Tool executed, but no content was returned in the response.");
+          // Optionally print a message indicating no content, or just exit silently.
         }
         
         await client.close();
         process.exit(0);
 
-      } catch (clientError) {
-        logger.error("MCP Client error:", clientError);
-        const errorMessage = clientError instanceof Error ? clientError.message : String(clientError);
-        // Check if it's a JSON-RPC error from the server
-        if (typeof clientError === 'object' && clientError !== null && 'error' in clientError) {
-            const rpcError = (clientError as { error: { message?: string, data?: unknown } }).error;
-            console.error(`Error executing tool '${toolName}': ${rpcError.message || 'Unknown server error'}`);
-            if (rpcError.data) {
-                console.error(`Details: ${JSON.stringify(rpcError.data)}`);
-            }
+      } catch (clientError: unknown) {
+        logger.error("MCP Client error during tool execution:", clientError);
+        // Enhanced Error Reporting
+        if (isJsonRpcErrorResponse(clientError)) {
+          // This is a structured error from the MCP server (tool execution error)
+          console.error(`Error executing tool '${toolName}': ${clientError.error.message} (Code: ${clientError.error.code})`);
+          if (clientError.error.data) {
+            console.error(`Details: ${JSON.stringify(clientError.error.data, null, 2)}`);
+          }
+        } else if (clientError instanceof Error) {
+          // Network errors, client-side SDK errors, etc.
+          console.error(`Error during tool '${toolName}' execution: ${clientError.message}`);
         } else {
-            console.error(`Error executing tool '${toolName}': ${errorMessage}`);
+          // Fallback for unknown error types
+          console.error(`An unknown error occurred while executing tool '${toolName}'.`);
         }
         process.exit(1);
       }
@@ -229,14 +269,20 @@ async function executeClientCommand(toolName: string, toolParamsString?: string)
     } else {
       logger.warn(`Service on port ${configService.HTTP_PORT} is not a CodeCompass server or responded unexpectedly. Ping response:`, pingResponse.data);
       console.error(`A service is running on port ${configService.HTTP_PORT}, but it's not a CodeCompass server or it's unresponsive.`);
+      console.error(`Ping Response Status: ${pingResponse.status}, Data: ${JSON.stringify(pingResponse.data)}`);
       process.exit(1);
     }
-  } catch (error) {
-    if (axios.isAxiosError(error) && (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT')) {
-      logger.warn(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Connection refused or timed out.`);
-      console.error(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Please start the server first.`);
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        logger.warn(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Connection refused or timed out.`);
+        console.error(`CodeCompass server is not running on port ${configService.HTTP_PORT}. Please start the server first.`);
+      } else {
+        logger.error(`Failed to connect to CodeCompass server (AxiosError) on port ${configService.HTTP_PORT}: ${error.message}`, { code: error.code, response: error.response?.data });
+        console.error(`Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}: ${error.message}`);
+      }
     } else {
-      logger.error(`Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}:`, error);
+      logger.error(`Failed to connect to CodeCompass server (UnknownError) on port ${configService.HTTP_PORT}:`, error);
       console.error(`Failed to connect to CodeCompass server on port ${configService.HTTP_PORT}.`);
     }
     process.exit(1);
@@ -297,7 +343,7 @@ async function main() {
     await executeClientCommand(toolName, toolParamsString);
   } else {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { startServer, ServerStartupError } = require('./lib/server') as typeof import('./lib/server');
+    const { startServer, ServerStartupError: LocalServerStartupError } = require('./lib/server') as typeof import('./lib/server'); // Import ServerStartupError here
 
     if (primaryArg && !primaryArg.startsWith('--')) {
       repoPath = primaryArg;
@@ -313,7 +359,7 @@ async function main() {
     } catch (error: unknown) {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { logger: localLogger } = require('./lib/config-service') as typeof import('./lib/config-service');
-      if (error instanceof ServerStartupError) {
+      if (error instanceof LocalServerStartupError) { // Use the locally required ServerStartupError
         if (error.exitCode !== 0) {
           // ServerStartupError with exitCode 0 means existing instance found, already logged by server.ts
           localLogger.error(`CodeCompass server failed to start. Error: ${error.message}`);
