@@ -13,20 +13,27 @@ This document outlines the tasks required to enhance CodeCompass.
 
 ## Port Configuration Enhancements
 
-### Phase 3: Port Configuration Enhancements (In Progress)
+### Phase 3: Port Configuration Enhancements (Completed)
 - **Goal**: Provide flexible and prioritized ways for users to configure the HTTP port.
 - **Tasks**:
     - **`ConfigService` Update**: (Completed) `HTTP_PORT` is now loaded from environment variables (`HTTP_PORT`) with a fallback to a default value. It is *not* loaded from or persisted to `model-config.json`.
-    - **CLI Port Argument**: (Next) Add a CLI argument (e.g., `--port <number>`) in `src/index.ts` for specifying the HTTP port. This argument should take the highest precedence by setting `process.env.HTTP_PORT` before `ConfigService` is initialized.
+    - **CLI Port Argument**: (Completed) Added a CLI argument (`--port <number>`) in `src/index.ts` for specifying the HTTP port. This argument takes the highest precedence.
 
 ## Client Mode Functionality
 
-### Phase 2: Enhance CLI for Client Mode (Future Task)
+### Phase 2: Enhance CLI for Client Mode (In Progress)
 - **Goal**: If the CodeCompass CLI is invoked with a command intended for client-side execution (e.g., `codecompass agent_query "..."`) and an existing CodeCompass server is detected, the CLI should execute the command as an MCP client against the existing server.
 - **Tasks for `src/index.ts`**:
-    - Implement logic to parse CLI arguments to distinguish between "start server" commands and "client execution" commands.
-    - If a "client execution" command is identified:
-        - Attempt to connect to the CodeCompass server on the configured port.
-        - If a server is running and responsive, use MCP client logic to send the command.
-        - If no server is running, inform the user and suggest starting it.
-    - If a "start server" command is identified, proceed with `startServer` as currently implemented.
+    - **Argument Parsing for Client Mode**: (Completed) Implemented logic in `src/index.ts` to parse CLI arguments and distinguish "client execution" commands (based on `KNOWN_TOOLS`) from "start server" commands.
+    - **Initial Client Command Execution (`executeClientCommand`)**: (Completed)
+        - Implemented server ping (`/api/ping`) to check for a running CodeCompass instance.
+        - Implemented dynamic import of `configService` and MCP SDK client components.
+        - Implemented MCP client setup (`Client`, `StreamableHTTPClientTransport`).
+        - Implemented `client.callTool()` to execute the specified tool with parsed JSON parameters.
+        - Implemented basic console output for tool results and error handling for connection/tool call failures.
+    - **Further Enhancements (Future)**:
+        - More sophisticated error reporting and user feedback for client mode.
+        - Standardized output formatting for various tool responses.
+        - Consider session ID management for client calls if needed by specific tools or for context continuity.
+        - Add comprehensive unit/integration tests for the client mode functionality.
+        - Evaluate using a dedicated CLI argument parsing library (e.g., `yargs`, `commander`) if CLI complexity grows further.

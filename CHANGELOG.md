@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - This allows users to specify the HTTP port for the server at runtime, overriding the `HTTP_PORT` environment variable and the default port.
     - Argument parsing in `src/index.ts` was updated to handle this option, setting `process.env.HTTP_PORT` before `ConfigService` initializes.
     - The `--help` output was updated to include information about the new `--port` option.
+- **CLI Client Mode for Tool Execution (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Implemented functionality in `src/index.ts` for the CLI to act as an MCP client.
+    - If a known tool name (e.g., `agent_query`, `search_code`) is provided as a command, the CLI will:
+        - Attempt to connect to an existing CodeCompass server on the configured port (checks `/api/ping`).
+        - If a server is found, it dynamically imports MCP client SDK components.
+        - It then executes the specified tool with JSON parameters (if provided) using `client.callTool()`.
+        - Tool results or errors are printed to the console.
+    - If no server is running, or if the command is not a known tool, the CLI proceeds with server startup or other commands as before.
+    - Updated `displayHelp()` in `src/index.ts` with examples for client command usage.
 ### Changed
 - **Tool and Prompt Name Refactoring (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Removed the `bb7_` prefix from all tool and prompt names for brevity and cleaner naming.
