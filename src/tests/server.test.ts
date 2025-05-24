@@ -502,8 +502,12 @@ describe('Server Startup and Port Handling', () => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         expect.objectContaining({
           name: "ServerStartupError",
-          message: `Port ${mcs.HTTP_PORT} in use by another CodeCompass instance.`,
-          exitCode: 0
+          message: `Port ${mcs.HTTP_PORT} in use by another CodeCompass instance (v${existingServerPingVersion}).`,
+          exitCode: 0,
+          // Check for the new properties
+          requestedPort: mcs.HTTP_PORT,
+          detectedServerPort: mcs.HTTP_PORT,
+          existingServerStatus: expect.objectContaining({ service: 'CodeCompass', version: existingServerPingVersion })
         })
       );
       
@@ -558,12 +562,23 @@ describe('Server Startup and Port Handling', () => {
       return Promise.resolve({ status: 404, data: {} });
     });
      
+    const otherServiceData = { service: "OtherService" };
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    vi.mocked(axios.get).mockImplementation((url: string) => {
+      if (url.endsWith('/api/ping')) { // Ping returns non-CodeCompass response or error
+        return Promise.resolve({ status: 200, data: otherServiceData });
+      }
+      return Promise.resolve({ status: 404, data: {} });
+    });
+     
     await expect(startServer('/fake/repo')).rejects.toThrow(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} in use by non-CodeCompass server.`,
-        exitCode: 1
+        message: `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server. Response: ${JSON.stringify(otherServiceData)}`,
+        exitCode: 1,
+        requestedPort: mcs.HTTP_PORT,
+        existingServerStatus: otherServiceData
       })
     );
 
@@ -605,12 +620,25 @@ describe('Server Startup and Port Handling', () => {
     });
     
      
+    const pingError = new Error('Connection refused') as NodeJS.ErrnoException;
+    pingError.code = 'ECONNREFUSED';
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    vi.mocked(axios.get).mockImplementation((url: string) => {
+      if (url.endsWith('/api/ping')) {
+        return Promise.reject(pingError);
+      }
+      return Promise.resolve({ status: 404, data: {} });
+    });
+    
+     
     await expect(startServer('/fake/repo')).rejects.toThrow(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} in use or ping failed.`,
-        exitCode: 1
+        message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${pingError.message}`,
+        exitCode: 1,
+        requestedPort: mcs.HTTP_PORT,
+        existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' })
       })
     );
 
@@ -654,14 +682,28 @@ describe('Server Startup and Port Handling', () => {
     });
 
      
+    const pingSuccessData = { service: "CodeCompass", status: "ok", version: "test-version" };
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    vi.mocked(axios.get).mockImplementation((url: string) => {
+      if (url.endsWith('/api/ping')) {
+        return Promise.resolve({ status: 200, data: pingSuccessData }); // Ping success
+      }
+      if (url.endsWith('/api/indexing-status')) {
+        return Promise.reject(new Error('Failed to fetch status')); // Status fetch fails
+      }
+      return Promise.resolve({ status: 404, data: {} });
+    });
+
+     
     await expect(startServer('/fake/repo')).rejects.toThrow(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
-        // The message might vary slightly based on the exact point of failure in the EADDRINUSE logic for status fetch
-        // For example, if it's the catch block after statusError:
-        message: `Port ${mcs.HTTP_PORT} in use, status fetch error.`, 
-        exitCode: 1
+        message: `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`,
+        exitCode: 1,
+        requestedPort: mcs.HTTP_PORT,
+        detectedServerPort: mcs.HTTP_PORT,
+        existingServerStatus: pingSuccessData
       })
     );
         

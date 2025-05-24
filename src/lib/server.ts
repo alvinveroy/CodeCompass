@@ -1473,47 +1473,61 @@ async function findFreePort(startPort: number): Promise<number> {
   let port = startPort;
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    const server = http.createServer();
     try {
       await new Promise<void>((resolve, reject) => {
-        const server = http.createServer();
-        server.listen(port, 'localhost', () => {
-          server.close(resolve);
-        });
-        server.on('error', (err: NodeJS.ErrnoException) => { // Add type for err
+        server.once('error', (err: NodeJS.ErrnoException) => {
+          server.removeAllListeners();
           if (err.code === 'EADDRINUSE') {
-            resolve(); // Resolve to try next port, not reject
+            resolve(); // Port is in use, resolve to allow trying the next port in the loop
           } else {
-            reject(err);
+            reject(err); // Other error
           }
         });
-      });
-      // If we are here, server.listen didn't throw EADDRINUSE immediately,
-      // but we need to re-check if it was actually free by trying to listen again
-      // A simpler way is to attempt to listen and catch EADDRINUSE
-      const tempServer = http.createServer();
-      await new Promise<void>((resolve, reject) => {
-        tempServer.once('error', reject);
-        tempServer.once('listening', () => {
-          tempServer.close(resolve);
+        server.once('listening', () => {
+          // Port is free, close server and then resolve with the port number
+          server.close((closeErr?: Error) => { // server.close callback can have an error
+            server.removeAllListeners();
+            if (closeErr) {
+              reject(closeErr);
+            } else {
+              // Signal success by rejecting with a special marker object containing the port.
+              // This allows the catch block to identify a successful port discovery.
+              // eslint-disable-next-line @typescript-eslint/no-throw-literal
+              reject({ _isPortFoundMarker: true, port });
+            }
+          });
         });
-        tempServer.listen(port, 'localhost');
+        server.listen(port, 'localhost');
       });
-      return port; // Port is free
-    } catch (error: any) {
-      if (error.code === 'EADDRINUSE') {
-        port++;
-        if (port > 65535) {
-          throw new Error('No free ports available.');
-        }
-        // Continue to next iteration
-      } else {
-        throw error; // Other error
+      // If the promise resolved (due to EADDRINUSE from the 'error' handler), increment port and continue loop
+      port++;
+      if (port > 65535) {
+        throw new Error('No free ports available.');
       }
+    } catch (error: any) {
+      // Check for our custom marker that indicates a port was successfully found and server closed.
+      if (error && error._isPortFoundMarker === true && typeof error.port === 'number') {
+        return error.port; // Port found
+      }
+      // If it's a genuine EADDRINUSE (e.g., from a race condition not caught by 'error' listener,
+      // or if the 'error' listener itself resolved to continue the loop), try next port.
+      if (error && error.code === 'EADDRINUSE') {
+         port++;
+         if (port > 65535) {
+           throw new Error('No free ports available.');
+         }
+         // Continue to next iteration of the while loop
+      } else {
+        // Other unexpected error
+        throw error;
+      }
+    } finally {
+        // Ensure listeners are cleaned up in all cases for the current server instance
+        server.removeAllListeners();
     }
   }
 }
-
-// Add this new function, e.g., at the end of the file or after startServer
 // Helper to convert stream to string for logging errors, place it before startProxyServer or inside if preferred
 async function streamToString(stream: any): Promise<string> {
   if (!stream || typeof stream.pipe !== 'function') { // Check if stream is null/undefined or not a stream

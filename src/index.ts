@@ -5,6 +5,8 @@ import path from 'path';
 import NodeCache from 'node-cache';
 import axios from 'axios';
 import yargs from 'yargs'; // Import yargs
+// Use path.resolve for dynamic requires to make them more robust, especially in test environments.
+const libPath = path.resolve(__dirname, './lib');
 import { hideBin } from 'yargs/helpers'; // Import hideBin
 
 // SDK imports will be done dynamically within handleClientCommand
@@ -104,9 +106,9 @@ interface ClientCommandArgs {
 async function handleClientCommand(argv: ClientCommandArgs) {
   const { toolName, params: toolParamsString, outputJson } = argv;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { configService } = require('./lib/config-service') as typeof import('./lib/config-service');
+  const { configService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { logger } = require('./lib/config-service') as typeof import('./lib/config-service');
+  const { logger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
 
   logger.info(`CLI Client Mode: Attempting to execute tool '${toolName}'`);
   
@@ -239,9 +241,9 @@ async function handleClientCommand(argv: ClientCommandArgs) {
 
 async function startServerHandler(repoPath: string) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { startServer, ServerStartupError: LocalServerStartupError } = require('./lib/server') as typeof import('./lib/server');
+    const { startServer, ServerStartupError: LocalServerStartupError, startProxyServer: localStartProxyServer } = require(path.join(libPath, 'server.js')) as typeof import('./lib/server');
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { logger: localLogger } = require('./lib/config-service') as typeof import('./lib/config-service');
+    const { logger: localLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
   try {
     await startServer(repoPath);
   } catch (error: unknown) {
@@ -260,15 +262,13 @@ async function startServerHandler(repoPath: string) {
 
         if (typedError.requestedPort && typedError.detectedServerPort) {
           try {
-            // Dynamically import startProxyServer
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const { startProxyServer } = require('./lib/server') as typeof import('./lib/server');
-            await startProxyServer(typedError.requestedPort, typedError.detectedServerPort, existingVersion);
+            // localStartProxyServer is already required with a robust path
+            await localStartProxyServer(typedError.requestedPort, typedError.detectedServerPort, existingVersion);
             // If startProxyServer resolves, the proxy is running. The process should stay alive.
             // No process.exit() here.
           } catch (proxyError: any) {
             localLogger.error(`Failed to start MCP proxy: ${proxyError.message}. Exiting.`);
-            process.exit(1);
+            process.exit(1); // Exit directly if proxy fails
           }
         } else {
           localLogger.error('Proxy: Could not determine necessary port information from ServerStartupError. Exiting.');
@@ -395,46 +395,48 @@ async function main() {
     .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass')
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
-    .fail((msg, err, yargsInstance) => {
+    .fail((msg, err, _yargsInstance) => {
       // Dynamically import logger for failure messages if possible
       try {
           // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const { logger } = require('./lib/config-service') as typeof import('./lib/config-service');
+          const { logger: failLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
           if (err) {
-              logger.error('CLI Error:', { message: err.message, stack: err.stack });
+              failLogger.error('CLI Error (yargs.fail):', { message: err.message, stack: err.stack });
           } else if (msg) {
-              logger.error('CLI Usage Error:', msg);
+              failLogger.error('CLI Usage Error (yargs.fail):', msg);
           }
-      } catch (_ignored) { /* fallback to console.error */ }
-
-      if (err) {
-        // console.error(err); // yargs might print its own error message
-        // To avoid double printing, we might only print if yargs doesn't
-        // Or, customize yargs error display. For now, let yargs handle it.
-      } else {
-        // yargsInstance.showHelp(); // Show help on usage error
-        console.error(msg); // Print the specific message from yargs
+      } catch (e) {
+          console.error("Fallback yargs.fail (logger unavailable): ", msg || err);
       }
-      // yargs automatically exits with 1 on failure by default
-      // process.exit(1); // This might be redundant if yargs handles it
+
+      if (!err && msg) {
+        console.error(msg);
+      }
+      // Yargs will exit with 1 by default if err is present or msg is from yargs validation.
+      // No need to call process.exit(1) explicitly here if yargs handles it.
     });
 
   try {
-    await cli.parseAsync(); // Use parseAsync for promise-based handlers
-    // If parseAsync resolves, it means command handlers (if any ran) resolved.
-    // yargs handles process.exit for its own errors or if handlers throw.
+    await cli.parseAsync();
   } catch (error) {
-    // This catch is for unhandled promise rejections from command handlers
-    // that weren't caught by yargs' .fail() or if parseAsync itself throws.
+    // This catch block is for errors thrown from command handlers
+    // that yargs' .fail() might not have caught or for truly unexpected issues.
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { logger } = require('./lib/config-service') as typeof import('./lib/config-service');
-        logger.error('Critical error in CLI execution:', error);
-    } catch (_ignored) { /* fallback to console.error */ }
-    console.error('Critical error in CLI execution:', error);
-    process.exit(1);
+        const { logger: critLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
+        critLogger.error('Critical unhandled error in CLI execution:', error);
+    } catch (e) {
+        console.error('Fallback critical error logger (logger unavailable): Critical error in CLI execution:', error);
+    }
+    // If an error reaches here, it's likely something yargs didn't handle, so exit.
+    if (process.env.NODE_ENV !== 'test') {
+        process.exit(1);
+    } else {
+        // In test environment, re-throw to allow test to fail and capture the error
+        throw error;
+    }
   }
 }
 
 // Execute the main function
-main(); // No .catch here, main's internal try/catch for parseAsync handles it.
+main();

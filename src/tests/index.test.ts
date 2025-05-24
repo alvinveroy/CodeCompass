@@ -93,7 +93,7 @@ describe('CLI with yargs (index.ts)', () => {
   async function runMainWithArgs(args: string[]) {
     process.argv = ['node', 'index.js', ...args];
     vi.resetModules(); 
-    const { main } = await import('../index');
+    const { main } = await import('../index.js'); // Added .js extension
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
     // to allow assertions on console.error or logger.error before process.exit is checked.
     try {
