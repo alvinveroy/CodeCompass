@@ -119,6 +119,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ESLint Fixes (server.ts - Empty Function & Unsafe Access) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved ESLint warning `@typescript-eslint/no-empty-function` in `src/lib/server.ts` for `httpServerSetupReject` initialization by adding an `eslint-disable-next-line` comment, as this is a valid pattern for initializing promise reject functions.
     - Addressed ESLint errors `@typescript-eslint/no-unsafe-assignment` and `@typescript-eslint/no-unsafe-member-access` related to `req.body.id` access in MCP error responses. Introduced a `RequestBodyWithId` interface and type-safe checks before accessing `req.body.id` to ensure `req.body` is an object and contains the `id` property.
+### Refactor
+- **Configuration and Logging Refinements (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
+    - Modified `src/lib/config-service.ts`:
+        - `HTTP_PORT` is no longer loaded from or persisted to `model-config.json`. It is now strictly managed by environment variables or internal defaults, treating it as a server operational parameter rather than a user model configuration.
+        - Removed `HTTP_PORT` from the `ModelConfigFile` interface and related persistence logic.
+    - Modified `src/lib/server.ts`:
+        - Standardized logging in the `EADDRINUSE` handler (when an existing CodeCompass instance is detected) to use `logger.info` exclusively, replacing mixed `console.info` calls for consistency.
+    - Updated `src/tests/lib/config-service.test.ts` to reflect that `HTTP_PORT` is no longer persisted in `model-config.json`.
 - **Linting Finalization & Build Stability (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER]):**
     - Resolved all ESLint errors in `src/tests/server.test.ts`.
     - The primary fix involved ensuring that `eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion` directives are present and preserved before all `await importOriginal() as typeof import(...)` type assertions in mock factories. These assertions are essential for ESLint's subsequent type-checking rules (`no-unsafe-return`, `no-unsafe-assignment`) to function correctly, even if `tsc` alone might not strictly require the disable.

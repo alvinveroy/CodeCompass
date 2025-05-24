@@ -793,6 +793,26 @@
 - Continue to use `eslint-disable-next-line @typescript-eslint/require-await` with justification for functions that are intentionally `async` without current `await` expressions for API consistency or future-proofing.
 
 ---
+# Retrospection for Configuration and Logging Refinements (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
+
+## What went well?
+- Identified and addressed inconsistencies in `HTTP_PORT` configuration management, aligning it with best practices for operational parameters (environment/default driven rather than user config file persisted).
+- Standardized logging output in the server's `EADDRINUSE` handler for better consistency by using `logger.info` throughout.
+- The changes were targeted and directly addressed findings from previous retrospections.
+- Unit tests for `ConfigService` were updated to reflect the change in persistence behavior.
+
+## What could be improved?
+- The `getConfig()` method in `ConfigService` was also updated to remove `HTTP_PORT`. This maintains semantic consistency that `HTTP_PORT` is not a "model config" item. If it were needed for broader diagnostic dumps not strictly related to "model config", its removal here could be debated, but for this refactor, consistency was prioritized.
+
+## What did we learn?
+- Clear separation between user-configurable model settings and server operational parameters (like port numbers) is crucial for robust configuration management.
+- Consistent use of the application's logger (instead of direct `console.*` calls) improves log structure and manageability.
+- Regularly reviewing retrospection notes can lead to actionable improvements in code quality and consistency.
+
+## Action Items / Follow-ups
+- Ensure the Git commit ID placeholder is replaced in `CHANGELOG.md` and this retrospection entry.
+
+---
 # Retrospection for ESLint Fixes (server.ts - Empty Function & Unsafe Access) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
 
 ## What went well?

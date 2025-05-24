@@ -12,7 +12,6 @@ interface ModelConfigFile {
   OPENAI_API_KEY?: string;
   GEMINI_API_KEY?: string;
   CLAUDE_API_KEY?: string;
-  HTTP_PORT?: number; // Add this line
   // Add other provider-specific keys here as needed
   SUMMARIZATION_MODEL?: string; // New
   REFINEMENT_MODEL?: string;   // New
@@ -346,16 +345,6 @@ class ConfigService {
     if (modelConfig.CLAUDE_API_KEY) {
       this._claudeApiKey = modelConfig.CLAUDE_API_KEY;
     }
-
-    // Apply HTTP_PORT from modelConfig if present and valid
-    // This value will be used if process.env.HTTP_PORT was not set, or will override it for _httpPort.
-    if (modelConfig.HTTP_PORT !== undefined &&
-        typeof modelConfig.HTTP_PORT === 'number' &&
-        !isNaN(modelConfig.HTTP_PORT) &&
-        modelConfig.HTTP_PORT > 0 && modelConfig.HTTP_PORT < 65536) {
-      this._httpPort = modelConfig.HTTP_PORT;
-      this.logger.info(`HTTP_PORT set to ${this._httpPort} from ${this.MODEL_CONFIG_FILE}`);
-    }
     
     // Ensure process.env reflects the final state. This is crucial for any part of the code
     // or external libraries that might still read from process.env directly.
@@ -499,7 +488,6 @@ class ConfigService {
       DEEPSEEK_API_KEY: this.DEEPSEEK_API_KEY,
       DEEPSEEK_API_URL: this.DEEPSEEK_API_URL,
       DEEPSEEK_MODEL: this.DEEPSEEK_MODEL,
-      HTTP_PORT: this.HTTP_PORT, // Add this line
       OPENAI_API_KEY: this.OPENAI_API_KEY,
       GEMINI_API_KEY: this.GEMINI_API_KEY,
       CLAUDE_API_KEY: this.CLAUDE_API_KEY,
@@ -596,7 +584,6 @@ class ConfigService {
         OPENAI_API_KEY: this.OPENAI_API_KEY,
         GEMINI_API_KEY: this.GEMINI_API_KEY,
         CLAUDE_API_KEY: this.CLAUDE_API_KEY,
-        HTTP_PORT: this.HTTP_PORT, // Use getter to save the effective port
         SUMMARIZATION_MODEL: this.SUMMARIZATION_MODEL, // New
         REFINEMENT_MODEL: this.REFINEMENT_MODEL,     // New
       };

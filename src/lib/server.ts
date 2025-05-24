@@ -558,21 +558,21 @@ export async function startServer(repoPath: string): Promise<void> {
               const statusResponse = await axios.get<IndexingStatusReport>(`http://localhost:${httpPort}/api/indexing-status`, { timeout: 1000 });
               if (statusResponse.status === 200 && statusResponse.data) {
                 const existingStatus = statusResponse.data;
-                console.info(`\n--- Status of existing CodeCompass instance on port ${httpPort} ---`);
-                console.info(`Version: ${pingResponse.data.version || 'unknown'}`);
-                console.info(`Status: ${existingStatus.status}`);
-                console.info(`Message: ${existingStatus.message}`);
+                logger.info(`\n--- Status of existing CodeCompass instance on port ${httpPort} ---`);
+                logger.info(`Version: ${pingResponse.data.version || 'unknown'}`);
+                logger.info(`Status: ${existingStatus.status}`);
+                logger.info(`Message: ${existingStatus.message}`);
                 if (existingStatus.overallProgress !== undefined) {
-                  console.info(`Progress: ${existingStatus.overallProgress}%`);
+                  logger.info(`Progress: ${existingStatus.overallProgress}%`);
                 }
                 if (existingStatus.currentFile) {
-                  console.info(`Current File: ${existingStatus.currentFile}`);
+                  logger.info(`Current File: ${existingStatus.currentFile}`);
                 }
                 if (existingStatus.currentCommit) {
-                  console.info(`Current Commit: ${existingStatus.currentCommit}`);
+                  logger.info(`Current Commit: ${existingStatus.currentCommit}`);
                 }
-                console.info(`Last Updated: ${existingStatus.lastUpdatedAt}`);
-                console.info(`-----------------------------------------------------------\n`);
+                logger.info(`Last Updated: ${existingStatus.lastUpdatedAt}`);
+                logger.info(`-----------------------------------------------------------\n`);
                 logger.info("Current instance will exit as another CodeCompass server is already running.");
                 httpServerSetupReject(new ServerStartupError(`Port ${httpPort} in use by another CodeCompass instance.`, 0));
               } else {
