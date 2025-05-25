@@ -1,8 +1,13 @@
 import path from 'path';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
+import path from 'path';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'; // Import for vi.mocked
 import { Client as ActualMcpClient } from '@modelcontextprotocol/sdk/client/index.js'; // Import for vi.mocked
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
+// Pre-calculate the path for the mock for dist/lib/server.js
+const distLibServerPath = path.resolve(__dirname, '../../../dist/lib/server.js');
+
 import fs from 'fs'; // For mocking fs in changelog test
 
 // Near the top of src/tests/index.test.ts, after imports
@@ -92,8 +97,6 @@ const ServerStartupError = class ServerStartupError extends Error {
 };
 
 // Mock the compiled path that dist/index.js will require
-// Pre-calculate the path for the mock
-const distLibServerPath = path.resolve(__dirname, '../../../dist/lib/server.js');
 vi.mock(distLibServerPath, () => ({
   startServer: mockStartServer,
   startProxyServer: mockStartProxyServer, // Add mock for startProxyServer

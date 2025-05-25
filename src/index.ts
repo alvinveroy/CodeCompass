@@ -147,17 +147,13 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       'start',           // Command for the server to start
       clientRepoPath,    // Repository path for the server
       '--port', '0',     // Instruct server to find a dynamic utility port
-    ], 
-    processOptions: { // Corrected: StdioServerParameters uses 'processOptions' not 'options'
-      // Pass essential environment variables.
-      // Avoid passing the parent's full env if it causes issues.
-      // Specifically, ensure HTTP_PORT is '0' for the child if dynamic porting is desired.
-      env: {
-        ...process.env, // Inherit parent env
-        HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
-        // Any other specific env vars the child server needs
-      },
-    }
+    ],
+    // Environment variables for the spawned server process
+    env: {
+      ...process.env, // Inherit parent env
+      HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
+      // Any other specific env vars the child server needs
+    },
   };
 
   const transport = new StdioClientTransport(serverProcessParams);
