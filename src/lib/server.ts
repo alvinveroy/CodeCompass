@@ -655,6 +655,7 @@ export async function startServer(repoPath: string): Promise<void> {
     
     if (process.env.NODE_ENV === 'test') {
       logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");
+      return; // Resolve the startServer promise in test mode
     } else {
       await new Promise<void>((resolve) => {
         process.on('SIGINT', () => {

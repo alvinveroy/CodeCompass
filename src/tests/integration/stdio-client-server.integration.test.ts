@@ -195,8 +195,9 @@ describe('Stdio Client-Server Integration Tests', () => {
     // This might be called if indexRepository runs automatically on start.
     // The collection name will be derived from configService.COLLECTION_NAME.
     // The mock for initializeQdrant already handles getCollection.
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' }; // Ensure utility server also uses dynamic port
 
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     
     // serverProcess.stderr?.pipe(process.stderr); // For debugging server output
 
@@ -233,7 +234,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000); // Increased timeout for this test
 
   it('should trigger indexing, wait for completion, and perform a search_code', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
@@ -316,7 +318,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 60000); // Increased timeout for indexing and search
 
   it('should execute agent_query and get a mocked LLM response', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
@@ -343,7 +346,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 45000);
 
   it('should call get_changelog and retrieve content from the test CHANGELOG.md', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
@@ -371,7 +375,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000);
 
   it('should call trigger_repository_update and verify indexing starts', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
@@ -414,7 +419,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 45000);
 
   it('should call switch_suggestion_model and get a success response', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
@@ -449,7 +455,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000);
 
   it('should perform some actions and then retrieve session history with get_session_history', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
@@ -489,7 +496,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 50000);
 
   it('should call generate_suggestion and get a mocked LLM response', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     await waitForServerReady(serverProcess);
     
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
@@ -529,7 +537,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 60000);
 
   it('should call get_repository_context and get a mocked LLM summary', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
