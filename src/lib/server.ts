@@ -533,10 +533,12 @@ export async function startServer(repoPath: string): Promise<void> {
                 }
                 logger.info(`Last Updated: ${existingStatus.lastUpdatedAt}`);
                 logger.info(`-----------------------------------------------------------\n`);
-                logger.info("Current instance will exit as another CodeCompass server is already running.");
+                const exitMessage = `Current instance will exit as another CodeCompass server (v${pingResponse.data.version || 'unknown'}) is already running on port ${httpPort}.`;
+                logger.info(exitMessage);
+                console.error(exitMessage); // Also log to console for CLI visibility
                 httpServerSetupReject(new ServerStartupError(
-                  `Port ${httpPort} in use by another CodeCompass instance (v${pingResponse.data.version || 'unknown'}).`,
-                  0, // Exit code 0 for graceful exit/proxy mode
+                  `Port ${httpPort} in use by another CodeCompass instance (v${pingResponse.data.version || 'unknown'}). This instance will exit.`,
+                  0, // Exit code 0 for graceful exit
                   {
                     originalError: error, // The original EADDRINUSE error
                     existingServerStatus: pingResponse.data, // Store the ping data
@@ -643,11 +645,13 @@ export async function startServer(repoPath: string): Promise<void> {
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath} (MCP via stdio)`);
     // Updated console message to reflect stdio MCP and utility HTTP server
     // Only log this if the utility server is actually running (not disabled due to EADDRINUSE by another CC instance)
-    if (!configService.IS_UTILITY_SERVER_DISABLED) {
+    // And if the server isn't exiting due to an existing instance.
+    // The httpServerSetupPromise rejection with exitCode 0 handles the "exiting" scenario.
+    if (!configService.IS_UTILITY_SERVER_DISABLED) { // This implies it's not exiting due to another CC instance
       console.error(`CodeCompass v${VERSION} ready. MCP active on stdio. Utility HTTP server running on port ${httpPort}.`);
-    } else {
-      console.error(`CodeCompass v${VERSION} ready. MCP active on stdio. Utility HTTP server is DISABLED (port ${httpPort} in use by another instance). Proxy mode active for utility tools.`);
     }
+    // The case where IS_UTILITY_SERVER_DISABLED is true (proxy mode) is handled by the EADDRINUSE logic that resolves httpServerSetupPromise.
+    // The case where it exits due to another CC instance (exitCode 0) will have its own console message from the EADDRINUSE handler.
     
     if (process.env.NODE_ENV === 'test') {
       logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");

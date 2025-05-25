@@ -196,7 +196,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     // The collection name will be derived from configService.COLLECTION_NAME.
     // The mock for initializeQdrant already handles getCollection.
 
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     
     // serverProcess.stderr?.pipe(process.stderr); // For debugging server output
 
@@ -234,14 +234,14 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000); // Increased timeout for this test
 
   it('should trigger indexing, wait for completion, and perform a search_code', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     // 1. Trigger indexing explicitly via the tool to ensure it runs for the test.
@@ -317,14 +317,14 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 60000); // Increased timeout for indexing and search
 
   it('should execute agent_query and get a mocked LLM response', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
     
     // Ensure LLM generateText is mocked for the agent's synthesis step
@@ -344,14 +344,14 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 45000);
 
   it('should call get_changelog and retrieve content from the test CHANGELOG.md', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     const changelogResult = await client.callTool({ name: 'get_changelog', arguments: {} });
@@ -372,14 +372,14 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000);
 
   it('should call trigger_repository_update and verify indexing starts', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     // Clear any calls from initial auto-indexing if it happened
@@ -415,14 +415,14 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 45000);
 
   it('should call switch_suggestion_model and get a success response', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     const modelSwitchArgs = { model: 'deepseek-coder', provider: 'deepseek' };
@@ -450,14 +450,14 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000);
 
   it('should perform some actions and then retrieve session history with get_session_history', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     const sessionId = `test-session-${Date.now()}`;
@@ -490,14 +490,14 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 50000);
 
   it('should call generate_suggestion and get a mocked LLM response', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     await waitForServerReady(serverProcess);
     
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Using as any to align with other instances and bypass potential strict type issues for now
     await client.connect(transport);
 
     // Wait for indexing (similar to search_code test)
@@ -530,14 +530,14 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 60000);
 
   it('should call get_repository_context and get a mocked LLM summary', async () => {
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any'
     await client.connect(transport);
 
     // Wait for indexing

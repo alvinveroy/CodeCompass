@@ -521,7 +521,7 @@ describe('Server Startup and Port Handling', () => {
       // When the server exits due to an existing instance, IS_UTILITY_SERVER_DISABLED should remain false,
       // and RELAY_TARGET_UTILITY_PORT should not be set (or remain undefined).
       expect(mcs.IS_UTILITY_SERVER_DISABLED).toBe(false);
-      expect(mcs.RELAY_TARGET_UTILITY_PORT).toBeUndefined(); // Or check it wasn't set from its initial state
+      expect(mcs.RELAY_TARGET_UTILITY_PORT).toBeUndefined(); 
       
       // The stdio MCP server should NOT connect if the server is exiting.
       expect(mockedMcpServerConnect).not.toHaveBeenCalled();
@@ -530,7 +530,9 @@ describe('Server Startup and Port Handling', () => {
       // Verify the utility HTTP server for *this* instance is not logged as "listening"
       expect(ml.info).not.toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`));
       // The console.error message about "Utility HTTP server is DISABLED" should not appear if the instance exits.
+      // The console.error message from server.ts for this path is "Current instance will exit..."
       expect(mockConsoleInfo.mock.calls.some(call => String(call[0]).includes(`Utility HTTP server is DISABLED`))).toBe(false);
+      expect(mockConsoleInfo.mock.calls.some(call => String(call[0]).includes(`Current instance will exit as another CodeCompass server is already running.`))).toBe(true);
     });
 
   it('should handle EADDRINUSE, detect a non-CodeCompass server, log error, and throw ServerStartupError with exitCode 1', async () => {
@@ -975,6 +977,18 @@ describe('startProxyServer', () => {
     vi.mocked(axios.delete).mockReset();
     // eslint-disable-next-line @typescript-eslint/unbound-method
     (axios as unknown as Mock).mockReset(); // For the general axios({ method: ... }) call
+
+    // Reset http server mocks for proxy tests
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostname, callback) {
+      if (typeof callback === 'function') callback();
+      return this;
+    });
+    mockHttpServerOnFn.mockReset();
+    mockHttpServerCloseFn.mockReset().mockImplementation(function(this: any, callback) {
+      if (typeof callback === 'function') callback();
+      return this;
+    });
+
 
     // Initialize the spy on the actual module's function
     findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort');
