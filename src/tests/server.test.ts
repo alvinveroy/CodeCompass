@@ -685,11 +685,14 @@ describe('Server Startup and Port Handling', () => {
         
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
     const mainFailLogCall = ml.error.mock.calls.find(callArgs => 
-      String(callArgs[0]).includes("Failed to start CodeCompass") &&
-      callArgs.length > 1 && 
-      typeof callArgs[1] === 'object' && 
-      callArgs[1] !== null &&
-      String((callArgs[1] as { message?: string })?.message).includes(`Port ${mcs.HTTP_PORT} is in use by an unknown service`)
+      (typeof callArgs[0] === 'string' && callArgs[0].includes("Failed to start CodeCompass") &&
+        callArgs.length > 1 && typeof callArgs[1] === 'object' && callArgs[1] !== null &&
+        String((callArgs[1] as { message?: string })?.message).includes(`Port ${mcs.HTTP_PORT} is in use by an unknown service`)) ||
+      (typeof callArgs[0] === 'object' && callArgs[0] !== null && 
+        String((callArgs[0] as { message?: string })?.message).includes("Failed to start CodeCompass") &&
+        (callArgs[0] as { error?: { message?: string } })?.error &&
+        String((callArgs[0] as { error: { message?: string } }).error.message).includes(`Port ${mcs.HTTP_PORT} is in use by an unknown service`)
+      )
     );
     expect(mainFailLogCall).toBeDefined();
 

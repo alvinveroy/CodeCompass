@@ -441,11 +441,8 @@ class ConfigService {
     this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
     // this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Original
     // Change to:
-    this._httpPort = parseInt(process.env.HTTP_PORT || '', 10);
-    if (isNaN(this._httpPort)) {
-      // _httpPortFallback should be initialized in constructor and available here
-      this._httpPort = this._httpPortFallback;
-    }
+    this.logger.debug(`[config-service reload] process.env.HTTP_PORT before Number(): '${process.env.HTTP_PORT}' (type: ${typeof process.env.HTTP_PORT})`); // THIS LOG
+    this._httpPort = Number(process.env.HTTP_PORT) || this._httpPortFallback;
     
     // Initialize from env, file loading will override if present, then derive.
     this._summarizationModel = process.env.SUMMARIZATION_MODEL || "";
