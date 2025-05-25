@@ -1067,8 +1067,7 @@ describe('startProxyServer', () => {
 
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
     const proxyListenPort = requestedPort + 100; // Assume findFreePort will give this
-    
-  }, 15000);
+        
     // Mock findFreePort using the spy on the imported module
     findFreePortSpy.mockResolvedValue(proxyListenPort);
 
@@ -1078,7 +1077,7 @@ describe('startProxyServer', () => {
 
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
     expect(proxyServerInstance).toBeDefined();
-    
+        
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`This instance (CodeCompass Proxy) is running on port ${proxyListenPort}`));
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -1090,12 +1089,11 @@ describe('startProxyServer', () => {
     expect(response.data).toEqual({ service: "CodeCompassTarget", status: "ok", version: "1.0.0" });
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
-  });
+  }, 15000);
 
   it('should proxy POST /mcp with body and headers', async () => {
     const proxyListenPort = requestedPort + 101;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
-  }, 15000);
 
     const requestBody = { jsonrpc: "2.0", method: "test", params: { data: "value" }, id: 1 };
     const responseBody = { jsonrpc: "2.0", result: "success", id: 1 };
@@ -1127,12 +1125,11 @@ describe('startProxyServer', () => {
     expect(response.headers['mcp-session-id']).toBe(sessionId);
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
-  });
+  }, 15000);
 
   it('should proxy GET /mcp for SSE', async () => {
     const proxyListenPort = requestedPort + 102;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
-  }, 15000);
     const sessionId = "sse-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1145,7 +1142,7 @@ describe('startProxyServer', () => {
         'Connection': 'keep-alive',
         'mcp-session-id': sessionId 
       });
-    
+        
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
     const response = await axios.get(`http://localhost:${proxyListenPort}/mcp`, {
@@ -1159,12 +1156,11 @@ describe('startProxyServer', () => {
     expect(response.data).toBe("event: message\ndata: hello\n\n");
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
-  });
+  }, 15000);
   
   it('should proxy DELETE /mcp', async () => {
     const proxyListenPort = requestedPort + 103;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
-  }, 15000);
     const sessionId = "delete-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1178,16 +1174,15 @@ describe('startProxyServer', () => {
     const response = await axios.delete(`http://localhost:${proxyListenPort}/mcp`, {
       headers: { 'mcp-session-id': sessionId }
     });
-    
+        
     expect(response.status).toBe(204);
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
-  });
+  }, 15000);
 
   it('should proxy /api/indexing-status', async () => {
     const proxyListenPort = requestedPort + 104;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
-  }, 15000);
     const mockStatus = { status: 'idle', message: 'Target server is idle' };
 
     nock(`http://localhost:${targetPort}`)
@@ -1201,19 +1196,18 @@ describe('startProxyServer', () => {
     expect(response.data).toEqual(mockStatus);
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
-  });
+  }, 15000);
 
   it('should handle target server unreachable for /mcp', async () => {
     const proxyListenPort = requestedPort + 105;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
-  }, 15000);
 
     nock(`http://localhost:${targetPort}`)
       .post('/mcp')
       .replyWithError({ message: 'Connection refused', code: 'ECONNREFUSED' });
 
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
-    
+        
     try {
       await axios.post(`http://localhost:${proxyListenPort}/mcp`, {});
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1222,15 +1216,14 @@ describe('startProxyServer', () => {
       expect(error.response.data.error.message).toBe('Proxy error: Bad Gateway');
     }
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Proxy: Error proxying MCP request'), expect.anything());
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Proxy: Error proxying MCP request to target server.'), expect.anything());
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
-  });
+  }, 15000);
 
   it('should forward target server 500 error for /mcp', async () => {
     const proxyListenPort = requestedPort + 106;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
-  }, 15000);
     const errorBody = { jsonrpc: "2.0", error: { code: -32000, message: "Target Internal Error" }, id: null };
 
     nock(`http://localhost:${targetPort}`)
@@ -1248,20 +1241,19 @@ describe('startProxyServer', () => {
     }
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
-  });
+  }, 15000);
    it('should reject if findFreePort fails', async () => {
     const findFreePortError = new Error("No ports for proxy!");
     // Ensure findFreePortSpy is initialized before use, which it is by beforeEach
-  }, 15000);
     findFreePortSpy.mockRejectedValue(findFreePortError);
 
     await expect(serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
       .rejects.toThrow(findFreePortError);
-    
+        
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(ml.error).not.toHaveBeenCalledWith(expect.stringContaining('Proxy server failed to start')); // This log is inside the listen promise
     // findFreePortSpy is restored in afterEach
-  });
+  }, 15000);
 });
 
 describe('MCP Tool Relaying', () => {
