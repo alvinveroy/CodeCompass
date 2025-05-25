@@ -205,9 +205,9 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const transport = new StdioClientTransport({
       // For StdioClientTransport, when providing streams directly:
-      // Use writableStream for stdin and readableStream for stdout.
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      // Use stdin for the child's stdin and stdout for the child's stdout.
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
 
@@ -239,8 +239,8 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     await client.connect(transport);
 
@@ -323,8 +323,8 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     await client.connect(transport);
     
@@ -351,8 +351,8 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     await client.connect(transport);
 
@@ -380,8 +380,8 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     await client.connect(transport);
 
@@ -424,8 +424,8 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     await client.connect(transport);
 
@@ -460,8 +460,8 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     await client.connect(transport);
 
@@ -501,8 +501,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     await client.connect(transport);
 
@@ -542,8 +542,8 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     const transport = new StdioClientTransport({
-      writableStream: serverProcess.stdin!,
-      readableStream: serverProcess.stdout!,
+      stdin: serverProcess.stdin!,
+      stdout: serverProcess.stdout!,
     });
     await client.connect(transport);
 

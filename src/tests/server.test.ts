@@ -732,18 +732,20 @@ describe('Server Startup and Port Handling', () => {
     );
           
     // Then, assert the specific log call for "Failed to start CodeCompass"
+    // The logger is called as: logger.error("Failed to start CodeCompass", { message: err.message });
     const failedToStartLogCall = ml.error.mock.calls.find(call =>
-      call.length === 2 &&
+      call.length === 2 && // Expecting two arguments: message string and metadata object
       typeof call[0] === 'string' &&
       call[0] === "Failed to start CodeCompass" &&
-      typeof call[1] === 'object' &&
+      typeof call[1] === 'object' && // The second argument should be an object
       call[1] !== null &&
-      typeof (call[1] as any).message === 'string'
+      'message' in call[1] && // This object should have a 'message' property
+      typeof (call[1] as { message: unknown }).message === 'string'
     );
-    expect(failedToStartLogCall).toBeDefined();
-    if (failedToStartLogCall && failedToStartLogCall.length > 1 && typeof failedToStartLogCall[1] === 'object' && failedToStartLogCall[1] !== null) {
-      // Check that the second argument (the error object) contains the expected message.
-      // This is more type-safe and idiomatic for checking error objects.
+    expect(failedToStartLogCall).toBeDefined(); // Ensure such a log call was made
+
+    if (failedToStartLogCall) { // If the call was found
+      // failedToStartLogCall[1] is the metadata object, e.g., { message: "actual error message" }
       expect(failedToStartLogCall[1]).toEqual(
         expect.objectContaining({
           message: expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`)
