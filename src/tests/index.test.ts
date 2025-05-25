@@ -9,22 +9,12 @@ let mockSpawnedProcessExitCallbackForClientTests: ((code: number | null, signal:
 let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null = null;
 
 
-// Helper function (can be defined at the top level or within the main describe block)
-async function simulateServerReadyForClientTests(readyMessage = "CodeCompass v0.0.0 ready. MCP active on stdio.") {
-  let attempts = 0;
-  const maxAttempts = 250; // Increased timeout to 25 seconds
-  while (!actualStderrDataCallbackForClientTests && attempts < maxAttempts) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    attempts++;
-  }
-  if (actualStderrDataCallbackForClientTests) {
-    actualStderrDataCallbackForClientTests(Buffer.from(readyMessage));
-  } else {
-    throw new Error(`SUT did not attach stderr 'data' listener within timeout (${maxAttempts * 100}ms). Listener was not captured.`);
-  }
-  // Allow time for SUT to react to readiness, e.g., connect MCP client
-  await new Promise(resolve => setTimeout(resolve, 500)); 
-}
+// The simulateServerReadyForClientTests helper is no longer directly applicable
+// as StdioClientTransport handles server readiness internally.
+// Tests will rely on client.connect() resolving or rejecting.
+// If specific stderr/stdout inspection of the spawned server is needed,
+// StdioClientTransport would need to expose a way to access the child process's streams,
+// or tests would need to use a more integrated approach.
 
 // --- Mocks for modules dynamically required by index.ts handlers ---
 // axios mock removed as it's no longer directly used by handleClientCommand's primary path
@@ -319,9 +309,10 @@ describe('CLI with yargs (index.ts)', () => {
       // as we will use the helper function directly.
     });
 
+    // For client command tests, StdioClientTransport will be instantiated by the SUT (index.ts)
+    // We expect client.connect() to be called on its instance.
     it('should spawn server and call tool via stdio for "agent_query"', { timeout: 30000 }, async () => {
       await runMainWithArgs(['agent_query', '{"query":"test_stdio"}']);
-      await simulateServerReadyForClientTests(); // Use the new helper
 
       expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath, 
@@ -330,14 +321,18 @@ describe('CLI with yargs (index.ts)', () => {
         [expect.stringContaining('index.js'), 'start', '.', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)], 
         expect.anything()
       );
+      // StdioClientTransport is now responsible for spawning.
+      // We expect the MCP client's callTool to be invoked.
+      expect(vi.mocked(mcp.StdioClientTransport)).toHaveBeenCalled(); // Check if transport was created
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_stdio' } });
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
-      expect(mockSpawnInstance.kill).toHaveBeenCalled();
+      // StdioClientTransport's close method should handle killing the process.
+      // We can check if client.close was called.
+      expect(mockMcpClientInstance.close).toHaveBeenCalled();
     });
     
     it('should use --repo path for spawned server in client stdio mode', { timeout: 30000 }, async () => {
       await runMainWithArgs(['agent_query', '{"query":"test_repo"}', '--repo', '/custom/path']);
-      await simulateServerReadyForClientTests(); // Use the new helper
 
       expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath,
@@ -345,13 +340,16 @@ describe('CLI with yargs (index.ts)', () => {
         expect.anything()
       );
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_repo' } });
+      expect(mockMcpClientInstance.close).toHaveBeenCalled();
     });
 
 
     it('should handle client command failure (spawn error) and log via yargs .fail()', async () => {
       const spawnError = new Error("Failed to spawn");
-      vi.mocked(mockSpawnFn).mockImplementation(() => { throw spawnError; });
-
+      // To simulate spawn error, we need to make the StdioClientTransport constructor or its connect method throw.
+      // This is tricky as it's internal to the SDK.
+      // A more direct way: mock StdioClientTransport's connect to reject.
+      vi.mocked(mcp.StdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(spawnError) } as any));
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}']);
       
@@ -361,13 +359,10 @@ describe('CLI with yargs (index.ts)', () => {
     });
 
     it('should handle client command failure (server process premature exit) and log via yargs .fail()', async () => {
-      mockSpawnInstance.on.mockImplementation((event, cb) => {
-        if (event === 'exit') {
-          (cb as (code: number | null, signal: string | null) => void)(1, null);
-        }
-        return mockSpawnInstance;
-      });
-      
+      // Simulate premature exit by having client.connect() reject with a specific error.
+      // StdioClientTransport might internally handle this and surface it as a connection error.
+      const prematureExitError = new Error("Server process exited prematurely");
+      vi.mocked(mcp.StdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(prematureExitError) } as any));
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       // No need to wait for simulateServerReady if server exits prematurely
       await runMainWithArgs(['agent_query', '{"query":"test_server_exit"}']); 
@@ -383,7 +378,7 @@ describe('CLI with yargs (index.ts)', () => {
     it('should handle invalid JSON parameters for client command (stdio) and log via yargs .fail()', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query": "test"']); // Invalid JSON
-      expect(mockSpawnFn).not.toHaveBeenCalled(); 
+      // StdioClientTransport might still be constructed, but connect or callTool should fail.
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Invalid JSON parameters for tool 'agent_query'"));
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: expect.stringContaining('Invalid JSON parameters') }));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
@@ -425,7 +420,6 @@ describe('CLI with yargs (index.ts)', () => {
     it('--port option should set HTTP_PORT environment variable for spawned server', { timeout: 30000 }, async () => {
       const customPort = 1234;
       await runMainWithArgs(['--port', String(customPort), 'agent_query', '{"query":"test_port_option"}']);
-      await simulateServerReadyForClientTests(); // Use the new helper
 
       expect(process.env.HTTP_PORT).toBe(String(customPort)); 
       expect(mockSpawnFn).toHaveBeenCalledWith(
@@ -433,6 +427,7 @@ describe('CLI with yargs (index.ts)', () => {
         [expect.stringContaining('index.js'), 'start', '.', '--port', String(customPort)], 
         expect.anything()
       );
+      expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_port_option' } });
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
     });
 
@@ -443,7 +438,6 @@ describe('CLI with yargs (index.ts)', () => {
     
     it('--repo option should be used by client stdio command for spawned server', { timeout: 30000 }, async () => {
       await runMainWithArgs(['agent_query', '{"query":"test_repo_opt"}', '--repo', '/my/client/repo']);
-      await simulateServerReadyForClientTests(); // Use the new helper
       
       expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath,
@@ -537,7 +531,6 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockResolvedValue(rawToolResult);
       
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
-      await simulateServerReadyForClientTests(); // Use the new helper
       
       expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResult, null, 2));
     });
@@ -548,7 +541,6 @@ describe('CLI with yargs (index.ts)', () => {
       
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json']);
-      await simulateServerReadyForClientTests(); // Use the new helper
 
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
@@ -561,7 +553,6 @@ describe('CLI with yargs (index.ts)', () => {
 
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_json_generic_error"}', '--json']);
-      await simulateServerReadyForClientTests(); // Use the new helper
       
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name } }, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);

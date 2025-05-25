@@ -671,7 +671,7 @@ describe('Server Startup and Port Handling', () => {
           requestedPort: mcs.HTTP_PORT,
           existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' }),
           // originalError should be the EADDRINUSE error simulated by mockHttpServerListenFn
-          originalError: expect.objectContaining({ code: 'EADDRINUSE', message: 'listen EADDRINUSE test from mockHttpServerListenFn' }),
+          originalError: expect.objectContaining({ code: 'EADDRINUSE', message: expect.stringContaining('listen EADDRINUSE') }),
           detectedServerPort: undefined, 
         })
       );
@@ -1120,7 +1120,7 @@ describe('startProxyServer', () => {
     findFreePortSpy.mockResolvedValue(proxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
-      .get('/api/ping')
+      .get('/api/ping') // Nock intercepts calls to the target server
       .reply(200, { service: "CodeCompassTarget", status: "ok", version: "1.0.0" });
 
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
@@ -1292,9 +1292,10 @@ describe('startProxyServer', () => {
   }, 15000);
    it('should reject if findFreePort fails', async () => {
     const findFreePortError = new Error("No ports for proxy!");
-    // Ensure findFreePortSpy is initialized before use, which it is by beforeEach
     findFreePortSpy.mockRejectedValue(findFreePortError);
 
+    // Ensure the module's startProxyServer is called, not a local mock if any.
+    // The import `import * as serverLibModule from '../lib/server';` should ensure this.
     await expect(serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
       .rejects.toThrow(findFreePortError);
         

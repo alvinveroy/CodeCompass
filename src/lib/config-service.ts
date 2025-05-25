@@ -507,30 +507,19 @@ class ConfigService {
   // get HTTP_PORT(): number { return parseInt(process.env.HTTP_PORT || '', 10) || this._httpPort; } // Original
   // Change to:
   get HTTP_PORT(): number {
-    const globalPort = global.CURRENT_HTTP_PORT;
-    const internalPort = this._httpPort;
     let resolvedPort: number;
 
-    if (process.env.NODE_ENV === 'test' || process.env.VITEST_WORKER_ID) {
-      // For tests, we want to ensure _httpPort (from env or fallback) is used,
-      // unless global.CURRENT_HTTP_PORT is EXPLICITLY set by a test for a specific scenario.
-      // The temporary debug was to force this._httpPort. Let's make it conditional.
-      if (global.CURRENT_HTTP_PORT !== undefined) {
-          resolvedPort = global.CURRENT_HTTP_PORT;
-          this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter TEST MODE] Using global.CURRENT_HTTP_PORT: ${resolvedPort}`);
-      } else {
-          resolvedPort = internalPort;
-          this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter TEST MODE] Using this._httpPort: ${resolvedPort} (global was undefined)`);
-      }
+    // _httpPort is initialized from process.env.HTTP_PORT or a fallback in the constructor.
+    // global.CURRENT_HTTP_PORT is used if a port is dynamically found by findFreePort in server.ts.
+    if (global.CURRENT_HTTP_PORT !== undefined) {
+      resolvedPort = global.CURRENT_HTTP_PORT;
+    } else if (this._httpPort !== undefined && !isNaN(this._httpPort)) {
+      resolvedPort = this._httpPort;
     } else {
-      // Production logic: prioritize env var if reparsed here, then global, then internal.
-      // However, process.env.HTTP_PORT should have already set this._httpPort correctly via reload.
-      // So, the original logic of global ?? internal is fine for production.
-      resolvedPort = globalPort ?? internalPort;
-      this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter PROD MODE] global: ${globalPort}, internal: ${internalPort}, resolved: ${resolvedPort}`);
+      resolvedPort = this._httpPortFallback;
     }
-    // Use console.error for very high visibility during integration test failures
-    console.error(`[CONFIG_GETTER_DEBUG] HTTP_PORT returning: ${resolvedPort}. (global: ${globalPort}, internal: ${internalPort}, env: ${process.env.HTTP_PORT}, testMode: ${process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID})`);
+    // Removed noisy console.error, using logger.debug if necessary.
+    // this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter] returning: ${resolvedPort}. (global: ${global.CURRENT_HTTP_PORT}, internal: ${this._httpPort}, env: ${process.env.HTTP_PORT})`);
     return resolvedPort;
   }
 

@@ -373,12 +373,8 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 
 export async function startServer(repoPath: string): Promise<void> {
   // Add these logs for debugging the spawned server's environment
-  // Commenting out this console.error as it might interfere with yargs.fail in CLI tests
-  // console.error(`[Spawned Server DEBUG] process.env.HTTP_PORT: ${process.env.HTTP_PORT}`);
   // Temporarily create a new logger instance for this debug line if the main logger isn't ready
   const tempLogger = winston.createLogger({ transports: [new winston.transports.Console({ format: winston.format.simple() })]});
-  // Commenting out this tempLogger.error as well
-  // tempLogger.error(`[Spawned Server DEBUG] configService.HTTP_PORT before reload: ${configService.HTTP_PORT}`);
   
   // The reloadConfigsFromFile(true) should ensure it re-reads process.env if called early enough.
   // configService.reloadConfigsFromFile(true); // This is already called later
@@ -402,7 +398,6 @@ export async function startServer(repoPath: string): Promise<void> {
   }
   
   logger.info("Starting CodeCompass MCP server...");
-  tempLogger.error(`[Spawned Server DEBUG] configService.HTTP_PORT after reload (which happens next): ${configService.HTTP_PORT}`); // Log before the actual reload in the try block
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function -- Initializing with a no-op, will be reassigned.
   let httpServerSetupResolve: () => void = () => {}; // Add this
@@ -414,7 +409,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
   try {
     configService.reloadConfigsFromFile(true); 
-    logger.info(`[DEBUG server.ts] After reloadConfigsFromFile, configService.HTTP_PORT: ${configService.HTTP_PORT}`);
+    // logger.info(`[DEBUG server.ts] After reloadConfigsFromFile, configService.HTTP_PORT: ${configService.HTTP_PORT}`);
     logger.info(`Initial suggestion model from config: ${configService.SUGGESTION_MODEL}`);
     
     if (!repoPath || repoPath === "${workspaceFolder}" || repoPath.trim() === "") {
@@ -525,14 +520,14 @@ export async function startServer(repoPath: string): Promise<void> {
 
     // Read HTTP_PORT *after* reloadConfigsFromFile has definitely run
     let httpPort = configService.HTTP_PORT; 
-    logger.info(`[INTEGRATION_DEBUG] server.ts: configService.HTTP_PORT initially: ${httpPort}`);
+    // logger.info(`[INTEGRATION_DEBUG] server.ts: configService.HTTP_PORT initially: ${httpPort}`);
     if (httpPort === 0) {
-      logger.info(`[INTEGRATION_DEBUG] server.ts: HTTP_PORT is 0, attempting to find a free port dynamically.`);
+      logger.info(`HTTP_PORT is 0, attempting to find a free port dynamically.`);
       httpPort = await findFreePort(10000 + Math.floor(Math.random() * 10000)); // Start search from a high random port
-      logger.info(`[INTEGRATION_DEBUG] server.ts: findFreePort selected: ${httpPort}. Setting global.CURRENT_HTTP_PORT.`);
+      logger.info(`findFreePort selected: ${httpPort}. Setting global.CURRENT_HTTP_PORT.`);
       global.CURRENT_HTTP_PORT = httpPort; // Ensure this dynamically found port is globally visible if needed
     }
-    logger.info(`[INTEGRATION_DEBUG] server.ts: final httpPort for listen: ${httpPort}`);
+    // logger.info(`[INTEGRATION_DEBUG] server.ts: final httpPort for listen: ${httpPort}`);
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
 
     httpServer.on('error', async (error: NodeJS.ErrnoException) => { // eslint-disable-line @typescript-eslint/no-misused-promises -- Event handler, promise settlement not directly used by emitter
@@ -1606,8 +1601,14 @@ export async function startProxyServer(
   existingServerVersion?: string
 ): Promise<http.Server> { // Changed return type from Promise<void> to Promise<http.Server>
   // Attempt to find a free port starting from requestedPort + 1, or a fixed offset
-  logger.debug(`[DEBUG startProxyServer] About to call findFreePort. Requested: ${requestedPort}, Target: ${targetServerPort}`);
-  const proxyListenPort = await findFreePort(requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50); // Adjust starting logic if needed
+  let proxyListenPort: number;
+  try {
+    logger.debug(`[DEBUG startProxyServer] About to call findFreePort. Requested: ${requestedPort}, Target: ${targetServerPort}`);
+    proxyListenPort = await findFreePort(requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50); // Adjust starting logic if needed
+  } catch (error) {
+    logger.error(`startProxyServer: Failed to find free port for proxy: ${error}`);
+    throw error; // Re-throw to ensure the caller (test) sees the rejection
+  }
   logger.debug(`[DEBUG startProxyServer] findFreePort returned: ${proxyListenPort}`);
   const targetBaseUrl = `http://localhost:${targetServerPort}`;
 

@@ -3,9 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';
-// axios import removed as it's no longer used by handleClientCommand
 import yargs from 'yargs'; // Import yargs
-import { spawn, type ChildProcess } from 'child_process'; // Added spawn
+import type { ChildProcess } from 'child_process'; // Keep type for potential direct use elsewhere
+import * as mcp from '@modelcontextprotocol/sdk'; // For StdioClientTransport etc.
 // Use path.resolve for dynamic requires to make them more robust, especially in test environments.
 const libPath = path.resolve(__dirname, './lib');
 import { hideBin } from 'yargs/helpers'; // Import hideBin
@@ -112,10 +112,10 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
   const { logger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
 
-  logger.info(`CLI Client Mode: Attempting to execute tool '${toolName}' via stdio`);
+  logger.info(`CLI Client Mode: Tool '${toolName}'`);
   
   const clientRepoPath = argv.repo as string || '.'; // Use global --repo option or default to '.'
-  logger.info(`Using repository path for client command: ${clientRepoPath}`);
+  // logger.info(`Using repository path for client command: ${clientRepoPath}`); // Less verbose
 
   let parsedParams: Record<string, unknown> = {};
   if (toolParamsString) {
@@ -134,92 +134,49 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     logger.info('With no parameters.');
   }
 
-  let child: ChildProcess | null = null;
+  const mainScriptPath = path.resolve(__dirname, 'index.js'); // Path to the compiled index.js
+
+  // Parameters for StdioClientTransport to spawn the server
+  const serverProcessParams: mcp.StdioServerParameters = {
+    command: process.execPath, // Path to node executable
+    args: [
+      mainScriptPath,    // Path to this script (dist/index.js)
+      'start',           // Command for the server to start
+      clientRepoPath,    // Repository path for the server
+      '--port', '0',     // Instruct server to find a dynamic utility port
+    ],
+    options: {
+      // Pass essential environment variables.
+      // Avoid passing the parent's full env if it causes issues.
+      // Specifically, ensure HTTP_PORT is '0' for the child if dynamic porting is desired.
+      env: {
+        ...process.env, // Inherit parent env
+        HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
+        // Any other specific env vars the child server needs
+      },
+    }
+  };
+
+  const transport = new mcp.StdioClientTransport(serverProcessParams);
+  const client = new mcp.Client({ name: "codecompass-cli-client", version: getPackageVersion() });
+
+  let clientClosed = false;
+  const cleanup = async () => {
+    if (!clientClosed) {
+      clientClosed = true;
+      logger.info("Closing MCP client and transport.");
+      await client.close().catch(err => logger.error("Error closing MCP client:", err));
+      // StdioClientTransport's close method should handle terminating the child process.
+    }
+  };
+
+  // Handle Ctrl+C and other termination signals gracefully
+  process.on('SIGINT', async () => { await cleanup(); process.exit(0); });
+  process.on('SIGTERM', async () => { await cleanup(); process.exit(0); });
 
   try {
-    const scriptPath = process.argv[1]; // Path to the current script (e.g., dist/index.js)
-    const args = ['start', clientRepoPath];
-    // Pass the --port to the child if it was specified for the parent
-    if (process.env.HTTP_PORT) {
-      args.push('--port', process.env.HTTP_PORT);
-    }
-    logger.info(`Spawning server process: ${process.execPath} ${scriptPath} ${args.join(' ')}`);
-
-    child = spawn(process.execPath, [scriptPath, ...args], {
-      stdio: ['pipe', 'pipe', 'pipe'], // pipe stdin, stdout, stderr
-    });
-
-    let serverReady = false;
-    let earlyExitError: Error | null = null;
-
-    child.stderr?.on('data', (data: Buffer) => {
-      const message = data.toString();
-      logger.debug(`[CLIENT_STDERR_DATA_HANDLER] Received stderr from spawned server: ${message}`);
-      // Heuristic to detect server readiness from stderr logs
-      // Example: "CodeCompass vX.Y.Z ready. MCP active on stdio."
-      if (message.includes("MCP active on stdio")) {
-        serverReady = true;
-        logger.info("Spawned server reported ready on stdio.");
-      }
-      // Log server's stderr, prefixed
-      process.stderr.write(`[server stderr] ${message}`);
-    });
-
-    child.on('error', (err) => {
-      logger.error('Failed to start server process:', err);
-      earlyExitError = err;
-    });
-
-    child.on('exit', (code, signal) => {
-      if (!serverReady && !earlyExitError) { // Exited before explicitly ready and no spawn error
-        const exitMsg = `Server process exited prematurely with code ${code}, signal ${signal}. Check server logs.`;
-        logger.error(exitMsg);
-        earlyExitError = new Error(exitMsg);
-      } else if (code !== 0 && code !== null && !earlyExitError) { // Exited with error after being ready
-         const exitMsg = `Server process exited with error code ${code}, signal ${signal}.`;
-         logger.error(exitMsg);
-         // This might happen if client.close() causes server to exit with error, or other issues.
-         // We might not want to overwrite a specific tool execution error with this.
-         // For now, log it. The primary error will be from callTool if it occurred.
-      }
-    });
-    
-    // Wait a short period for the server to initialize or detect early exit
-    // This is a heuristic. A more robust method would be for the server to send a specific "ready" signal on stdout.
-    // For now, we rely on stderr log parsing and a timeout.
-    await new Promise<void>((resolve, reject) => {
-      const readyTimeout = setTimeout(() => {
-        if (!serverReady && !earlyExitError) {
-          reject(new Error("Timeout waiting for spawned server to become ready."));
-        } else if (earlyExitError) {
-          reject(earlyExitError);
-        } else {
-          resolve();
-        }
-      }, 20000); // 20-second timeout for server readiness (increased from 10s)
-
-      const checkReady = () => {
-        if (serverReady || earlyExitError) {
-          clearTimeout(readyTimeout);
-          if (earlyExitError) reject(earlyExitError); else resolve();
-        } else {
-          setTimeout(checkReady, 100);
-        }
-      };
-      checkReady();
-    });
-    
-    if (earlyExitError) throw earlyExitError; // If an error occurred during spawn/early exit
-
-    const { Client: MCPClient } = require('@modelcontextprotocol/sdk/client/index.js') as typeof import('@modelcontextprotocol/sdk/client/index.js');
-    const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js') as typeof import('@modelcontextprotocol/sdk/client/stdio.js');
-
-    // Pass the child process using the 'process' key as per StdioClientTransportOptions
-    const transport = new StdioClientTransport({ process: child } as any);
-    const client = new MCPClient({ name: "codecompass-cli-client", version: getPackageVersion() });
-
     await client.connect(transport);
-    logger.info("MCP Client connected to spawned server via stdio.");
+    logger.info("MCP Client connected to server via stdio transport.");
     logger.info(`Calling tool '${toolName}' with params:`, parsedParams);
     const result = await client.callTool({ name: toolName, arguments: parsedParams });
     logger.info("Tool execution successful via stdio.");
@@ -228,22 +185,16 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     if (outputJson) {
       console.log(JSON.stringify(result, null, 2));
     } else {
-      if (result.content && Array.isArray(result.content)) {
-        result.content.forEach(item => {
-          if (item && typeof item === 'object' && 'type' in item && item.type === 'text' && 'text' in item && typeof item.text === 'string') {
-            console.log(item.text);
-          } else {
-            console.log(JSON.stringify(item, null, 2));
-          }
-        });
+      // Prefer text content if available
+      const textContent = result.content?.find(c => c.type === 'text')?.text;
+      if (textContent) {
+        console.log(textContent);
       } else if (result) {
         console.log(JSON.stringify(result, null, 2));
       } else {
         logger.info("Tool executed, but no content was returned in the response.");
       }
     }
-    await client.close();
-
   } catch (error: unknown) {
     logger.error(`Error during client command '${toolName}' (stdio):`, error);
     const reportError = (errToReport: unknown) => {
@@ -269,18 +220,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     reportError(error);
     throw error; // Re-throw for yargs
   } finally {
-    if (child) {
-      logger.info(`Terminating spawned server process (PID: ${child.pid}).`);
-      child.kill('SIGTERM'); // Send SIGTERM first
-      // Set a timeout to force kill if it doesn't exit gracefully
-      const killTimeout = setTimeout(() => {
-        if (child && !child.killed) {
-          logger.warn(`Spawned server process (PID: ${child.pid}) did not exit gracefully, sending SIGKILL.`);
-          child.kill('SIGKILL');
-        }
-      }, 2000); // 2 seconds to exit gracefully
-      child.on('exit', () => clearTimeout(killTimeout));
-    }
+    await cleanup();
   }
 }
 
