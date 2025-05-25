@@ -1044,17 +1044,28 @@ describe('startProxyServer', () => {
 
     // Reset http server mocks for proxy tests
     // Ensure listen calls its callback for the proxy server itself
-    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostnameOrCb, _backlogOrCb, _cb) {
-      let cb = _cb;
-      if (typeof _hostnameOrCb === 'function') cb = _hostnameOrCb;
-      else if (typeof _backlogOrCb === 'function') cb = _backlogOrCb;
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostnameOrCb, _backlogOrCb, finalListenCb) {
+      let actualFinalListenCb = finalListenCb;
+      if (typeof _hostnameOrCb === 'function') actualFinalListenCb = _hostnameOrCb;
+      else if (typeof _backlogOrCb === 'function') actualFinalListenCb = _backlogOrCb;
 
-      if (typeof cb === 'function') {
-        process.nextTick(cb); // Simulate async listen
-      }
-      return this; // Return the mock server instance
+      process.nextTick(() => {
+        // Simulate 'listening' event emission
+        if (this._listeners && typeof this._listeners.listening === 'function') {
+          this._listeners.listening();
+        }
+        // Call the final callback for listen() if provided
+        if (typeof actualFinalListenCb === 'function') {
+          actualFinalListenCb();
+        }
+      });
+      return this; 
     });
-    mockHttpServerOnFn.mockReset();
+    mockHttpServerOnFn.mockReset().mockImplementation(function(this: any, event, callback) {
+        if (!this._listeners) this._listeners = {};
+        this._listeners[event] = callback;
+        return this;
+    });
     mockHttpServerCloseFn.mockReset().mockImplementation(function(this: any, callback) {
       if (typeof callback === 'function') callback();
       return this;
@@ -1317,13 +1328,33 @@ describe('MCP Tool Relaying', () => {
     // The `mainStdioMcpServer.tool` calls happen during `startServer`.
     // So, to get handlers, we must call `startServer`.
     // Mock `httpServer.listen` to resolve immediately to prevent hanging.
-    mockHttpServerListenFn.mockImplementation((_port, _hostname, cb) => { 
-      if (typeof cb === 'function') cb(); 
-      return {} as httpModule.Server; // Return a minimal mock server
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostnameOrCb, _backlogOrCb, finalListenCb) {
+      let actualFinalListenCb = finalListenCb;
+      if (typeof _hostnameOrCb === 'function') actualFinalListenCb = _hostnameOrCb;
+      else if (typeof _backlogOrCb === 'function') actualFinalListenCb = _backlogOrCb;
+
+      process.nextTick(() => {
+        // Ensure 'listening' event is emitted for startServer's httpServerSetupPromise
+        if (this._listeners && typeof this._listeners.listening === 'function') {
+          this._listeners.listening();
+        } else {
+          // Fallback: try to find it on the global mock if 'this' context is problematic
+          // This part is tricky and might indicate a deeper issue with 'this' in mocks.
+          // For now, rely on this._listeners being populated by a correctly scoped mockHttpServerOnFn.
+        }
+        
+        if (typeof actualFinalListenCb === 'function') {
+          actualFinalListenCb();
+        }
+      });
+      return this; 
     });
-    // Also ensure the httpServerSetupPromise resolves if startServer uses Promise.race with it.
-    // The fix in server.ts should handle this, but defensive mocking here is okay.
-    // No, the fix in server.ts is better. This mock should just ensure listen() callback is hit.
+    // Ensure mockHttpServerOnFn is also reset/configured if its state affects this
+    mockHttpServerOnFn.mockReset().mockImplementation(function(this: any, event, callback) {
+        if (!this._listeners) this._listeners = {};
+        this._listeners[event] = callback;
+        return this;
+    });
 
     await serverLibModule.startServer(repoPath); // This will call registerTools
   });

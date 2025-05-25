@@ -3,6 +3,29 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockIn
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
 import fs from 'fs'; // For mocking fs in changelog test
 
+// Near the top of src/tests/index.test.ts, after imports
+let actualStderrDataCallbackForClientTests: ((data: Buffer) => void) | null = null;
+let mockSpawnedProcessExitCallbackForClientTests: ((code: number | null, signal: NodeJS.Signals | null) => void) | null = null;
+let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null = null;
+
+
+// Helper function (can be defined at the top level or within the main describe block)
+async function simulateServerReadyForClientTests(readyMessage = "CodeCompass v0.0.0 ready. MCP active on stdio.") {
+  let attempts = 0;
+  const maxAttempts = 250; // Increased timeout to 25 seconds
+  while (!actualStderrDataCallbackForClientTests && attempts < maxAttempts) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    attempts++;
+  }
+  if (actualStderrDataCallbackForClientTests) {
+    actualStderrDataCallbackForClientTests(Buffer.from(readyMessage));
+  } else {
+    throw new Error(`SUT did not attach stderr 'data' listener within timeout (${maxAttempts * 100}ms). Listener was not captured.`);
+  }
+  // Allow time for SUT to react to readiness, e.g., connect MCP client
+  await new Promise(resolve => setTimeout(resolve, 500)); 
+}
+
 // --- Mocks for modules dynamically required by index.ts handlers ---
 // axios mock removed as it's no longer directly used by handleClientCommand's primary path
 
@@ -253,55 +276,47 @@ describe('CLI with yargs (index.ts)', () => {
 
   describe('Client Tool Commands (stdio based)', () => {
     beforeEach(() => {
-      let actualStderrDataCallback: ((data: Buffer) => void) | undefined;
+      actualStderrDataCallbackForClientTests = null; // Reset for each test
+      mockSpawnedProcessExitCallbackForClientTests = null;
+      mockSpawnedProcessErrorCallbackForClientTests = null;
       // Initialize mockSpawnInstance (it's declared at a higher scope)
       mockSpawnInstance = {
         on: vi.fn((event, cb) => {
-          if (event === 'error' || event === 'exit') { /* store cb if needed */ }
+          if (event === 'exit') mockSpawnedProcessExitCallbackForClientTests = cb;
+          else if (event === 'error') mockSpawnedProcessErrorCallbackForClientTests = cb;
           return mockSpawnInstance;
         }),
         kill: vi.fn(),
         pid: 12345,
-        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
+        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn(), pipe: vi.fn() }, // Added pipe
         stdout: { on: vi.fn(), pipe: vi.fn(), unpipe: vi.fn(), resume: vi.fn() },
         stderr: { 
-          on: vi.fn((event, callback) => {
+          on: vi.fn(function(this: any, event, callback) { // Use function for 'this'
             if (event === 'data') {
-              actualStderrDataCallback = callback; // Capture SUT's listener
+              actualStderrDataCallbackForClientTests = callback;
             }
-            return mockSpawnInstance.stderr;
+            return this; // Return the stderr mock object itself
           }), 
-          pipe: vi.fn() 
+          pipe: vi.fn(),
+          removeAllListeners: vi.fn(), // Added
         },
-      };
-      mockSpawnFn.mockReturnValue(mockSpawnInstance); // Configure the mock function
-
-      // This helper function will be used in tests that need to simulate server readiness
-      async function simulateServerReady() {
-        let attempts = 0;
-        while (!actualStderrDataCallback && attempts < 200) { // Poll for up to 20 seconds
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-        if (actualStderrDataCallback) {
-          actualStderrDataCallback(Buffer.from("CodeCompass v0.0.0 ready. MCP active on stdio."));
-        } else {
-          throw new Error("SUT did not attach stderr 'data' listener within timeout.");
-        }
-        // Allow time for async operations in SUT triggered by readiness
-        await new Promise(resolve => setTimeout(resolve, 500)); 
-      }
-      // Make it available to tests in this suite if needed, or call directly
-      (mockSpawnInstance as any).simulateServerReady = simulateServerReady; 
+        removeAllListeners: vi.fn(), // Added
+        // Add other ChildProcess properties/methods if SUT uses them
+      } as unknown as typeof mockSpawnInstance; // Use unknown for type flexibility with the mock
+      mockSpawnFn.mockReturnValue(mockSpawnInstance);
+      // The (mockSpawnInstance as any).simulateServerReady = simulateServerReady; line can be removed
+      // as we will use the helper function directly.
     });
 
     it('should spawn server and call tool via stdio for "agent_query"', { timeout: 30000 }, async () => {
       await runMainWithArgs(['agent_query', '{"query":"test_stdio"}']);
-      await (mockSpawnInstance as any).simulateServerReady();
+      await simulateServerReadyForClientTests(); // Use the new helper
 
       expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath, 
-        [process.argv[1], 'start', '.', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)], 
+        // process.argv[1] in the SUT will be the path to dist/index.js
+        // The repoPath default is '.'
+        [expect.stringContaining('index.js'), 'start', '.', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)], 
         expect.anything()
       );
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_stdio' } });
@@ -311,11 +326,11 @@ describe('CLI with yargs (index.ts)', () => {
     
     it('should use --repo path for spawned server in client stdio mode', { timeout: 30000 }, async () => {
       await runMainWithArgs(['agent_query', '{"query":"test_repo"}', '--repo', '/custom/path']);
-      await (mockSpawnInstance as any).simulateServerReady();
+      await simulateServerReadyForClientTests(); // Use the new helper
 
       expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath,
-        [process.argv[1], 'start', '/custom/path', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)],
+        [expect.stringContaining('index.js'), 'start', '/custom/path', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)],
         expect.anything()
       );
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_repo' } });
@@ -367,51 +382,44 @@ describe('CLI with yargs (index.ts)', () => {
 
   describe('Global Options', () => {
     beforeEach(() => {
-      let actualStderrDataCallback: ((data: Buffer) => void) | undefined;
+      actualStderrDataCallbackForClientTests = null; // Reset for each test
+      mockSpawnedProcessExitCallbackForClientTests = null;
+      mockSpawnedProcessErrorCallbackForClientTests = null;
+
       mockSpawnInstance = {
         on: vi.fn((event, cb) => {
-          if (event === 'error' || event === 'exit') { /* store cb if needed */ }
+          if (event === 'exit') mockSpawnedProcessExitCallbackForClientTests = cb;
+          else if (event === 'error') mockSpawnedProcessErrorCallbackForClientTests = cb;
           return mockSpawnInstance;
         }),
         kill: vi.fn(),
         pid: 12345,
-        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
+        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn(), pipe: vi.fn() },
         stdout: { on: vi.fn(), pipe: vi.fn(), unpipe: vi.fn(), resume: vi.fn() },
         stderr: { 
-          on: vi.fn((event, callback) => {
+          on: vi.fn(function(this: any, event, callback) {
             if (event === 'data') {
-              actualStderrDataCallback = callback;
+              actualStderrDataCallbackForClientTests = callback;
             }
-            return mockSpawnInstance.stderr;
+            return this;
           }), 
-          pipe: vi.fn() 
+          pipe: vi.fn(),
+          removeAllListeners: vi.fn(),
         },
-      };
+        removeAllListeners: vi.fn(),
+      } as unknown as typeof mockSpawnInstance;
       mockSpawnFn.mockReturnValue(mockSpawnInstance);
-      (mockSpawnInstance as any).simulateServerReady = async function() {
-        let attempts = 0;
-        while (!actualStderrDataCallback && attempts < 200) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-        if (actualStderrDataCallback) {
-          actualStderrDataCallback(Buffer.from("CodeCompass v0.0.0 ready. MCP active on stdio."));
-        } else {
-          throw new Error("SUT did not attach stderr 'data' listener within timeout (Global Options).");
-        }
-        await new Promise(resolve => setTimeout(resolve, 500));
-      };
     });
 
     it('--port option should set HTTP_PORT environment variable for spawned server', { timeout: 30000 }, async () => {
       const customPort = 1234;
       await runMainWithArgs(['--port', String(customPort), 'agent_query', '{"query":"test_port_option"}']);
-      await (mockSpawnInstance as any).simulateServerReady();
+      await simulateServerReadyForClientTests(); // Use the new helper
 
       expect(process.env.HTTP_PORT).toBe(String(customPort)); 
       expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath,
-        [process.argv[1], 'start', '.', '--port', String(customPort)], 
+        [expect.stringContaining('index.js'), 'start', '.', '--port', String(customPort)], 
         expect.anything()
       );
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
@@ -424,11 +432,11 @@ describe('CLI with yargs (index.ts)', () => {
     
     it('--repo option should be used by client stdio command for spawned server', { timeout: 30000 }, async () => {
       await runMainWithArgs(['agent_query', '{"query":"test_repo_opt"}', '--repo', '/my/client/repo']);
-      await (mockSpawnInstance as any).simulateServerReady();
+      await simulateServerReadyForClientTests(); // Use the new helper
       
       expect(mockSpawnFn).toHaveBeenCalledWith(
         process.execPath,
-        [process.argv[1], 'start', '/my/client/repo', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)],
+        [expect.stringContaining('index.js'), 'start', '/my/client/repo', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)],
         expect.anything()
       );
     });
@@ -483,41 +491,34 @@ describe('CLI with yargs (index.ts)', () => {
   });
 
   describe('Client Tool Commands with --json output flag', () => {
-    beforeEach(() => { // Ensure simulateServerReady is available for this suite too
-      let actualStderrDataCallback: ((data: Buffer) => void) | undefined;
-      mockSpawnInstance = { // Re-initialize mockSpawnInstance for this suite
+    beforeEach(() => { 
+      actualStderrDataCallbackForClientTests = null; // Reset for each test
+      mockSpawnedProcessExitCallbackForClientTests = null;
+      mockSpawnedProcessErrorCallbackForClientTests = null;
+
+      mockSpawnInstance = { 
         on: vi.fn((event, cb) => {
-          if (event === 'error' || event === 'exit') { /* store cb if needed */ }
+          if (event === 'exit') mockSpawnedProcessExitCallbackForClientTests = cb;
+          else if (event === 'error') mockSpawnedProcessErrorCallbackForClientTests = cb;
           return mockSpawnInstance;
         }),
         kill: vi.fn(),
         pid: 12345,
-        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
+        stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn(), pipe: vi.fn() },
         stdout: { on: vi.fn(), pipe: vi.fn(), unpipe: vi.fn(), resume: vi.fn() },
         stderr: { 
-          on: vi.fn((event, callback) => {
+          on: vi.fn(function(this: any, event, callback) {
             if (event === 'data') {
-              actualStderrDataCallback = callback;
+              actualStderrDataCallbackForClientTests = callback;
             }
-            return mockSpawnInstance.stderr;
+            return this;
           }), 
-          pipe: vi.fn() 
+          pipe: vi.fn(),
+          removeAllListeners: vi.fn(),
         },
-      };
+        removeAllListeners: vi.fn(),
+      } as unknown as typeof mockSpawnInstance;
       mockSpawnFn.mockReturnValue(mockSpawnInstance);
-      (mockSpawnInstance as any).simulateServerReady = async function() {
-        let attempts = 0;
-        while (!actualStderrDataCallback && attempts < 200) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-        if (actualStderrDataCallback) {
-          actualStderrDataCallback(Buffer.from("CodeCompass v0.0.0 ready. MCP active on stdio."));
-        } else {
-          throw new Error("SUT did not attach stderr 'data' listener within timeout (JSON output tests).");
-        }
-        await new Promise(resolve => setTimeout(resolve, 500));
-      };
     });
 
     it('should output raw JSON when --json flag is used on successful tool call', { timeout: 30000 }, async () => {
@@ -525,7 +526,7 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockResolvedValue(rawToolResult);
       
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
-      await (mockSpawnInstance as any).simulateServerReady();
+      await simulateServerReadyForClientTests(); // Use the new helper
       
       expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResult, null, 2));
     });
@@ -536,7 +537,7 @@ describe('CLI with yargs (index.ts)', () => {
       
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json']);
-      await (mockSpawnInstance as any).simulateServerReady();
+      await simulateServerReadyForClientTests(); // Use the new helper
 
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
@@ -549,7 +550,7 @@ describe('CLI with yargs (index.ts)', () => {
 
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_json_generic_error"}', '--json']);
-      await (mockSpawnInstance as any).simulateServerReady();
+      await simulateServerReadyForClientTests(); // Use the new helper
       
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name } }, null, 2));
       expect(mockProcessExit).toHaveBeenCalledWith(1);

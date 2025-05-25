@@ -434,9 +434,11 @@ async function main() {
           // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
           const { logger: failLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
           if (err) {
-              failLogger.error('CLI Error (yargs.fail):', { message: err.message, stack: err.stack });
+              // failLogger.error('CLI Error (yargs.fail):', { message: err.message, stack: err.stack });
+              failLogger.error('CLI Error (yargs.fail): err.message=' + err.message); // Simplified for debugging
           } else if (msg) {
-              failLogger.error('CLI Usage Error (yargs.fail):', msg);
+              // failLogger.error('CLI Usage Error (yargs.fail):', msg);
+              failLogger.error('CLI Usage Error (yargs.fail): msg=' + msg); // Simplified for debugging
           }
       } catch (_e) { // Use _e if error object 'e' is not used
           console.error("Fallback yargs.fail (logger unavailable): ", msg || err);
