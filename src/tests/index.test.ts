@@ -105,6 +105,9 @@ vi.mock('../lib/server.js', () => ({
 }));
 // --- End Mocks ---
 
+// REMOVE the top-level vi.mock('../lib/server.js', ...)
+// The mock for server.js will be handled by vi.doMock within runMainWithArgs
+
 import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
 
 const mockSpawnFn = vi.fn();
@@ -173,11 +176,19 @@ describe('CLI with yargs (index.ts)', () => {
       configService: currentMockConfigServiceInstance, 
       logger: currentMockLoggerInstance,             
     }));
-    vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({
-      startServer: mockStartServer,
-      startProxyServer: mockStartProxyServer,
-      ServerStartupError: ServerStartupError,
-    }));
+
+    const targetServerJsPath = path.join(resolvedSUTLibPath, 'server.js');
+    // Add a log to confirm the path being mocked by vi.doMock
+    console.log(`[TEST_DEBUG] vi.doMock attempting to mock path: ${targetServerJsPath}`);
+
+    vi.doMock(targetServerJsPath, () => { // Use the resolved absolute path
+      console.log(`[TEST_DEBUG] vi.doMock for ${targetServerJsPath} IS BEING USED`); // Debug log
+      return {
+        startServer: mockStartServer,
+        startProxyServer: mockStartProxyServer,
+        ServerStartupError: ServerStartupError,
+      };
+    });
     vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
       Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
     }));

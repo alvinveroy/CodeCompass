@@ -507,24 +507,31 @@ class ConfigService {
   // get HTTP_PORT(): number { return parseInt(process.env.HTTP_PORT || '', 10) || this._httpPort; } // Original
   // Change to:
   get HTTP_PORT(): number {
-    // TEMPORARY DEBUG: Force use of _httpPort to bypass global.CURRENT_HTTP_PORT and process.env.HTTP_PORT in tests
+    const globalPort = global.CURRENT_HTTP_PORT;
+    const internalPort = this._httpPort;
+    let resolvedPort: number;
+
     if (process.env.NODE_ENV === 'test' || process.env.VITEST_WORKER_ID) {
-        // console.error(`[DEBUG ConfigService.HTTP_PORT getter TEST MODE] Forcing this._httpPort: ${this._httpPort}`); // Use console.error for high visibility
-        this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter TEST MODE] Forcing this._httpPort: ${this._httpPort}, global.CURRENT_HTTP_PORT: ${global.CURRENT_HTTP_PORT}`);
-        return this._httpPort;
-    }
-    // Original logic for non-test environments:
-    // Prioritize process.env.HTTP_PORT if set and valid, otherwise use the internal _httpPort
-    // which has already been determined from env, file (if applicable), or fallback.
-    // console.error(`[DEBUG ConfigService.HTTP_PORT getter NORMAL MODE] global.CURRENT_HTTP_PORT: ${global.CURRENT_HTTP_PORT}, this._httpPort: ${this._httpPort}, process.env.HTTP_PORT: ${process.env.HTTP_PORT}`); // Use console.error for high visibility
-    this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter NORMAL MODE] global.CURRENT_HTTP_PORT: ${global.CURRENT_HTTP_PORT}, this._httpPort: ${this._httpPort}, process.env.HTTP_PORT: ${process.env.HTTP_PORT}`);
-    if (process.env.HTTP_PORT) {
-      const envPort = parseInt(process.env.HTTP_PORT, 10);
-      if (!isNaN(envPort)) {
-        return envPort;
+      // For tests, we want to ensure _httpPort (from env or fallback) is used,
+      // unless global.CURRENT_HTTP_PORT is EXPLICITLY set by a test for a specific scenario.
+      // The temporary debug was to force this._httpPort. Let's make it conditional.
+      if (global.CURRENT_HTTP_PORT !== undefined) {
+          resolvedPort = global.CURRENT_HTTP_PORT;
+          this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter TEST MODE] Using global.CURRENT_HTTP_PORT: ${resolvedPort}`);
+      } else {
+          resolvedPort = internalPort;
+          this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter TEST MODE] Using this._httpPort: ${resolvedPort} (global was undefined)`);
       }
+    } else {
+      // Production logic: prioritize env var if reparsed here, then global, then internal.
+      // However, process.env.HTTP_PORT should have already set this._httpPort correctly via reload.
+      // So, the original logic of global ?? internal is fine for production.
+      resolvedPort = globalPort ?? internalPort;
+      this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter PROD MODE] global: ${globalPort}, internal: ${internalPort}, resolved: ${resolvedPort}`);
     }
-    return this._httpPort;
+    // Use console.error for very high visibility during integration test failures
+    console.error(`[CONFIG_GETTER_DEBUG] HTTP_PORT returning: ${resolvedPort}. (global: ${globalPort}, internal: ${internalPort}, env: ${process.env.HTTP_PORT}, testMode: ${process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID})`);
+    return resolvedPort;
   }
 
   // Method to get all relevant config for a provider (example for OpenAI)

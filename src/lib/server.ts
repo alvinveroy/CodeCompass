@@ -521,7 +521,8 @@ export async function startServer(repoPath: string): Promise<void> {
     // activeSessionTransports and /mcp HTTP routes removed for stdio-first MCP.
     // MCP communication is now handled by mainStdioMcpServer via StdioServerTransport.
 
-    const httpPort = configService.HTTP_PORT;
+    const httpPort = configService.HTTP_PORT; 
+    logger.info(`[INTEGRATION_DEBUG] server.ts: const httpPort set to: ${httpPort}`); // Add this log
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
 
     httpServer.on('error', async (error: NodeJS.ErrnoException) => { // eslint-disable-line @typescript-eslint/no-misused-promises -- Event handler, promise settlement not directly used by emitter
@@ -1609,6 +1610,7 @@ export async function startProxyServer(
 
   app.all('/mcp', async (req, res) => {
     const targetUrl = `${targetBaseUrl}/mcp`;
+    logger.info(`[PROXY_DEBUG] MCP Request received by proxy: ${req.method} ${req.url}`);
     logger.info(`Proxy: ${req.method} /mcp from client ${req.ip} -> ${targetUrl}`);
 
     const headersToForward: Record<string, string | string[] | undefined> = {};

@@ -431,7 +431,8 @@ async function main() {
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
     .fail((msg, err, _yargsInstance) => {
-      console.error('YARGS_FAIL_HANDLER_INVOKED', { msg, err });
+      // console.error('YARGS_FAIL_HANDLER_INVOKED', { msg, err });
+      console.error('YARGS_FAIL_HANDLER_INVOKED --- Msg Type:', typeof msg, 'Msg:', msg, '--- Err Type:', typeof err, 'Err:', err ? { message: err.message, name: err.name, stack: err.stack?.substring(0,100) } : null);
       // Dynamically import logger for failure messages if possible
       try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
