@@ -91,8 +91,10 @@ const ServerStartupError = class ServerStartupError extends Error {
   }
 };
 
+// Pre-calculate the path for the mock
+const distLibServerPath = path.resolve(__dirname, '../../../dist/lib/server.js');
 // Mock the compiled path that dist/index.js will require
-vi.mock(path.resolve(__dirname, '../../../dist/lib/server.js'), () => ({
+vi.mock(distLibServerPath, () => ({
   startServer: mockStartServer,
   startProxyServer: mockStartProxyServer, // Add mock for startProxyServer
   ServerStartupError: ServerStartupError, // Use the class defined in the test
