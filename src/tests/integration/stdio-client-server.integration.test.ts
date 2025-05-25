@@ -5,9 +5,8 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-// Move the require to the top-level for consistent module loading.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { configService: actualConfigServiceForMock } = require('../../lib/config-service');
+// actualConfigServiceForMock will be initialized in beforeAll
+let actualConfigServiceForMock: typeof import('../../lib/config-service').configService;
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node'; // For cloning if needed, or just local init
 
@@ -122,6 +121,10 @@ describe('Stdio Client-Server Integration Tests', () => {
   const mainScriptPath = path.resolve(__dirname, '../../../dist/index.js'); // Adjust if structure differs
 
   beforeAll(async () => {
+    // Dynamically import configService
+    const configServiceModule = await import('../../lib/config-service');
+    actualConfigServiceForMock = configServiceModule.configService;
+
     // Create a temporary directory for the Git repository
     testRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), 'codecompass-integration-test-'));
     

@@ -451,7 +451,7 @@ describe('Server Startup and Port Handling', () => {
   });
 
   it('should start the server and listen on the configured port if free', async () => {
-    await startServer('/fake/repo');
+    await serverLibModule.startServer('/fake/repo');
 
     expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
     expect(http.createServer).toHaveBeenCalled();
@@ -494,7 +494,7 @@ describe('Server Startup and Port Handling', () => {
         return { status: 404, data: {} };
       });
 
-      await expect(startServer('/fake/repo')).resolves.toBeUndefined();
+      await expect(serverLibModule.startServer('/fake/repo')).resolves.toBeUndefined();
       
       expect(ml.warn).toHaveBeenCalledWith(`HTTP Port ${mcs.HTTP_PORT} is already in use. Attempting to ping...`);
       expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/ping`, { timeout: 500 });
@@ -745,6 +745,8 @@ describe('Server Startup and Port Handling', () => {
 // ... (after describe('Server Startup and Port Handling', () => { ... });) ...
 
 describe('findFreePort', () => {
+  // findFreePortSpy will be initialized in beforeEach of the startProxyServer suite
+  // For findFreePort direct tests, we don't need a module-level spy on it.
   let mockedHttp: {
     createServer: Mock<() => httpModule.Server>;
     default?: { createServer: Mock<() => httpModule.Server> }; // Optional default
@@ -814,7 +816,7 @@ describe('findFreePort', () => {
       return this;
     });
 
-    await expect(findFreePort(startPort)).resolves.toBe(startPort);
+    await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort);
     expect(mockedHttp.createServer).toHaveBeenCalledTimes(1);
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost');
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1);
@@ -845,7 +847,7 @@ describe('findFreePort', () => {
         return this;
       });
 
-    await expect(findFreePort(startPort)).resolves.toBe(startPort + 1);
+    await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort + 1);
     expect(mockedHttp.createServer).toHaveBeenCalledTimes(2);
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost');
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost');
@@ -864,7 +866,7 @@ describe('findFreePort', () => {
       return this;
     });
 
-    await expect(findFreePort(startPort)).rejects.toThrow(otherError);
+    await expect(serverLibModule.findFreePort(startPort)).rejects.toThrow(otherError);
     expect(mockedHttp.createServer).toHaveBeenCalledTimes(1);
     expect(mockHttpServerCloseFn).not.toHaveBeenCalled();
   });
@@ -887,7 +889,7 @@ describe('findFreePort', () => {
       return this;
     });
 
-    await expect(findFreePort(startPort)).rejects.toThrow(closeError);
+    await expect(serverLibModule.findFreePort(startPort)).rejects.toThrow(closeError);
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1);
   });
 
@@ -921,7 +923,7 @@ describe('findFreePort', () => {
     // For startPort = 65530, it will try 65530, 65531, 65532, 65533, 65534, 65535 (6 times)
     const expectedAttempts = (65535 - startPort) + 1;
 
-    await expect(findFreePort(startPort)).rejects.toThrow('No free ports available.');
+    await expect(serverLibModule.findFreePort(startPort)).rejects.toThrow('No free ports available.');
     expect(mockedHttp.createServer).toHaveBeenCalledTimes(expectedAttempts);
   }, 10000); // Increase timeout if needed for many iterations
 });
@@ -935,6 +937,7 @@ describe('startProxyServer', () => {
   let proxyServerInstance: httpModule.Server | null = null;
   let mcs: MockedConfigService;
   let ml: MockedLogger;
+  let findFreePortSpy: MockInstance<typeof serverLibModule.findFreePort>; // Declare spy here
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -954,6 +957,9 @@ describe('startProxyServer', () => {
     vi.mocked(axios.delete).mockReset();
     // eslint-disable-next-line @typescript-eslint/unbound-method
     (axios as unknown as Mock).mockReset(); // For the general axios({ method: ... }) call
+
+    // Initialize the spy on the actual module's function
+    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort');
   });
 
   afterEach(async () => {
@@ -1143,7 +1149,8 @@ describe('startProxyServer', () => {
   });
    it('should reject if findFreePort fails', async () => {
     const findFreePortError = new Error("No ports for proxy!");
-    findFreePortSpy.mockRejectedValue(findFreePortError); // Configure the spy
+    // Ensure findFreePortSpy is initialized before use, which it is by beforeEach
+    findFreePortSpy.mockRejectedValue(findFreePortError);
 
     await expect(serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
       .rejects.toThrow(findFreePortError);
