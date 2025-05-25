@@ -689,9 +689,9 @@ describe('Server Startup and Port Handling', () => {
 
     if (mainFailLogCall) {
       let errorDetails: Error | { message: string } | undefined;
-      if (mainFailLogCall.length === 1 && typeof mainFailLogCall[0] === 'object' && mainFailLogCall[0] !== null) {
+      if ((mainFailLogCall as any[]).length === 1 && typeof mainFailLogCall[0] === 'object' && mainFailLogCall[0] !== null) {
         errorDetails = (mainFailLogCall[0] as { error?: Error | { message: string } }).error;
-      } else if (mainFailLogCall.length === 2) {
+      } else if ((mainFailLogCall as any[]).length === 2) {
         errorDetails = mainFailLogCall[1] as Error | { message: string };
       }
 
@@ -708,13 +708,16 @@ describe('Server Startup and Port Handling', () => {
       const messagePart1 = `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
       const messagePart2 = `Ping error: ${localPingError.message}`;
       
-      if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
+      if ((call as any[]).length === 1 && typeof call[0] === 'object' && call[0] !== null) {
         const logObject = call[0] as { message?: string };
         return typeof logObject.message === 'string' && logObject.message.includes(messagePart1) && logObject.message.includes(messagePart2);
-      } else if (call.length >= 1 && typeof call[0] === 'string') {
-        // This branch handles call[0] being a string. TypeScript should not infer 'never'.
-        const firstArgAsString = call[0] as string;
-        return firstArgAsString.includes(messagePart1) && firstArgAsString.includes(messagePart2);
+      } else if ((call as any[]).length >= 1) { // Use cast for length check
+        const firstArg = call[0];
+        if (typeof firstArg === 'string') { // Proper type guard
+          const messageStr = firstArg; // Now messageStr is string
+          // ... rest of the logic using messageStr
+          return messageStr.includes(messagePart1) && messageStr.includes(messagePart2);
+        }
       }
       return false;
     });
