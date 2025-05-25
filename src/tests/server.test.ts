@@ -775,52 +775,35 @@ describe('Server Startup and Port Handling', () => {
       })
     );
           
-    // Then, assert the specific log call for "Failed to start CodeCompass"
-    const failedToStartLogCall = ml.error.mock.calls.find(call => {
+    let failedToStartLogCallFound = false;
+    let statusFetchErrorLogFound = false;
+    const expectedFailedToStartMessage = `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`;
+    const expectedStatusFetchErrorMessage = `Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`;
+
+    for (const call of ml.error.mock.calls) {
       if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
-        const logObject = call[0] as { message?: string, error?: { message?: string } }; // Ensure 'error' and 'message' are optional
-        return logObject.message === "Failed to start CodeCompass" &&
-               logObject.error !== undefined && typeof logObject.error === 'object' && logObject.error !== null &&
-               typeof logObject.error.message === 'string';
-      } else if (call.length === 2 && typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass") {
-        const errorArg = call[1];
-        return typeof errorArg === 'object' && errorArg !== null && typeof (errorArg as Error).message === 'string';
-      }
-      return false;
-    });
-
-    expect(failedToStartLogCall).toBeDefined(); 
-
-    if (failedToStartLogCall) {
-      let errorDetails: Error | { message: string } | undefined;
-      if (failedToStartLogCall.length === 1 && typeof failedToStartLogCall[0] === 'object' && failedToStartLogCall[0] !== null) {
-        errorDetails = (failedToStartLogCall[0] as { error?: Error | { message: string } }).error;
-      } else if (failedToStartLogCall.length === 2) {
-        errorDetails = failedToStartLogCall[1] as Error | { message: string };
-      }
-      
-      if (errorDetails && typeof errorDetails === 'object' && 'message' in errorDetails && typeof errorDetails.message === 'string') {
-        expect(errorDetails.message).toContain(`Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`);
-      } else {
-        throw new Error("Logged error details for 'Failed to start CodeCompass' are not in the expected format or 'message' property is missing/invalid.");
-      }
-    } else {
-      throw new Error("Expected 'Failed to start CodeCompass' log call with metadata not found.");
-    }
-
-    // Also check the initial error log about failing to fetch status
-    const statusFetchErrorLogFound = ml.error.mock.calls.some(call => {
-      const expectedMessage = `Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`;
-      if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
-        const logObject = call[0] as { message?: string };
-        return typeof logObject.message === 'string' && logObject.message.includes(expectedMessage);
+        const logObject = call[0] as { message?: string, error?: { message?: string } };
+        if (logObject.message === "Failed to start CodeCompass" && logObject.error?.message?.includes(expectedFailedToStartMessage)) {
+          failedToStartLogCallFound = true;
+        }
+        if (logObject.message?.includes(expectedStatusFetchErrorMessage)) {
+          statusFetchErrorLogFound = true;
+        }
       } else if (call.length >= 1 && typeof call[0] === 'string') {
-        const firstArgAsString = call[0] as string;
-        return firstArgAsString.includes(expectedMessage);
+        const messageStr = call[0];
+        if (messageStr === "Failed to start CodeCompass" && call.length === 2) {
+          const errorArg = call[1] as { message?: string };
+          if (errorArg?.message?.includes(expectedFailedToStartMessage)) {
+            failedToStartLogCallFound = true;
+          }
+        }
+        if (messageStr.includes(expectedStatusFetchErrorMessage)) {
+          statusFetchErrorLogFound = true;
+        }
       }
-      return false;
-    });
-    expect(statusFetchErrorLogFound).toBe(true);
+    }
+    expect(failedToStartLogCallFound, "Expected 'Failed to start CodeCompass' log with specific error details was not found.").toBe(true);
+    expect(statusFetchErrorLogFound, "Expected 'status fetch error' log message was not found.").toBe(true);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
