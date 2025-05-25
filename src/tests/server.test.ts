@@ -613,7 +613,8 @@ describe('Server Startup and Port Handling', () => {
 
   it('should handle EADDRINUSE, ping fails (e.g. ECONNREFUSED), log error, and throw ServerStartupError with exitCode 1', async () => {
     mockHttpServerListenFn.mockImplementation(
-      (
+      ( // Note: `this` context for mockHttpServerInstance might be an issue if not bound correctly or if `this` is not the mock instance.
+        // However, the current mock structure for http.createServer returns an object with these methods, so `this` should be that object.
         _portOrOptions?: number | string | net.ListenOptions | null,
         _hostnameOrListener?: string | (() => void),
         _backlogOrListener?: number | (() => void),
@@ -673,15 +674,15 @@ describe('Server Startup and Port Handling', () => {
     );
         
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
-    const mainFailLogCall = ml.error.mock.calls.find(call => {
-      if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
-        const logObject = call[0] as { message?: string, error?: { message?: string } }; // Ensure 'error' and 'message' are optional
+    const mainFailLogCall = ml.error.mock.calls.find(callArgs => { // Renamed 'call' to 'callArgs' for clarity
+      if (callArgs.length === 1 && typeof callArgs[0] === 'object' && callArgs[0] !== null) {
+        const logObject = callArgs[0] as { message?: string, error?: { message?: string } };
         return logObject.message === "Failed to start CodeCompass" &&
                logObject.error !== undefined && typeof logObject.error === 'object' && logObject.error !== null &&
                typeof logObject.error.message === 'string';
-      } else if (call.length === 2 && typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass") {
-        const errorArg = call[1];
-        return typeof errorArg === 'object' && errorArg !== null && typeof (errorArg as Error).message === 'string';
+      } else if (callArgs.length === 2 && typeof callArgs[0] === 'string' && callArgs[0] === "Failed to start CodeCompass") {
+        const errorArg = callArgs[1] as { message?: string }; // Type assertion for errorArg
+        return typeof errorArg === 'object' && errorArg !== null && typeof errorArg.message === 'string';
       }
       return false;
     });
@@ -689,10 +690,12 @@ describe('Server Startup and Port Handling', () => {
 
     if (mainFailLogCall) {
       let errorDetails: Error | { message: string } | undefined;
-      if ((mainFailLogCall as any[]).length === 1 && typeof mainFailLogCall[0] === 'object' && mainFailLogCall[0] !== null) {
-        errorDetails = (mainFailLogCall[0] as { error?: Error | { message: string } }).error;
-      } else if ((mainFailLogCall as any[]).length === 2) {
-        errorDetails = mainFailLogCall[1] as Error | { message: string };
+      // Access arguments of the found call
+      const callArgs = mainFailLogCall as ReadonlyArray<unknown>;
+      if (callArgs.length === 1 && typeof callArgs[0] === 'object' && callArgs[0] !== null) {
+        errorDetails = (callArgs[0] as { error?: Error | { message: string } }).error;
+      } else if (callArgs.length === 2) {
+        errorDetails = callArgs[1] as Error | { message: string };
       }
 
       if (errorDetails && typeof errorDetails === 'object' && 'message' in errorDetails && typeof errorDetails.message === 'string') {
@@ -708,16 +711,12 @@ describe('Server Startup and Port Handling', () => {
       const messagePart1 = `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
       const messagePart2 = `Ping error: ${localPingError.message}`;
       
-      if ((call as any[]).length === 1 && typeof call[0] === 'object' && call[0] !== null) {
+      if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
         const logObject = call[0] as { message?: string };
         return typeof logObject.message === 'string' && logObject.message.includes(messagePart1) && logObject.message.includes(messagePart2);
-      } else if ((call as any[]).length >= 1) { // Use cast for length check
-        const firstArg = call[0];
-        if (typeof firstArg === 'string') { // Proper type guard
-          const messageStr = firstArg; // Now messageStr is string
-          // ... rest of the logic using messageStr
+      } else if (call.length >= 1 && typeof call[0] === 'string') {
+          const messageStr: string = call[0];
           return messageStr.includes(messagePart1) && messageStr.includes(messagePart2);
-        }
       }
       return false;
     });
@@ -727,7 +726,7 @@ describe('Server Startup and Port Handling', () => {
   });
 
   it('should handle EADDRINUSE, CodeCompass ping OK, but /api/indexing-status fails, log error, and throw ServerStartupError with exitCode 1', async () => {
-    mockHttpServerListenFn.mockImplementation(() => {
+    mockHttpServerListenFn.mockImplementation(function(this: any) { // Added function and this
       const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
       if (errorArgs && typeof errorArgs[1] === 'function') {
         const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
@@ -784,18 +783,19 @@ describe('Server Startup and Port Handling', () => {
     const expectedStatusFetchErrorMessage = `Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`;
 
     for (const call of ml.error.mock.calls) {
-      if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
-        const logObject = call[0] as { message?: string, error?: { message?: string } };
+      const args = call as ReadonlyArray<unknown>; // Treat arguments as a flexible array
+      if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const logObject = args[0] as { message?: string, error?: { message?: string } };
         if (logObject.message === "Failed to start CodeCompass" && logObject.error?.message?.includes(expectedFailedToStartMessage)) {
           failedToStartLogCallFound = true;
         }
         if (logObject.message?.includes(expectedStatusFetchErrorMessage)) {
           statusFetchErrorLogFound = true;
         }
-      } else if (call.length >= 1 && typeof call[0] === 'string') {
-        const messageStr = call[0];
-        if (messageStr === "Failed to start CodeCompass" && call.length === 2) {
-          const errorArg = call[1] as { message?: string };
+      } else if (args.length >= 1 && typeof args[0] === 'string') {
+        const messageStr: string = args[0];
+        if (messageStr === "Failed to start CodeCompass" && args.length === 2) {
+          const errorArg = args[1] as { message?: string };
           if (errorArg?.message?.includes(expectedFailedToStartMessage)) {
             failedToStartLogCallFound = true;
           }
@@ -814,21 +814,17 @@ describe('Server Startup and Port Handling', () => {
     const otherError = new Error('Some other server error') as NodeJS.ErrnoException;
     otherError.code = 'EACCES'; // Example of another error code
 
-    mockHttpServerListenFn.mockImplementation(() => {
+    mockHttpServerListenFn.mockImplementation(function(this: any) { // Added function and this
       // Simulate listen failure by invoking the 'error' handler
       const errorArgs = mockHttpServerOnFn.mock.calls.find(call => call[0] === 'error');
       if (errorArgs && typeof errorArgs[1] === 'function') {
         const errorHandler = errorArgs[1] as (err: NodeJS.ErrnoException) => void;
         errorHandler(otherError);
       }      
-      return this as unknown as httpModule.Server; // Changed to 'this'
+      return this; // Return the mock server instance
     });
     
-    // We need to ensure listen is called to trigger the 'on' setup
-    
-     
     await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
         message: `HTTP server error: ${otherError.message}`,
@@ -836,14 +832,8 @@ describe('Server Startup and Port Handling', () => {
       })
     );
     
-    // Check that the 'on' handler was attached
-         
-         
-     
     expect(mockHttpServerOnFn).toHaveBeenCalledWith('error', expect.any(Function));
         
-    // Check for the specific error log for non-EADDRINUSE
-         
     expect(ml.error).toHaveBeenCalledWith(`Failed to start HTTP server on port ${mcs.HTTP_PORT}: ${otherError.message}`);
      
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
