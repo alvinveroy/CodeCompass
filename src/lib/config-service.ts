@@ -507,8 +507,17 @@ class ConfigService {
   // get HTTP_PORT(): number { return parseInt(process.env.HTTP_PORT || '', 10) || this._httpPort; } // Original
   // Change to:
   get HTTP_PORT(): number {
+    // TEMPORARY DEBUG: Force use of _httpPort to bypass global.CURRENT_HTTP_PORT and process.env.HTTP_PORT in tests
+    if (process.env.NODE_ENV === 'test' || process.env.VITEST_WORKER_ID) {
+        // console.error(`[DEBUG ConfigService.HTTP_PORT getter TEST MODE] Forcing this._httpPort: ${this._httpPort}`); // Use console.error for high visibility
+        this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter TEST MODE] Forcing this._httpPort: ${this._httpPort}, global.CURRENT_HTTP_PORT: ${global.CURRENT_HTTP_PORT}`);
+        return this._httpPort;
+    }
+    // Original logic for non-test environments:
     // Prioritize process.env.HTTP_PORT if set and valid, otherwise use the internal _httpPort
     // which has already been determined from env, file (if applicable), or fallback.
+    // console.error(`[DEBUG ConfigService.HTTP_PORT getter NORMAL MODE] global.CURRENT_HTTP_PORT: ${global.CURRENT_HTTP_PORT}, this._httpPort: ${this._httpPort}, process.env.HTTP_PORT: ${process.env.HTTP_PORT}`); // Use console.error for high visibility
+    this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter NORMAL MODE] global.CURRENT_HTTP_PORT: ${global.CURRENT_HTTP_PORT}, this._httpPort: ${this._httpPort}, process.env.HTTP_PORT: ${process.env.HTTP_PORT}`);
     if (process.env.HTTP_PORT) {
       const envPort = parseInt(process.env.HTTP_PORT, 10);
       if (!isNaN(envPort)) {
