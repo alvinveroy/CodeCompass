@@ -518,7 +518,7 @@ describe('Server Startup and Port Handling', () => {
       expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
       // Check for the specific exit message
       const exitLogFound = ml.info.mock.calls.some(call => 
-        String(call[0]).includes(`Current instance will exit as another CodeCompass server (v${existingServerPingVersion}) is already running on port ${mcs.HTTP_PORT}.`)
+        typeof call[0] === 'string' && call[0].includes(`Current instance will exit as another CodeCompass server (v${existingServerPingVersion}) is already running on port ${mcs.HTTP_PORT}.`)
       );
       expect(exitLogFound).toBe(true);
       
@@ -535,8 +535,8 @@ describe('Server Startup and Port Handling', () => {
       expect(ml.info).not.toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`));
       // The console.error message about "Utility HTTP server is DISABLED" should not appear if the instance exits.
       // The console.error message from server.ts for this path is "Current instance will exit..."
-      expect(mockConsoleInfo.mock.calls.some(call => String(call[0]).includes(`Utility HTTP server is DISABLED`))).toBe(false);
-      expect(mockConsoleInfo.mock.calls.some(call => String(call[0]).includes(`Current instance will exit as another CodeCompass server is already running.`))).toBe(true);
+      expect(mockConsoleError.mock.calls.some(call => typeof call[0] === 'string' && call[0].includes(`Utility HTTP server is DISABLED`))).toBe(false); // Check mockConsoleError
+      expect(mockConsoleError.mock.calls.some(call => typeof call[0] === 'string' && call[0].includes(`Current instance will exit as another CodeCompass server (v${existingServerPingVersion}) is already running on port ${mcs.HTTP_PORT}.`))).toBe(true); // Check mockConsoleError
     });
 
   it('should handle EADDRINUSE, detect a non-CodeCompass server, log error, and throw ServerStartupError with exitCode 1', async () => {
