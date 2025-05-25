@@ -373,10 +373,12 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 
 export async function startServer(repoPath: string): Promise<void> {
   // Add these logs for debugging the spawned server's environment
-  console.error(`[Spawned Server DEBUG] process.env.HTTP_PORT: ${process.env.HTTP_PORT}`);
+  // Commenting out this console.error as it might interfere with yargs.fail in CLI tests
+  // console.error(`[Spawned Server DEBUG] process.env.HTTP_PORT: ${process.env.HTTP_PORT}`);
   // Temporarily create a new logger instance for this debug line if the main logger isn't ready
   const tempLogger = winston.createLogger({ transports: [new winston.transports.Console({ format: winston.format.simple() })]});
-  tempLogger.error(`[Spawned Server DEBUG] configService.HTTP_PORT before reload: ${configService.HTTP_PORT}`);
+  // Commenting out this tempLogger.error as well
+  // tempLogger.error(`[Spawned Server DEBUG] configService.HTTP_PORT before reload: ${configService.HTTP_PORT}`);
   
   // The reloadConfigsFromFile(true) should ensure it re-reads process.env if called early enough.
   // configService.reloadConfigsFromFile(true); // This is already called later

@@ -372,6 +372,8 @@ async function main() {
       async (argv) => {
         // process.env.HTTP_PORT would have been set by the global 'port' option's 'apply'
         // Pass the full argv object so startServerHandler can access .repo if .repoPath is not set
+        // eslint-disable-next-line no-console
+        console.log('[INDEX_TS_DEBUG] Default/Start command handler INVOKED');
         await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; });
       }
     );

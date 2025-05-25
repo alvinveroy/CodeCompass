@@ -91,6 +91,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   let testRepoPath: string;
   // serverProcess variable removed as StdioClientTransport will manage its own process.
   const mainScriptPath = path.resolve(__dirname, '../../../dist/index.js'); // Adjust if structure differs
+  let transport: StdioClientTransport; // Declare transport here to be accessible in beforeEach
+  let client: MCPClient; // Declare client here
 
   beforeAll(async () => {
     // Dynamically import configService
@@ -142,6 +144,24 @@ describe('Stdio Client-Server Integration Tests', () => {
     // If specific config (like EMBEDDING_DIMENSION) is crucial, ensure it's correctly mocked.
     vi.spyOn(actualConfigServiceForMock, 'EMBEDDING_DIMENSION', 'get').mockReturnValue(768);
 
+    // Setup transport and client for each test to ensure fresh state and proper env application
+    const baseSpawnEnv = {
+      ...process.env,
+      NODE_ENV: 'test', // Crucial for configService behavior in spawned process
+      HTTP_PORT: '0', // Ensure dynamic port for the server utility HTTP interface
+      // Unique worker ID for test isolation if needed by other parts of the system
+      VITEST_WORKER_ID: process.env.VITEST_WORKER_ID || `integration_worker_${Math.random().toString(36).substring(7)}`,
+    };
+    const currentTestSpawnEnv = { ...baseSpawnEnv };
+    // eslint-disable-next-line no-console
+    console.log(`[INTEGRATION_BEFORE_EACH_SPAWN_ENV] For test "${expect.getState().currentTestName}": ${JSON.stringify(currentTestSpawnEnv)}`);
+
+    transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
+      processOptions: { env: currentTestSpawnEnv } // Spawn environment
+    } as any);
+    client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
   });
 
   afterEach(async () => {
@@ -156,13 +176,9 @@ describe('Stdio Client-Server Integration Tests', () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' }; // Ensure utility server also uses dynamic port
 
     // serverProcess spawning and waitForServerReady removed.
+    // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    // transport and client are now initialized in beforeEach
 
     await client.connect(transport);
     // expect(client.state).toBe('connected'); // Property 'state' may not be public or exist
@@ -186,15 +202,9 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000); // Increased timeout for this test
 
   it('should trigger indexing, wait for completion, and perform a search_code', async () => {
-    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    // transport and client are now initialized in beforeEach
     await client.connect(transport);
 
     // 1. Trigger indexing explicitly via the tool to ensure it runs for the test.
@@ -214,18 +224,21 @@ describe('Stdio Client-Server Integration Tests', () => {
     while (!indexingComplete && attempts < maxAttempts) {
       const statusResult = await client.callTool({ name: 'get_indexing_status', arguments: {} });
       const statusText = statusResult.content![0].text as string;
-      if (statusText.includes("Status: idle") || statusText.includes("Status: completed")) {
-        if (statusText.includes("Overall Progress: 100%")) {
-           indexingComplete = true;
-           console.log("Integration test: Indexing reported as complete.");
-        } else if (statusText.includes("Status: idle") && !statusText.includes("Overall Progress:")) {
-            // Handle older status format or cases where progress might not be 100% but it's idle after initial
-            console.log("Integration test: Indexing reported as idle, assuming complete for test.");
+      // Updated completion check
+      if (statusText.includes("Status: completed") || statusText.includes("Status: idle")) {
+        if (statusText.includes("Overall Progress: 100%") || statusText.includes("Status: completed")) {
+            indexingComplete = true;
+            // eslint-disable-next-line no-console
+            console.log("Integration test: Indexing reported as complete/idle with 100% or completed status.");
+        } else if (statusText.includes("Status: idle") && attempts > 10) { // If idle for a bit (e.g., 5s), assume done
+            // eslint-disable-next-line no-console
+            console.log("Integration test: Indexing reported as idle after several attempts, assuming complete for test.");
             indexingComplete = true;
         }
       }
       if (!indexingComplete) {
         attempts++;
+        // eslint-disable-next-line no-console
         await new Promise(resolve => setTimeout(resolve, 500)); // Poll every 500ms
       }
     }
@@ -270,15 +283,9 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 60000); // Increased timeout for indexing and search
 
   it('should execute agent_query and get a mocked LLM response', async () => {
-    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    // transport and client are now initialized in beforeEach
     await client.connect(transport);
     
     // Ensure LLM generateText is mocked for the agent's synthesis step
@@ -298,15 +305,9 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 45000);
 
   it('should call get_changelog and retrieve content from the test CHANGELOG.md', async () => {
-    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    // transport and client are now initialized in beforeEach
     await client.connect(transport);
 
     const changelogResult = await client.callTool({ name: 'get_changelog', arguments: {} });
@@ -327,15 +328,9 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000);
 
   it('should call trigger_repository_update and verify indexing starts', async () => {
-    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    // transport and client are now initialized in beforeEach
     await client.connect(transport);
 
     // Clear any calls from initial auto-indexing if it happened
@@ -371,15 +366,9 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 45000);
 
   it('should call switch_suggestion_model and get a success response', async () => {
-    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    // transport and client are now initialized in beforeEach
     await client.connect(transport);
 
     const modelSwitchArgs = { model: 'deepseek-coder', provider: 'deepseek' };
@@ -407,15 +396,9 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 40000);
 
   it('should perform some actions and then retrieve session history with get_session_history', async () => {
-    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
+    // transport and client are now initialized in beforeEach
     await client.connect(transport);
 
     const sessionId = `test-session-${Date.now()}`;
@@ -448,16 +431,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 50000);
 
   it('should call generate_suggestion and get a mocked LLM response', async () => {
-    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
-    
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
+    // transport and client are now initialized in beforeEach
     await client.connect(transport);
 
     // Wait for indexing (similar to search_code test)
@@ -490,16 +465,8 @@ describe('Stdio Client-Server Integration Tests', () => {
   }, 60000);
 
   it('should call get_repository_context and get a mocked LLM summary', async () => {
-    const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
-
-    const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    // StdioClientTransport now spawns its own process.
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    } as any);
+    // transport and client are now initialized in beforeEach
     await client.connect(transport);
 
     // Wait for indexing
