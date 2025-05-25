@@ -63,7 +63,7 @@ This document outlines the tasks required to enhance CodeCompass.
             - If a CodeCompass server responds: Utility HTTP server for the current instance is not started. `configService.IS_UTILITY_SERVER_DISABLED` and `configService.RELAY_TARGET_UTILITY_PORT` are set. `startServer` resolves successfully for `stdio` MCP.
             - If a non-CodeCompass service responds or ping fails: Throws a `ServerStartupError` to cause the instance to exit.
         - Modified MCP tool `get_indexing_status` and added `trigger_repository_update` tool in `src/lib/server.ts` to relay requests via `axios` if `IS_UTILITY_SERVER_DISABLED` is true.
-    - **Testing**: (Completed) Unit tests added for utility HTTP port conflict handling and MCP tool relaying in `src/tests/server.test.ts`. Unit tests for `src/index.ts` updated to reflect new server startup behavior.
+    - **Testing**: (Partially Addressed) Unit tests for utility HTTP port conflict handling and MCP tool relaying in `src/tests/server.test.ts` have been updated and refined. Some timeouts and assertion issues persist, particularly for `startProxyServer` and `MCP Tool Relaying` suites. Unit tests for `src/index.ts` still require significant attention.
     - **Documentation**: (Completed)
         - `README.md` updated regarding utility HTTP port conflicts and relay behavior.
         - CLI help text (via `KNOWN_TOOLS` in `src/index.ts`) implicitly updated by adding `trigger_repository_update`.
@@ -95,3 +95,5 @@ This document outlines the tasks required to enhance CodeCompass.
         - Added integration tests for `get_changelog` and `trigger_repository_update`. (230f232)
         - Enhanced Qdrant client mock in integration tests to support `scroll` and `delete` methods for stale entry cleanup. (230f232)
         - Added integration tests for `switch_suggestion_model`, `get_session_history`, `generate_suggestion`, and `get_repository_context`. (dbbeee9)
+        - Fixed premature server exits in integration tests by ensuring spawned servers use dynamic utility HTTP ports. (95286ae)
+        - Corrected `StdioClientTransport` parameters in integration tests. (0f7f266)

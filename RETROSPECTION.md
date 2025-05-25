@@ -279,6 +279,34 @@
 - Consider if the project's ESLint configuration for `@typescript-eslint/no-unnecessary-type-assertion` needs adjustment or if this pattern (disabling it for `importOriginal`) should be documented as a standard practice for the project.
 
 ---
+
+# Retrospection for Test Suite Stabilization (Git Commit ID: 0488037)
+
+## What went well?
+- Successfully fixed TypeScript errors in `src/tests/integration/stdio-client-server.integration.test.ts` related to `StdioClientTransport` parameters by reverting to `writableStream`/`readableStream` and using `as any`.
+- Resolved "Server process exited prematurely" errors in integration tests by ensuring the spawned server process uses a dynamic port for its utility HTTP server (via `HTTP_PORT=0` environment variable in `spawn` options).
+- Corrected several assertion errors in `src/tests/server.test.ts` related to EADDRINUSE handling, including log messages and expected error object structures.
+- Ensured `startServer` in `src/lib/server.ts` now correctly resolves its promise in test environments, preventing hangs in tests that await its completion.
+- The `http.Server` mock's `listen` method in `src/tests/server.test.ts` was improved to call its callback asynchronously using `process.nextTick`, which is crucial for testing `startProxyServer`.
+- Corrected console mock usage from `mockConsoleInfo` to `mockConsoleError` for specific EADDRINUSE log assertion.
+
+## What could be improved?
+- The `startProxyServer` tests in `src/tests/server.test.ts` continued to time out despite improvements to the `http.Server` mock. This suggests that the mock might still not fully satisfy the `http-proxy` library's expectations, or there are underlying resource contention or cleanup issues between tests that need further investigation.
+- New TypeScript errors (TS2367, TS2493) emerged in `src/tests/server.test.ts` concerning assertions on logger mock calls. This indicates a need for more precise type handling or assertion logic when dealing with the arguments of mocked logging functions.
+- The extensive test suite in `src/tests/index.test.ts` remains largely unaddressed and contains many failures, likely requiring a separate, focused effort to stabilize.
+
+## What did we learn?
+- Ensuring distinct and isolated environments for spawned processes in integration tests (e.g., by using dynamic ports for all potentially conflicting server components) is critical to avoid unexpected interactions and premature exits.
+- Mocking Node.js core modules like `http` for libraries that build upon them (e.g., `http-proxy`) can be challenging. Timeouts often point to these interactions not being fully or correctly simulated by the mock.
+- Asserting mock calls, especially for logging functions that can accept varied argument patterns (e.g., `logger.error(message, errorObj)` vs. `logger.error(errorObj)`), requires careful type checking and accessing the correct argument index within the mock call data to avoid TypeScript errors and ensure assertion accuracy.
+- The `console.error` stream from spawned processes can provide valuable clues (like the "Current instance will exit..." message) for diagnosing test failures in integration scenarios.
+
+## Action Items / Follow-ups
+- Address the new TypeScript errors (TS2367, TS2493) in `src/tests/server.test.ts` by refining logger mock assertions.
+- Deeply investigate and fix the timeouts in the `startProxyServer` tests in `src/tests/server.test.ts`.
+- Systematically re-evaluate and fix the numerous failures in the `src/tests/index.test.ts` suite.
+
+---
 # Retrospection for Test/Build Fixes (server.test.ts - ECONNREFUSED Log Assertion) (Git Commit ID: [GIT_COMMIT_ID_PLACEHOLDER])
  
  ## What went well?

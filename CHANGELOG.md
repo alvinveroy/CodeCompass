@@ -157,6 +157,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Build Fix (Git Commit ID: b9ae103):**
     - Re-addressed and resolved persistent TypeScript build errors (TS2698: Spread types may only be created from object types; TS18046: 'variable' is of type 'unknown') in `src/tests/server.test.ts`.
     - Ensured that all instances of the `actual` variable, obtained from `await importOriginal()` within `vi.mock` factories, are explicitly and correctly typed using `as typeof import('module-name')`. This provides TypeScript with the necessary module type information for safe property access and object spreading.
+- **Test Suite Stabilization (Git Commit ID: 0488037):**
+    - Fixed TypeScript errors and runtime failures in `src/tests/integration/stdio-client-server.integration.test.ts` by correcting `StdioClientTransport` parameters (using `writableStream`/`readableStream` with `as any`) and ensuring spawned servers use dynamic utility HTTP ports (via `HTTP_PORT=0` env var). (0f7f266, 95286ae)
+    - Addressed several test failures in `src/tests/server.test.ts`:
+        - Corrected assertions for EADDRINUSE scenarios (log messages, error details, console mock usage). (94df120, 357eb76, df011bc)
+        - Replaced incorrect mock variable `mockFindFreePort` with `findFreePortSpy`. (df011bc)
+        - Improved `http.Server` mock's `listen` method to call its callback asynchronously for `startProxyServer` tests. (df011bc)
+    - Ensured `startServer` in `src/lib/server.ts` resolves its promise correctly in test environments and updated console message for graceful exits when another instance is detected. (95286ae)
 +- **Linting Finalization (Git Commit ID: 317650b):**
 +    - Resolved all remaining ESLint errors in `src/tests/server.test.ts`.
 +    - Automatically fixed `no-unnecessary-type-assertion` errors that arose after TypeScript compilation successfully typed `importOriginal()` results.

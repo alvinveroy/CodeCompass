@@ -717,9 +717,21 @@ describe('Server Startup and Port Handling', () => {
       expect.stringContaining(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`)
     );
     // The second error log is the generic "Failed to start"
-    const failedToStartLog = ml.error.mock.calls.find(call => call[0] === "Failed to start CodeCompass");
+    const failedToStartLog = ml.error.mock.calls.find(call => typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass" && call.length > 1);
     expect(failedToStartLog).toBeDefined();
-    expect(failedToStartLog![1]).toEqual(expect.objectContaining({
+    // Ensure failedToStartLog is not undefined before accessing its elements
+    if (failedToStartLog) {
+      expect(failedToStartLog[1]).toEqual(expect.objectContaining({
+        name: "ServerStartupError", // Check the error type
+        message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
+        exitCode: 1,
+        requestedPort: mcs.HTTP_PORT,
+        detectedServerPort: mcs.HTTP_PORT,
+        existingServerStatus: pingSuccessData
+      }));
+    }
+    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
+  });
         name: "ServerStartupError", // Check the error type
         message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
         exitCode: 1,
