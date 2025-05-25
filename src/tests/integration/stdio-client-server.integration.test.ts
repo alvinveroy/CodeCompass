@@ -405,7 +405,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
+      processEnv: spawnEnv
     });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
