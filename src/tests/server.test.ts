@@ -695,7 +695,7 @@ describe('Server Startup and Port Handling', () => {
     // Check for the more specific initial logs if needed, e.g.:
     const pingFailedLogFound = ml.error.mock.calls.some(call => {
       const messagePart1 = `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
-      const messagePart2 = `Ping error: ${localPingError.message}`;
+      const messagePart2 = `Ping error: ${String(localPingError)}`;
       
       if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
         const logObject = call[0] as { message?: string };

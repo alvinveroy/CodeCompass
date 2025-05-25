@@ -241,8 +241,16 @@ class ConfigService {
     this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
     // this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Original
     // Change to use _httpPortFallback:
-    this._httpPort = parseInt(process.env.HTTP_PORT || '', 10);
-    if (isNaN(this._httpPort)) {
+    const httpPortEnv = process.env.HTTP_PORT;
+    if (httpPortEnv !== undefined && httpPortEnv !== null && httpPortEnv.trim() !== "") {
+      const parsedPort = parseInt(httpPortEnv, 10);
+      if (!isNaN(parsedPort) && parsedPort >= 0 && parsedPort <= 65535) { // Allow 0
+        this._httpPort = parsedPort;
+      } else {
+        this.logger.warn(`Invalid HTTP_PORT environment variable: "${httpPortEnv}". Falling back to default: ${this._httpPortFallback}`);
+        this._httpPort = this._httpPortFallback;
+      }
+    } else {
       this._httpPort = this._httpPortFallback;
     }
 
