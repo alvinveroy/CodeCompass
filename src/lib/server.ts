@@ -34,6 +34,7 @@ import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provid
 import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
+import winston from "winston"; // Added for temporary logger
 
 // RequestBodyWithId removed as it was only used by the /mcp HTTP endpoint
 
@@ -371,6 +372,16 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 
 
 export async function startServer(repoPath: string): Promise<void> {
+  // Add these logs for debugging the spawned server's environment
+  console.error(`[Spawned Server DEBUG] process.env.HTTP_PORT: ${process.env.HTTP_PORT}`);
+  // Temporarily create a new logger instance for this debug line if the main logger isn't ready
+  const tempLogger = winston.createLogger({ transports: [new winston.transports.Console({ format: winston.format.simple() })]});
+  tempLogger.error(`[Spawned Server DEBUG] configService.HTTP_PORT before reload: ${configService.HTTP_PORT}`);
+  
+  // The reloadConfigsFromFile(true) should ensure it re-reads process.env if called early enough.
+  // configService.reloadConfigsFromFile(true); // This is already called later
+  
+  // --- Original code continues ---
   if (!processListenersAttached) {
     process.on('uncaughtException', (error: Error) => {
       logger.error('UNCAUGHT EXCEPTION:', { message: error.message, stack: error.stack });
@@ -389,6 +400,7 @@ export async function startServer(repoPath: string): Promise<void> {
   }
   
   logger.info("Starting CodeCompass MCP server...");
+  tempLogger.error(`[Spawned Server DEBUG] configService.HTTP_PORT after reload (which happens next): ${configService.HTTP_PORT}`); // Log before the actual reload in the try block
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function -- Initializing with a no-op, will be reassigned.
   let httpServerSetupResolve: () => void = () => {}; // Add this
