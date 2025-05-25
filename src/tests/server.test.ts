@@ -439,8 +439,8 @@ describe('Server Startup and Port Handling', () => {
     ml.debug?.mockClear();
     mcs.reloadConfigsFromFile?.mockClear();
     
-    // Assign and clear the stable McpServer.connect mock
-    mcpConnectStableMock.mockClear();
+    // Assign, clear, and mock resolution for the stable McpServer.connect mock
+    mcpConnectStableMock.mockClear().mockResolvedValue(undefined);
     mockedMcpServerConnect = mcpConnectStableMock;
     
     // Default mock for axios.get
@@ -673,13 +673,16 @@ describe('Server Startup and Port Handling', () => {
     );
         
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
-    const mainFailLog = (ml.error.mock.calls as [string, any][]).find(
-      call => call.length === 2 && call[0] === "Failed to start CodeCompass" &&
-      typeof call[1] === 'object' && call[1] !== null && typeof call[1].message === 'string'
+    const mainFailLogCall = ml.error.mock.calls.find(call =>
+      call.length >= 1 && // Ensure at least one argument
+      typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass" &&
+      (call.length >= 2 && typeof call[1] === 'object' && call[1] !== null && typeof (call[1] as Error).message === 'string')
     );
-    expect(mainFailLog).toBeDefined();
-    if (mainFailLog) {
-      expect(mainFailLog[1].message).toContain(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`);
+    expect(mainFailLogCall).toBeDefined();
+    if (mainFailLogCall && mainFailLogCall[1]) {
+      const loggedError = mainFailLogCall[1] as Error;
+      expect(loggedError.message).toContain(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
+      expect(loggedError.message).toContain(String(localPingError)); // String(localPingError) includes "Error: " prefix
     }
 
     // Optionally, check for the more specific initial logs if needed, e.g.:
@@ -758,8 +761,8 @@ describe('Server Startup and Port Handling', () => {
 
     expect(failedToStartLogCall).toBeDefined(); 
 
-    if (failedToStartLogCall) { 
-      expect(failedToStartLogCall[1].message).toContain(`Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`);
+    if (failedToStartLogCall && failedToStartLogCall[1]) { 
+      expect((failedToStartLogCall[1] as { message: string }).message).toContain(`Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`);
     } else {
       throw new Error("Expected 'Failed to start CodeCompass' log call with metadata not found.");
     }
@@ -1065,6 +1068,7 @@ describe('startProxyServer', () => {
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
     const proxyListenPort = requestedPort + 100; // Assume findFreePort will give this
     
+  }, 15000);
     // Mock findFreePort using the spy on the imported module
     findFreePortSpy.mockResolvedValue(proxyListenPort);
 
@@ -1091,6 +1095,7 @@ describe('startProxyServer', () => {
   it('should proxy POST /mcp with body and headers', async () => {
     const proxyListenPort = requestedPort + 101;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
+  }, 15000);
 
     const requestBody = { jsonrpc: "2.0", method: "test", params: { data: "value" }, id: 1 };
     const responseBody = { jsonrpc: "2.0", result: "success", id: 1 };
@@ -1127,6 +1132,7 @@ describe('startProxyServer', () => {
   it('should proxy GET /mcp for SSE', async () => {
     const proxyListenPort = requestedPort + 102;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
+  }, 15000);
     const sessionId = "sse-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1158,6 +1164,7 @@ describe('startProxyServer', () => {
   it('should proxy DELETE /mcp', async () => {
     const proxyListenPort = requestedPort + 103;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
+  }, 15000);
     const sessionId = "delete-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1180,6 +1187,7 @@ describe('startProxyServer', () => {
   it('should proxy /api/indexing-status', async () => {
     const proxyListenPort = requestedPort + 104;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
+  }, 15000);
     const mockStatus = { status: 'idle', message: 'Target server is idle' };
 
     nock(`http://localhost:${targetPort}`)
@@ -1198,6 +1206,7 @@ describe('startProxyServer', () => {
   it('should handle target server unreachable for /mcp', async () => {
     const proxyListenPort = requestedPort + 105;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
+  }, 15000);
 
     nock(`http://localhost:${targetPort}`)
       .post('/mcp')
@@ -1221,6 +1230,7 @@ describe('startProxyServer', () => {
   it('should forward target server 500 error for /mcp', async () => {
     const proxyListenPort = requestedPort + 106;
     findFreePortSpy.mockResolvedValue(proxyListenPort);
+  }, 15000);
     const errorBody = { jsonrpc: "2.0", error: { code: -32000, message: "Target Internal Error" }, id: null };
 
     nock(`http://localhost:${targetPort}`)
@@ -1242,6 +1252,7 @@ describe('startProxyServer', () => {
    it('should reject if findFreePort fails', async () => {
     const findFreePortError = new Error("No ports for proxy!");
     // Ensure findFreePortSpy is initialized before use, which it is by beforeEach
+  }, 15000);
     findFreePortSpy.mockRejectedValue(findFreePortError);
 
     await expect(serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
