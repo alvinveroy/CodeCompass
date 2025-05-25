@@ -8,12 +8,7 @@ import os from 'os';
 // actualConfigServiceForMock will be initialized in beforeAll
 let actualConfigServiceForMock: typeof import('../../lib/config-service').configService;
 
-interface CustomStdioClientTransportOptions {
-  process: NodeChildProcess;
-  command?: string; 
-  args?: string[];
-  // Add other fields from StdioClientTransportOptions if they exist in the SDK
-}
+// CustomStdioClientTransportOptions interface removed as it's no longer used.
 
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node'; // For cloning if needed, or just local init
@@ -82,50 +77,11 @@ vi.mock('../../lib/repository', async () => {
 });
 
 
-// Helper function to wait for server readiness
-function waitForServerReady(childProcess: ChildProcess, timeout = 30000): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let output = '';
-    const onData = (data: Buffer) => {
-      output += data.toString();
-      // Adjusted readiness message to be more general
-      if (output.includes("MCP active on stdio") || output.includes("Utility HTTP server is DISABLED")) {
-        if (childProcess.stderr) childProcess.stderr.off('data', onData);
-        if (childProcess.stdout) childProcess.stdout.off('data', onData); // Also check stdout if logs go there
-        clearTimeout(timer);
-        resolve();
-      }
-    };
-
-    if (childProcess.stderr) childProcess.stderr.on('data', onData);
-    // Sometimes readiness messages might go to stdout if stderr is not configured for all logs
-    if (childProcess.stdout) childProcess.stdout.on('data', onData);
-
-
-    const timer = setTimeout(() => {
-      if (childProcess.stderr) childProcess.stderr.off('data', onData);
-      if (childProcess.stdout) childProcess.stdout.off('data', onData);
-      reject(new Error(`Timeout waiting for server to be ready. Last output: ${output.slice(-500)}`));
-    }, timeout);
-
-    childProcess.on('exit', (code, signal) => {
-      clearTimeout(timer);
-      if (childProcess.stderr) childProcess.stderr.off('data', onData);
-      if (childProcess.stdout) childProcess.stdout.off('data', onData);
-      reject(new Error(`Server process exited prematurely with code ${code}, signal ${signal}. Output: ${output.slice(-500)}`));
-    });
-    childProcess.on('error', (err) => {
-      clearTimeout(timer);
-      if (childProcess.stderr) childProcess.stderr.off('data', onData);
-      if (childProcess.stdout) childProcess.stdout.off('data', onData);
-      reject(new Error(`Server process failed to start: ${err.message}. Output: ${output.slice(-500)}`));
-    });
-  });
-}
+// waitForServerReady function removed as StdioClientTransport now manages its own process.
 
 describe('Stdio Client-Server Integration Tests', () => {
   let testRepoPath: string;
-  let serverProcess: ChildProcess | null = null;
+  // serverProcess variable removed as StdioClientTransport will manage its own process.
   const mainScriptPath = path.resolve(__dirname, '../../../dist/index.js'); // Adjust if structure differs
 
   beforeAll(async () => {
@@ -158,11 +114,7 @@ describe('Stdio Client-Server Integration Tests', () => {
   });
 
   afterAll(async () => {
-    if (serverProcess && !serverProcess.killed) {
-      serverProcess.kill('SIGTERM');
-      await new Promise(resolve => setTimeout(resolve, 500)); // Give it time to exit
-      if (!serverProcess.killed) serverProcess.kill('SIGKILL');
-    }
+    // serverProcess cleanup removed from afterAll.
     if (testRepoPath) {
       await fs.remove(testRepoPath);
       console.log(`Test repository removed from: ${testRepoPath}`);
@@ -185,17 +137,7 @@ describe('Stdio Client-Server Integration Tests', () => {
   });
 
   afterEach(async () => {
-    if (serverProcess && !serverProcess.killed) {
-      serverProcess.kill('SIGTERM');
-      // Wait for graceful exit or timeout
-      const exitPromise = new Promise(resolve => serverProcess!.on('exit', resolve));
-      const timeoutPromise = new Promise(resolve => setTimeout(resolve, 1000)); // 1s timeout
-      await Promise.race([exitPromise, timeoutPromise]);
-      if (!serverProcess.killed) {
-        serverProcess.kill('SIGKILL');
-      }
-      serverProcess = null;
-    }
+    // serverProcess cleanup removed from afterEach.
   });
 
   it('should start the server, connect a client via stdio, and call get_indexing_status', async () => {
@@ -205,14 +147,13 @@ describe('Stdio Client-Server Integration Tests', () => {
     // The mock for initializeQdrant already handles getCollection.
     const spawnEnv = { ...process.env, HTTP_PORT: '0' }; // Ensure utility server also uses dynamic port
 
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    
-    // serverProcess.stderr?.pipe(process.stderr); // For debugging server output
-
-    await waitForServerReady(serverProcess);
-
-    // Pass the child process directly, using 'process' key, and cast to any
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
+    // serverProcess spawning and waitForServerReady removed.
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
 
     await client.connect(transport);
@@ -238,11 +179,14 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   it('should trigger indexing, wait for completion, and perform a search_code', async () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    await waitForServerReady(serverProcess);
-
+    // serverProcess spawning and waitForServerReady removed.
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
     await client.connect(transport);
 
     // 1. Trigger indexing explicitly via the tool to ensure it runs for the test.
@@ -319,11 +263,14 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   it('should execute agent_query and get a mocked LLM response', async () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    await waitForServerReady(serverProcess);
-
+    // serverProcess spawning and waitForServerReady removed.
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
     await client.connect(transport);
     
     // Ensure LLM generateText is mocked for the agent's synthesis step
@@ -344,11 +291,14 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   it('should call get_changelog and retrieve content from the test CHANGELOG.md', async () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    await waitForServerReady(serverProcess);
-
+    // serverProcess spawning and waitForServerReady removed.
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
     await client.connect(transport);
 
     const changelogResult = await client.callTool({ name: 'get_changelog', arguments: {} });
@@ -370,11 +320,14 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   it('should call trigger_repository_update and verify indexing starts', async () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    await waitForServerReady(serverProcess);
-
+    // serverProcess spawning and waitForServerReady removed.
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
     await client.connect(transport);
 
     // Clear any calls from initial auto-indexing if it happened
@@ -411,11 +364,14 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   it('should call switch_suggestion_model and get a success response', async () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    await waitForServerReady(serverProcess);
-
+    // serverProcess spawning and waitForServerReady removed.
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
     await client.connect(transport);
 
     const modelSwitchArgs = { model: 'deepseek-coder', provider: 'deepseek' };
@@ -444,11 +400,14 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   it('should perform some actions and then retrieve session history with get_session_history', async () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    await waitForServerReady(serverProcess);
-
+    // serverProcess spawning and waitForServerReady removed.
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
     await client.connect(transport);
 
     const sessionId = `test-session-${Date.now()}`;
@@ -482,11 +441,15 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   it('should call generate_suggestion and get a mocked LLM response', async () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    await waitForServerReady(serverProcess);
+    // serverProcess spawning and waitForServerReady removed.
     
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     await client.connect(transport);
 
     // Wait for indexing (similar to search_code test)
@@ -520,11 +483,15 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   it('should call get_repository_context and get a mocked LLM summary', async () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
-    serverProcess = spawn('node', [mainScriptPath, 'start', testRepoPath, '--port', '0'], { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv });
-    await waitForServerReady(serverProcess);
+    // serverProcess spawning and waitForServerReady removed.
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({ process: serverProcess! } as any);
+    // StdioClientTransport now spawns its own process.
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
+      spawnOptions: { env: spawnEnv }
+    });
     await client.connect(transport);
 
     // Wait for indexing
