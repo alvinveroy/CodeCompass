@@ -741,9 +741,14 @@ describe('Server Startup and Port Handling', () => {
       typeof (call[1] as any).message === 'string'
     );
     expect(failedToStartLogCall).toBeDefined();
-    if (failedToStartLogCall) {
-      const loggedErrorObject = failedToStartLogCall[1] as { message: string };
-      expect(loggedErrorObject.message).toContain(`Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`);
+    if (failedToStartLogCall && failedToStartLogCall.length > 1 && typeof failedToStartLogCall[1] === 'object' && failedToStartLogCall[1] !== null) {
+      // Check that the second argument (the error object) contains the expected message.
+      // This is more type-safe and idiomatic for checking error objects.
+      expect(failedToStartLogCall[1]).toEqual(
+        expect.objectContaining({
+          message: expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`)
+        })
+      );
     }
 
     // Also check the initial error log about failing to fetch status
