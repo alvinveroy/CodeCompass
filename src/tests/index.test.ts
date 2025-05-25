@@ -48,7 +48,7 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Mock for StdioC
 }));
 
 // Store the original configService mock structure to reset it
-const originalMockConfigServiceInstance = { HTTP_PORT: 3001, AGENT_QUERY_TIMEOUT: 180000, /* other relevant defaults */ };
+const originalMockConfigServiceInstance = { HTTP_PORT: 0, AGENT_QUERY_TIMEOUT: 180000, /* other relevant defaults, use 0 for HTTP_PORT in tests */ };
 // These will be freshly created in beforeEach for use with vi.doMock
 let currentMockConfigServiceInstance: typeof originalMockConfigServiceInstance;
 let currentMockLoggerInstance: {
@@ -507,7 +507,12 @@ describe('CLI with yargs (index.ts)', () => {
       await runMainWithArgs(['--help']);
       // The scriptName is set to "codecompass", so help output should reflect that.
       // Yargs typically shows "Usage: <scriptName> [command]"
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Usage: codecompass [repoPath]"));
+      // Check for a more general part of the help output, or multiple distinct parts.
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Commands:"));
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("codecompass start [repoPath]"));
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Options:"));
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("--help"));
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("--port"));
       expect(mockProcessExit).toHaveBeenCalledWith(0);
     });
   });
