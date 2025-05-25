@@ -661,8 +661,8 @@ describe('Server Startup and Port Handling', () => {
         return logObject.message === "Failed to start CodeCompass" &&
                logObject.error !== undefined && typeof logObject.error === 'object' && logObject.error !== null &&
                typeof logObject.error.message === 'string';
-      } else if (callArgs.length === 2 && typeof callArgs[0] === 'string' && callArgs[0] === "Failed to start CodeCompass") {
-        const errorArg = callArgs[1] as { message?: string }; // Type assertion for errorArg
+      } else if ((callArgs as any[]).length === 2 && typeof callArgs[0] === 'string' && callArgs[0] === "Failed to start CodeCompass") {
+        const errorArg = callArgs[1] as { message?: string }; // Keep this assertion
         return typeof errorArg === 'object' && errorArg !== null && typeof errorArg.message === 'string';
       }
       return false;
