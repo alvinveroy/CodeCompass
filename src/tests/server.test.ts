@@ -766,13 +766,12 @@ describe('Server Startup and Port Handling', () => {
     // Then, assert the specific log call for "Failed to start CodeCompass"
     const failedToStartLogCall = ml.error.mock.calls.find(call => {
       if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
-        const logObject = call[0] as { message?: string, error?: { message?: string } };
-        return logObject.message === "Failed to start CodeCompass" && 
-               typeof logObject.error === 'object' && logObject.error !== null && 
+        const logObject = call[0] as { message?: string, error?: Error | { message?: string } };
+        return logObject.message === "Failed to start CodeCompass" &&
+               typeof logObject.error === 'object' && logObject.error !== null &&
                typeof logObject.error.message === 'string';
-      } else if (call.length === 2 && typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass" &&
-                 typeof call[1] === 'object' && call[1] !== null && typeof (call[1] as { message: string }).message === 'string') {
-        return true; // Original structure
+      } else if (call.length === 2 && typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass") {
+        return typeof call[1] === 'object' && call[1] !== null && typeof (call[1] as Error).message === 'string';
       }
       return false;
     });
@@ -780,19 +779,32 @@ describe('Server Startup and Port Handling', () => {
     expect(failedToStartLogCall).toBeDefined(); 
 
     if (failedToStartLogCall) {
-      const loggedErrorObject = (failedToStartLogCall.length === 1 ? (failedToStartLogCall[0] as { error: { message: string } }).error : failedToStartLogCall[1]) as { message: string };
-      expect(loggedErrorObject.message).toContain(`Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`);
+      const errorDetails = failedToStartLogCall.length === 1 && typeof failedToStartLogCall[0] === 'object' && failedToStartLogCall[0] !== null
+        ? (failedToStartLogCall[0] as { error: Error }).error
+        : failedToStartLogCall[1];
+      
+      if (errorDetails instanceof Error) {
+        expect(errorDetails.message).toContain(`Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`);
+      } else if (typeof errorDetails === 'object' && errorDetails !== null && 'message' in errorDetails) { // Handle case where it's an object with message
+        expect((errorDetails as {message: string}).message).toContain(`Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`);
+      } else {
+        throw new Error("Logged error details for 'Failed to start CodeCompass' are not in the expected format.");
+      }
     } else {
       throw new Error("Expected 'Failed to start CodeCompass' log call with metadata not found.");
     }
 
     // Also check the initial error log about failing to fetch status
-    // This log might be `logger.error(messageString)` or `logger.error(messageString, errorObject)`.
-    // We need to find a call where the first argument contains the specific message.
-    const statusFetchErrorLogFound = ml.error.mock.calls.some(call => 
-      typeof call[0] === 'string' && 
-      (call[0] as string).includes(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`)
-    );
+    const statusFetchErrorLogFound = ml.error.mock.calls.some(call => {
+      const expectedMessage = `Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`;
+      if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
+        const logObject = call[0] as { message?: string };
+        return typeof logObject.message === 'string' && logObject.message.includes(expectedMessage);
+      } else if (call.length >= 1 && typeof call[0] === 'string') {
+        return call[0].includes(expectedMessage);
+      }
+      return false;
+    });
     expect(statusFetchErrorLogFound).toBe(true);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
