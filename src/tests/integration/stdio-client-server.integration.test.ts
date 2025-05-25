@@ -160,8 +160,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processEnv: spawnEnv
-    });
+      processOptions: { env: spawnEnv }
+    } as any);
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
 
     await client.connect(transport);
@@ -192,8 +192,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processEnv: spawnEnv
-    });
+      processOptions: { env: spawnEnv }
+    } as any);
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -276,8 +276,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processEnv: spawnEnv
-    });
+      processOptions: { env: spawnEnv }
+    } as any);
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
     
@@ -304,8 +304,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processEnv: spawnEnv
-    });
+      processOptions: { env: spawnEnv }
+    } as any);
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -333,8 +333,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processEnv: spawnEnv
-    });
+      processOptions: { env: spawnEnv }
+    } as any);
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -377,8 +377,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processEnv: spawnEnv
-    });
+      processOptions: { env: spawnEnv }
+    } as any);
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -456,8 +456,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processEnv: spawnEnv
-    });
+      processOptions: { env: spawnEnv }
+    } as any);
     await client.connect(transport);
 
     // Wait for indexing (similar to search_code test)
@@ -498,8 +498,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processEnv: spawnEnv
-    });
+      processOptions: { env: spawnEnv }
+    } as any);
     await client.connect(transport);
 
     // Wait for indexing

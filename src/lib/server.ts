@@ -525,6 +525,8 @@ export async function startServer(repoPath: string): Promise<void> {
 
     httpServer.on('error', async (error: NodeJS.ErrnoException) => { // eslint-disable-line @typescript-eslint/no-misused-promises -- Event handler, promise settlement not directly used by emitter
       if (error.code === 'EADDRINUSE') {
+        // ADD THIS LOG:
+        logger.error(`[Spawned Server EADDRINUSE DEBUG] Entered EADDRINUSE block. Current httpPort variable is: ${httpPort}. configService.HTTP_PORT is: ${configService.HTTP_PORT}`);
         logger.warn(`HTTP Port ${httpPort} is already in use. Attempting to ping...`);
         try {
           const pingResponse = await axios.get<PingResponseData>(`http://localhost:${httpPort}/api/ping`, { timeout: 500 });
