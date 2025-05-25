@@ -661,10 +661,16 @@ describe('Server Startup and Port Handling', () => {
         return logObject.message === "Failed to start CodeCompass" &&
                logObject.error !== undefined && typeof logObject.error === 'object' && logObject.error !== null &&
                typeof logObject.error.message === 'string';
-      } else if ((callArgs as any[]).length === 2 && typeof callArgs[0] === 'string' && callArgs[0] === "Failed to start CodeCompass") {
-        const errorArg = callArgs[1] as { message?: string }; // Keep this assertion
+      } else if (
+        Array.isArray(callArgs) && // Ensure it's an array
+        callArgs.length === 2 &&    // Check length
+        typeof callArgs[0] === 'string' &&
+        callArgs[0] === "Failed to start CodeCompass"
+    ) {
+        // Now TypeScript should be more confident that callArgs[1] exists.
+        const errorArg = callArgs[1] as { message?: string }; // Keep the assertion for the object shape
         return typeof errorArg === 'object' && errorArg !== null && typeof errorArg.message === 'string';
-      }
+    }
       return false;
     });
     expect(mainFailLogCall).toBeDefined();
