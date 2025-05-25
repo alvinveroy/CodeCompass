@@ -705,9 +705,9 @@ describe('Server Startup and Port Handling', () => {
       })
     );
         
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by another CodeCompass instance, but it failed to provide status. This instance will exit.`));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`));
     expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({
-      message: `Port ${mcs.HTTP_PORT} in use by another CodeCompass instance which is unhealthy (status fetch failed).`,
+      message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
     }));
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
