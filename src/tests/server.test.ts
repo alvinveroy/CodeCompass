@@ -516,7 +516,11 @@ describe('Server Startup and Port Handling', () => {
       expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
       expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerPingVersion}`));
       expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
-      expect(ml.info).toHaveBeenCalledWith("Current instance will exit as another CodeCompass server is already running.");
+      // Check for the specific exit message
+      const exitLogFound = ml.info.mock.calls.some(call => 
+        String(call[0]).includes(`Current instance will exit as another CodeCompass server (v${existingServerPingVersion}) is already running on port ${mcs.HTTP_PORT}.`)
+      );
+      expect(exitLogFound).toBe(true);
       
       // When the server exits due to an existing instance, IS_UTILITY_SERVER_DISABLED should remain false,
       // and RELAY_TARGET_UTILITY_PORT should not be set (or remain undefined).
@@ -713,12 +717,16 @@ describe('Server Startup and Port Handling', () => {
       expect.stringContaining(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`)
     );
     // The second error log is the generic "Failed to start"
-    expect(ml.error).toHaveBeenCalledWith(
-      "Failed to start CodeCompass",
-      expect.objectContaining({
+    const failedToStartLog = ml.error.mock.calls.find(call => call[0] === "Failed to start CodeCompass");
+    expect(failedToStartLog).toBeDefined();
+    expect(failedToStartLog![1]).toEqual(expect.objectContaining({
+        name: "ServerStartupError", // Check the error type
         message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
-      })
-    );
+        exitCode: 1,
+        requestedPort: mcs.HTTP_PORT,
+        detectedServerPort: mcs.HTTP_PORT,
+        existingServerStatus: pingSuccessData
+    }));
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
@@ -979,9 +987,16 @@ describe('startProxyServer', () => {
     (axios as unknown as Mock).mockReset(); // For the general axios({ method: ... }) call
 
     // Reset http server mocks for proxy tests
-    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostname, callback) {
-      if (typeof callback === 'function') callback();
-      return this;
+    // Ensure listen calls its callback for the proxy server itself
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostnameOrCb, _backlogOrCb, _cb) {
+      let cb = _cb;
+      if (typeof _hostnameOrCb === 'function') cb = _hostnameOrCb;
+      else if (typeof _backlogOrCb === 'function') cb = _backlogOrCb;
+
+      if (typeof cb === 'function') {
+        process.nextTick(cb); // Simulate async listen
+      }
+      return this; // Return the mock server instance
     });
     mockHttpServerOnFn.mockReset();
     mockHttpServerCloseFn.mockReset().mockImplementation(function(this: any, callback) {
