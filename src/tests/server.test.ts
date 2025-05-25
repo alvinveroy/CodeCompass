@@ -707,7 +707,7 @@ describe('Server Startup and Port Handling', () => {
         message: `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`,
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
-        detectedServerPort: mcs.HTTP_PORT,
+        detectedServerPort: mcs.HTTP_PORT, // Added comma
         existingServerStatus: pingSuccessData
       })
     );
@@ -723,7 +723,7 @@ describe('Server Startup and Port Handling', () => {
     if (failedToStartLog) {
       expect(failedToStartLog[1]).toEqual(expect.objectContaining({
         name: "ServerStartupError", // Check the error type
-        message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
+        message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`, // Added comma
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
         detectedServerPort: mcs.HTTP_PORT,
