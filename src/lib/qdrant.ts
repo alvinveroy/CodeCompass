@@ -15,6 +15,48 @@ export type SimplePoint = {
 
 // Initialize Qdrant
 export async function initializeQdrant(): Promise<QdrantClient> {
+  if (process.env.CI === 'true' || process.env.SKIP_QDRANT_INIT === 'true') {
+    logger.info("CI environment detected or SKIP_QDRANT_INIT is true, returning mock Qdrant client.");
+    // Return a minimal mock client that satisfies the QdrantClient interface
+    // for methods called during server startup or basic operations.
+    return {
+      getCollections: (() => Promise.resolve({ collections: [], time: 0.1 })) as QdrantClient['getCollections'],
+      createCollection: (() => Promise.resolve(true)) as QdrantClient['createCollection'],
+      getCollection: (() => Promise.resolve({
+        status: 'ok',
+        result: {
+          status: 'green',
+          optimizer_status: 'ok',
+          vectors_count: 0,
+          indexed_vectors_count: 0,
+          points_count: 0,
+          segments_count: 0,
+          config: {
+            params: {
+              vectors: { size: configService.EMBEDDING_DIMENSION, distance: 'Cosine' },
+              shard_number: 1,
+              replication_factor: 1,
+              write_consistency_factor: 1,
+              on_disk_payload: true,
+            },
+            hnsw_config: { m: 16, ef_construct: 100 },
+            optimizer_config: { deleted_threshold: 0.2, vacuum_min_vector_number: 1000, default_segment_number: 0, max_segment_size: undefined, memmap_threshold: undefined, indexing_threshold: 20000, flush_interval_sec: 5, max_optimization_threads: 1 },
+            wal_config: { wal_capacity_mb: 32, wal_segments_ahead: 0 },
+            quantization_config: undefined,
+          },
+          payload_schema: {},
+        },
+        time: 0.1
+      })) as QdrantClient['getCollection'],
+      // Add other methods if server startup or critical paths strictly depend on them.
+      // For example, if upsert or search are called immediately and unconditionally:
+      upsert: (() => Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }})) as QdrantClient['upsert'],
+      search: (() => Promise.resolve([])) as QdrantClient['search'],
+      scroll: (() => Promise.resolve({ points: [], next_page_offset: null })) as QdrantClient['scroll'],
+      delete: (() => Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }})) as QdrantClient['delete'],
+    } as unknown as QdrantClient;
+  }
+
   if (qdrantClientInstance) {
     try {
       // Perform a lightweight operation to check if the client is still healthy
