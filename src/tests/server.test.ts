@@ -662,13 +662,12 @@ describe('Server Startup and Port Handling', () => {
                logObject.error !== undefined && typeof logObject.error === 'object' && logObject.error !== null &&
                typeof logObject.error.message === 'string';
       } else if (
-        Array.isArray(callArgs) && // Ensure it's an array
-        callArgs.length === 2 &&    // Check length
-        typeof callArgs[0] === 'string' &&
-        callArgs[0] === "Failed to start CodeCompass"
+        typeof (callArgs as ReadonlyArray<unknown>)[0] === 'string' && // Cast for indexing
+        (callArgs as ReadonlyArray<unknown>)[0] === "Failed to start CodeCompass" &&
+        (callArgs as ReadonlyArray<unknown>).length === 2 // Check length after confirming first element
     ) {
-        // Now TypeScript should be more confident that callArgs[1] exists.
-        const errorArg = callArgs[1] as { message?: string }; // Keep the assertion for the object shape
+        // If the above conditions are met, callArgs[1] should exist.
+        const errorArg = (callArgs as ReadonlyArray<unknown>)[1] as { message?: string }; // Cast for indexing and shape
         return typeof errorArg === 'object' && errorArg !== null && typeof errorArg.message === 'string';
     }
       return false;
