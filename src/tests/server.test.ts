@@ -494,7 +494,15 @@ describe('Server Startup and Port Handling', () => {
         return { status: 404, data: {} };
       });
 
-      await expect(serverLibModule.startServer('/fake/repo')).resolves.toBeUndefined();
+      // Expect startServer to reject with a ServerStartupError indicating graceful exit/proxy mode
+      await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
+        expect.objectContaining({
+          name: "ServerStartupError",
+          exitCode: 0,
+          message: expect.stringContaining(`Port ${mcs.HTTP_PORT} in use by another CodeCompass instance`),
+          detectedServerPort: mcs.HTTP_PORT
+        })
+      );
       
       expect(ml.warn).toHaveBeenCalledWith(`HTTP Port ${mcs.HTTP_PORT} is already in use. Attempting to ping...`);
       expect(axios.get).toHaveBeenCalledWith(`http://localhost:${mcs.HTTP_PORT}/api/ping`, { timeout: 500 });
@@ -557,7 +565,7 @@ describe('Server Startup and Port Handling', () => {
       return Promise.resolve({ status: 404, data: {} });
     });
      
-    await expect(startServer('/fake/repo')).rejects.toThrow(
+    await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
@@ -625,7 +633,7 @@ describe('Server Startup and Port Handling', () => {
       return Promise.resolve({ status: 404, data: {} });
     });
     
-    await expect(startServer('/fake/repo')).rejects.toThrow(
+    await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
@@ -683,7 +691,7 @@ describe('Server Startup and Port Handling', () => {
     });
 
      
-    await expect(startServer('/fake/repo')).rejects.toThrow(
+    await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
@@ -719,7 +727,7 @@ describe('Server Startup and Port Handling', () => {
     // We need to ensure listen is called to trigger the 'on' setup
     
      
-    await expect(startServer('/fake/repo')).rejects.toThrow(
+    await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
@@ -973,8 +981,8 @@ describe('startProxyServer', () => {
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
     const proxyListenPort = requestedPort + 100; // Assume findFreePort will give this
     
-    // Mock findFreePort using the spy on the imported module
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    // Mock findFreePort directly for startProxyServer tests
+    mockFindFreePort.mockResolvedValue(proxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
       .get('/api/ping')
@@ -993,12 +1001,12 @@ describe('startProxyServer', () => {
     expect(response.status).toBe(200);
     expect(response.data).toEqual({ service: "CodeCompassTarget", status: "ok", version: "1.0.0" });
     expect(nock.isDone()).toBe(true);
-    // findFreePortSpy is restored in afterEach
+    // mockFindFreePort is reset in beforeEach
   });
 
   it('should proxy POST /mcp with body and headers', async () => {
     const proxyListenPort = requestedPort + 101;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    mockFindFreePort.mockResolvedValue(proxyListenPort);
 
     const requestBody = { jsonrpc: "2.0", method: "test", params: { data: "value" }, id: 1 };
     const responseBody = { jsonrpc: "2.0", result: "success", id: 1 };
@@ -1029,12 +1037,12 @@ describe('startProxyServer', () => {
     expect(response.headers['content-type']).toContain('application/json');
     expect(response.headers['mcp-session-id']).toBe(sessionId);
     expect(nock.isDone()).toBe(true);
-    // findFreePortSpy is restored in afterEach
+    // mockFindFreePort is reset in beforeEach
   });
 
   it('should proxy GET /mcp for SSE', async () => {
     const proxyListenPort = requestedPort + 102;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    mockFindFreePort.mockResolvedValue(proxyListenPort);
     const sessionId = "sse-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1060,12 +1068,12 @@ describe('startProxyServer', () => {
     expect(response.headers['mcp-session-id']).toBe(sessionId);
     expect(response.data).toBe("event: message\ndata: hello\n\n");
     expect(nock.isDone()).toBe(true);
-    // findFreePortSpy is restored in afterEach
+    // mockFindFreePort is reset in beforeEach
   });
   
   it('should proxy DELETE /mcp', async () => {
     const proxyListenPort = requestedPort + 103;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    mockFindFreePort.mockResolvedValue(proxyListenPort);
     const sessionId = "delete-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1082,12 +1090,12 @@ describe('startProxyServer', () => {
     
     expect(response.status).toBe(204);
     expect(nock.isDone()).toBe(true);
-    // findFreePortSpy is restored in afterEach
+    // mockFindFreePort is reset in beforeEach
   });
 
   it('should proxy /api/indexing-status', async () => {
     const proxyListenPort = requestedPort + 104;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    mockFindFreePort.mockResolvedValue(proxyListenPort);
     const mockStatus = { status: 'idle', message: 'Target server is idle' };
 
     nock(`http://localhost:${targetPort}`)
@@ -1100,12 +1108,12 @@ describe('startProxyServer', () => {
     expect(response.status).toBe(200);
     expect(response.data).toEqual(mockStatus);
     expect(nock.isDone()).toBe(true);
-    // findFreePortSpy is restored in afterEach
+    // mockFindFreePort is reset in beforeEach
   });
 
   it('should handle target server unreachable for /mcp', async () => {
     const proxyListenPort = requestedPort + 105;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    mockFindFreePort.mockResolvedValue(proxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
       .post('/mcp')
@@ -1123,12 +1131,12 @@ describe('startProxyServer', () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Proxy: Error proxying MCP request'), expect.anything());
     expect(nock.isDone()).toBe(true);
-    // findFreePortSpy is restored in afterEach
+    // mockFindFreePort is reset in beforeEach
   });
 
   it('should forward target server 500 error for /mcp', async () => {
     const proxyListenPort = requestedPort + 106;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    mockFindFreePort.mockResolvedValue(proxyListenPort);
     const errorBody = { jsonrpc: "2.0", error: { code: -32000, message: "Target Internal Error" }, id: null };
 
     nock(`http://localhost:${targetPort}`)
@@ -1145,19 +1153,18 @@ describe('startProxyServer', () => {
       expect(error.response.data).toEqual(errorBody);
     }
     expect(nock.isDone()).toBe(true);
-    // findFreePortSpy is restored in afterEach
+    // mockFindFreePort is reset in beforeEach
   });
    it('should reject if findFreePort fails', async () => {
     const findFreePortError = new Error("No ports for proxy!");
-    // Ensure findFreePortSpy is initialized before use, which it is by beforeEach
-    findFreePortSpy.mockRejectedValue(findFreePortError);
+    mockFindFreePort.mockRejectedValue(findFreePortError);
 
     await expect(serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
       .rejects.toThrow(findFreePortError);
     
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(ml.error).not.toHaveBeenCalledWith(expect.stringContaining('Proxy server failed to start')); // This log is inside the listen promise
-    // findFreePortSpy is restored in afterEach
+    // mockFindFreePort is reset in beforeEach
   });
 });
 

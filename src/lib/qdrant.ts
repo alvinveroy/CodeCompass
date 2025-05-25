@@ -47,13 +47,13 @@ export async function initializeQdrant(): Promise<QdrantClient> {
           payload_schema: {},
         },
         time: 0.1
-      })) as QdrantClient['getCollection'],
+      })) as unknown as QdrantClient['getCollection'],
       // Add other methods if server startup or critical paths strictly depend on them.
       // For example, if upsert or search are called immediately and unconditionally:
-      upsert: (() => Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }})) as QdrantClient['upsert'],
-      search: (() => Promise.resolve([])) as QdrantClient['search'],
-      scroll: (() => Promise.resolve({ points: [], next_page_offset: null })) as QdrantClient['scroll'],
-      delete: (() => Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }})) as QdrantClient['delete'],
+      upsert: (() => Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }})) as unknown as QdrantClient['upsert'],
+      search: (() => Promise.resolve([])) as unknown as QdrantClient['search'],
+      scroll: (() => Promise.resolve({ points: [], next_page_offset: null })) as unknown as QdrantClient['scroll'],
+      delete: (() => Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }})) as unknown as QdrantClient['delete'],
     } as unknown as QdrantClient;
   }
 
