@@ -666,11 +666,12 @@ describe('Server Startup and Port Handling', () => {
         message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`,
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
-        existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' })
+        existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' }),
+        originalError: expect.any(Error) // Account for the original EADDRINUSE error
       })
     );
-    
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service, or the service is unresponsive. Ping error: ${localPingError.message}. This instance will exit.`));
+        
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}. This instance will exit.`));
     expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({
       message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`,
     }));
@@ -723,11 +724,12 @@ describe('Server Startup and Port Handling', () => {
         message: `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`,
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
-        detectedServerPort: mcs.HTTP_PORT, // Added comma
-        existingServerStatus: pingSuccessData
+        detectedServerPort: mcs.HTTP_PORT,
+        existingServerStatus: pingSuccessData,
+        originalError: expect.any(Error) // Account for the original EADDRINUSE error
       })
     );
-        
+          
     // The first error log is about the status fetch failure
     expect(ml.error).toHaveBeenCalledWith(
       expect.stringContaining(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`)
