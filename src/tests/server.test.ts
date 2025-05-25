@@ -733,23 +733,27 @@ describe('Server Startup and Port Handling', () => {
           
     // Then, assert the specific log call for "Failed to start CodeCompass"
     // The logger is called as: logger.error("Failed to start CodeCompass", { message: err.message });
-    const failedToStartLogCall = ml.error.mock.calls.find(call => {
+    const failedToStartLogCall = ml.error.mock.calls.find((callArgs): callArgs is [string, { message: string, [key: string]: any }] => {
       // Check for the specific call structure: logger.error(string, object)
-      if (call.length === 2 && typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass") {
-        const meta = call[1]; // meta is of type unknown here
+      if (callArgs.length === 2 && typeof callArgs[0] === 'string' && callArgs[0] === "Failed to start CodeCompass") {
+        const meta = callArgs[1];
         // Check if the second argument is an object with a string 'message' property
-        return typeof meta === 'object' && meta !== null && 'message' in meta && typeof (meta as {message: unknown}).message === 'string';
+        return typeof meta === 'object' && meta !== null && typeof (meta as {message: unknown}).message === 'string';
       }
       return false;
     });
     expect(failedToStartLogCall).toBeDefined(); // Ensure such a log call was made
 
-    if (failedToStartLogCall) { // If the call was found, failedToStartLogCall[1] is the metadata object
+    // If failedToStartLogCall is defined, the type guard ensures it has the correct structure
+    if (failedToStartLogCall) { 
       expect(failedToStartLogCall[1]).toEqual(
         expect.objectContaining({
           message: expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`)
         })
       );
+    } else {
+      // Fail test explicitly if log not found, to make it clearer than just undefined access
+      throw new Error("Expected 'Failed to start CodeCompass' log call with metadata not found.");
     }
 
     // Also check the initial error log about failing to fetch status
