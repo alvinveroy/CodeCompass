@@ -415,7 +415,10 @@ describe('Server Startup and Port Handling', () => {
     // Initialize mockProcessExit here
     mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as unknown as typeof process.exit);
 
-    mockHttpServerCloseFn.mockReset();
+    mockHttpServerCloseFn.mockReset().mockImplementation(function(this: any, callback?: () => void) { // Ensure close calls callback
+      if (callback) callback();
+      return this;
+    });
     // Get the mocked configService and logger from the vi.mock factory
     // This ensures we are interacting with the same mocked objects that the SUT uses.
     const mockedConfigModule = await import('../lib/config-service.js') as unknown as ConfigServiceModuleType;
@@ -513,23 +516,21 @@ describe('Server Startup and Port Handling', () => {
       expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`--- Status of existing CodeCompass instance on port ${mcs.HTTP_PORT} ---`));
       expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`Version: ${existingServerPingVersion}`));
       expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
-
-      // The log "Another CodeCompass instance found. Disabling utility HTTP server..." is not present with current server.ts logic for this path.
-      // Instead, it logs "Current instance will exit..."
       expect(ml.info).toHaveBeenCalledWith("Current instance will exit as another CodeCompass server is already running.");
       
-      // IS_UTILITY_SERVER_DISABLED should remain false as the current instance exits instead of disabling its server.
-      expect(mcs.IS_UTILITY_SERVER_DISABLED).toBe(false); 
-      expect(mcs.RELAY_TARGET_UTILITY_PORT).toBe(mcs.HTTP_PORT);
+      // When the server exits due to an existing instance, IS_UTILITY_SERVER_DISABLED should remain false,
+      // and RELAY_TARGET_UTILITY_PORT should not be set (or remain undefined).
+      expect(mcs.IS_UTILITY_SERVER_DISABLED).toBe(false);
+      expect(mcs.RELAY_TARGET_UTILITY_PORT).toBeUndefined(); // Or check it wasn't set from its initial state
       
-      // Verify that the main MCP server (stdio) still connects
-      expect(mockedMcpServerConnect).toHaveBeenCalled(); 
-      // Verify process did not exit
+      // The stdio MCP server should NOT connect if the server is exiting.
+      expect(mockedMcpServerConnect).not.toHaveBeenCalled();
+      // Verify process did not exit (because ServerStartupError with exitCode 0 is thrown in test env)
       expect(mockProcessExit).not.toHaveBeenCalled();
       // Verify the utility HTTP server for *this* instance is not logged as "listening"
       expect(ml.info).not.toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`));
-      // Check the final console.error message
-      expect(mockConsoleInfo.mock.calls.some(call => String(call[0]).includes(`Utility HTTP server is DISABLED`))).toBe(true);
+      // The console.error message about "Utility HTTP server is DISABLED" should not appear if the instance exits.
+      expect(mockConsoleInfo.mock.calls.some(call => String(call[0]).includes(`Utility HTTP server is DISABLED`))).toBe(false);
     });
 
   it('should handle EADDRINUSE, detect a non-CodeCompass server, log error, and throw ServerStartupError with exitCode 1', async () => {
@@ -640,16 +641,16 @@ describe('Server Startup and Port Handling', () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} is in use by an unknown or unresponsive service. Ping error: ${String(localPingError)}`, // Use String(localPingError)
+        message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`,
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
         existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' })
       })
     );
     
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service, or the service is unresponsive. Ping error: ${String(localPingError)}. This instance will exit.`));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service, or the service is unresponsive. Ping error: ${localPingError.message}. This instance will exit.`));
     expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({
-      message: `Port ${mcs.HTTP_PORT} is in use by an unknown or unresponsive service. Ping error: ${String(localPingError)}`,
+      message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`,
     }));
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
@@ -705,10 +706,17 @@ describe('Server Startup and Port Handling', () => {
       })
     );
         
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`));
-    expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({
-      message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
-    }));
+    // The first error log is about the status fetch failure
+    expect(ml.error).toHaveBeenCalledWith(
+      expect.stringContaining(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`)
+    );
+    // The second error log is the generic "Failed to start"
+    expect(ml.error).toHaveBeenCalledWith(
+      "Failed to start CodeCompass",
+      expect.objectContaining({
+        message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
+      })
+    );
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
