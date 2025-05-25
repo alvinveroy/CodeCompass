@@ -685,7 +685,11 @@ describe('Server Startup and Port Handling', () => {
         
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
     const mainFailLogCall = ml.error.mock.calls.find(callArgs => 
-      String(callArgs[0]).includes("Failed to start CodeCompass") && String((callArgs[1] as Error)?.message).includes(`Port ${mcs.HTTP_PORT} is in use by an unknown service`)
+      String(callArgs[0]).includes("Failed to start CodeCompass") &&
+      callArgs.length > 1 && 
+      typeof callArgs[1] === 'object' && 
+      callArgs[1] !== null &&
+      String((callArgs[1] as { message?: string })?.message).includes(`Port ${mcs.HTTP_PORT} is in use by an unknown service`)
     );
     expect(mainFailLogCall).toBeDefined();
 
@@ -1091,8 +1095,9 @@ describe('startProxyServer', () => {
 
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
     // Calculate the port startProxyServer will use
-    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
-                
+    // Since requestedPort (3000) and targetPort (3005) are const and different, this simplifies:
+    const expectedProxyListenPort = requestedPort + 50;
+                    
     // Mock findFreePort using the spy on the imported module
     findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
 
@@ -1102,10 +1107,10 @@ describe('startProxyServer', () => {
 
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
     expect(proxyServerInstance).toBeDefined();
-        
-    expect(ml.info.mock.calls[0][0]).toBe(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetServerPort}.`);
-    expect(ml.info.mock.calls[1][0]).toBe(`This instance (CodeCompass Proxy) is running on port ${expectedProxyListenPort}.`);
-    expect(ml.info.mock.calls[2][0]).toBe(`MCP requests to http://localhost:${expectedProxyListenPort}/mcp will be forwarded to http://localhost:${targetServerPort}/mcp`);
+            
+    expect(ml.info.mock.calls[0][0]).toBe(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetPort}.`);
+    expect(ml.info.mock.calls[1][0]).toBe(`This instance (CodeCompass Proxy) is running on port ${expectedProxyListenPort}.`); 
+    expect(ml.info.mock.calls[2][0]).toBe(`MCP requests to http://localhost:${expectedProxyListenPort}/mcp will be forwarded to http://localhost:${targetPort}/mcp`); 
     expect(ml.info.mock.calls[3][0]).toBe(`API endpoints /api/ping and /api/indexing-status are also proxied.`);
 
 
@@ -1115,11 +1120,12 @@ describe('startProxyServer', () => {
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
   }, 15000);
-
+    
   it('should proxy POST /mcp with body and headers', async () => {
-    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    // Since requestedPort (3000) and targetPort (3005) are const and different, this simplifies:
+    const expectedProxyListenPort = requestedPort + 50;
     findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
-
+    
     const requestBody = { jsonrpc: "2.0", method: "test", params: { data: "value" }, id: 1 };
     const responseBody = { jsonrpc: "2.0", result: "success", id: 1 };
     const sessionId = "test-session-id";
@@ -1151,9 +1157,10 @@ describe('startProxyServer', () => {
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
   }, 15000);
-
+    
   it('should proxy GET /mcp for SSE', async () => {
-    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    // Since requestedPort (3000) and targetPort (3005) are const and different, this simplifies:
+    const expectedProxyListenPort = requestedPort + 50;
     findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
     const sessionId = "sse-session-id";
 
@@ -1182,9 +1189,10 @@ describe('startProxyServer', () => {
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
   }, 15000);
-  
+      
   it('should proxy DELETE /mcp', async () => {
-    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    // Since requestedPort (3000) and targetPort (3005) are const and different, this simplifies:
+    const expectedProxyListenPort = requestedPort + 50;
     findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
     const sessionId = "delete-session-id";
 
@@ -1204,9 +1212,10 @@ describe('startProxyServer', () => {
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
   }, 15000);
-
+    
   it('should proxy /api/indexing-status', async () => {
-    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    // Since requestedPort (3000) and targetPort (3005) are const and different, this simplifies:
+    const expectedProxyListenPort = requestedPort + 50;
     findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
     const mockStatus = { status: 'idle', message: 'Target server is idle' };
 
@@ -1222,11 +1231,12 @@ describe('startProxyServer', () => {
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
   }, 15000);
-
+    
   it('should handle target server unreachable for /mcp', async () => {
-    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    // Since requestedPort (3000) and targetPort (3005) are const and different, this simplifies:
+    const expectedProxyListenPort = requestedPort + 50;
     findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
-
+    
     nock(`http://localhost:${targetPort}`)
       .post('/mcp')
       .replyWithError({ message: 'Connection refused', code: 'ECONNREFUSED' });
@@ -1245,9 +1255,10 @@ describe('startProxyServer', () => {
     expect(nock.isDone()).toBe(true);
     // findFreePortSpy is restored in afterEach
   }, 15000);
-
+    
   it('should forward target server 500 error for /mcp', async () => {
-    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    // Since requestedPort (3000) and targetPort (3005) are const and different, this simplifies:
+    const expectedProxyListenPort = requestedPort + 50;
     findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
     const errorBody = { jsonrpc: "2.0", error: { code: -32000, message: "Target Internal Error" }, id: null };
 

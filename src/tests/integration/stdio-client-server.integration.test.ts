@@ -275,8 +275,9 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(searchResultText).toContain(`# Search Results for: "${searchQuery}"`);
     expect(searchResultText).toContain('## file1.ts');
     expect(searchResultText).toContain('console.log("Hello from file1")');
-    // Check if the mocked LLM summary is present (generateText is mocked)
-    expect(searchResultText).toContain("Mocked LLM response for integration test.");
+    // Check for the non-LLM summary because the snippet is short
+    expect(searchResultText).toContain('### Summary');
+    expect(searchResultText).toContain('console.log("Hello from file1");... (Full snippet used as summary)');
 
 
     await client.close();
