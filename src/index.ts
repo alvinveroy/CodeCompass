@@ -4,9 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';
 import yargs from 'yargs'; // Import yargs
-import type { ChildProcess } from 'child_process';
-import type { StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js'; // Static type-only import
-// SDK imports will be done dynamically within handleClientCommand
+import type { ChildProcess } from 'child_process'; 
+import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { Client as MCPClientSdk } from '@modelcontextprotocol/sdk/client/index.js';
 
 // Use path.resolve for dynamic requires to make them more robust, especially in test environments.
 const libPath = path.resolve(__dirname, './lib');
@@ -114,10 +114,6 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
   const { logger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
 
-  // Dynamically import SDK components
-  const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
-  // StdioServerParameters is now imported as a type at the top
-  const { Client: MCPClientSdk } = await import('@modelcontextprotocol/sdk/client/index.js');
 
   logger.info(`CLI Client Mode: Tool '${toolName}'`);
   
@@ -151,8 +147,8 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       'start',           // Command for the server to start
       clientRepoPath,    // Repository path for the server
       '--port', '0',     // Instruct server to find a dynamic utility port
-    ],
-    options: {
+    ], 
+    processOptions: { // Corrected: StdioServerParameters uses 'processOptions' not 'options'
       // Pass essential environment variables.
       // Avoid passing the parent's full env if it causes issues.
       // Specifically, ensure HTTP_PORT is '0' for the child if dynamic porting is desired.
@@ -193,7 +189,9 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       console.log(JSON.stringify(result, null, 2));
     } else {
       // Prefer text content if available
-      const textContent = result.content?.find(c => c.type === 'text')?.text;
+      // Add type assertion for content parts
+      const contentParts = result.content as Array<{ type?: string; text?: string }> | undefined;
+      const textContent = contentParts?.find(c => c.type === 'text')?.text;
       if (textContent) {
         console.log(textContent);
       } else if (result) {
