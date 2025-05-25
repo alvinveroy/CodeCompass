@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll, type Mock } from 'vitest';
 import { spawn, type ChildProcess, type ChildProcess as NodeChildProcess } from 'child_process'; // Use NodeChildProcess
 import { Client as MCPClient } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
@@ -157,12 +157,11 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
 
     await client.connect(transport);
@@ -190,12 +189,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -275,12 +273,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
     
@@ -304,12 +301,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -334,12 +330,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -379,12 +374,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -416,12 +410,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     const spawnEnv = { ...process.env, HTTP_PORT: '0' };
     // serverProcess spawning and waitForServerReady removed.
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     await client.connect(transport);
 
@@ -460,12 +453,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     await client.connect(transport);
 
     // Wait for indexing (similar to search_code test)
@@ -503,12 +495,11 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
     // StdioClientTransport now spawns its own process.
-    const transportOptions: StdioServerParameters = {
+    const transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'],
-      processOptions: { env: spawnEnv }
-    };
-    const transport = new StdioClientTransport(transportOptions);
+      processEnv: spawnEnv
+    });
     await client.connect(transport);
 
     // Wait for indexing
