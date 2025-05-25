@@ -204,12 +204,11 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const transport = new StdioClientTransport({
       // For StdioClientTransport:
-      // For StdioClientTransport, when attaching to an existing process's streams:
-      // - `stdin` is the stream the client writes to (server's process.stdin)
-      // - `stdout` is the stream the client reads from (server's process.stdout)
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+      // - `writableStream` is the stream to write client requests TO (which is the server's stdin)
+      // - `readableStream` is the stream to read server responses FROM (server's stdout)
+      writableStream: serverProcess.stdin!,
+      readableStream: serverProcess.stdout!,
+    } as any); // Added 'as any' to bypass TS2353, similar to src/index.ts
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
 
     await client.connect(transport);
