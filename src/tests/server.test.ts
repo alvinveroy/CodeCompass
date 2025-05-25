@@ -675,43 +675,46 @@ describe('Server Startup and Port Handling', () => {
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
     const mainFailLogCall = ml.error.mock.calls.find(call => {
       if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
-        const logObject = call[0] as { message?: string, error?: Error | { message?: string } };
+        const logObject = call[0] as { message?: string, error?: { message?: string } }; // Ensure 'error' and 'message' are optional
         return logObject.message === "Failed to start CodeCompass" &&
-               typeof logObject.error === 'object' && logObject.error !== null &&
+               logObject.error !== undefined && typeof logObject.error === 'object' && logObject.error !== null &&
                typeof logObject.error.message === 'string';
       } else if (call.length === 2 && typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass") {
-        // Check if the second argument is an error object with a message property
-        return typeof call[1] === 'object' && call[1] !== null && typeof (call[1] as Error).message === 'string';
+        const errorArg = call[1];
+        return typeof errorArg === 'object' && errorArg !== null && typeof (errorArg as Error).message === 'string';
       }
       return false;
     });
     expect(mainFailLogCall).toBeDefined();
 
     if (mainFailLogCall) {
-      // Determine if the error object is in call[0].error or call[1]
-      const errorDetails = mainFailLogCall.length === 1 && typeof mainFailLogCall[0] === 'object' && mainFailLogCall[0] !== null
-        ? (mainFailLogCall[0] as { error: Error }).error
-        : mainFailLogCall[1];
-      
-      if (errorDetails instanceof Error) {
+      let errorDetails: Error | { message: string } | undefined;
+      if (mainFailLogCall.length === 1 && typeof mainFailLogCall[0] === 'object' && mainFailLogCall[0] !== null) {
+        errorDetails = (mainFailLogCall[0] as { error?: Error | { message: string } }).error;
+      } else if (mainFailLogCall.length === 2) {
+        errorDetails = mainFailLogCall[1] as Error | { message: string };
+      }
+
+      if (errorDetails && typeof errorDetails === 'object' && 'message' in errorDetails && typeof errorDetails.message === 'string') {
         expect(errorDetails.message).toContain(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
         expect(errorDetails.message).toContain(String(localPingError));
       } else {
-        // This case should ideally not be hit if mainFailLogCall is found and structured as expected
-        throw new Error("Logged error details are not in the expected format.");
+        throw new Error("Logged error details are not in the expected format or 'message' property is missing/invalid.");
       }
     }
 
     // Check for the more specific initial logs if needed, e.g.:
     const pingFailedLogFound = ml.error.mock.calls.some(call => {
       const messagePart1 = `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
-      const messagePart2 = `Ping error: ${localPingError.message}`; // localPingError.message is "Connection refused"
+      const messagePart2 = `Ping error: ${localPingError.message}`;
       
       if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
         const logObject = call[0] as { message?: string };
         return typeof logObject.message === 'string' && logObject.message.includes(messagePart1) && logObject.message.includes(messagePart2);
-      } else if (call.length >= 1 && typeof call[0] === 'string') { // Can be logger.error(message) or logger.error(message, error)
-        return call[0].includes(messagePart1) && call[0].includes(messagePart2);
+      } else if (call.length >= 1 && typeof call[0] === 'string') {
+        // This branch handles call[0] being a string. TypeScript should not infer 'never'.
+        const firstArgAsString = call[0] as string;
+        return firstArgAsString.includes(messagePart1) && firstArgAsString.includes(messagePart2);
       }
       return false;
     });
