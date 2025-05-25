@@ -1601,18 +1601,20 @@ export async function startProxyServer(
   existingServerVersion?: string
 ): Promise<http.Server> { // Changed return type from Promise<void> to Promise<http.Server>
   // Attempt to find a free port starting from requestedPort + 1, or a fixed offset
-  let proxyListenPort: number;
-  try {
-    logger.debug(`[DEBUG startProxyServer] About to call findFreePort. Requested: ${requestedPort}, Target: ${targetServerPort}`);
-    proxyListenPort = await findFreePort(requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50); // Adjust starting logic if needed
-  } catch (error) {
-    logger.error(`startProxyServer: Failed to find free port for proxy: ${error}`);
-    throw error; // Re-throw to ensure the caller (test) sees the rejection
-  }
-  logger.debug(`[DEBUG startProxyServer] findFreePort returned: ${proxyListenPort}`);
-  const targetBaseUrl = `http://localhost:${targetServerPort}`;
+  return new Promise<http.Server>(async (resolveProxyStart, rejectProxyStart) => {
+    let proxyListenPort: number;
+    try {
+      logger.debug(`[DEBUG startProxyServer] About to call findFreePort. Requested: ${requestedPort}, Target: ${targetServerPort}`);
+      proxyListenPort = await findFreePort(requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50); 
+      logger.debug(`[DEBUG startProxyServer] findFreePort returned: ${proxyListenPort}`);
+    } catch (error) {
+      logger.error(`startProxyServer: Failed to find free port for proxy: ${error}`);
+      rejectProxyStart(error); // Reject the main promise
+      return;
+    }
+    const targetBaseUrl = `http://localhost:${targetServerPort}`;
 
-  const app = express();
+    const app = express();
 
   // Middleware to get raw body for POST/PUT etc.
   // MCP requests can be large, adjust limit as needed.
@@ -1709,8 +1711,7 @@ export async function startProxyServer(
     }
   });
 
-  // Replace the existing return new Promise<void> block with:
-  return new Promise<http.Server>((resolveProxyStart, rejectProxyStart) => { // Changed Promise<void> to Promise<http.Server>
+    // Proxy server listen logic
     const proxyServer = http.createServer(app);
     proxyServer.listen(proxyListenPort, 'localhost', () => {
       logger.info(`Original CodeCompass server (v${existingServerVersion || 'N/A'}) is running on port ${targetServerPort}.`);
@@ -1724,5 +1725,5 @@ export async function startProxyServer(
       logger.error(`Proxy server failed to start on port ${proxyListenPort}: ${err.message}`);
       rejectProxyStart(err);
     });
-  });
+  }); // End of the main Promise constructor
 }

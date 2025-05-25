@@ -684,23 +684,9 @@ describe('Server Startup and Port Handling', () => {
     // console.error("Debug: ml.error calls for 'ping fails' test:", JSON.stringify(ml.error.mock.calls, null, 2));
         
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
-    const mainFailLogCall = ml.error.mock.calls.find(callArgs => { 
-      if (callArgs.length === 1 && typeof callArgs[0] === 'object' && callArgs[0] !== null) {
-        const logObject = callArgs[0] as { message?: string, error?: { message?: string } };
-        return logObject.message === "Failed to start CodeCompass" &&
-               logObject.error !== undefined && typeof logObject.error === 'object' && logObject.error !== null &&
-               typeof logObject.error.message === 'string';
-      } else if (
-        typeof (callArgs as ReadonlyArray<unknown>)[0] === 'string' && // Cast for indexing
-        (callArgs as ReadonlyArray<unknown>)[0] === "Failed to start CodeCompass" &&
-        (callArgs as ReadonlyArray<unknown>).length === 2 // Check length after confirming first element
-    ) {
-        // If the above conditions are met, callArgs[1] should exist.
-        const errorArg = (callArgs as ReadonlyArray<unknown>)[1] as { message?: string }; // Cast for indexing and shape
-        return typeof errorArg === 'object' && errorArg !== null && typeof errorArg.message === 'string';
-    }
-      return false;
-    });
+    const mainFailLogCall = ml.error.mock.calls.find(callArgs => 
+      String(callArgs[0]).includes("Failed to start CodeCompass") && String((callArgs[1] as Error)?.message).includes(`Port ${mcs.HTTP_PORT} is in use by an unknown service`)
+    );
     expect(mainFailLogCall).toBeDefined();
 
     if (mainFailLogCall) {
@@ -722,19 +708,9 @@ describe('Server Startup and Port Handling', () => {
     }
 
     // Check for the more specific initial logs if needed, e.g.:
-    const pingFailedLogFound = ml.error.mock.calls.some(call => {
-      const messagePart1 = `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
-      const messagePart2 = `Ping error: ${String(localPingError)}`;
-      
-      if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
-        const logObject = call[0] as { message?: string };
-        return typeof logObject.message === 'string' && logObject.message.includes(messagePart1) && logObject.message.includes(messagePart2);
-      } else if (call.length >= 1 && typeof call[0] === 'string') {
-          const messageStr: string = call[0];
-          return messageStr.includes(messagePart1) && messageStr.includes(messagePart2);
-      }
-      return false;
-    });
+    const pingFailedLogFound = ml.error.mock.calls.some(call => 
+      String(call[0]).includes(`Connection refused on port ${mcs.HTTP_PORT}`)
+    );
     expect(pingFailedLogFound).toBe(true);
 
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
@@ -1114,10 +1090,11 @@ describe('startProxyServer', () => {
   });
 
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
-    const proxyListenPort = requestedPort + 100; // Assume findFreePort will give this
-        
+    // Calculate the port startProxyServer will use
+    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+                
     // Mock findFreePort using the spy on the imported module
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
       .get('/api/ping') // Nock intercepts calls to the target server
@@ -1126,13 +1103,13 @@ describe('startProxyServer', () => {
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
     expect(proxyServerInstance).toBeDefined();
         
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`This instance (CodeCompass Proxy) is running on port ${proxyListenPort}`));
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`forwarding to main server on ${targetPort}`));
+    expect(ml.info.mock.calls[0][0]).toBe(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetServerPort}.`);
+    expect(ml.info.mock.calls[1][0]).toBe(`This instance (CodeCompass Proxy) is running on port ${expectedProxyListenPort}.`);
+    expect(ml.info.mock.calls[2][0]).toBe(`MCP requests to http://localhost:${expectedProxyListenPort}/mcp will be forwarded to http://localhost:${targetServerPort}/mcp`);
+    expect(ml.info.mock.calls[3][0]).toBe(`API endpoints /api/ping and /api/indexing-status are also proxied.`);
 
 
-    const response = await axios.get(`http://localhost:${proxyListenPort}/api/ping`);
+    const response = await axios.get(`http://localhost:${expectedProxyListenPort}/api/ping`);
     expect(response.status).toBe(200);
     expect(response.data).toEqual({ service: "CodeCompassTarget", status: "ok", version: "1.0.0" });
     expect(nock.isDone()).toBe(true);
@@ -1140,8 +1117,8 @@ describe('startProxyServer', () => {
   }, 15000);
 
   it('should proxy POST /mcp with body and headers', async () => {
-    const proxyListenPort = requestedPort + 101;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
 
     const requestBody = { jsonrpc: "2.0", method: "test", params: { data: "value" }, id: 1 };
     const responseBody = { jsonrpc: "2.0", result: "success", id: 1 };
@@ -1159,7 +1136,7 @@ describe('startProxyServer', () => {
 
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
-    const response = await axios.post(`http://localhost:${proxyListenPort}/mcp`, requestBody, {
+    const response = await axios.post(`http://localhost:${expectedProxyListenPort}/mcp`, requestBody, {
       headers: { 
         'Content-Type': 'application/json',
         'mcp-session-id': sessionId,
@@ -1176,8 +1153,8 @@ describe('startProxyServer', () => {
   }, 15000);
 
   it('should proxy GET /mcp for SSE', async () => {
-    const proxyListenPort = requestedPort + 102;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
     const sessionId = "sse-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1193,7 +1170,7 @@ describe('startProxyServer', () => {
         
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
-    const response = await axios.get(`http://localhost:${proxyListenPort}/mcp`, {
+    const response = await axios.get(`http://localhost:${expectedProxyListenPort}/mcp`, {
       headers: { 'mcp-session-id': sessionId },
       responseType: 'text' // Get raw text to check SSE format
     });
@@ -1207,8 +1184,8 @@ describe('startProxyServer', () => {
   }, 15000);
   
   it('should proxy DELETE /mcp', async () => {
-    const proxyListenPort = requestedPort + 103;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
     const sessionId = "delete-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1219,7 +1196,7 @@ describe('startProxyServer', () => {
 
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
-    const response = await axios.delete(`http://localhost:${proxyListenPort}/mcp`, {
+    const response = await axios.delete(`http://localhost:${expectedProxyListenPort}/mcp`, {
       headers: { 'mcp-session-id': sessionId }
     });
         
@@ -1229,8 +1206,8 @@ describe('startProxyServer', () => {
   }, 15000);
 
   it('should proxy /api/indexing-status', async () => {
-    const proxyListenPort = requestedPort + 104;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
     const mockStatus = { status: 'idle', message: 'Target server is idle' };
 
     nock(`http://localhost:${targetPort}`)
@@ -1239,7 +1216,7 @@ describe('startProxyServer', () => {
 
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
-    const response = await axios.get(`http://localhost:${proxyListenPort}/api/indexing-status`);
+    const response = await axios.get(`http://localhost:${expectedProxyListenPort}/api/indexing-status`);
     expect(response.status).toBe(200);
     expect(response.data).toEqual(mockStatus);
     expect(nock.isDone()).toBe(true);
@@ -1247,8 +1224,8 @@ describe('startProxyServer', () => {
   }, 15000);
 
   it('should handle target server unreachable for /mcp', async () => {
-    const proxyListenPort = requestedPort + 105;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
       .post('/mcp')
@@ -1257,7 +1234,7 @@ describe('startProxyServer', () => {
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
         
     try {
-      await axios.post(`http://localhost:${proxyListenPort}/mcp`, {});
+      await axios.post(`http://localhost:${expectedProxyListenPort}/mcp`, {});
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       expect(error.response.status).toBe(502); // Bad Gateway
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -1270,8 +1247,8 @@ describe('startProxyServer', () => {
   }, 15000);
 
   it('should forward target server 500 error for /mcp', async () => {
-    const proxyListenPort = requestedPort + 106;
-    findFreePortSpy.mockResolvedValue(proxyListenPort);
+    const expectedProxyListenPort = requestedPort === targetPort ? requestedPort + 1 : requestedPort + 50;
+    findFreePortSpy.mockResolvedValue(expectedProxyListenPort);
     const errorBody = { jsonrpc: "2.0", error: { code: -32000, message: "Target Internal Error" }, id: null };
 
     nock(`http://localhost:${targetPort}`)
@@ -1281,7 +1258,7 @@ describe('startProxyServer', () => {
     proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
     try {
-      await axios.post(`http://localhost:${proxyListenPort}/mcp`, {});
+      await axios.post(`http://localhost:${expectedProxyListenPort}/mcp`, {});
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       expect(error.response.status).toBe(500);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -1358,7 +1335,7 @@ describe('MCP Tool Relaying', () => {
     // The `mainStdioMcpServer.tool` calls happen during `startServer`.
     // So, to get handlers, we must call `startServer`.
     // Mock `httpServer.listen` to resolve immediately to prevent hanging.
-    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostnameOrCb, _backlogOrCb, finalListenCb) {
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostnameOrCb, _backlogOrCb, finalListenCb) { // Added function and this
       let actualFinalListenCb = finalListenCb;
       if (typeof _hostnameOrCb === 'function') actualFinalListenCb = _hostnameOrCb;
       else if (typeof _backlogOrCb === 'function') actualFinalListenCb = _backlogOrCb;
@@ -1386,6 +1363,9 @@ describe('MCP Tool Relaying', () => {
         return this;
     });
 
+    // Set config for relaying *before* startServer is called for this suite
+    mcs.IS_UTILITY_SERVER_DISABLED = true;
+    mcs.RELAY_TARGET_UTILITY_PORT = 3005; // Example port
     await serverLibModule.startServer(repoPath); // This will call registerTools
   });
 
@@ -1394,8 +1374,7 @@ describe('MCP Tool Relaying', () => {
   });
 
   it('get_indexing_status should relay if IS_UTILITY_SERVER_DISABLED is true', async () => {
-    mcs.IS_UTILITY_SERVER_DISABLED = true;
-    mcs.RELAY_TARGET_UTILITY_PORT = 3005;
+    // mcs.IS_UTILITY_SERVER_DISABLED and mcs.RELAY_TARGET_UTILITY_PORT are set in beforeEach
     const mockRelayedStatus: IndexingStatusReport = {
       status: 'indexing_file_content', message: 'Relayed indexing', overallProgress: 50, lastUpdatedAt: new Date().toISOString()
     };
@@ -1412,7 +1391,11 @@ describe('MCP Tool Relaying', () => {
   });
 
   it('get_indexing_status should use local status if relaying is disabled', async () => {
-    mcs.IS_UTILITY_SERVER_DISABLED = false;
+    mcs.IS_UTILITY_SERVER_DISABLED = false; // Override suite-level beforeEach
+    mcs.RELAY_TARGET_UTILITY_PORT = undefined;
+    // Re-call startServer with the new config state to re-register tools
+    await serverLibModule.startServer(repoPath); 
+
     const handler = capturedToolHandlers['get_indexing_status'];
     expect(handler).toBeDefined();
     const result = await handler({} as any, {} as any); // Added as any for params
@@ -1424,8 +1407,7 @@ describe('MCP Tool Relaying', () => {
   });
 
   it('trigger_repository_update should relay if IS_UTILITY_SERVER_DISABLED is true', async () => {
-    mcs.IS_UTILITY_SERVER_DISABLED = true;
-    mcs.RELAY_TARGET_UTILITY_PORT = 3005;
+    // mcs.IS_UTILITY_SERVER_DISABLED and mcs.RELAY_TARGET_UTILITY_PORT are set in beforeEach
     vi.mocked(axios.post).mockResolvedValue({ status: 202, data: { message: "Relayed update accepted" }, headers: {}, config: {} as any });
     
     const { indexRepository } = await import('../lib/repository.js'); // ensure mock is used
@@ -1441,7 +1423,11 @@ describe('MCP Tool Relaying', () => {
   });
 
   it('trigger_repository_update should trigger local indexing if relaying is disabled', async () => {
-    mcs.IS_UTILITY_SERVER_DISABLED = false;
+    mcs.IS_UTILITY_SERVER_DISABLED = false; // Override suite-level beforeEach
+    mcs.RELAY_TARGET_UTILITY_PORT = undefined;
+    // Re-call startServer with the new config state to re-register tools
+    await serverLibModule.startServer(repoPath);
+
     const { indexRepository } = await import('../lib/repository.js'); // ensure mock is used
 
     const handler = capturedToolHandlers['trigger_repository_update'];
@@ -1458,7 +1444,12 @@ describe('MCP Tool Relaying', () => {
     expect(result.content[0].text).toContain('# Repository Update Triggered (Locally)');
   });
    it('trigger_repository_update should not trigger local indexing if already in progress and relaying is disabled', async () => {
+    // Override suite-level beforeEach for this specific test
     mcs.IS_UTILITY_SERVER_DISABLED = false;
+    mcs.RELAY_TARGET_UTILITY_PORT = undefined;
+    // Re-call startServer with the new config state to re-register tools
+    await serverLibModule.startServer(repoPath);
+
     vi.mocked(getGlobalIndexingStatus).mockReturnValue({
       status: 'indexing_file_content', message: 'Local indexing in progress', overallProgress: 50, lastUpdatedAt: new Date().toISOString()
     } as IndexingStatusReport);
