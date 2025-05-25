@@ -1,5 +1,7 @@
 import path from 'path';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
+import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'; // Import for vi.mocked
+import { Client as ActualMcpClient } from '@modelcontextprotocol/sdk/client/index.js'; // Import for vi.mocked
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
 import fs from 'fs'; // For mocking fs in changelog test
 
@@ -323,7 +325,7 @@ describe('CLI with yargs (index.ts)', () => {
       );
       // StdioClientTransport is now responsible for spawning.
       // We expect the MCP client's callTool to be invoked.
-      expect(vi.mocked(mcp.StdioClientTransport)).toHaveBeenCalled(); // Check if transport was created
+      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalled(); // Check if transport was created
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_stdio' } });
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
       // StdioClientTransport's close method should handle killing the process.
@@ -347,9 +349,8 @@ describe('CLI with yargs (index.ts)', () => {
     it('should handle client command failure (spawn error) and log via yargs .fail()', async () => {
       const spawnError = new Error("Failed to spawn");
       // To simulate spawn error, we need to make the StdioClientTransport constructor or its connect method throw.
-      // This is tricky as it's internal to the SDK.
       // A more direct way: mock StdioClientTransport's connect to reject.
-      vi.mocked(mcp.StdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(spawnError) } as any));
+      vi.mocked(ActualStdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(spawnError) } as any));
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}']);
       
@@ -362,7 +363,7 @@ describe('CLI with yargs (index.ts)', () => {
       // Simulate premature exit by having client.connect() reject with a specific error.
       // StdioClientTransport might internally handle this and surface it as a connection error.
       const prematureExitError = new Error("Server process exited prematurely");
-      vi.mocked(mcp.StdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(prematureExitError) } as any));
+      vi.mocked(ActualStdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(prematureExitError) } as any));
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       // No need to wait for simulateServerReady if server exits prematurely
       await runMainWithArgs(['agent_query', '{"query":"test_server_exit"}']); 

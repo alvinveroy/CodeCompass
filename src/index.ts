@@ -4,8 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';
 import yargs from 'yargs'; // Import yargs
-import type { ChildProcess } from 'child_process'; // Keep type for potential direct use elsewhere
-import * as mcp from '@modelcontextprotocol/sdk'; // For StdioClientTransport etc.
+import type { ChildProcess } from 'child_process';
+import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { Client as MCPClientSdk } from '@modelcontextprotocol/sdk/client/index.js'; // Aliased to avoid potential local conflicts
 // Use path.resolve for dynamic requires to make them more robust, especially in test environments.
 const libPath = path.resolve(__dirname, './lib');
 import { hideBin } from 'yargs/helpers'; // Import hideBin
@@ -137,7 +138,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   const mainScriptPath = path.resolve(__dirname, 'index.js'); // Path to the compiled index.js
 
   // Parameters for StdioClientTransport to spawn the server
-  const serverProcessParams: mcp.StdioServerParameters = {
+  const serverProcessParams: StdioServerParameters = {
     command: process.execPath, // Path to node executable
     args: [
       mainScriptPath,    // Path to this script (dist/index.js)
@@ -157,8 +158,8 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     }
   };
 
-  const transport = new mcp.StdioClientTransport(serverProcessParams);
-  const client = new mcp.Client({ name: "codecompass-cli-client", version: getPackageVersion() });
+  const transport = new StdioClientTransport(serverProcessParams);
+  const client = new MCPClientSdk({ name: "codecompass-cli-client", version: getPackageVersion() });
 
   let clientClosed = false;
   const cleanup = async () => {
