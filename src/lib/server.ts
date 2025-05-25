@@ -473,8 +473,7 @@ export async function startServer(repoPath: string): Promise<void> {
     // Assuming StdioServerTransport defaults to process.stdin/stdout if no args are provided,
     // based on SDK examples.
     const transportForStdio = new StdioServerTransport();
-    await mainStdioMcpServer.connect(transportForStdio); // Connect the main server instance
-    logger.info("CodeCompass MCP server connected to stdio transport. Ready for MCP communication over stdin/stdout.");
+    // Stdio MCP server connection moved to after HTTP server setup race condition.
 
     const finalDeclaredTools = Object.keys(serverCapabilities.tools);
     logger.info(`Declared tools in capabilities: ${finalDeclaredTools.join(', ')}`);
@@ -636,9 +635,19 @@ export async function startServer(repoPath: string): Promise<void> {
     });
 
     await Promise.race([listenPromise, httpServerSetupPromise]);
+    
+    // Connect stdio MCP server only if HTTP server setup didn't lead to an early exit/rejection.
+    await mainStdioMcpServer.connect(transportForStdio);
+    logger.info("CodeCompass MCP server connected to stdio transport. Ready for MCP communication over stdin/stdout.");
+    
     logger.info(`CodeCompass MCP server v${VERSION} running for repository: ${repoPath} (MCP via stdio)`);
     // Updated console message to reflect stdio MCP and utility HTTP server
-    console.error(`CodeCompass v${VERSION} ready. MCP active on stdio. Utility HTTP server running on port ${httpPort}.`);
+    // Only log this if the utility server is actually running (not disabled due to EADDRINUSE by another CC instance)
+    if (!configService.IS_UTILITY_SERVER_DISABLED) {
+      console.error(`CodeCompass v${VERSION} ready. MCP active on stdio. Utility HTTP server running on port ${httpPort}.`);
+    } else {
+      console.error(`CodeCompass v${VERSION} ready. MCP active on stdio. Utility HTTP server is DISABLED (port ${httpPort} in use by another instance). Proxy mode active for utility tools.`);
+    }
     
     if (process.env.NODE_ENV === 'test') {
       logger.info("Test environment detected, server setup complete. Skipping SIGINT wait.");
