@@ -139,6 +139,13 @@ describe('CLI with yargs (index.ts)', () => {
     const SUT_distPath = path.dirname(indexPath); 
     const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); 
     
+    // Explicitly mock child_process here for this SUT import
+    const actualCpModule = await vi.importActual('child_process') as typeof import('child_process');
+    vi.doMock('child_process', () => ({
+      ...actualCpModule,
+      spawn: mockSpawnFn, // mockSpawnFn is from the describe/beforeEach scope
+    }));
+
     vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
       configService: currentMockConfigServiceInstance, 
       logger: currentMockLoggerInstance,             

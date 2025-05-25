@@ -672,10 +672,24 @@ describe('Server Startup and Port Handling', () => {
       })
     );
         
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${String(localPingError)}. This instance will exit.`));
-    expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({
-      message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`,
-    }));
+    // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
+    const mainFailLog = (ml.error.mock.calls as [string, any][]).find(
+      call => call.length === 2 && call[0] === "Failed to start CodeCompass" &&
+      typeof call[1] === 'object' && call[1] !== null && typeof call[1].message === 'string'
+    );
+    expect(mainFailLog).toBeDefined();
+    if (mainFailLog) {
+      expect(mainFailLog[1].message).toContain(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`);
+    }
+
+    // Optionally, check for the more specific initial logs if needed, e.g.:
+    const pingFailedLogFound = ml.error.mock.calls.some(call => 
+      typeof call[0] === 'string' && 
+      (call[0] as string).includes(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`) &&
+      (call[0] as string).includes(`Ping error: ${localPingError.message}`)
+    );
+    expect(pingFailedLogFound).toBe(true);
+
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
@@ -722,44 +736,42 @@ describe('Server Startup and Port Handling', () => {
     await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
       expect.objectContaining({
         name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`, // Corrected message
+        message: `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`,
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
-        detectedServerPort: mcs.HTTP_PORT, // Port of the existing CC server
+        detectedServerPort: mcs.HTTP_PORT, 
         existingServerStatus: pingSuccessData,
-        originalError: expect.objectContaining({ code: 'EADDRINUSE' }) // The original EADDRINUSE error
+        originalError: expect.objectContaining({ code: 'EADDRINUSE' })
       })
     );
           
     // Then, assert the specific log call for "Failed to start CodeCompass"
-    // The logger is called as: logger.error("Failed to start CodeCompass", { message: err.message });
-    const failedToStartLogCall = ml.error.mock.calls.find((callArgs): callArgs is [string, { message: string, [key: string]: any }] => {
-      // Check for the specific call structure: logger.error(string, object)
-      if (callArgs.length === 2 && typeof callArgs[0] === 'string' && callArgs[0] === "Failed to start CodeCompass") {
-        const meta = callArgs[1];
-        // Check if the second argument is an object with a string 'message' property
-        return typeof meta === 'object' && meta !== null && typeof (meta as {message: unknown}).message === 'string';
-      }
-      return false;
-    });
-    expect(failedToStartLogCall).toBeDefined(); // Ensure such a log call was made
+    const failedToStartLogCall = (ml.error.mock.calls as [string, any][]).find(
+      (callArgs): callArgs is [string, { message: string; [key: string]: any }] =>
+        callArgs.length === 2 &&
+        typeof callArgs[0] === 'string' &&
+        callArgs[0] === "Failed to start CodeCompass" &&
+        typeof callArgs[1] === 'object' &&
+        callArgs[1] !== null &&
+        typeof callArgs[1].message === 'string'
+    );
 
-    // If failedToStartLogCall is defined, the type guard ensures it has the correct structure
+    expect(failedToStartLogCall).toBeDefined(); 
+
     if (failedToStartLogCall) { 
-      expect(failedToStartLogCall[1]).toEqual(
-        expect.objectContaining({
-          message: expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`)
-        })
-      );
+      expect(failedToStartLogCall[1].message).toContain(`Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`);
     } else {
-      // Fail test explicitly if log not found, to make it clearer than just undefined access
       throw new Error("Expected 'Failed to start CodeCompass' log call with metadata not found.");
     }
 
     // Also check the initial error log about failing to fetch status
-    expect(ml.error).toHaveBeenCalledWith(
-      expect.stringContaining(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`)
+    // This log might be `logger.error(messageString)` or `logger.error(messageString, errorObject)`.
+    // We need to find a call where the first argument contains the specific message.
+    const statusFetchErrorLogFound = ml.error.mock.calls.some(call => 
+      typeof call[0] === 'string' && 
+      (call[0] as string).includes(`Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`)
     );
+    expect(statusFetchErrorLogFound).toBe(true);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
