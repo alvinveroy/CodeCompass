@@ -1657,6 +1657,8 @@ export async function startProxyServer(
         requestMethod: req.method,
         responseStatus: axiosError.response?.status,
         responseDataPreview: errorResponseData?.substring(0, 500), // Log a preview
+        // More detailed Axios error logging
+        axiosErrorDetails: JSON.stringify(axiosError, Object.getOwnPropertyNames(axiosError), 2)
       });
 
       if (axiosError.response) {

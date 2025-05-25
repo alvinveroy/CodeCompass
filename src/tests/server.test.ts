@@ -655,6 +655,25 @@ describe('Server Startup and Port Handling', () => {
     );
         
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
+    try {
+      await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        expect.objectContaining({
+          name: "ServerStartupError",
+          message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${String(localPingError)}`, // Use String(localPingError)
+          exitCode: 1,
+          requestedPort: mcs.HTTP_PORT,
+          existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' }),
+          originalError: expect.objectContaining({ code: 'EADDRINUSE' }), // Check for EADDRINUSE code
+          detectedServerPort: undefined, // Ensure this is expected
+        })
+      );
+    } finally {
+      // eslint-disable-next-line no-console
+      console.error("Debug: ml.error calls for 'ping fails' test:", JSON.stringify(ml.error.mock.calls, null, 2));
+    }
+        
+    // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
     const mainFailLogCall = ml.error.mock.calls.find(callArgs => { // Renamed 'call' to 'callArgs' for clarity
       if (callArgs.length === 1 && typeof callArgs[0] === 'object' && callArgs[0] !== null) {
         const logObject = callArgs[0] as { message?: string, error?: { message?: string } };
