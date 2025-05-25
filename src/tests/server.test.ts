@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock } from 'vitest';
-// Add findFreePort to the import from ../lib/server
-import { normalizeToolParams, startServer, findFreePort, ServerStartupError } from '../lib/server';
+// Add findFreePort and startProxyServer to the import from ../lib/server
+import * as serverLibModule from '../lib/server'; // Import the whole module to spy on its exports
+import { normalizeToolParams, ServerStartupError } from '../lib/server'; // Keep specific imports if needed elsewhere
 import { IndexingStatusReport, getGlobalIndexingStatus } from '../lib/repository'; // For mock status
 import type * as httpModule from 'http'; // For types
 // Import actual modules to be mocked
@@ -966,15 +967,14 @@ describe('startProxyServer', () => {
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
     const proxyListenPort = requestedPort + 100; // Assume findFreePort will give this
     
-    // Mock findFreePort specifically for startProxyServer tests
-    const serverLib = await import('../lib/server.js');
-    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    // Mock findFreePort using the spy on the imported module
+    findFreePortSpy.mockResolvedValue(proxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
       .get('/api/ping')
       .reply(200, { service: "CodeCompassTarget", status: "ok", version: "1.0.0" });
 
-    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
     expect(proxyServerInstance).toBeDefined();
     
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -987,13 +987,12 @@ describe('startProxyServer', () => {
     expect(response.status).toBe(200);
     expect(response.data).toEqual({ service: "CodeCompassTarget", status: "ok", version: "1.0.0" });
     expect(nock.isDone()).toBe(true);
-    findFreePortSpy.mockRestore();
+    // findFreePortSpy is restored in afterEach
   });
 
   it('should proxy POST /mcp with body and headers', async () => {
     const proxyListenPort = requestedPort + 101;
-    const serverLib = await import('../lib/server.js');
-    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    findFreePortSpy.mockResolvedValue(proxyListenPort);
 
     const requestBody = { jsonrpc: "2.0", method: "test", params: { data: "value" }, id: 1 };
     const responseBody = { jsonrpc: "2.0", result: "success", id: 1 };
@@ -1024,13 +1023,12 @@ describe('startProxyServer', () => {
     expect(response.headers['content-type']).toContain('application/json');
     expect(response.headers['mcp-session-id']).toBe(sessionId);
     expect(nock.isDone()).toBe(true);
-    findFreePortSpy.mockRestore();
+    // findFreePortSpy is restored in afterEach
   });
 
   it('should proxy GET /mcp for SSE', async () => {
     const proxyListenPort = requestedPort + 102;
-    const serverLib = await import('../lib/server.js');
-    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    findFreePortSpy.mockResolvedValue(proxyListenPort);
     const sessionId = "sse-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1044,7 +1042,7 @@ describe('startProxyServer', () => {
         'mcp-session-id': sessionId 
       });
     
-    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
     const response = await axios.get(`http://localhost:${proxyListenPort}/mcp`, {
       headers: { 'mcp-session-id': sessionId },
@@ -1056,13 +1054,12 @@ describe('startProxyServer', () => {
     expect(response.headers['mcp-session-id']).toBe(sessionId);
     expect(response.data).toBe("event: message\ndata: hello\n\n");
     expect(nock.isDone()).toBe(true);
-    findFreePortSpy.mockRestore();
+    // findFreePortSpy is restored in afterEach
   });
   
   it('should proxy DELETE /mcp', async () => {
     const proxyListenPort = requestedPort + 103;
-    const serverLib = await import('../lib/server.js');
-    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    findFreePortSpy.mockResolvedValue(proxyListenPort);
     const sessionId = "delete-session-id";
 
     nock(`http://localhost:${targetPort}`, {
@@ -1071,7 +1068,7 @@ describe('startProxyServer', () => {
       .delete('/mcp')
       .reply(204); // Or 200 with a body if applicable
 
-    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
     const response = await axios.delete(`http://localhost:${proxyListenPort}/mcp`, {
       headers: { 'mcp-session-id': sessionId }
@@ -1079,38 +1076,36 @@ describe('startProxyServer', () => {
     
     expect(response.status).toBe(204);
     expect(nock.isDone()).toBe(true);
-    findFreePortSpy.mockRestore();
+    // findFreePortSpy is restored in afterEach
   });
 
   it('should proxy /api/indexing-status', async () => {
     const proxyListenPort = requestedPort + 104;
-    const serverLib = await import('../lib/server.js');
-    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    findFreePortSpy.mockResolvedValue(proxyListenPort);
     const mockStatus = { status: 'idle', message: 'Target server is idle' };
 
     nock(`http://localhost:${targetPort}`)
       .get('/api/indexing-status')
       .reply(200, mockStatus);
 
-    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
     const response = await axios.get(`http://localhost:${proxyListenPort}/api/indexing-status`);
     expect(response.status).toBe(200);
     expect(response.data).toEqual(mockStatus);
     expect(nock.isDone()).toBe(true);
-    findFreePortSpy.mockRestore();
+    // findFreePortSpy is restored in afterEach
   });
 
   it('should handle target server unreachable for /mcp', async () => {
     const proxyListenPort = requestedPort + 105;
-    const serverLib = await import('../lib/server.js');
-    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    findFreePortSpy.mockResolvedValue(proxyListenPort);
 
     nock(`http://localhost:${targetPort}`)
       .post('/mcp')
       .replyWithError({ message: 'Connection refused', code: 'ECONNREFUSED' });
 
-    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
     
     try {
       await axios.post(`http://localhost:${proxyListenPort}/mcp`, {});
@@ -1122,20 +1117,19 @@ describe('startProxyServer', () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining('Proxy: Error proxying MCP request'), expect.anything());
     expect(nock.isDone()).toBe(true);
-    findFreePortSpy.mockRestore();
+    // findFreePortSpy is restored in afterEach
   });
 
   it('should forward target server 500 error for /mcp', async () => {
     const proxyListenPort = requestedPort + 106;
-    const serverLib = await import('../lib/server.js');
-    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockResolvedValue(proxyListenPort);
+    findFreePortSpy.mockResolvedValue(proxyListenPort);
     const errorBody = { jsonrpc: "2.0", error: { code: -32000, message: "Target Internal Error" }, id: null };
 
     nock(`http://localhost:${targetPort}`)
       .post('/mcp')
       .reply(500, errorBody, { 'Content-Type': 'application/json' });
 
-    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
     try {
       await axios.post(`http://localhost:${proxyListenPort}/mcp`, {});
@@ -1145,19 +1139,18 @@ describe('startProxyServer', () => {
       expect(error.response.data).toEqual(errorBody);
     }
     expect(nock.isDone()).toBe(true);
-    findFreePortSpy.mockRestore();
+    // findFreePortSpy is restored in afterEach
   });
    it('should reject if findFreePort fails', async () => {
     const findFreePortError = new Error("No ports for proxy!");
-    const serverLib = await import('../lib/server.js');
-    const findFreePortSpy = vi.spyOn(serverLib, 'findFreePort').mockRejectedValue(findFreePortError);
+    findFreePortSpy.mockRejectedValue(findFreePortError); // Configure the spy
 
-    await expect(serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
+    await expect(serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing"))
       .rejects.toThrow(findFreePortError);
     
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(ml.error).not.toHaveBeenCalledWith(expect.stringContaining('Proxy server failed to start')); // This log is inside the listen promise
-    findFreePortSpy.mockRestore();
+    // findFreePortSpy is restored in afterEach
   });
 });
 
@@ -1199,7 +1192,7 @@ describe('MCP Tool Relaying', () => {
     // The McpServer mock's `tool` method captures handlers.
     // We need to ensure `startServer` is called or its tool registration part is simulated.
     // Let's try calling startServer and letting it run to the point of tool registration.
-    // To prevent full server start, we can make http.listen throw an error *after* tools are registered.
+    // To prevent full server start, we can make http.listen resolve immediately.
     
     // Minimal mock for getLLMProvider for tool registration
     const { getLLMProvider: getLLMProviderActual } = await import('../lib/llm-provider.js');
@@ -1208,23 +1201,21 @@ describe('MCP Tool Relaying', () => {
       generateText: vi.fn().mockResolvedValue("mocked text"),
       generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
       processFeedback: vi.fn().mockResolvedValue("mocked feedback response"),
-    } as LLMProvider); // Changed to full LLMProvider
+    } as LLMProvider);
 
 
-    // This is tricky. `startServer` is complex.
-    // A simpler approach for unit testing tool handlers:
-    // If `registerTools` was exported, we could call it directly.
-    // Since it's not, we rely on the McpServer mock's `tool` method to have captured them
-    // if `startServer` was implicitly run by other tests or if the mock is stateful across tests.
-    // This is fragile.
-    // A better way: The McpServer mock is at the top level. Its `tool` method captures handlers.
-    // We just need to ensure the `server.ts` module (which calls `registerTools` at module scope via `configureMcpServerInstance`)
-    // is imported, which it is.
     // The `mainStdioMcpServer.tool` calls happen during `startServer`.
     // So, to get handlers, we must call `startServer`.
-    // To prevent `startServer` from fully running or hanging, we can mock `httpServer.listen` to do nothing or resolve immediately.
-    mockHttpServerListenFn.mockImplementation((_port, _hostname, cb) => { if (cb) cb(); return this as any; }); // Changed currentMockHttpServerInstance to this
-    await startServer(repoPath); // This will call registerTools
+    // Mock `httpServer.listen` to resolve immediately to prevent hanging.
+    mockHttpServerListenFn.mockImplementation((_port, _hostname, cb) => { 
+      if (typeof cb === 'function') cb(); 
+      return {} as httpModule.Server; // Return a minimal mock server
+    });
+    // Also ensure the httpServerSetupPromise resolves if startServer uses Promise.race with it.
+    // The fix in server.ts should handle this, but defensive mocking here is okay.
+    // No, the fix in server.ts is better. This mock should just ensure listen() callback is hit.
+
+    await serverLibModule.startServer(repoPath); // This will call registerTools
   });
 
   afterEach(() => {

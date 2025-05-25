@@ -386,8 +386,10 @@ export async function startServer(repoPath: string): Promise<void> {
   logger.info("Starting CodeCompass MCP server...");
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function -- Initializing with a no-op, will be reassigned.
+  let httpServerSetupResolve: () => void = () => {}; // Add this
   let httpServerSetupReject: (reason?: unknown) => void = () => {}; 
-  const httpServerSetupPromise = new Promise<void>((_resolve, reject) => {
+  const httpServerSetupPromise = new Promise<void>((resolve, reject) => {
+    httpServerSetupResolve = resolve; // Assign resolve
     httpServerSetupReject = reject;
   });
 
@@ -628,6 +630,7 @@ export async function startServer(repoPath: string): Promise<void> {
     const listenPromise = new Promise<void>((resolve) => {
       httpServer.listen(httpPort, () => {
         logger.info(`CodeCompass HTTP server listening on port ${httpPort} for status and notifications.`);
+        httpServerSetupResolve(); // Resolve the setup promise on successful listen
         resolve();
       });
     });

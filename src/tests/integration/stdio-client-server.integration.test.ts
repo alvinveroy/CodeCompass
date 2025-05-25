@@ -5,6 +5,9 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+// Move the require to the top-level for consistent module loading.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { configService: actualConfigServiceForMock } = require('../../lib/config-service');
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node'; // For cloning if needed, or just local init
 
@@ -166,8 +169,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     // For now, we assume the top-level vi.mock for configService in unit tests is sufficient or
     // that the server uses defaults that are compatible with these integration tests.
     // If specific config (like EMBEDDING_DIMENSION) is crucial, ensure it's correctly mocked.
-    const { configService: actualConfigService } = require('../../lib/config-service'); // Removed .js extension
-    vi.spyOn(actualConfigService, 'EMBEDDING_DIMENSION', 'get').mockReturnValue(768);
+    vi.spyOn(actualConfigServiceForMock, 'EMBEDDING_DIMENSION', 'get').mockReturnValue(768);
 
   });
 
