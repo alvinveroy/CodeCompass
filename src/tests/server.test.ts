@@ -732,15 +732,6 @@ describe('Server Startup and Port Handling', () => {
     }
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
-        name: "ServerStartupError", // Check the error type
-        message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
-        exitCode: 1,
-        requestedPort: mcs.HTTP_PORT,
-        detectedServerPort: mcs.HTTP_PORT,
-        existingServerStatus: pingSuccessData
-    }));
-    expect(mockedMcpServerConnect).not.toHaveBeenCalled();
-  });
 
   it('should handle non-EADDRINUSE errors on HTTP server and throw ServerStartupError with exitCode 1', async () => {
     const otherError = new Error('Some other server error') as NodeJS.ErrnoException;
