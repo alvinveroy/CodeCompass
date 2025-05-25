@@ -660,18 +660,24 @@ describe('Server Startup and Port Handling', () => {
       return Promise.resolve({ status: 404, data: {} });
     });
     
-    await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      expect.objectContaining({
-        name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${String(localPingError)}`, // Use String(localPingError)
-        exitCode: 1,
-        requestedPort: mcs.HTTP_PORT,
-        existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' }),
-        originalError: expect.objectContaining({ code: 'EADDRINUSE' }), // Check for EADDRINUSE code
-        detectedServerPort: undefined, // Ensure this is expected
-      })
-    );
+    process.env.SIMULATE_EADDRINUSE_FOR_TEST = 'true';
+    try {
+      await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        expect.objectContaining({
+          name: "ServerStartupError",
+          message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${String(localPingError)}`, // Use String(localPingError)
+          exitCode: 1,
+          requestedPort: mcs.HTTP_PORT,
+          existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' }),
+          // originalError should be the EADDRINUSE error simulated by mockHttpServerListenFn
+          originalError: expect.objectContaining({ code: 'EADDRINUSE', message: 'listen EADDRINUSE test from mockHttpServerListenFn' }),
+          detectedServerPort: undefined, 
+        })
+      );
+    } finally {
+      delete process.env.SIMULATE_EADDRINUSE_FOR_TEST;
+    }
         
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
     // This console.error for debugging can be removed if the test passes or if it's too verbose.
