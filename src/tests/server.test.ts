@@ -718,16 +718,16 @@ describe('Server Startup and Port Handling', () => {
     });
 
      
+    // First, assert the thrown ServerStartupError
     await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`,
+        message: `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`, // Corrected message
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
-        detectedServerPort: mcs.HTTP_PORT,
+        detectedServerPort: mcs.HTTP_PORT, // Port of the existing CC server
         existingServerStatus: pingSuccessData,
-        originalError: expect.any(Error) // Account for the original EADDRINUSE error
+        originalError: expect.objectContaining({ code: 'EADDRINUSE' }) // The original EADDRINUSE error
       })
     );
           
