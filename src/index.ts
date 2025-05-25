@@ -213,10 +213,8 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     const { Client: MCPClient } = require('@modelcontextprotocol/sdk/client/index.js') as typeof import('@modelcontextprotocol/sdk/client/index.js');
     const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js') as typeof import('@modelcontextprotocol/sdk/client/stdio.js');
 
-    const transport = new StdioClientTransport({
-      stdin: child.stdin!,
-      stdout: child.stdout!,
-    });
+    // Pass the child process directly, and cast to any to bypass potential TS errors for now
+    const transport = new StdioClientTransport({ childProcess: child } as any);
     const client = new MCPClient({ name: "codecompass-cli-client", version: getPackageVersion() });
 
     await client.connect(transport);

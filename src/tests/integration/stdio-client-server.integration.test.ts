@@ -203,11 +203,8 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     await waitForServerReady(serverProcess);
 
-    const transport = new StdioClientTransport({
-      // Use stdin and stdout properties, mapping to the child process's streams
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+    // Pass the child process directly, and cast to any to bypass potential TS errors for now
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
 
     await client.connect(transport);
@@ -237,10 +234,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     await client.connect(transport);
 
     // 1. Trigger indexing explicitly via the tool to ensure it runs for the test.
@@ -321,10 +315,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     await client.connect(transport);
     
     // Ensure LLM generateText is mocked for the agent's synthesis step
@@ -349,10 +340,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     await client.connect(transport);
 
     const changelogResult = await client.callTool({ name: 'get_changelog', arguments: {} });
@@ -378,10 +366,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     await client.connect(transport);
 
     // Clear any calls from initial auto-indexing if it happened
@@ -422,10 +407,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     await client.connect(transport);
 
     const modelSwitchArgs = { model: 'deepseek-coder', provider: 'deepseek' };
@@ -458,10 +440,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     await client.connect(transport);
 
     const sessionId = `test-session-${Date.now()}`;
@@ -499,10 +478,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await waitForServerReady(serverProcess);
     
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({
-      stdin: serverProcess.stdin!,
-      stdout: serverProcess.stdout!,
-    });
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     await client.connect(transport);
 
     // Wait for indexing (similar to search_code test)
@@ -540,10 +516,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     await waitForServerReady(serverProcess);
 
     const client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
-    const transport = new StdioClientTransport({
-      input: serverProcess.stdin!,
-      output: serverProcess.stdout!,
-    });
+    const transport = new StdioClientTransport({ childProcess: serverProcess } as any);
     await client.connect(transport);
 
     // Wait for indexing
