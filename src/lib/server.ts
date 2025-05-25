@@ -521,8 +521,16 @@ export async function startServer(repoPath: string): Promise<void> {
     // activeSessionTransports and /mcp HTTP routes removed for stdio-first MCP.
     // MCP communication is now handled by mainStdioMcpServer via StdioServerTransport.
 
-    const httpPort = configService.HTTP_PORT; 
-    logger.info(`[INTEGRATION_DEBUG] server.ts: const httpPort set to: ${httpPort}`); // Add this log
+    // Read HTTP_PORT *after* reloadConfigsFromFile has definitely run
+    let httpPort = configService.HTTP_PORT; 
+    logger.info(`[INTEGRATION_DEBUG] server.ts: configService.HTTP_PORT initially: ${httpPort}`);
+    if (httpPort === 0) {
+      logger.info(`[INTEGRATION_DEBUG] server.ts: HTTP_PORT is 0, attempting to find a free port dynamically.`);
+      httpPort = await findFreePort(10000 + Math.floor(Math.random() * 10000)); // Start search from a high random port
+      logger.info(`[INTEGRATION_DEBUG] server.ts: findFreePort selected: ${httpPort}. Setting global.CURRENT_HTTP_PORT.`);
+      global.CURRENT_HTTP_PORT = httpPort; // Ensure this dynamically found port is globally visible if needed
+    }
+    logger.info(`[INTEGRATION_DEBUG] server.ts: final httpPort for listen: ${httpPort}`);
     const httpServer = http.createServer(expressApp as (req: http.IncomingMessage, res: http.ServerResponse) => void);
 
     httpServer.on('error', async (error: NodeJS.ErrnoException) => { // eslint-disable-line @typescript-eslint/no-misused-promises -- Event handler, promise settlement not directly used by emitter

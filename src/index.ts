@@ -431,18 +431,20 @@ async function main() {
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
     .fail((msg, err, _yargsInstance) => {
-      // console.error('YARGS_FAIL_HANDLER_INVOKED', { msg, err });
-      console.error('YARGS_FAIL_HANDLER_INVOKED --- Msg Type:', typeof msg, 'Msg:', msg, '--- Err Type:', typeof err, 'Err:', err ? { message: err.message, name: err.name, stack: err.stack?.substring(0,100) } : null);
       // Dynamically import logger for failure messages if possible
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
+    const { logger: localFailLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
+    localFailLogger.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
+      hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
+      hasErr: !!err, errName: err?.name, errMessage: err?.message
+    });
       try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
           const { logger: failLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
           if (err) {
-              // failLogger.error('CLI Error (yargs.fail):', { message: err.message, stack: err.stack });
-              failLogger.error('CLI Error (yargs.fail): err.message=' + err.message); // Simplified for debugging
+              failLogger.error(`CLI Error (yargs.fail): ${err.name} - ${err.message}`, err);
           } else if (msg) {
-              // failLogger.error('CLI Usage Error (yargs.fail):', msg);
-              failLogger.error('CLI Usage Error (yargs.fail): msg=' + msg); // Simplified for debugging
+              failLogger.error(`CLI Usage Error (yargs.fail): ${msg}`);
           }
       } catch (_e) { // Use _e if error object 'e' is not used
           console.error("Fallback yargs.fail (logger unavailable): ", msg || err);
