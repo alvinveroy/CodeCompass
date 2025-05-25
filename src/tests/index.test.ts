@@ -63,7 +63,7 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Mock for StdioClientTransport
   StdioClientTransport: vi.fn().mockImplementation(() => ({
-    // Mock methods if needed, e.g., close: vi.fn()
+    close: vi.fn(), // Ensure the transport instance has a close method
   })),
 }));
 
@@ -175,7 +175,7 @@ describe('CLI with yargs (index.ts)', () => {
       StreamableHTTPClientTransport: vi.fn(),
     }));
     vi.doMock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Add mock for stdio transport
-      StdioClientTransport: vi.fn().mockImplementation(() => ({ /* mock transport methods if needed */ })),
+      StdioClientTransport: vi.fn().mockImplementation(() => ({ close: vi.fn() })),
     }));
     
     // The top-level vi.mock for dist/lib/server.js should now apply.
@@ -274,16 +274,21 @@ describe('CLI with yargs (index.ts)', () => {
     it('should spawn server and call tool via stdio for "agent_query"', { timeout: 30000 }, async () => {
       await runMainWithArgs(['agent_query', '{"query":"test_stdio"}']);
 
-      expect(mockSpawnFn).toHaveBeenCalledWith(
-        process.execPath, 
-        // process.argv[1] in the SUT will be the path to dist/index.js
-        // The repoPath default is '.'
-        [expect.stringContaining('index.js'), 'start', '.', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)], 
-        expect.anything()
+      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: process.execPath,
+          args: [
+            expect.stringContaining('index.js'), // Path to dist/index.js
+            'start',
+            '.', // Default repoPath
+            '--port', '0', // Client-spawned servers use dynamic utility port
+          ],
+          env: expect.objectContaining({
+            HTTP_PORT: '0', // Client-spawned servers use dynamic utility port
+          }),
+        })
       );
-      // StdioClientTransport is now responsible for spawning.
       // We expect the MCP client's callTool to be invoked.
-      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalled(); // Check if transport was created
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_stdio' } });
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
       // StdioClientTransport's close method should handle killing the process.
@@ -292,12 +297,22 @@ describe('CLI with yargs (index.ts)', () => {
     });
     
     it('should use --repo path for spawned server in client stdio mode', { timeout: 30000 }, async () => {
-      await runMainWithArgs(['agent_query', '{"query":"test_repo"}', '--repo', '/custom/path']);
+      const repoPath = '/custom/path';
+      await runMainWithArgs(['agent_query', '{"query":"test_repo"}', '--repo', repoPath]);
 
-      expect(mockSpawnFn).toHaveBeenCalledWith(
-        process.execPath,
-        [expect.stringContaining('index.js'), 'start', '/custom/path', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)],
-        expect.anything()
+      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: process.execPath,
+          args: [
+            expect.stringContaining('index.js'),
+            'start',
+            repoPath, // Custom repoPath
+            '--port', '0',
+          ],
+          env: expect.objectContaining({
+            HTTP_PORT: '0',
+          }),
+        })
       );
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_repo' } });
       expect(mockMcpClientInstance.close).toHaveBeenCalled();
@@ -381,10 +396,21 @@ describe('CLI with yargs (index.ts)', () => {
       await runMainWithArgs(['--port', String(customPort), 'agent_query', '{"query":"test_port_option"}']);
 
       expect(process.env.HTTP_PORT).toBe(String(customPort)); 
-      expect(mockSpawnFn).toHaveBeenCalledWith(
-        process.execPath,
-        [expect.stringContaining('index.js'), 'start', '.', '--port', String(customPort)], 
-        expect.anything()
+      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: process.execPath,
+          args: [
+            expect.stringContaining('index.js'),
+            'start',
+            '.', // Default repoPath
+            '--port', '0', // Client-spawned server still uses port '0' in args
+          ],
+          env: expect.objectContaining({
+            // The parent process.env.HTTP_PORT is customPort,
+            // but serverProcessParams.env explicitly sets HTTP_PORT: '0' for the child.
+            HTTP_PORT: '0',
+          }),
+        })
       );
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_port_option' } });
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
@@ -396,12 +422,22 @@ describe('CLI with yargs (index.ts)', () => {
     });
     
     it('--repo option should be used by client stdio command for spawned server', { timeout: 30000 }, async () => {
-      await runMainWithArgs(['agent_query', '{"query":"test_repo_opt"}', '--repo', '/my/client/repo']);
+      const repoPath = '/my/client/repo';
+      await runMainWithArgs(['agent_query', '{"query":"test_repo_opt"}', '--repo', repoPath]);
       
-      expect(mockSpawnFn).toHaveBeenCalledWith(
-        process.execPath,
-        [expect.stringContaining('index.js'), 'start', '/my/client/repo', '--port', String(currentMockConfigServiceInstance.HTTP_PORT)],
-        expect.anything()
+      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: process.execPath,
+          args: [
+            expect.stringContaining('index.js'),
+            'start',
+            repoPath, // Custom repoPath from --repo
+            '--port', '0',
+          ],
+          env: expect.objectContaining({
+            HTTP_PORT: '0',
+          }),
+        })
       );
     });
 
