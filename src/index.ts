@@ -214,9 +214,9 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js') as typeof import('@modelcontextprotocol/sdk/client/stdio.js');
 
     const transport = new StdioClientTransport({
-      readableStream: child.stdout!, // Non-null assertion: stdio is piped
-      writableStream: child.stdin!,  // Non-null assertion: stdio is piped
-    } as any); // Workaround for potential SDK type issue TS2353
+      stdin: child.stdin!,  // Changed from writableStream
+      stdout: child.stdout!, // Changed from readableStream
+    }); // Remove 'as any' if TS2353 is resolved by this change
     const client = new MCPClient({ name: "codecompass-cli-client", version: getPackageVersion() });
 
     await client.connect(transport);

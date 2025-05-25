@@ -663,15 +663,16 @@ describe('Server Startup and Port Handling', () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       expect.objectContaining({
         name: "ServerStartupError",
-        message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`,
+        message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${String(localPingError)}`, // Use String(localPingError)
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
         existingServerStatus: expect.objectContaining({ service: 'Unknown or non-responsive to pings' }),
-        originalError: expect.any(Error) // Account for the original EADDRINUSE error
+        originalError: expect.objectContaining({ code: 'EADDRINUSE' }), // Check for EADDRINUSE code
+        detectedServerPort: undefined, // Ensure this is expected
       })
     );
         
-    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}. This instance will exit.`));
+    expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${String(localPingError)}. This instance will exit.`));
     expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({
       message: `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: ${localPingError.message}`,
     }));
