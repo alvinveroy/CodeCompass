@@ -1008,7 +1008,7 @@ describe('startProxyServer', () => {
       .post('/mcp', requestBody)
       .reply(200, responseBody, { 'Content-Type': 'application/json', 'mcp-session-id': sessionId });
 
-    proxyServerInstance = await serverLib.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
+    proxyServerInstance = await serverLibModule.startProxyServer(requestedPort, targetPort, "1.0.0-existing");
 
     const response = await axios.post(`http://localhost:${proxyListenPort}/mcp`, requestBody, {
       headers: { 
