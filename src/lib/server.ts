@@ -109,6 +109,8 @@ export function normalizeToolParams(params: unknown): Record<string, unknown> {
   return { query: `[Unexpected type: ${typeof params}]` };
 }
 
+let processListenersAttached = false; // Flag to track if listeners are attached
+
 // Add this function definition at the module level, before startServer
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -369,19 +371,22 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 
 
 export async function startServer(repoPath: string): Promise<void> {
-  process.on('uncaughtException', (error: Error) => {
-    logger.error('UNCAUGHT EXCEPTION:', { message: error.message, stack: error.stack });
-    if (process.env.NODE_ENV !== 'test') { 
-      process.exit(1); 
-    }
-  });
+  if (!processListenersAttached) {
+    process.on('uncaughtException', (error: Error) => {
+      logger.error('UNCAUGHT EXCEPTION:', { message: error.message, stack: error.stack });
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(1);
+      }
+    });
 
-  process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-    logger.error('UNHANDLED PROMISE REJECTION:', { reason, promise });
-    if (process.env.NODE_ENV !== 'test') { 
-      process.exit(1);
-    }
-  });
+    process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+      logger.error('UNHANDLED PROMISE REJECTION:', { reason, promise });
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(1);
+      }
+    });
+    processListenersAttached = true;
+  }
   
   logger.info("Starting CodeCompass MCP server...");
 

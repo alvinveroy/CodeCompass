@@ -406,6 +406,7 @@ describe('Server Startup and Port Handling', () => {
   let ml: MockedLogger; // ml for mockedLogger
   let mockedMcpServerConnect: MockInstance; // Typed the mock instance
   let originalNodeEnv: string | undefined;
+  let mockConsoleError: MockInstance<typeof console.error>; // Declare mockConsoleError
 
   beforeEach(async () => {
     originalNodeEnv = process.env.NODE_ENV; // Store original NODE_ENV
@@ -414,6 +415,7 @@ describe('Server Startup and Port Handling', () => {
 
     // Initialize mockProcessExit here
     mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as unknown as typeof process.exit);
+    mockConsoleError = vi.spyOn(console, 'error').mockImplementation(vi.fn()); // Initialize mockConsoleError
 
     mockHttpServerCloseFn.mockReset().mockImplementation(function(this: any, callback?: () => void) { // Ensure close calls callback
       if (callback) callback();
@@ -444,12 +446,26 @@ describe('Server Startup and Port Handling', () => {
     // Default mock for axios.get
     // eslint-disable-next-line @typescript-eslint/unbound-method
     vi.mocked(axios.get).mockResolvedValue({ status: 200, data: {} });
+
+    // Refined mock for httpServer.listen to be async
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port, _hostnameOrCb, _backlogOrCb, cbIfFourArgs) {
+      let actualCallback: (() => void) | undefined;
+      if (typeof cbIfFourArgs === 'function') actualCallback = cbIfFourArgs;
+      else if (typeof _backlogOrCb === 'function') actualCallback = _backlogOrCb;
+      else if (typeof _hostnameOrCb === 'function') actualCallback = _hostnameOrCb;
+      
+      if (actualCallback) {
+        process.nextTick(actualCallback); // Call callback asynchronously
+      }
+      return this; // Return the mock server instance
+    });
   });
 
   afterEach(() => {
     process.env.NODE_ENV = originalNodeEnv; // Restore original NODE_ENV
     // Restore any global mocks if necessary, though vi.clearAllMocks() handles most
     if (mockProcessExit) mockProcessExit.mockClear(); // mockProcessExit is defined in beforeEach
+    if (mockConsoleError) mockConsoleError.mockClear(); // Clear mockConsoleError
     mockConsoleInfo.mockClear();
   });
 
@@ -518,7 +534,7 @@ describe('Server Startup and Port Handling', () => {
       expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`Status: ${mockExistingServerStatus.status}`));
       // Check for the specific exit message
       const exitLogFound = ml.info.mock.calls.some(call => 
-        typeof call[0] === 'string' && call[0].includes(`Current instance will exit as another CodeCompass server (v${existingServerPingVersion}) is already running on port ${mcs.HTTP_PORT}.`)
+        typeof call[0] === 'string' && (call[0] as string).includes(`Current instance will exit as another CodeCompass server (v${existingServerPingVersion}) is already running on port ${mcs.HTTP_PORT}.`)
       );
       expect(exitLogFound).toBe(true);
       
@@ -721,9 +737,10 @@ describe('Server Startup and Port Handling', () => {
     expect(failedToStartLog).toBeDefined();
     // Ensure failedToStartLog is not undefined before accessing its elements
     if (failedToStartLog) {
-      expect(failedToStartLog[1]).toEqual(expect.objectContaining({
+      const errorObject = failedToStartLog[1] as Record<string, unknown>; // Assert type for safety
+      expect(errorObject).toEqual(expect.objectContaining({
         name: "ServerStartupError", // Check the error type
-        message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`, // Added comma
+        message: `Port ${mcs.HTTP_PORT} is in use by existing CodeCompass server, but status fetch error occurred.`,
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
         detectedServerPort: mcs.HTTP_PORT,
