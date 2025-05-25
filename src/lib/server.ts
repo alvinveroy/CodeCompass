@@ -454,6 +454,7 @@ export async function startServer(repoPath: string): Promise<void> {
         search_code: {}, get_repository_context: {}, // Renamed
         ...(suggestionModelAvailable ? { generate_suggestion: {} } : {}), // Renamed
         get_changelog: {}, agent_query: {}, switch_suggestion_model: {}, get_indexing_status: {}, // Renamed
+        trigger_repository_update: {}, // Add this line
       },
       prompts: { "repository-context": {}, "code-suggestion": {}, "code-analysis": {} }, // Renamed
     };
@@ -1005,6 +1006,81 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
       };
     }
   });
+
+  // Add this new tool registration:
+  server.tool(
+    "trigger_repository_update",
+    "Triggers a re-indexing of the repository. If this server instance's utility HTTP endpoint is disabled (due to another primary instance running), this request will be relayed to the primary instance. Otherwise, it triggers indexing locally.",
+    {}, // No parameters for this tool
+    async (_args: Record<string, never>, _extra: any) => {
+      logger.info("Tool 'trigger_repository_update' execution started.");
+      // The configService and logger should be available in this scope
+      // or retrieved if necessary. qdrantClient and repoPath are parameters to registerTools.
+      // llmProvider would need to be fetched if triggering locally.
+
+      if (configService.IS_UTILITY_SERVER_DISABLED && configService.RELAY_TARGET_UTILITY_PORT) {
+        const targetUrl = `http://localhost:${configService.RELAY_TARGET_UTILITY_PORT}/api/repository/notify-update`;
+        logger.info(`Utility server is disabled, relaying repository update trigger to: ${targetUrl}`);
+        try {
+          // axios is already imported in server.ts
+          const response = await axios.post(targetUrl, {}); // Empty body for POST
+          logger.info(`Relayed repository update trigger successful, target server responded with status ${response.status}`);
+          return {
+            content: [{
+              type: "text",
+              text: `# Repository Update Triggered (Relayed to :${configService.RELAY_TARGET_UTILITY_PORT})\n\n${response.data.message || 'Update initiated on target server.'}`
+            }]
+          };
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          let errorDetails = errorMessage;
+          if (axios.isAxiosError(error) && error.response) {
+            errorDetails = `Status ${error.response.status}: ${JSON.stringify(error.response.data)}`;
+          }
+          logger.error(`Failed to relay repository update trigger: ${errorDetails}`);
+          return {
+            content: [{
+              type: "text",
+              text: `# Repository Update Trigger Failed (Relay Error)\n\nCould not relay to target server: ${errorDetails}`
+            }]
+          };
+        }
+      } else {
+        logger.info("Utility server is active, triggering local repository update.");
+        const currentStatus = getGlobalIndexingStatus(); // getGlobalIndexingStatus is imported
+        if (['initializing', 'validating_repo', 'listing_files', 'cleaning_stale_entries', 'indexing_file_content', 'indexing_commits_diffs'].includes(currentStatus.status)) {
+          const message = 'Indexing already in progress locally.';
+          logger.warn(message);
+          return {
+            content: [{ type: "text", text: `# Repository Update Trigger Failed\n\n${message}` }]
+          };
+        }
+        try {
+          const llmProvider = await getLLMProvider(); // getLLMProvider is imported
+          // indexRepository is imported. qdrantClient and repoPath are available from registerTools params.
+          indexRepository(qdrantClient, repoPath, llmProvider)
+            .then(() => logger.info("Local re-indexing process completed successfully via tool trigger."))
+            .catch(err => logger.error("Local re-indexing error via tool trigger:", err));
+          
+          return {
+            content: [{
+              type: "text",
+              text: "# Repository Update Triggered (Locally)\n\nRe-indexing initiated in the background."
+            }]
+          };
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.error(`Error initiating local repository update: ${errorMessage}`);
+          return {
+            content: [{
+              type: "text",
+              text: `# Repository Update Trigger Failed (Local Error)\n\n${errorMessage}`
+            }]
+          };
+        }
+      }
+    }
+  );
     
   if (suggestionModelAvailable) {
     server.tool(
