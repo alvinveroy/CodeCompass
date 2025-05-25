@@ -25,6 +25,7 @@ class ConfigService {
   public readonly OLLAMA_HOST: string;
   public readonly QDRANT_HOST: string;
   public readonly COLLECTION_NAME: string;
+  private readonly _httpPortFallback: number;
   
   private _llmProvider: string;
   private _suggestionModel: string;
@@ -94,8 +95,7 @@ class ConfigService {
   public readonly DEFAULT_EMBEDDING_DIMENSION = 768; // For nomic-embed-text
   public readonly DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY = 50;
 
-  public readonly DEFAULT_HTTP_PORT = 3001; // Added
-
+  // DEFAULT_HTTP_PORT removed, _httpPortFallback is used instead
 
   public readonly DEEPSEEK_RPM_LIMIT_DEFAULT = 60; // Default RPM for DeepSeek
 
@@ -122,6 +122,9 @@ class ConfigService {
         }),
       ],
     });
+
+    // Initialize _httpPortFallback before it's used
+    this._httpPortFallback = process.env.NODE_ENV === 'test' ? 0 : 3001;
 
     this.CONFIG_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '', '.codecompass');
     this.MODEL_CONFIG_FILE = path.join(this.CONFIG_DIR, 'model-config.json');
@@ -236,7 +239,12 @@ class ConfigService {
     this._diffLinesOfContext = parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this.DEFAULT_DIFF_LINES_OF_CONTEXT;
     this._maxFileContentLengthForCapability = parseInt(process.env.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY;
     this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
-    this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Added
+    // this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Original
+    // Change to use _httpPortFallback:
+    this._httpPort = parseInt(process.env.HTTP_PORT || '', 10);
+    if (isNaN(this._httpPort)) {
+      this._httpPort = this._httpPortFallback;
+    }
 
     // For _summarizationModel and _refinementModel, we'll set them properly in loadConfigurationsFromFile
     // and reloadConfigsFromFile after _suggestionModel is definitively set.
@@ -423,7 +431,13 @@ class ConfigService {
     this._diffLinesOfContext = parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this.DEFAULT_DIFF_LINES_OF_CONTEXT;
     this._maxFileContentLengthForCapability = parseInt(process.env.MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY;
     this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
-    this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Added
+    // this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Original
+    // Change to:
+    this._httpPort = parseInt(process.env.HTTP_PORT || '', 10);
+    if (isNaN(this._httpPort)) {
+      // _httpPortFallback should be initialized in constructor and available here
+      this._httpPort = this._httpPortFallback;
+    }
     
     // Initialize from env, file loading will override if present, then derive.
     this._summarizationModel = process.env.SUMMARIZATION_MODEL || "";
@@ -482,7 +496,19 @@ class ConfigService {
   get DIFF_LINES_OF_CONTEXT(): number { return parseInt(process.env.DIFF_LINES_OF_CONTEXT || '', 10) || this._diffLinesOfContext; }
   get MAX_FILE_CONTENT_LENGTH_FOR_CAPABILITY(): number { return this._maxFileContentLengthForCapability; }
   get MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY(): number { return this._maxDirListingEntriesForCapability; }
-  get HTTP_PORT(): number { return parseInt(process.env.HTTP_PORT || '', 10) || this._httpPort; } // Added getter
+  // get HTTP_PORT(): number { return parseInt(process.env.HTTP_PORT || '', 10) || this._httpPort; } // Original
+  // Change to:
+  get HTTP_PORT(): number {
+    // Prioritize process.env.HTTP_PORT if set and valid, otherwise use the internal _httpPort
+    // which has already been determined from env, file (if applicable), or fallback.
+    if (process.env.HTTP_PORT) {
+      const envPort = parseInt(process.env.HTTP_PORT, 10);
+      if (!isNaN(envPort)) {
+        return envPort;
+      }
+    }
+    return this._httpPort;
+  }
 
   // Method to get all relevant config for a provider (example for OpenAI)
   public getConfig(): { [key: string]: string | number | boolean | undefined } {
