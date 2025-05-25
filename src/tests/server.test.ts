@@ -676,33 +676,42 @@ describe('Server Startup and Port Handling', () => {
     const mainFailLogCall = ml.error.mock.calls.find(call => {
       if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
         const logObject = call[0] as { message?: string, error?: Error | { message?: string } };
-        return logObject.message === "Failed to start CodeCompass" && 
-               typeof logObject.error === 'object' && logObject.error !== null && 
+        return logObject.message === "Failed to start CodeCompass" &&
+               typeof logObject.error === 'object' && logObject.error !== null &&
                typeof logObject.error.message === 'string';
-      } else if (call.length === 2 && typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass" &&
-                 typeof call[1] === 'object' && call[1] !== null && typeof (call[1] as Error).message === 'string') {
-        return true; // Original structure
+      } else if (call.length === 2 && typeof call[0] === 'string' && call[0] === "Failed to start CodeCompass") {
+        // Check if the second argument is an error object with a message property
+        return typeof call[1] === 'object' && call[1] !== null && typeof (call[1] as Error).message === 'string';
       }
       return false;
     });
     expect(mainFailLogCall).toBeDefined();
 
     if (mainFailLogCall) {
-      const loggedErrorObject = (mainFailLogCall.length === 1 ? (mainFailLogCall[0] as { error: Error }).error : mainFailLogCall[1]) as Error;
-      expect(loggedErrorObject.message).toContain(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
-      expect(loggedErrorObject.message).toContain(String(localPingError));
+      // Determine if the error object is in call[0].error or call[1]
+      const errorDetails = mainFailLogCall.length === 1 && typeof mainFailLogCall[0] === 'object' && mainFailLogCall[0] !== null
+        ? (mainFailLogCall[0] as { error: Error }).error
+        : mainFailLogCall[1];
+      
+      if (errorDetails instanceof Error) {
+        expect(errorDetails.message).toContain(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`);
+        expect(errorDetails.message).toContain(String(localPingError));
+      } else {
+        // This case should ideally not be hit if mainFailLogCall is found and structured as expected
+        throw new Error("Logged error details are not in the expected format.");
+      }
     }
 
     // Check for the more specific initial logs if needed, e.g.:
-    // The logger might be called as logger.error("message with details", errorObject) or logger.error({ message: "...", error: errorObject })
     const pingFailedLogFound = ml.error.mock.calls.some(call => {
       const messagePart1 = `Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
       const messagePart2 = `Ping error: ${localPingError.message}`; // localPingError.message is "Connection refused"
-      if (typeof call[0] === 'string') {
-        return (call[0] as string).includes(messagePart1) && (call[0] as string).includes(messagePart2);
-      } else if (typeof call[0] === 'object' && call[0] !== null) {
-        const logObject = call[0] as { message?: string, error?: { message?: string } };
+      
+      if (call.length === 1 && typeof call[0] === 'object' && call[0] !== null) {
+        const logObject = call[0] as { message?: string };
         return typeof logObject.message === 'string' && logObject.message.includes(messagePart1) && logObject.message.includes(messagePart2);
+      } else if (call.length >= 1 && typeof call[0] === 'string') { // Can be logger.error(message) or logger.error(message, error)
+        return call[0].includes(messagePart1) && call[0].includes(messagePart2);
       }
       return false;
     });
