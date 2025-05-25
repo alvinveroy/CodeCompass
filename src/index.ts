@@ -4,9 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';
 import yargs from 'yargs'; // Import yargs
-import type { ChildProcess } from 'child_process';
-import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { Client as MCPClientSdk } from '@modelcontextprotocol/sdk/client/index.js'; // Aliased to avoid potential local conflicts
+import type { ChildProcess } from 'child_process'; // Keep type for potential direct use elsewhere
+// SDK imports will be done dynamically within handleClientCommand
+
 // Use path.resolve for dynamic requires to make them more robust, especially in test environments.
 const libPath = path.resolve(__dirname, './lib');
 import { hideBin } from 'yargs/helpers'; // Import hideBin
@@ -112,6 +112,10 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   const { configService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
   const { logger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
+
+  // Dynamically import SDK components
+  const { StdioClientTransport, type StdioServerParameters } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+  const { Client: MCPClientSdk } = await import('@modelcontextprotocol/sdk/client/index.js');
 
   logger.info(`CLI Client Mode: Tool '${toolName}'`);
   

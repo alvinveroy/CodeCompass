@@ -81,8 +81,8 @@ const ServerStartupError = class ServerStartupError extends Error {
   detectedServerPort?: number;
 
   constructor(message: string, exitCode = 1, options?: any) {
-    super(message);
-    this.name = "ServerStartupError";
+    super(message); // Pass message to the base Error constructor
+    this.name = "ServerStartupError"; // Set the name of the error
     this.exitCode = exitCode;
     this.originalError = options?.originalError;
     this.existingServerStatus = options?.existingServerStatus;
@@ -90,7 +90,9 @@ const ServerStartupError = class ServerStartupError extends Error {
     this.detectedServerPort = options?.detectedServerPort;
   }
 };
-vi.mock('../lib/server.js', () => ({
+
+// Mock the compiled path that dist/index.js will require
+vi.mock(path.resolve(__dirname, '../../../dist/lib/server.js'), () => ({
   startServer: mockStartServer,
   startProxyServer: mockStartProxyServer, // Add mock for startProxyServer
   ServerStartupError: ServerStartupError, // Use the class defined in the test
@@ -155,32 +157,12 @@ describe('CLI with yargs (index.ts)', () => {
     // Dynamically resolve paths as src/index.ts would
     // const indexPath = require.resolve('../../dist/index.js'); // This line is now effectively moved up
     const SUT_distPath = path.dirname(indexPath); 
-    const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); 
+    const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
     
-    // Explicitly mock child_process here for this SUT import
-    const actualCpModule = await vi.importActual('child_process') as typeof import('child_process');
-    vi.doMock('child_process', () => ({
-      ...actualCpModule,
-      spawn: mockSpawnFn, // mockSpawnFn is from the describe/beforeEach scope
-    }));
-
     vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
       configService: currentMockConfigServiceInstance, 
       logger: currentMockLoggerInstance,             
     }));
-
-    const targetServerJsPath = path.join(resolvedSUTLibPath, 'server.js');
-    // Add a log to confirm the path being mocked by vi.doMock
-    console.log(`[TEST_DEBUG] vi.doMock attempting to mock path: ${targetServerJsPath}`);
-
-    vi.doMock(targetServerJsPath, () => { // Use the resolved absolute path
-      console.log(`[TEST_DEBUG] vi.doMock for ${targetServerJsPath} IS BEING USED`); // Debug log
-      return {
-        startServer: mockStartServer,
-        startProxyServer: mockStartProxyServer,
-        ServerStartupError: ServerStartupError,
-      };
-    });
     vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
       Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
     }));
@@ -191,39 +173,10 @@ describe('CLI with yargs (index.ts)', () => {
       StdioClientTransport: vi.fn().mockImplementation(() => ({ /* mock transport methods if needed */ })),
     }));
     
+    // The top-level vi.mock for dist/lib/server.js should now apply.
+    // No need for vi.doMock for server.js here.
     await import(indexPath); 
 
-    // The following block (const declarations, vi.doMock calls, and the second await import) was duplicated and is removed.
-    // // Dynamically resolve paths as src/index.ts would
-    // // require.resolve needs a path that exists relative to this test file to find index.js
-    // // Assuming index.js is in dist/ and tests are in dist/tests/
-    // // If src/index.ts is run directly (e.g. via ts-node for tests), then '../index.js' might point to src/index.js
-    // // Let's assume the compiled output structure where index.js is at a level accessible via '../index.js' from 'dist/tests/index.js'
-    // // And 'lib' is a sibling to 'index.js'
-    // // const indexPath = require.resolve('../index.js'); // Get absolute path to index.js
-    // // const SUT_distPath = path.dirname(indexPath); // Get directory of index.js (e.g., /path/to/project/dist)
-    // // const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
-
-    // // vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
-    // //   configService: currentMockConfigServiceInstance, // Use the current, fresh mock
-    // //   logger: currentMockLoggerInstance,             // Use the current, fresh mock
-    // // }));
-    // // vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({
-    // //   startServer: mockStartServer,
-    // //   startProxyServer: mockStartProxyServer,
-    // //   ServerStartupError: ServerStartupError,
-    // // }));
-    // // // Mock SDK client components that are dynamically required in handleClientCommand
-    // // vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
-    // //   Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
-    // // }));
-    // // vi.doMock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
-    // //   StreamableHTTPClientTransport: vi.fn(),
-    // // }));
-
-    // // // Importing src/index.js executes main() at its end.
-    // // // No need to destructure or call main explicitly if it's not exported.
-    // // await import('../index.js'); 
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
     // to allow assertions on console.error or logger.error before process.exit is checked.
     try {
