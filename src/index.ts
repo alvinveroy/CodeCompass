@@ -154,6 +154,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
 
     child.stderr?.on('data', (data: Buffer) => {
       const message = data.toString();
+      logger.debug(`[CLIENT_STDERR_DATA_HANDLER] Received stderr from spawned server: ${message}`);
       // Heuristic to detect server readiness from stderr logs
       // Example: "CodeCompass vX.Y.Z ready. MCP active on stdio."
       if (message.includes("MCP active on stdio")) {
@@ -284,6 +285,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
 }
 
 async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }) {
+  console.log('[INDEX_TS_DEBUG] startServerHandler ENTERED');
   let effectiveRepoPath: string;
   if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath
     effectiveRepoPath = repoPathOrArgv;
@@ -429,6 +431,7 @@ async function main() {
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
     .fail((msg, err, _yargsInstance) => {
+      console.error('YARGS_FAIL_HANDLER_INVOKED', { msg, err });
       // Dynamically import logger for failure messages if possible
       try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
@@ -452,8 +455,11 @@ async function main() {
     });
 
   try {
+    console.log('[INDEX_TS_DEBUG] Before cli.parseAsync()');
     await cli.parseAsync();
+    console.log('[INDEX_TS_DEBUG] After cli.parseAsync() - success path');
   } catch (error) {
+    console.log('[INDEX_TS_DEBUG] After cli.parseAsync() - catch block');
     // This catch block is for errors thrown from command handlers
     // that yargs' .fail() might not have caught or for truly unexpected issues.
     try {

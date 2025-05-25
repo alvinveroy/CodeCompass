@@ -412,6 +412,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
   try {
     configService.reloadConfigsFromFile(true); 
+    logger.info(`[DEBUG server.ts] After reloadConfigsFromFile, configService.HTTP_PORT: ${configService.HTTP_PORT}`);
     logger.info(`Initial suggestion model from config: ${configService.SUGGESTION_MODEL}`);
     
     if (!repoPath || repoPath === "${workspaceFolder}" || repoPath.trim() === "") {
@@ -1594,7 +1595,9 @@ export async function startProxyServer(
   existingServerVersion?: string
 ): Promise<http.Server> { // Changed return type from Promise<void> to Promise<http.Server>
   // Attempt to find a free port starting from requestedPort + 1, or a fixed offset
+  logger.debug(`[DEBUG startProxyServer] About to call findFreePort. Requested: ${requestedPort}, Target: ${targetServerPort}`);
   const proxyListenPort = await findFreePort(requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50); // Adjust starting logic if needed
+  logger.debug(`[DEBUG startProxyServer] findFreePort returned: ${proxyListenPort}`);
   const targetBaseUrl = `http://localhost:${targetServerPort}`;
 
   const app = express();
