@@ -706,3 +706,62 @@ This guard seems correct for preventing runtime errors, but TypeScript might sti
     *   **DeepSeek API Connection Errors:** In `src/tests/integration/stdio-client-server.integration.test.ts`, ensure the `vi.mock('../../lib/deepseek.js', ...)` mock for `testDeepSeekConnection` is at the very top of the file, before any other imports or describe blocks, to ensure it's applied globally for all tests in this file.
 
 ---
+
+## Attempt 40: Address Vitest Transform Errors, TypeScript Errors, and Persistent Test Failures
+
+**Git Commit (Before Attempt 40 changes):** (User to fill with git commit SHA after applying Attempt 39 and partial application fixes)
+**Git Commit (After Attempt 40 changes):** (User to fill after applying these changes)
+
+### State After Attempt 39 (Full Application) and `npm run build` (Output from 2025-05-27 ~01:47 UTC):
+
+*   **Vitest Transform Errors (Build Blockers for these test files):**
+    *   **`src/tests/index.test.ts`**:
+        *   `ERROR: The symbol "SUT_distPath" has already been declared` (Line 198:10). This occurs during the Vitest run (esbuild transform).
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+        *   `ERROR: "await" can only be used inside an "async" function` (Line 194:25, related to `await import('../../lib/qdrant')`). This occurs during the Vitest run (esbuild transform).
+
+*   **TypeScript Compilation Errors (`tsc` after Vitest run):**
+    *   **`src/tests/index.test.ts`**:
+        *   `TS2451: Cannot redeclare block-scoped variable 'SUT_distPath'.` (Lines 195 & 198). This is a direct consequence of the transform error.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+        *   `TS2448: Block-scoped variable 'currentTestSpawnEnv' used before its declaration.` (Line 183).
+        *   `TS2454: Variable 'currentTestSpawnEnv' is used before being assigned.` (Line 183).
+        *   `TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.` (Line 194 for `qdrant` import, Line 198 for `deepseek.js` import). This is related to the transform error.
+        *   `TS2835: Relative import paths need explicit file extensions... Did you mean '../../lib/qdrant.js'?` (Line 194).
+
+*   **Test Failures (Vitest Runtime):**
+    *   **`src/tests/index.test.ts`**: Tests did not run due to the transform error. (Previously 19 failures).
+    *   **`src/tests/server.test.ts` (7 failures - no change):**
+        *   3 tests fail due to `mockHttpServerListenFn` assertions (extra `undefined` arguments).
+        *   4 tests in the `startProxyServer` suite are still timing out (20000ms).
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`**: Tests did not run due to the transform error. (Previously 4 failures).
+    *   **DeepSeek API Connection Errors in Logs:** Still present in `stderr` during integration tests (though the tests themselves didn't fully run).
+
+### Analysis/Retrospection for Attempt 39:
+*   The top-level `vi.mock` strategy for `src` files in `src/tests/index.test.ts` did not resolve the mocking issues for `startServerHandler` and `StdioClientTransport` and seems to have contributed to the `SUT_distPath` redeclaration error during transformation.
+*   The `await import()` in a non-async `beforeEach` in `stdio-client-server.integration.test.ts` is a clear syntax error causing a transform failure.
+*   The `currentTestSpawnEnv` usage before declaration in `stdio-client-server.integration.test.ts` is a straightforward coding error.
+*   The `server.test.ts` timeouts and listen mock issues remain persistent and need focused attention once the build-blocking errors are resolved.
+
+### Next Step / Plan for Next Attempt (Attempt 40):
+
+1.  **Fix Vitest Transform & TypeScript Errors in `src/tests/index.test.ts` (Highest Priority):**
+    *   **`SUT_distPath` redeclaration (TS2451 & ESBuild error):** Remove the duplicate `const SUT_distPath = path.dirname(indexPath);` declaration within `runMainWithArgs`. One declaration (e.g., at line 195) should suffice if scoped correctly or ensure they have different names if intended for different purposes (though they appear identical).
+2.  **Fix Vitest Transform & TypeScript Errors in `src/tests/integration/stdio-client-server.integration.test.ts`:**
+    *   **`await` outside async (TS1308 & ESBuild error):** Make the `beforeEach` hook (around line 167) `async`: `beforeEach(async () => { ... });`.
+    *   **`currentTestSpawnEnv` used before declaration/assignment (TS2448, TS2454):** Ensure `currentTestSpawnEnv` is declared and initialized *before* line 183 where `currentTestSpawnEnv.LLM_PROVIDER` is assigned. It's declared later at line 236. This assignment needs to happen *after* line 236.
+    *   **Missing file extension (TS2835):** Change `await import('../../lib/qdrant')` to `await import('../../lib/qdrant.js')` (line 194).
+3.  **Address `src/tests/server.test.ts` Failures (7 - after build errors are fixed):**
+    *   **`listen` mock assertions (3 tests):** Re-evaluate the `mockHttpServerListenFn.toHaveBeenCalledWith(...)` assertions. The mock might be receiving more arguments than the test expects, or the mock implementation needs adjustment.
+    *   **`startProxyServer` Timeouts (4 tests):**
+        *   Further investigate the `findFreePortSpy` and `mockHttpServerListenFn` interactions. Ensure `findFreePort` mock correctly simulates rejection when `startProxyServer` expects it to fail.
+        *   Add more granular logging within `startProxyServer` (in `src/lib/server.ts`) and the relevant mocks to trace the async flow.
+4.  **Re-evaluate `src/tests/index.test.ts` Mocking Strategy (if transform errors fixed but tests still fail):**
+    *   If `mockStartServer` and `StdioClientTransport` mocks are still ineffective after fixing the transform error, reconsider the `vi.doMock` strategy targeting the `dist` files directly from within `runMainWithArgs`, ensuring paths are correct relative to the SUT (`dist/index.js`).
+5.  **Integration Test Logic (after transform errors fixed):**
+    *   **LLM Mocking:** Re-verify `LLM_PROVIDER` env var setting for the spawned process and the shared mock instance strategy.
+    *   **`get_session_history`:** Continue tracing session state.
+    *   **`trigger_repository_update` (`qdrant` spy):** Ensure the shared `qdrant` mock object is correctly used by the SUT.
+    *   **DeepSeek Connection Errors:** Ensure `testDeepSeekConnection` in `deepseek.js` is fully mocked to return `true` and prevent actual API calls.
+
+---
