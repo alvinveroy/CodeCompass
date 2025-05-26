@@ -979,7 +979,7 @@ describe('findFreePort', () => {
       });
 
     await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort + 1);
-    expect(mockedHttp.createServer).toHaveBeenCalledTimes(2);
+    expect(mockedHttpCreateServer).toHaveBeenCalledTimes(2); // Use the direct mock
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost');
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost');
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1); // Only closed on success
