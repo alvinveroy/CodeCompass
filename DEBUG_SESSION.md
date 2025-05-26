@@ -496,6 +496,40 @@ The `npm run build` command fails due to:
 *   Remaining integration test failures related to mock interactions, session handling, and LLM response assertions.
 ---
 
+## Attempt 13: Fix `index.test.ts` Build Error, `server.test.ts` HTTP Mock, and Integration Test Logic
+
+**Git Commit (Before Attempt 13 changes):** (User to provide if available, assumed to be state after Attempt 12 analysis)
+**Git Commit (After Attempt 13 changes):** (User to fill after applying these changes)
+
+### Issues Addressed (Intended):
+1.  **`src/tests/index.test.ts` (Critical Build Blocker):** Fix the syntax/transform error `Expected ")" but found "}"` at line 297, likely by ensuring `toHaveBeenCalledWith` is correctly terminated.
+2.  **`src/tests/server.test.ts` (`startProxyServer` failures):** Correct the `http.createServer` mock (specifically `createNewMockServerObject`) to ensure the `once` method is properly implemented on mock server instances, resolving the "server.once is not a function" error.
+3.  **`src/tests/integration/stdio-client-server.integration.test.ts` Failures:**
+    *   **`get_session_history`**: Ensure `repoPath` is passed to `getOrCreateSession` in the tool handler within `src/lib/server.ts`. Add error handling if session is not found.
+    *   **`generate_suggestion` & `get_repository_context`**: Use `mockClear().mockResolvedValueOnce()` for `mockLLMProviderInstance.generateText` in specific tests to ensure the correct mock response is used.
+    *   **`trigger_repository_update`**: Deferred.
+
+### Changes Applied (Proposed for this attempt):
+*   **`src/tests/index.test.ts`**: Corrected the `expect(...).toHaveBeenCalledWith(...)` statement around line 297 to ensure it's properly terminated with `);`.
+*   **`src/tests/server.test.ts`**: Modified the `createNewMockServerObject` function in the `http` mock to ensure `once` is a `vi.fn()` that correctly registers event handlers, similar to `on`.
+*   **`src/lib/server.ts`**: Ensured the `get_session_history` tool handler passes `repoPath` to `getOrCreateSession` and added error handling if the session is not found.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+    *   Used `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce(...)` in the `generate_suggestion` and `get_repository_context` tests.
+
+### Result (Based on User's Output from `npm run build` after applying these changes):
+*(To be filled by the user after running the build with these changes)*
+
+### Analysis/Retrospection:
+*(To be filled after seeing the build output)*
+
+### Next Step / Plan for Next Attempt:
+*(To be filled after seeing the build output)*
+
+### Blockers:
+*(To be identified after seeing the build output)*
+
+---
+
 ## Attempt 11: Address Syntax Errors, `server.test.ts` Mocking, and Integration Test Logic
 
 **Git Commit (Initial for Attempt 11):** 16e1192

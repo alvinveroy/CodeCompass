@@ -993,6 +993,17 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     try {
       // repoPath is available in the scope of registerTools
       const session = getOrCreateSession(sessionIdValue, repoPath); 
+
+      if (!session) {
+        // If session is null, it means it wasn't found and couldn't be created
+        logger.warn(`Session with ID "${sessionIdValue}" not found for get_session_history. Repo path used for lookup/creation attempt: ${repoPath}`);
+        return {
+          content: [{
+            type: "text",
+            text: `# Error Getting Session History\n\nSession with ID "${sessionIdValue}" not found.`,
+          }],
+        };
+      }
       
       return {
         content: [{
