@@ -1,5 +1,20 @@
 #!/usr/bin/env node
 
+// Add this block at the VERY TOP of the file, before any other imports
+// to ensure it runs before anything else can modify process.env or console.
+// This is for debugging spawned server environment in integration tests.
+if (process.env.DEBUG_SPAWNED_SERVER_ENV === 'true') {
+  const initialEnv = {
+    NODE_ENV: process.env.NODE_ENV,
+    HTTP_PORT: process.env.HTTP_PORT,
+    // Add any other critical env vars you want to check
+  };
+  // Use a simple console.error for this debug log as logger might not be initialized.
+  // Prefix with a clear marker.
+  console.error(`[SPAWNED_SERVER_INIT_ENV_DEBUG] Initial process.env: ${JSON.stringify(initialEnv)}`);
+}
+// End of early debug block
+
 import fs from 'fs';
 import path from 'path';
 import NodeCache from 'node-cache';

@@ -1166,8 +1166,8 @@ describe('startProxyServer', () => {
     ).resolves.toBeNull(); // Correct: startProxyServer resolves null on findFreePort error
         
     expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
-      // Updated expected log message to match the new error message
-      expect.stringContaining(`[ProxyServer] Failed to find free port for proxy: Error: ${findFreePortError.message}`)
+      // Match the exact string logged by server.ts
+      `[ProxyServer] Failed to find free port for proxy: Error: ${findFreePortError.message}`
     );
   }, 15000);
 
