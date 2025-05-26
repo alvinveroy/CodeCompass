@@ -207,9 +207,16 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Reset DeepSeek mocks
     const deepseekModule = await import('../../lib/deepseek.js'); // .js extension already here
     vi.mocked(deepseekModule.testDeepSeekConnection).mockResolvedValue(true);
-    vi.mocked(deepseekModule.checkDeepSeekApiKey).mockReturnValue(true);
-    vi.mocked(deepseekModule.generateWithDeepSeek).mockResolvedValue("Mocked DeepSeek from beforeEach reset");
-    vi.mocked(deepseekModule.generateEmbeddingWithDeepSeek).mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5]);
+    // Check if functions exist on the module before mocking, as the mock factory might not define all of them
+    if (deepseekModule.checkDeepSeekApiKey) {
+      vi.mocked(deepseekModule.checkDeepSeekApiKey).mockReturnValue(true);
+    }
+    if (deepseekModule.generateWithDeepSeek) {
+      vi.mocked(deepseekModule.generateWithDeepSeek).mockResolvedValue("Mocked DeepSeek from beforeEach reset");
+    }
+    if (deepseekModule.generateEmbeddingWithDeepSeek) {
+      vi.mocked(deepseekModule.generateEmbeddingWithDeepSeek).mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5]);
+    }
     
     // Ensure configService mock is reset or its relevant properties are set for the test
     // This might involve dynamically importing and mocking configService if its state needs to be test-specific
