@@ -530,6 +530,92 @@ The `npm run build` command fails due to:
 
 ---
 
+## Attempt 19: Address TypeScript Errors, `index.test.ts` Failures, `server.test.ts` Timeouts, and Integration Test LLM/Session Logic
+
+**Git Commit (Before Attempt 19 changes):** (User to fill with git commit SHA after applying Attempt 18 changes)
+**Git Commit (After Attempt 19 changes):** (User to fill after applying these changes)
+
+### Issues Addressed (Intended from Attempt 18 Plan):
+1.  **`src/tests/server.test.ts` TypeScript Errors**:
+    *   Change `SpyInstance` to `VitestMock` for `findFreePortSpy`.
+    *   Refine logger TS fixes (for TS2493, TS2339, TS2707).
+2.  **`src/tests/index.test.ts` Failures**:
+    *   Remove `vi.doMock` from `runMainWithArgs`.
+3.  **`src/tests/server.test.ts` Timeouts**:
+    *   Ensure `startProxyServer` listen mock is async in its specific `beforeEach`.
+4.  **`src/lib/server.ts` & `src/lib/agent-service.ts`**:
+    *   Add `sessionId` logging.
+5.  **`src/lib/llm-provider.ts` (Read-Only)**:
+    *   Propose workaround for LLM mocking using `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` environment variable (to be implemented in the read-only file if possible, or handled by test-side mocks).
+
+### Changes Applied in Attempt 18 (Based on user's provided files reflecting Attempt 18's plan):
+*   **`src/tests/server.test.ts`**:
+    *   `SpyInstance` type was removed, and `VitestMock` is used for `findFreePortSpy` (e.g., `findFreePortSpy: VitestMock<[number], Promise<number>>;`).
+*   **`src/tests/index.test.ts`**:
+    *   The `vi.doMock` calls for `config-service.js` and `server.js` within `runMainWithArgs` were commented out as intended.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+    *   The environment variable `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true'` was added to the `currentTestSpawnEnv` in `beforeEach`.
+
+### Result (After Applying Changes from Attempt 18 - based on build log from 2024-05-26, after user applied Attempt 18 changes):
+*   **Total Test Failures: 28**
+    *   **`src/tests/index.test.ts`**: 20 failures persisted.
+        *   `mockStartServer` (mocked as `mockStartServerHandler` in the test's `vi.mock`) was not called with the expected repository path.
+        *   The `--port` option test failed: `process.env.HTTP_PORT` was '0' instead of '1234' after yargs parsing.
+        *   The `--json` output test failed due to unexpected logs.
+        *   Other failures related to `StdioClientTransport` constructor and `currentMockLoggerInstance.error` not being called as expected.
+    *   **`src/tests/server.test.ts`**: 4 tests timed out in the `startProxyServer` suite.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`**: 4 failures persisted.
+        *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy was not called.
+        *   `get_session_history`: The second query (from `agent_query`) was not recorded in the session history (expected "Query 2" missing).
+        *   `generate_suggestion` & `get_repository_context`: Tests failed because the actual LLM output was received instead of the specific test-scoped mock. The `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` env var strategy was ineffective as `llm-provider.ts` (read-only) likely doesn't implement the check for it.
+*   **TypeScript Compilation Errors (5) in `src/tests/server.test.ts`**:
+    *   `TS2305: Module 'vitest' has no exported member 'SpyInstance'.` (Line 1, expected as `SpyInstance` is no longer used).
+    *   `TS2493: Tuple type '[infoObject: object]' of length '1' has no element at index '1'.` (Lines 767, 867).
+    *   `TS2339: Property 'includes' does not exist on type 'never'.` (Line 862).
+    *   `TS2707: Generic type 'MockInstance<T>' requires between 0 and 1 type arguments.` (Line 1127, for `findFreePortSpy` typing).
+
+### Analysis/Retrospection for Attempt 18:
+*   **TypeScript Errors in `server.test.ts`**: The change from `SpyInstance` to `VitestMock` was made, leading to the expected `TS2305`. However, the other TS errors (TS2493, TS2339, TS2707) related to logger mocks and `MockInstance` generics were not resolved by the previous attempts and persist.
+*   **`index.test.ts` Failures**: Removing `vi.doMock` in `runMainWithArgs` did not fix the underlying issue with the top-level `vi.mock('./dist/lib/server.js', ...)` not being effective for `mockStartServer`. The `--port` and `--json` test failures also indicate persistent issues with yargs interaction or test setup.
+*   **`server.test.ts` Timeouts**: The `startProxyServer` listen mock was already asynchronous. The timeouts suggest a deeper issue in the test logic or the interaction with `findFreePort` and its own http server mocks within that specific test suite.
+*   **Integration Test Failures**:
+    *   LLM Mocking: The `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` env var strategy failed because the corresponding logic is missing in the read-only `llm-provider.ts`. The tests need to rely on Vitest's module mocking for `getLLMProvider` to return the `mockLLMProviderInstance`.
+    *   `get_session_history`: The failure to record the second query, despite `state.ts` changes, points to issues in how `agent_query` interacts with session state or how the test sets up/verifies this. The planned `sessionId` logging was not added.
+    *   `trigger_repository_update`: The `batchUpsertVectors` spy not being called indicates `indexRepository` might not be running as expected or the mock setup for `qdrant.ts` is not being hit correctly by the SUT.
+*   **Missing Debug Logs**: The `yargs` debug log (for `--port` apply) and `getLLMProvider` debug log were not visible in the previous output, hindering diagnosis.
+
+### Next Step / Plan for Next Attempt (Attempt 19):
+1.  **`src/tests/server.test.ts` TypeScript Errors (Highest Priority):**
+    *   Fix `TS2493` (tuple length for logger call args) by ensuring `callArgs.length > 1` before accessing `callArgs[1]`.
+    *   Fix `TS2339` (`.includes` on `never` for logger call args) by ensuring `callArgs[0]` is type-checked as a string before calling `.includes()`.
+    *   Fix `TS2707` (`MockInstance` generics for `findFreePortSpy`) by ensuring `findFreePortSpy` is typed as `VitestMock<[number], Promise<number>>`. (The current file seems to have this, so the error might be a symptom of other issues or a misconfiguration).
+    *   The `TS2305` (missing `SpyInstance`) is an expected outcome of removing `SpyInstance` and can be ignored if `SpyInstance` is truly no longer used.
+2.  **`src/tests/index.test.ts` Failures (20):**
+    *   **`mockStartServer` not called**: Add diagnostic `console.log` statements in `runMainWithArgs` immediately before `await import(indexPath)` to check the mocked status of `mockStartServer` from the top-level `vi.mock`.
+    *   **`--port` test**: Add a `console.log` inside the `yargs` `.option('port', { apply: (value) => { ... } })` function in `src/index.ts` to observe if it's being called and what `process.env.HTTP_PORT` is before and after `String(value)` assignment.
+    *   **`--json` test**: Ensure `mockConsoleLog.mockClear()` is called immediately before the `await runMainWithArgs(...)` call within this specific test to isolate its console output.
+3.  **`src/tests/server.test.ts` Timeouts (4 - `startProxyServer` suite):**
+    *   Re-verify the `mockHttpServerListenFn` in the `startProxyServer` suite's `beforeEach`. Ensure it correctly simulates asynchronous listen and calls the callback for *all* relevant `listen` calls, including those originating from `findFreePort` when it's invoked by `startProxyServer`. The mock for `http.createServer` needs to consistently return server instances that behave as expected by `findFreePort`.
+4.  **`src/tests/integration/stdio-client-server.integration.test.ts` Failures (4):**
+    *   **LLM Mocking (`generate_suggestion`, `get_repository_context`)**:
+        *   Add a `console.log` inside the `vi.mock('../../lib/llm-provider', ...)` factory in `stdio-client-server.integration.test.ts` to confirm that this mock factory is being executed when the SUT (spawned server) tries to get an LLM provider.
+        *   Ensure `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce(...)` is used correctly in the specific tests.
+    *   **`get_session_history`**:
+        *   Add `console.log(\`[SERVER_GET_SESSION_HISTORY_TOOL] Session ID: \${args.sessionId}, Repo Path: \${repoPath}\`);` at the beginning of the `get_session_history` tool handler in `src/lib/server.ts`.
+        *   Add `console.log(\`[STATE_GET_OR_CREATE_SESSION] Session ID: \${sessionId}, Repo Path: \${repoPath}\`);` in `getOrCreateSession` in `src/lib/state.ts`.
+        *   Add `console.log(\`[STATE_ADD_QUERY] Session ID: \${sessionId}, Query: \${query}\`);` in `addQuery` in `src/lib/state.ts`.
+        *   Add `console.log(\`[AGENT_SERVICE_PROCESS_QUERY] Session ID: \${sessionId}, Query: \${query}\`);` at the start of `processAgentQuery` in `src/lib/agent-service.ts`.
+    *   **`trigger_repository_update`**: Defer detailed investigation for now, focus on other issues.
+
+### Blockers:
+*   Persistent TypeScript errors in `src/tests/server.test.ts`.
+*   Persistent test failures in `src/tests/index.test.ts` related to mocking and yargs option handling.
+*   Persistent timeouts in `src/tests/server.test.ts` (`startProxyServer` suite).
+*   Persistent logic failures in `src/tests/integration/stdio-client-server.integration.test.ts` related to LLM mocking and session state.
+*   Lack of visibility into debug logs from spawned processes or specific mock interactions.
+
+---
+
 ## Attempt 14: Resolve Remaining TypeScript Errors and Stabilize Ollama Mocks
 
 **Git Commit (Before Attempt 14 changes):** (User to fill - commit after Attempt 13's changes)
