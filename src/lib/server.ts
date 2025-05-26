@@ -791,8 +791,8 @@ function registerTools( // Removed async
         // configService.reloadConfigsFromFile(true); // processAgentQuery will use current configService state
 
         // processAgentQuery will internally get the LLMProvider and QdrantClient
-        logger.debug(`[SERVER_TOOL_HANDLER] agent_query calling processAgentQuery. Query: "${query}", SessionId: "${sessionId}", RepoPath: "${repoPath}"`);
-        const agentResponseText = await processAgentQuery(query, sessionId, repoPath); // Pass repoPath
+        logger.debug(`[SERVER_TOOL_HANDLER] agent_query calling processAgentQuery. Query: "${query}", SessionId: "${sessionId}"`);
+        const agentResponseText = await processAgentQuery(query, sessionId); // processAgentQuery only accepts two arguments
         logger.debug(`[SERVER_TOOL_HANDLER] agent_query processAgentQuery completed. Response: ${JSON.stringify(agentResponseText)}`);
         
         return {
