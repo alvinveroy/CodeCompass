@@ -1,6 +1,6 @@
 // Define these constants at the very top, before any imports or other code.
-// const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Adjusted path
-// const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts');
+const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Adjusted path
+const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts');
 
 import path from 'path';
 
@@ -78,7 +78,7 @@ let currentMockLoggerInstance: {
 
 
 // Define mock functions and ServerStartupError class first
-const mockStartServer = vi.fn();
+const mockStartServer = vi.fn().mockResolvedValue({ close: vi.fn() }); // Returns a mock server object with a close method
 const mockStartProxyServer = vi.fn();
 const ServerStartupError = class ServerStartupError extends Error {
   exitCode: number;
@@ -117,6 +117,15 @@ vi.mock('./dist/lib/server.js', () => ({ // This mock might still be needed if S
 //   get configService() { return currentMockConfigServiceInstance; },
 //   get logger() { return currentMockLoggerInstance; },
 // }));
+
+// Use vi.doMock here, at the top level, after constants are defined.
+vi.doMock(MOCKED_SERVER_MODULE_PATH, () => {
+  // console.log(`[INDEX_TEST_DEBUG] Top-level doMock for ${MOCKED_SERVER_MODULE_PATH} factory executing`);
+  return {
+    startServer: mockStartServer,
+    // ... other server exports if needed by the SUT indirectly via index.ts
+  };
+});
 
 import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
 

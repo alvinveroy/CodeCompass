@@ -1016,6 +1016,8 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 - Last Updated: ${new Date(session.lastUpdated).toISOString()}
 - Repository: ${session.context.repoPath}
 
+${""/* Adding logger here */}logger.debug(`[SERVER_TOOLS_DEBUG] formatSessionHistory for session ${session.id}. Queries:`, JSON.stringify(session.queries.map(q => ({ query: q.query, ts: q.timestamp, results_count: q.results.length }) ), null, 2));
+
 ## Queries (${session.queries.length})
 ${session.queries.map((q, i) => `
 ### Query ${i+1}: "${q.query}"
