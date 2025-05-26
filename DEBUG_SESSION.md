@@ -600,3 +600,46 @@ The `npm run build` command fails due to:
         *   Alternatively, ensure `mockLLMProviderInstance` is the exact same instance used by the server logic.
 
 ---
+
+## Attempt 15: Address `index.test.ts` Mocks, `server.test.ts` Timeouts, Integration Test LLM Mocking & Session History
+
+**Git Commit (Before Attempt 15 changes):** 5c10a56
+**Git Commit (After Attempt 15 changes):** (User to fill after applying these changes)
+
+### Issues Addressed (Intended):
+1.  **`src/tests/index.test.ts` (20 failures):**
+    *   Re-evaluate `vi.doMock` for `dist/lib/server.js` within `runMainWithArgs`. Add aggressive logging.
+    *   Review `--port` option test and `process.env.HTTP_PORT` assertion timing.
+    *   Verify `mockMcpClientInstance.callTool` result for `--json` output test.
+2.  **`src/tests/server.test.ts` (4 Timeouts):**
+    *   Focus on `http.createServer().listen()` mock in `startProxyServer` suite's `beforeEach` to ensure asynchronous callback.
+    *   Verify `findFreePortSpy.mockResolvedValue(proxyListenPort)` setup.
+3.  **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
+    *   **`get_session_history`**: Add `addQuery(...)` call in `src/lib/agent-service.ts` within `processAgentQuery`.
+    *   **`generate_suggestion` & `get_repository_context` (LLM Mocking)**: Mock `mockLLMProviderInstance.generateText` (from `llm-provider.ts` mock) in `beforeEach` and use `mockResolvedValueOnce` in specific tests.
+4.  **TypeScript Errors**: All were resolved in Attempt 14.
+
+### Changes Applied in Attempt 15 (Based on plan):
+*   **`src/lib/agent-service.ts`**:
+    *   Added `addQuery(session.id, preprocessedQuery, searchResults, 0);` within `processAgentQuery` after search results are obtained.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+    *   In `beforeEach`, added `mockLLMProviderInstance.generateText.mockClear().mockResolvedValue("Default mock from integration test beforeEach");`.
+    *   In `generate_suggestion` and `get_repository_context` tests, changed `vi.mocked(ollamaGenerateText)...` to `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce(...).mockResolvedValueOnce(...)`.
+*   **`src/tests/index.test.ts`**:
+    *   Updated `vi.doMock` for `server.js` in `runMainWithArgs` with more logging.
+*   **`src/tests/server.test.ts`**:
+    *   No explicit changes to `startProxyServer` timeout logic in this round, focusing on other areas first. The TS fixes from Attempt 14 were maintained.
+
+### Result (After Applying Changes from Attempt 15):
+*(To be filled by the user after running `npm run build`)*
+
+### Analysis/Retrospection for Attempt 15:
+*(To be filled after seeing the build output)*
+
+### Next Step / Plan for Next Attempt (Attempt 16):
+*(To be filled after seeing the build output)*
+
+### Blockers:
+*(To be identified after seeing the build output)*
+
+---
