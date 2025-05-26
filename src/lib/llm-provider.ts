@@ -9,6 +9,14 @@ import { OllamaGenerateResponse } from "./types";
 
 const llmCache = new NodeCache({ stdTTL: 3600 });
 
+// Helper type for the hardcoded mock structure
+interface HardcodedMockLLMProvider {
+  checkConnection: () => Promise<boolean>;
+  generateText: (prompt: string, forceFresh?: boolean) => Promise<string>;
+  generateEmbedding: (text: string, model?: string) => Promise<number[]>;
+  processFeedback: (originalPrompt: string, originalResponse: string, feedback: string, score: number) => Promise<string>;
+}
+
 export interface LLMProvider {
   checkConnection(): Promise<boolean>;
   generateText(prompt: string, forceFresh?: boolean): Promise<string>;
@@ -300,6 +308,17 @@ export function clearProviderCache(): void {
 }
 
 export async function getLLMProvider(): Promise<LLMProvider> {
+  // Integration test override
+  if (process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM === 'true') {
+    logger.info('[LLM_PROVIDER_SUT_DEBUG] Using hardcoded mock LLM provider for integration test.');
+    return Promise.resolve({
+      checkConnection: async () => true,
+      generateText: async (_prompt: string, _forceFresh?: boolean) => "Hardcoded mock response from SUT for integration test.",
+      generateEmbedding: async (_text: string, _model?: string) => [0.1, 0.2, 0.3, 0.4, 0.5], // Ensure embedding dim matches if relevant
+      processFeedback: async (_originalPrompt: string, _originalResponse: string, _feedback: string, _score: number) => "Hardcoded feedback response.",
+    } as LLMProvider); // Cast to LLMProvider
+  }
+
   // Ensure ConfigService has the latest from files/env.
 
   const suggestionModel = configService.SUGGESTION_MODEL;
