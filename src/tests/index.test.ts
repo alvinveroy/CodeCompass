@@ -178,8 +178,12 @@ describe('CLI with yargs (index.ts)', () => {
       StdioClientTransport: vi.fn().mockImplementation(() => ({ close: vi.fn() })),
     }));
     
-    // The top-level vi.mock for dist/lib/server.js should now apply.
-    // No need for vi.doMock for server.js here.
+    vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({ // Add this vi.doMock for server.js
+      startServer: mockStartServer,
+      startProxyServer: mockStartProxyServer,
+      ServerStartupError: ServerStartupError,
+    }));
+    
     await import(indexPath); 
 
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
@@ -392,21 +396,16 @@ describe('CLI with yargs (index.ts)', () => {
     });
 
     // (This test name is slightly misleading, it checks process.env in the *current* process after yargs parsing)
-    it('--port option should set HTTP_PORT environment variable after yargs parsing', { timeout: 30000 }, async () => {
+    it('--port option should set HTTP_PORT environment variable after yargs parsing', async () => {
       const customPort = 1234;
-      // Stub the env var that yargs will modify. This ensures that if vi.resetModules()
-      // resets process.env, our subsequent check is still valid for what yargs did.
-      vi.stubEnv('HTTP_PORT', undefined as string | undefined); // Start with it undefined
+      // originalProcessEnv is saved in global beforeEach and restored in afterEach.
+      // We modify process.env directly here, and yargs' apply function will also modify it.
+      delete process.env.HTTP_PORT; // Ensure it's not set before test
 
-      await runMainWithArgs(['--port', String(customPort)]); // Run a simple command that triggers yargs parsing
-
-      // Check process.env *after* yargs has parsed and its 'apply' function for --port has run.
+      await runMainWithArgs(['--port', String(customPort)]); 
+      // The import inside runMainWithArgs triggers yargs parsing and the 'apply' function.
+      // process.env.HTTP_PORT should now be set.
       expect(process.env.HTTP_PORT).toBe(String(customPort));
-      
-      // The rest of the assertions about StdioClientTransport are for client commands,
-      // not directly for testing the --port option's effect on process.env.
-      // If the intent was to check the env var *passed to the spawned server*, that's a different test.
-      // For now, this test focuses on yargs's 'apply' function setting process.env.
     });
 
     it('--repo option should be used by startServerHandler', async () => {

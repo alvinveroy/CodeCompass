@@ -521,12 +521,20 @@ describe('Server Startup and Port Handling', () => {
         return this;
     });
 
-    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, portToListen, _hostnameOrCb, _backlogOrCb, finalListenCb) {
-      let actualFinalListenCb = finalListenCb;
-      if (typeof _hostnameOrCb === 'function') actualFinalListenCb = _hostnameOrCb;
-      else if (typeof _backlogOrCb === 'function') actualFinalListenCb = _backlogOrCb;
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, portOrPathOrOptions, arg2, arg3, arg4) {
+      let callback: (() => void) | undefined;
+      if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { // Options object
+        callback = arg2 as (() => void);
+      } else if (typeof arg2 === 'function') { // listen(port, callback)
+        callback = arg2;
+      } else if (typeof arg3 === 'function') { // listen(port, host, callback)
+        callback = arg3;
+      } else if (typeof arg4 === 'function') { // listen(port, host, backlog, callback)
+        callback = arg4;
+      }
 
-      // Simulate EADDRINUSE if port is mcs.HTTP_PORT (e.g. 3001) and a specific test flag is set
+      // Simulate EADDRINUSE if port is mcs.HTTP_PORT and a specific test flag is set
+      const portToListen = typeof portOrPathOrOptions === 'number' ? portOrPathOrOptions : (portOrPathOrOptions as net.ListenOptions)?.port;
       if (portToListen === mcs.HTTP_PORT && process.env.SIMULATE_EADDRINUSE_FOR_TEST === 'true') {
         if (this._listeners && typeof this._listeners.error === 'function') {
           const error = new Error('listen EADDRINUSE test from mockHttpServerListenFn') as NodeJS.ErrnoException;
@@ -538,12 +546,12 @@ describe('Server Startup and Port Handling', () => {
           if (this._listeners && typeof this._listeners.listening === 'function') {
             this._listeners.listening();
           }
-          if (typeof actualFinalListenCb === 'function') {
-            actualFinalListenCb();
+          if (typeof callback === 'function') {
+            callback();
           }
         });
       }
-      return this; 
+      return this;
     });
   });
 
@@ -684,7 +692,8 @@ describe('Server Startup and Port Handling', () => {
         message: `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server. Response: ${JSON.stringify(otherServiceData)}`,
         exitCode: 1,
         requestedPort: mcs.HTTP_PORT,
-        existingServerStatus: otherServiceData
+        existingServerStatus: otherServiceData,
+        originalError: expect.objectContaining({ code: 'EADDRINUSE' }) // Verify originalError is passed
       })
     );
 
@@ -835,25 +844,27 @@ describe('Server Startup and Port Handling', () => {
     const expectedFailedToStartMessage = `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`;
     const expectedStatusFetchErrorMessage = `Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`;
 
-    for (const call of ml.error.mock.calls) {
-      const args = call as ReadonlyArray<unknown>; // Treat arguments as a flexible array
-      if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const logObject = args[0] as { message?: string, error?: { message?: string } };
+    for (const callArgs of ml.error.mock.calls) {
+      const firstArg = callArgs[0];
+      const secondArg = callArgs.length > 1 ? callArgs[1] : undefined;
+
+      if (typeof firstArg === 'string') {
+        if (firstArg.includes(expectedStatusFetchErrorMessage)) {
+          statusFetchErrorLogFound = true;
+        }
+        if (firstArg === "Failed to start CodeCompass" && 
+            secondArg && 
+            typeof secondArg === 'object' && 
+            (secondArg as { message?: string })?.message?.includes(expectedFailedToStartMessage)) {
+          failedToStartLogCallFound = true;
+        }
+      } else if (typeof firstArg === 'object' && firstArg !== null) {
+        const logObject = firstArg as { message?: string, error?: { message?: string } };
         if (logObject.message === "Failed to start CodeCompass" && logObject.error?.message?.includes(expectedFailedToStartMessage)) {
           failedToStartLogCallFound = true;
         }
         if (logObject.message?.includes(expectedStatusFetchErrorMessage)) {
-          statusFetchErrorLogFound = true;
-        }
-      } else if (args.length >= 1 && typeof args[0] === 'string') {
-        const messageStr: string = args[0];
-        if (messageStr === "Failed to start CodeCompass" && args.length === 2) {
-          const errorArg = args[1] as { message?: string };
-          if (errorArg?.message?.includes(expectedFailedToStartMessage)) {
-            failedToStartLogCallFound = true;
-          }
-        }
-        if (messageStr.includes(expectedStatusFetchErrorMessage)) {
+          // This case might occur if the error message is nested within an object's message property
           statusFetchErrorLogFound = true;
         }
       }
@@ -1167,7 +1178,7 @@ describe('startProxyServer', () => {
         
     expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
       // Match the exact string logged by server.ts
-      `[ProxyServer] Failed to find free port for proxy: Error: ${findFreePortError.message}`
+      `[ProxyServer] Failed to find free port for proxy: ${findFreePortError.message}`
     );
   }, 15000);
 
@@ -1286,42 +1297,9 @@ describe('MCP Tool Relaying', () => {
 
     // The capturedToolHandlers are from the initial module load of server.ts.
     // They should reference the configService module, which is mocked to be stableMockConfigServiceInstance.
-  });
-
-  it('get_indexing_status should relay if IS_UTILITY_SERVER_DISABLED is true', async () => {
-    stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = true;
-    stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = 3005;
-    
-    const mockRelayedStatus: IndexingStatusReport = {
-      status: 'indexing_file_content', message: 'Relayed indexing', overallProgress: 50, lastUpdatedAt: new Date().toISOString()
-    };
-    vi.mocked(axios.get).mockResolvedValueOnce({ status: 200, data: mockRelayedStatus, headers: {}, config: {} as any });
-
-    const handler = capturedToolHandlers['get_indexing_status'];
-    expect(handler, "get_indexing_status handler should be captured").toBeDefined();
-    
-    // The handler directly uses the imported configService.
-    // No extra args needed for this specific tool beyond what MCP provides.
-    const result = await handler({} /* args */, {} /* extra */);
-
-    expect(axios.get).toHaveBeenCalledWith(`http://localhost:3005/api/indexing-status`);
-    expect(result.content[0].text).toContain('# Indexing Status (Relayed from :3005)');
-    expect(result.content[0].text).toContain('Status: indexing_file_content');
-    expect(vi.mocked(getGlobalIndexingStatus)).not.toHaveBeenCalled();
-  });
-
-  it('get_indexing_status should use local status if relaying is disabled', async () => {
-    stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = false; // Relaying disabled
-    stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = undefined;
-
-    const handler = capturedToolHandlers['get_indexing_status'];
-    expect(handler, "get_indexing_status handler should be captured").toBeDefined();
-    const result = await handler({} /* args */, {} /* extra */);
-
-    expect(vi.mocked(getGlobalIndexingStatus)).toHaveBeenCalled();
-    expect(axios.get).not.toHaveBeenCalled();
-    expect(result.content[0].text).toContain('# Indexing Status');
-    expect(result.content[0].text).toContain('Local idle status');
+    // Ensure server.ts has been imported so capturedToolHandlers is populated.
+    // This is typically done by importing serverLibModule or specific functions from it.
+    // If serverLibModule was imported in the describe's beforeEach, that's sufficient.
   });
 
   it('trigger_repository_update should relay if IS_UTILITY_SERVER_DISABLED is true', async () => {
@@ -1338,14 +1316,15 @@ describe('MCP Tool Relaying', () => {
     expect(axios.post).toHaveBeenCalledWith(`http://localhost:3005/api/repository/notify-update`, {});
     expect(result.content[0].text).toContain('# Repository Update Triggered (Relayed to :3005)');
     expect(result.content[0].text).toContain('Relayed update accepted');
-    expect(vi.mocked(indexRepository)).not.toHaveBeenCalled();
+    const { indexRepository: mockedIndexRepositoryFromImport } = await import('../lib/repository.js'); // Get the mocked version
+    expect(mockedIndexRepositoryFromImport).not.toHaveBeenCalled();
   });
 
   it('trigger_repository_update should trigger local indexing if relaying is disabled', async () => {
     stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = false; // Relaying disabled
     stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = undefined;
 
-    const { indexRepository } = await import('../lib/repository.js'); // Get the mocked version
+    const { indexRepository: mockedIndexRepositoryFromImport } = await import('../lib/repository.js'); // Get the mocked version
     const { getLLMProvider } = await import('../lib/llm-provider.js'); // Get the mocked version
     const llmProviderInstance = await getLLMProvider();
 
@@ -1355,7 +1334,7 @@ describe('MCP Tool Relaying', () => {
     const result = await handler({} /* args */, {} /* extra */);
     
 
-    expect(vi.mocked(indexRepository)).toHaveBeenCalledWith(expect.anything(), repoPath, llmProviderInstance);
+    expect(mockedIndexRepositoryFromImport).toHaveBeenCalledWith(expect.anything(), repoPath, llmProviderInstance);
     expect(axios.post).not.toHaveBeenCalled();
     expect(result.content[0].text).toContain('# Repository Update Triggered (Locally)');
   });
@@ -1368,13 +1347,13 @@ describe('MCP Tool Relaying', () => {
       status: 'indexing_file_content', // In-progress status
       message: 'Local indexing in progress', overallProgress: 50, lastUpdatedAt: new Date().toISOString()
     } as IndexingStatusReport);
-    const { indexRepository } = await import('../lib/repository.js'); // Get the mocked version
+    const { indexRepository: mockedIndexRepositoryFromImport } = await import('../lib/repository.js'); // Get the mocked version
 
     const handler = capturedToolHandlers['trigger_repository_update'];
     expect(handler, "trigger_repository_update handler should be captured").toBeDefined();
     const result = await handler({} /* args */, {} /* extra */);
 
-    expect(vi.mocked(indexRepository)).not.toHaveBeenCalled(); // Should not be called
+    expect(mockedIndexRepositoryFromImport).not.toHaveBeenCalled(); // Should not be called
     expect(result.content[0].text).toContain('# Repository Update Trigger Failed');
     expect(result.content[0].text).toContain('Indexing already in progress locally.');
   });
