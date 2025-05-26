@@ -8,7 +8,7 @@
 // cannot be fulfilled as PROXY_PORT_SUCCESS_2 is not found.
 // Please clarify if these constants should be added, and if so, where.
 
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock as VitestMock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock as VitestMock, type SpyInstance } from 'vitest';
 // Import types needed for the stable mocks FIRST
 // MockInstance is already imported above, ensure Mock is aliased if used directly.
 import type { ConfigService as ActualConfigServiceType } from '../lib/config-service'; // For typing the stable mock
@@ -1110,7 +1110,7 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: MockInstance<(startPort: number) => Promise<number>>;
+  let findFreePortSpy: SpyInstance<[number], Promise<number>>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {

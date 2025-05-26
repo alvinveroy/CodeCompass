@@ -89,7 +89,11 @@ export function addQuery(
   relevanceScore = 0,
   repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = getOrCreateSession(sessionId, repoPath);
+  const session = sessions.get(sessionId);
+  if (!session) {
+    logger.error(`addQuery: Session not found for ID: ${sessionId}. Cannot add query.`);
+    throw new Error(`Session not found: ${sessionId}. Cannot add query.`);
+  }
   
   session.queries.push({
     timestamp: Date.now(),
@@ -109,7 +113,11 @@ export function addSuggestion(
   suggestion: string,
   repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = getOrCreateSession(sessionId, repoPath);
+  const session = sessions.get(sessionId);
+  if (!session) {
+    logger.error(`addSuggestion: Session not found for ID: ${sessionId}. Cannot add suggestion.`);
+    throw new Error(`Session not found: ${sessionId}. Cannot add suggestion.`);
+  }
   
   session.suggestions.push({
     timestamp: Date.now(),
@@ -128,7 +136,11 @@ export function addFeedback(
   comments: string,
   repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = getOrCreateSession(sessionId, repoPath);
+  const session = sessions.get(sessionId);
+  if (!session) {
+    logger.error(`addFeedback: Session not found for ID: ${sessionId}. Cannot add feedback.`);
+    throw new Error(`Session not found: ${sessionId}. Cannot add feedback.`);
+  }
   
   if (session.suggestions.length === 0) {
     throw new Error("No suggestions found to add feedback to");
@@ -152,7 +164,11 @@ export function updateContext(
   lastDiff?: string
 ): SessionState {
   // Pass repoPath to getOrCreateSession for potential creation and for context update
-  const session = getOrCreateSession(sessionId, repoPath); 
+  const session = sessions.get(sessionId);
+  if (!session) {
+    logger.error(`updateContext: Session not found for ID: ${sessionId}. Cannot update context.`);
+    throw new Error(`Session not found: ${sessionId}. Cannot update context.`);
+  }
   
   if (repoPath) {
     session.context.repoPath = repoPath; // Update context if repoPath is provided
@@ -231,7 +247,11 @@ export function addAgentSteps(
   finalResponse: string,
   repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = getOrCreateSession(sessionId, repoPath);
+  const session = sessions.get(sessionId);
+  if (!session) {
+    logger.error(`addAgentSteps: Session not found for ID: ${sessionId}. Cannot add agent steps.`);
+    throw new Error(`Session not found: ${sessionId}. Cannot add agent steps.`);
+  }
   
   if (!session.agentSteps) {
     session.agentSteps = [];

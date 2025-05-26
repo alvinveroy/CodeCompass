@@ -164,29 +164,8 @@ describe('CLI with yargs (index.ts)', () => {
     const SUT_distPath = path.dirname(indexPath); 
     const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
     
-    vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
-      get configService() { return currentMockConfigServiceInstance; },
-      get logger() { return currentMockLoggerInstance; },
-    }));
-    vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
-      Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
-    }));
-    vi.doMock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({ // Keep for now if any test path uses it
-      StreamableHTTPClientTransport: vi.fn(),
-    }));
-    
-    // Ensure server.js is also mocked using vi.doMock within runMainWithArgs
-    // This is crucial for tests that invoke the 'start' command of the CLI.
-    const MOCKED_SERVER_MODULE_PATH_FOR_INDEX_TEST = path.join(resolvedSUTLibPath, 'server.js');
-    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting to vi.doMock: ${MOCKED_SERVER_MODULE_PATH_FOR_INDEX_TEST}`);
-    vi.doMock(MOCKED_SERVER_MODULE_PATH_FOR_INDEX_TEST, () => {
-      console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: vi.doMock for server.js EXECUTING. mockStartServer is defined: ${!!mockStartServer}, mockStartProxyServer defined: ${!!mockStartProxyServer}, ServerStartupError defined: ${!!ServerStartupError}`);
-      return {
-        startServer: mockStartServer,
-        startProxyServer: mockStartProxyServer, 
-        ServerStartupError: ServerStartupError, 
-      };
-    });
+    // Top-level vi.mock calls will handle these dependencies.
+    // vi.doMock calls removed from here.
     console.log('[INDEX_TEST_DEBUG] mockStartServer type before SUT import:', typeof mockStartServer);
     
     await import(indexPath); 
@@ -410,7 +389,7 @@ describe('CLI with yargs (index.ts)', () => {
       // Use vi.stubEnv to isolate environment variable changes for this test
       vi.stubEnv('HTTP_PORT', undefined); // Ensure HTTP_PORT is initially undefined or some known state
 
-      await runMainWithArgs(['--port', String(customPort)]);
+      await runMainWithArgs(['--port', String(customPort), '.']); // Add '.' as repoPath for default command
       
       // process.env.HTTP_PORT should now be set by yargs' apply function
       expect(process.env.HTTP_PORT).toBe(String(customPort));
@@ -529,6 +508,7 @@ describe('CLI with yargs (index.ts)', () => {
       const rawToolResult = { content: [{ type: 'text', text: 'Success' }], id: '123' };
       mockMcpClientInstance.callTool.mockResolvedValue(rawToolResult);
       
+      mockConsoleLog.mockClear();
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
       
       expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResult, null, 2));

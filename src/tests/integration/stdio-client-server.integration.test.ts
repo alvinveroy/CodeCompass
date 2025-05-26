@@ -76,7 +76,10 @@ const mockLLMProviderInstance = {
   processFeedback: vi.fn().mockResolvedValue("Mocked improved LLM response."),
 };
 vi.mock('../../lib/llm-provider', () => ({
-  getLLMProvider: vi.fn().mockResolvedValue(mockLLMProviderInstance),
+  getLLMProvider: vi.fn().mockImplementation(async () => { // Make it async if it returns a Promise
+    console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider in llm-provider mock factory CALLED! Returning mockLLMProviderInstance.');
+    return mockLLMProviderInstance;
+  }),
   switchSuggestionModel: vi.fn().mockResolvedValue(true),
   clearProviderCache: vi.fn(),
   // Export LLMProvider type if needed by other mocks, though not strictly for this file.
