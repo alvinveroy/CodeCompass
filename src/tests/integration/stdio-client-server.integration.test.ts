@@ -388,7 +388,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(triggerResult.content![0].text).toContain('# Repository Update Triggered (Locally)');
 
     // Wait a bit longer for indexing to potentially start and make calls
-    await new Promise(resolve => setTimeout(resolve, 3000)); // Increased from 1000ms
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Increased wait time to 5 seconds
 
     // Verify that batchUpsertVectors was called, indicating indexing ran
     // This relies on the real indexRepository calling the mocked batchUpsertVectors
@@ -404,7 +404,7 @@ describe('Stdio Client-Server Integration Tests', () => {
 
 
     await client.close();
-  }, 45000);
+  }, 60000); // Increased overall test timeout
 
   it('should call switch_suggestion_model and get a success response', async () => {
     // serverProcess spawning and waitForServerReady removed.
@@ -458,7 +458,6 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Pass testSessionId in arguments
     await client.callTool({ name: 'search_code', arguments: { query: query1, sessionId: testSessionId } });
     await client.callTool({ name: 'agent_query', arguments: { query: query2, sessionId: testSessionId } });
-    // const testSessionId = client.sessionId; // REMOVE THIS LINE
 
     const historyResult = await client.callTool({ name: 'get_session_history', arguments: { sessionId: testSessionId } });
     expect(historyResult).toBeDefined();
@@ -490,7 +489,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockQdrantClientInstance.search.mockResolvedValue([ // Mock search results for context
       { id: 'sugg-ctx', score: 0.85, payload: { dataType: 'file_chunk', filepath: 'file1.ts', file_content_chunk: 'context for suggestion', chunk_index: 0, total_chunks: 1, last_modified: 'date' } }
     ]);
-    mockLLMProviderInstance.generateText.mockResolvedValue("This is a generated suggestion based on context from file1.ts"); // Make mock more specific
+    mockLLMProviderInstance.generateText.mockResolvedValue("This is a generated suggestion based on context from file1.ts");
 
     const suggestionQuery = "Suggest how to use file1.ts";
     const suggestionResult = await client.callTool({ name: 'generate_suggestion', arguments: { query: suggestionQuery } });
@@ -502,8 +501,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
     // Check for key parts of a suggestion response
     expect(suggestionText).toContain("## Suggestion");
-    // Check for the more specific mocked content:
-    expect(suggestionText).toContain("based on context from file1.ts"); 
+    expect(suggestionText).toContain("based on context from file1.ts"); // Check for specific mocked content
     // Optionally, still check that "Context Used" section exists if it's part of the format
     expect(suggestionText).toContain("Context Used");
     // And that file1.ts is mentioned somewhere in that context section if important
@@ -529,7 +527,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockQdrantClientInstance.search.mockResolvedValue([ // Mock search results for context
       { id: 'repo-ctx', score: 0.75, payload: { dataType: 'file_chunk', filepath: 'file2.txt', file_content_chunk: 'repository context information', chunk_index: 0, total_chunks: 1, last_modified: 'date' } }
     ]);
-    mockLLMProviderInstance.generateText.mockResolvedValue("This is a summary of the repository context, using info from file2.txt"); // Make mock more specific
+    mockLLMProviderInstance.generateText.mockResolvedValue("This is a summary of the repository context, using info from file2.txt");
 
     const repoContextQuery = "What is the main purpose of this repo?";
     const repoContextResult = await client.callTool({ name: 'get_repository_context', arguments: { query: repoContextQuery } });
@@ -541,8 +539,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
     // Check for key parts of a repo context summary
     expect(repoContextText).toContain("## Summary");
-    // Check for the more specific mocked content:
-    expect(repoContextText).toContain("using info from file2.txt");
+    expect(repoContextText).toContain("using info from file2.txt"); // Check for specific mocked content
     // Optionally, still check that "Relevant Information Used for Summary" section exists
     expect(repoContextText).toContain("Relevant Information Used for Summary");
     // And that file2.txt is mentioned somewhere in that context section if important

@@ -553,4 +553,3 @@ describe('CLI with yargs (index.ts)', () => {
     
     // New tests for spawn failures or server premature exit are added above.
   });
-// }); // This closing }); was identified as extraneous at line 561
