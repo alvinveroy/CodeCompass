@@ -86,9 +86,10 @@ export function addQuery(
   sessionId: string, 
   query: string, 
   results: unknown[] = [], 
-  relevanceScore = 0
+  relevanceScore = 0,
+  repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = getOrCreateSession(sessionId);
+  const session = getOrCreateSession(sessionId, repoPath);
   
   session.queries.push({
     timestamp: Date.now(),
@@ -105,9 +106,10 @@ export function addQuery(
 export function addSuggestion(
   sessionId: string,
   prompt: string,
-  suggestion: string
+  suggestion: string,
+  repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = getOrCreateSession(sessionId);
+  const session = getOrCreateSession(sessionId, repoPath);
   
   session.suggestions.push({
     timestamp: Date.now(),
@@ -123,9 +125,10 @@ export function addSuggestion(
 export function addFeedback(
   sessionId: string,
   score: number,
-  comments: string
+  comments: string,
+  repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = getOrCreateSession(sessionId);
+  const session = getOrCreateSession(sessionId, repoPath);
   
   if (session.suggestions.length === 0) {
     throw new Error("No suggestions found to add feedback to");
@@ -148,10 +151,11 @@ export function updateContext(
   lastFiles?: string[],
   lastDiff?: string
 ): SessionState {
-  const session = getOrCreateSession(sessionId);
+  // Pass repoPath to getOrCreateSession for potential creation and for context update
+  const session = getOrCreateSession(sessionId, repoPath); 
   
   if (repoPath) {
-    session.context.repoPath = repoPath;
+    session.context.repoPath = repoPath; // Update context if repoPath is provided
   }
   
   if (lastFiles) {
@@ -224,9 +228,10 @@ export function addAgentSteps(
     output: unknown;
     reasoning: string;
   }[],
-  finalResponse: string
+  finalResponse: string,
+  repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = getOrCreateSession(sessionId);
+  const session = getOrCreateSession(sessionId, repoPath);
   
   if (!session.agentSteps) {
     session.agentSteps = [];
