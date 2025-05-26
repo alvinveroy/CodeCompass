@@ -991,7 +991,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       }
 
     try {
-      const session = getOrCreateSession(sessionIdValue);
+      const session = getOrCreateSession(sessionIdValue, repoPath);
       
       return {
         content: [{
