@@ -735,8 +735,12 @@ describe('Server Startup and Port Handling', () => {
     // expect(failedToStartLogCall).toBeDefined();
 
     const expectedNonCodeCompassMessage = `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server`;
-    const relevantNonCodeCompassCall = stableMockLoggerInstance.error.mock.calls.find(
-      (callArgs: readonly unknown[]): callArgs is [string, Record<string, unknown>] => {
+    // Assert the structure of mock calls to help TypeScript for TS2493
+    const errorCalls = stableMockLoggerInstance.error.mock.calls as [string, any?][];
+    const relevantNonCodeCompassCall = errorCalls.find(
+      // The predicate ensures that we only deal with calls where the first arg is a string.
+      // The 'as' cast above helps inform TS about the general expected structure.
+      (callArgs): callArgs is [string, Record<string, unknown>] => {
         if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string') {
           // This predicate primarily ensures callArgs[0] is a string and matches the criteria.
           // The type assertion `callArgs is [string, Record<string, unknown>]` helps TypeScript,

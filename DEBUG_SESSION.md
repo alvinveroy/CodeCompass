@@ -560,48 +560,67 @@ This attempt focused on resolving any remaining TypeScript compilation errors ac
     *   `server.test.ts`: The `listen` mock failures (extra `undefined` arguments) persist. The `startProxyServer` timeouts/failures also persist despite `TS2552` being fixed, indicating the mock `http.Server` instance, while now defined, might not be behaving as expected (e.g., `listen` callback not firing correctly, or `findFreePortSpy` issues).
     *   Other test suites (`index.test.ts`, `integration/stdio-client-server.integration.test.ts`) remain unchanged as higher-priority build/type errors are still present.
 
-### Next Step / Plan for Next Attempt (Attempt 37):
-1.  **`src/tests/integration/stdio-client-server.integration.test.ts` - `TS2345` (Highest Priority):**
-    *   The `client.callTool`'s second argument should be an object that fully matches `ClientCommandArgs`.
-    *   The current call is `client.callTool('generate_suggestion', { params: JSON.stringify({ query: suggestionQuery }) });`
-    *   The `ClientCommandArgs` interface is:
-        ```typescript
-        interface ClientCommandArgs {
-          toolName: string;
-          params?: string; // This is what we are setting
-          outputJson?: boolean;
-          [key: string]: unknown;
-        }
-        ```
-    *   The error `Argument of type 'string' is not assignable to parameter of type '{ [x: string]: unknown; name: string; ... }'` for the `params` argument is confusing. The `params` *value* is a string. The error might be misleading or pointing to an issue with how `callTool` is typed or how yargs processes it internally before it reaches the tool handler.
-    *   **Action:** Let's simplify the `generate_suggestion` call to pass only the required `toolName` and the `params` string directly, ensuring the object structure is minimal but correct.
-        *   Change: `client.callTool('generate_suggestion', { params: JSON.stringify({ query: suggestionQuery }) });`
-        *   To: `client.callTool('generate_suggestion', JSON.stringify({ query: suggestionQuery }));`
-        *   **Correction:** My apologies, the above change is incorrect. The `callTool` method in `StdioClient` expects the *second argument* to be the `params` string directly, not an object containing `params`. The `ClientCommandArgs` is for the yargs CLI parsing, not directly for `StdioClient.callTool`.
-        *   **Correct Action for `src/tests/integration/stdio-client-server.integration.test.ts` line 528:**
-            *   The `StdioClient.callTool(toolName: string, params?: string | Record<string, unknown>)` signature means the second argument *is* the params.
-            *   Change: `client.callTool('generate_suggestion', { params: JSON.stringify({ query: suggestionQuery }) });`
-            *   To: `client.callTool('generate_suggestion', JSON.stringify({ query: suggestionQuery }));`
-            *   And for `get_repository_context` on line 573:
-            *   Change: `client.callTool('get_repository_context', { params: JSON.stringify({ query }) });`
-            *   To: `client.callTool('get_repository_context', JSON.stringify({ query }) );`
+### Attempt 37: Further Diagnose TypeScript Errors (TS2345, TS2503, TS2493)
 
-2.  **`src/tests/server.test.ts` TypeScript Errors:**
-    *   **`TS2503 (Cannot find namespace 'vi')`**: Double-check that `import type { MockedFunction, MockInstance } from 'vitest';` is at the top of the file and all instances of `vi.MockedFunction` are replaced by `MockedFunction`, and `vi.MockInstance` by `MockInstance`.
-    *   **`TS2493 (Tuple access)`**: Re-provide the exact code for the logger argument guards. For example, for `relevantNonCodeCompassCall[1]`:
-        ```typescript
-        let metaArg: any = {}; // Use 'any' for simplicity if complex typing is an issue
-        if (relevantNonCodeCompassCall && relevantNonCodeCompassCall.length > 1) {
-          const secondArg = relevantNonCodeCompassCall[1];
-          if (typeof secondArg === 'object' && secondArg !== null) {
-            metaArg = secondArg;
-          }
-        }
-        // Then access metaArg.error, metaArg.message etc.
-        ```
-3.  **Run `npm run build` again.**
-4.  **Provide the new, complete build output.**
+**Build Output Reference:** (User to specify, e.g., "Build output from 2024-05-DD HH:MM UTC after Attempt 36")
 
-We will defer addressing the runtime test failures until these remaining TypeScript errors are cleared.
+**Observations (from user update):**
+It seems the TypeScript errors are still largely the same, which is unexpected if the changes from the previous step were applied correctly.
+
+**`src/tests/integration/stdio-client-server.integration.test.ts` (TS2345):**
+The error on line 528:
+`Argument of type 'string' is not assignable to parameter of type '{ [x: string]: unknown; name: string; _meta?: { ... } | undefined; arguments?: { ... } | undefined; }'.`
+persists for:
+`const result = await client.callTool('generate_suggestion', JSON.stringify({ query: suggestionQuery }));`
+
+This is very strange because the `StdioClient.callTool` method is defined as `callTool(method: string, params?: string | Record<string, unknown>)`. Passing a string as the second argument *should* be valid.
+
+**`src/tests/server.test.ts` (TS2503, TS2493):**
+The persistence of these errors is also unexpected:
+*   `TS2503: Cannot find namespace 'vi'.` (Lines 205, 1014, 1216)
+*   `TS2493: Tuple type '[infoObject: object]' of length '1' has no element at index '1'.` (Lines 754 (twice), 755)
+
+**For `TS2503`**:
+User requests to double-check the very top of `src/tests/server.test.ts`. It should have:
+```typescript
+import type { MockedFunction, MockInstance as VitestMockInstance } from 'vitest';
+```
+And then, for example, line 205 should be:
+```typescript
+    createServer: mockCreateServerFn as unknown as MockedFunction<typeof http.createServer>,
+```
+(Using `MockedFunction` not `vi.MockedFunction`).
+
+**For `TS2493`**:
+The guard applied previously:
+```typescript
+      let metaArg: any = {}; // Use 'any' for simplicity if complex typing is an issue
+      if (relevantNonCodeCompassCall && relevantNonCodeCompassCall.length > 1) {
+        const secondArg = relevantNonCodeCompassCall[1];
+        if (typeof secondArg === 'object' && secondArg !== null) {
+          metaArg = secondArg;
+        }
+      }
+```
+This guard seems correct for preventing runtime errors, but TypeScript might still be inferring the type of `relevantNonCodeCompassCall[1]` incorrectly *before* the guard is applied, leading to the tuple access error.
+
+**Plan for This Attempt (Attempt 37):**
+
+1.  **Provide `src/lib/stdio-client.ts`**: User has requested this file to be added to the chat for diagnosing `TS2345`. (AI Action: Await file)
+2.  **Verify `src/tests/server.test.ts` Imports for `TS2503`**:
+    *   AI Action: Propose SEARCH/REPLACE to ensure `import type { MockedFunction, MockInstance as VitestMockInstance } from 'vitest';` is present and `MockedFunction` is used. (Self-correction: Based on current file, import and usage seem correct. No changes proposed for this specific point unless further issues arise).
+3.  **Fix `TS2493` in `src/tests/server.test.ts`**:
+    *   AI Action: Propose SEARCH/REPLACE to explicitly type `stableMockLoggerInstance.error.mock.calls` array. Example:
+        ```typescript
+        const errorCalls = stableMockLoggerInstance.error.mock.calls as [string, any?][];
+        const relevantNonCodeCompassCall = errorCalls.find(
+          (callArgs) => typeof callArgs[0] === 'string' && callArgs[0].includes("Port") && callArgs[0].includes("in use by non-CodeCompass server")
+        );
+        // ...
+        ```
+4.  **User Action:** Run `npm run build` again.
+5.  **User Action:** Provide the new, complete build output.
+
+**AI Action for `TS2345`:** Await `src/lib/stdio-client.ts` before suggesting specific code changes.
 
 ---
