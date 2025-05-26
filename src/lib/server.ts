@@ -1011,13 +1011,14 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       }
       
       // Adding logger here for [SERVER_TOOLS_DEBUG]
+      const queriesForLog = session.queries.map(q => ({
+        query: q.query,
+        ts: q.timestamp,
+        results_count: q.results.length,
+      }));
       logger.debug(
-        `[SERVER_TOOLS_DEBUG] formatSessionHistory for session ${session.id}. Queries:`,
-        session.queries.map(q => ({
-          query: q.query,
-          ts: q.timestamp,
-          results_count: q.results.length,
-        }))
+        `[SERVER_TOOLS_DEBUG] formatSessionHistory for session ${session.id}. Queries count: ${queriesForLog.length}`,
+        JSON.stringify(queriesForLog, null, 2) // Explicitly stringify as a separate argument
       );
       
       return {
