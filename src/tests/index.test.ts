@@ -553,5 +553,6 @@ describe('CLI with yargs (index.ts)', () => {
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
     
-    // New tests for spawn failures or server premature exit are added above.
+      // New tests for spawn failures or server premature exit are added above.
+    });
   });
