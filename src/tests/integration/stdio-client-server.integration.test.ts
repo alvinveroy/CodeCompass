@@ -224,6 +224,12 @@ describe('Stdio Client-Server Integration Tests', () => {
     // If specific config (like EMBEDDING_DIMENSION) is crucial, ensure it's correctly mocked.
     vi.spyOn(actualConfigServiceForMock, 'EMBEDDING_DIMENSION', 'get').mockReturnValue(768);
 
+    const preloadScriptPath = path.resolve(__dirname, './mock-llm-provider-child-setup.js');
+    // Check if preload script exists
+    if (!fs.existsSync(preloadScriptPath)) {
+      console.warn(`[INTEGRATION_TEST_DEBUG] Preload script not found at: ${preloadScriptPath}. LLM/DeepSeek mocks in child process might not work.`);
+    }
+
     // Add this to ensure previous test's transport is fully closed if not already
     if (transport && typeof transport.close === 'function') {
         transport.close();
@@ -248,6 +254,8 @@ describe('Stdio Client-Server Integration Tests', () => {
       // Unique worker ID for test isolation if needed by other parts of the system
       VITEST_WORKER_ID: process.env.VITEST_WORKER_ID || `integration_worker_${Math.random().toString(36).substring(7)}`,
       // CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Removed: Rely on Vitest module mock
+      // Add NODE_OPTIONS to preload the script
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require ${preloadScriptPath}`.trim(),
     };
     const currentTestSpawnEnv = { ...baseSpawnEnv };
     // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is NOT set in currentTestSpawnEnv

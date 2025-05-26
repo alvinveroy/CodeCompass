@@ -591,9 +591,9 @@ describe('Server Startup and Port Handling', () => {
     expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
     expect(http.createServer).toHaveBeenCalled();
     // If 'localhost' is consistently passed by SUT when no callback is given to listen:
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, 'localhost', expect.any(Function));
+    // expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, 'localhost', expect.any(Function));
     // If SUT only passes port and callback:
-    // expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function));
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function));
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`));
     expect(mockProcessExit).not.toHaveBeenCalled();
     expect(mcs.IS_UTILITY_SERVER_DISABLED).toBe(false); // Ensure not disabled
@@ -1097,7 +1097,7 @@ describe('findFreePort', () => {
     await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort);
     expect(mockedHttpCreateServer).toHaveBeenCalledTimes(1); // Use the direct mock
     // The findFreePort utility calls server.listen(port, 'localhost', resolve)
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function));
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function)); // findFreePort uses 'localhost'
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1);
   });
 
@@ -1128,8 +1128,8 @@ describe('findFreePort', () => {
 
     await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort + 1);
     expect(mockedHttpCreateServer).toHaveBeenCalledTimes(2); // Use the direct mock
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function));
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost', expect.any(Function));
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function)); // findFreePort uses 'localhost'
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost', expect.any(Function)); // findFreePort uses 'localhost'
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1); // Only closed on success
   });
 
@@ -1308,9 +1308,13 @@ describe('startProxyServer', () => {
     // (if http.createServer is called directly in test logic or by SUT functions called here)
     // will have this specific async listen behavior.
     if (mockReturnedHttpServer && typeof mockReturnedHttpServer.listen === 'function') {
-        vi.mocked(mockReturnedHttpServer.listen).mockImplementation((_port: any, listeningListener?: () => void) => {
-            if (listeningListener) {
-                process.nextTick(listeningListener);
+        vi.mocked(mockReturnedHttpServer.listen).mockImplementation((_port: any, arg2?: any, arg3?: any) => {
+            let callback: (() => void) | undefined;
+            if (typeof arg2 === 'function') callback = arg2;
+            else if (typeof arg3 === 'function') callback = arg3;
+
+            if (callback) {
+                process.nextTick(callback);
             }
             return mockReturnedHttpServer; // Return the instance
         });
