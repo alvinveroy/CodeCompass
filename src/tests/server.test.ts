@@ -729,7 +729,9 @@ describe('Server Startup and Port Handling', () => {
     const expectedNonCodeCompassMessage = `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server`;
     const relevantNonCodeCompassCall = stableMockLoggerInstance.error.mock.calls.find(callArgs => {
       if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string') {
-        return callArgs[0].includes("Port") && callArgs[0].includes("in use by non-CodeCompass server");
+        // Ensure firstArg is treated as string for .includes
+        const firstArg = callArgs[0] as string;
+        return firstArg.includes("Port") && firstArg.includes("in use by non-CodeCompass server");
       }
       return false;
     });
