@@ -1,5 +1,4 @@
 import path from 'path';
-import path from 'path';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'; // Import for vi.mocked
 import { Client as ActualMcpClient } from '@modelcontextprotocol/sdk/client/index.js'; // Import for vi.mocked
