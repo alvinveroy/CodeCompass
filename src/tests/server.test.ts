@@ -8,7 +8,7 @@
 // cannot be fulfilled as PROXY_PORT_SUCCESS_2 is not found.
 // Please clarify if these constants should be added, and if so, where.
 
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock as VitestMock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type MockedFunction, type Mock as VitestMock } from 'vitest';
 // Import types needed for the stable mocks FIRST
 // MockInstance is already imported above, ensure Mock is aliased if used directly.
 import type { ConfigService as ActualConfigServiceType } from '../lib/config-service'; // For typing the stable mock
@@ -1199,7 +1199,7 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: vi.MockedFunction<typeof serverLibModule.findFreePort>;
+  let findFreePortSpy: MockedFunction<typeof serverLibModule.findFreePort>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {
@@ -1234,7 +1234,7 @@ describe('startProxyServer', () => {
 
     // Default mock for http.createServer and its listen method for this suite
     // This needs to be robust for startProxyServer's internal usage.
-    mockHttpServerListenFn.mockReset().mockImplementation((_port: any, arg2: any, arg3?: any) => {
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port: any, arg2: any, arg3?: any) {
       let callback: (() => void) | undefined;
       if (typeof arg2 === 'function') {
         callback = arg2;
@@ -1244,7 +1244,7 @@ describe('startProxyServer', () => {
       if (callback) {
         process.nextTick(callback);
       }
-      return mockHttpServer; // Assuming mockHttpServer is the instance, as per plan's REPLACE
+      return this; // listen() should return the server instance itself.
     });
 
     mockHttpServerOnFn.mockReset().mockImplementation(function(this: any, event: string, callback: (...args: any[]) => void) {

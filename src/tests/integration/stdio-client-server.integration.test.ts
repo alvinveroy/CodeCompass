@@ -525,7 +525,7 @@ describe('Stdio Client-Server Integration Tests', () => {
 
 
     const suggestionQuery = "Suggest how to use file1.ts";
-    const result = await client.callTool('generate_suggestion', { params: suggestionQuery });
+    const result = await client.callTool('generate_suggestion', { params: JSON.stringify({ query: suggestionQuery }) });
     
     expect(result).toBeDefined();
     expect(result.content).toBeInstanceOf(Array);
