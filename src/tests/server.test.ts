@@ -750,13 +750,17 @@ describe('Server Startup and Port Handling', () => {
     if (relevantNonCodeCompassCall) {
       const messageArg = relevantNonCodeCompassCall[0]; // Known to be string due to predicate logic
       // For metaArg, ensure it exists and is an object before accessing its properties
-      const metaArg = (relevantNonCodeCompassCall.length > 1 && typeof relevantNonCodeCompassCall[1] === 'object' && relevantNonCodeCompassCall[1] !== null)
-                      ? relevantNonCodeCompassCall[1]
-                      : undefined;
+      let metaArg: any = undefined; // Default to undefined
+      if (relevantNonCodeCompassCall && relevantNonCodeCompassCall.length > 1) {
+        const secondArg = relevantNonCodeCompassCall[1];
+        if (typeof secondArg === 'object' && secondArg !== null) {
+          metaArg = secondArg;
+        }
+      }
 
       expect(messageArg).toEqual(expect.stringContaining(expectedNonCodeCompassMessage));
 
-      if (metaArg) { // Check if metaArg is defined and is an object
+      if (metaArg) { // Check if metaArg is defined (and not the initial undefined)
         const meta = metaArg as { existingServerStatus?: { service?: string } }; // Cast after confirming it's an object
         if (meta.existingServerStatus && typeof meta.existingServerStatus === 'object' && meta.existingServerStatus !== null) {
           expect(meta.existingServerStatus.service).toBe("OtherService");
