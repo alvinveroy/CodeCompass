@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock as VitestMock } from 'vitest';
 // Import types needed for the stable mocks FIRST
 import type { ConfigService as ActualConfigServiceType } from '../lib/config-service'; // For typing the stable mock
 import type { Logger as WinstonLogger } from 'winston';
@@ -13,7 +13,7 @@ import nock from 'nock'; // Added nock import here as it's a top-level import
 // Define MockedLogger and MockedConfigService types
 type MockedLogger = {
   [K in keyof WinstonLogger]: WinstonLogger[K] extends (...args: infer A) => infer R
-    ? Mock<A, R>
+    ? VitestMock<A, R>
     : WinstonLogger[K];
 };
 
@@ -26,7 +26,7 @@ type MockedConfigService = Pick<
   // | 'AGENT_QUERY_TIMEOUT' // Omit if readonly in base type
 > & {
   AGENT_QUERY_TIMEOUT: number; // Add it here as mutable
-  reloadConfigsFromFile: Mock<[], void>;
+  reloadConfigsFromFile: VitestMock<[], void>;
   VERSION: string;
   IS_UTILITY_SERVER_DISABLED: boolean;
   RELAY_TARGET_UTILITY_PORT?: number;
@@ -1067,7 +1067,7 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: Mock<[startPort: number], Promise<number>>;
+  let findFreePortSpy: VitestMock<[startPort: number], Promise<number>>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {

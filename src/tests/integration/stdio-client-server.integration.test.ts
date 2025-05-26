@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll, type Mock } from 'vitest';
-import { spawn, type ChildProcess, type ChildProcess as NodeChildProcess } from 'child_process'; // Use NodeChildProcess
+import { spawn, type ChildProcess, type ChildProcess as NodeChildProcess, type SpawnOptions } from 'child_process'; // Use NodeChildProcess
 import { Client as MCPClient } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import fs from 'fs-extra';
@@ -9,6 +9,13 @@ import os from 'os';
 let actualConfigServiceForMock: typeof import('../../lib/config-service').configService;
 
 // CustomStdioClientTransportOptions interface removed as it's no longer used.
+
+// Interface for StdioClientTransport constructor parameters
+interface StdioTransportParams {
+  command: string;
+  args?: string[];
+  options?: SpawnOptions;
+}
 
 // Local interface for StdioClientTransport options when spawning a process
 // interface MyStdioClientTransportOptions { // This interface is no longer needed
@@ -172,8 +179,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
-      processOptions: { env: currentTestSpawnEnv } // Spawn environment
-    } as any);
+      options: { env: currentTestSpawnEnv } // Spawn environment
+    } as StdioTransportParams);
     client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
   });
 
