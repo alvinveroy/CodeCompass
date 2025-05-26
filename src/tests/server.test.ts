@@ -746,15 +746,27 @@ describe('Server Startup and Port Handling', () => {
         
     // Check for one of the specific log messages
     const pingFailedLogFound = stableMockLoggerInstance.error.mock.calls.some(callArgs => {
-      const firstArg = callArgs[0] as string; 
-      if (typeof firstArg === 'string') {
+      const firstArgRaw = callArgs[0];
+      let logMessage = '';
+      if (typeof firstArgRaw === 'string') {
+        logMessage = firstArgRaw;
+      } else if (typeof firstArgRaw === 'object' && firstArgRaw !== null && 'message' in firstArgRaw && typeof (firstArgRaw as any).message === 'string') {
+        logMessage = (firstArgRaw as any).message;
+      }
+
         // Check for the "Connection refused on port X"
-        if (firstArg.includes(`Connection refused on port ${stableMockConfigServiceInstance.HTTP_PORT}`)) {
+        if (logMessage.includes(`Connection refused on port ${stableMockConfigServiceInstance.HTTP_PORT}`)) {
           return true;
         }
         // Check for the concluding message
-        if (firstArg.includes(`Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`)) {
+        if (logMessage.includes(`Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`)) {
           return true;
+        }
+      // Check for the "Failed to start CodeCompass" log as well, if its message is relevant
+      if (logMessage === "Failed to start CodeCompass" && callArgs.length > 1) {
+        const meta = callArgs[1] as any;
+        if (meta && typeof meta.message === 'string' && meta.message.includes(`Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service`)) {
+            return true;
         }
       }
       return false;
