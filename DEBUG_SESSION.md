@@ -329,6 +329,55 @@ This attempt focused on resolving any remaining TypeScript compilation errors ac
 
 ---
 
+## Attempt 27: Resolve `index.test.ts` ReferenceError, Address Persistent Failures
+
+**Git Commit (Before Attempt 27 changes):** (User to fill with git commit SHA after applying Attempt 26 changes)
+**Git Commit (After Attempt 27 changes):** (User to fill after applying these changes)
+
+### Issues Addressed (Based on Plan for Attempt 26/27):
+1.  **`src/tests/index.test.ts` `ReferenceError` (MOCKED_SERVER_MODULE_PATH)**:
+    *   Implemented `vi.resetModules()` and `vi.doMock` with direct relative string paths (`../lib/server.js`, `../lib/config-service.js`) inside the `runMainWithArgs` helper function, just before importing the system under test (`indexPath`).
+2.  **`src/tests/server.test.ts` Timeouts (4 - `startProxyServer` suite)**:
+    *   Investigation continued, focusing on asynchronous mocking of `findFreePort` or `http.Server.listen`.
+3.  **`src/tests/integration/stdio-client-server.integration.test.ts` Failures (4)**:
+    *   **`get_session_history`**: Debug logging added in `src/lib/state.ts` (`addQueryToSession`, `getSession`, `getOrCreateSession`) and `src/lib/server.ts` (`agent_query`, `get_session_history`, `formatSessionHistory`) to trace session state.
+    *   **LLM Mocking (`generate_suggestion`, `get_repository_context`)**: Issues with LLM mocking in the spawned server process persisted.
+    *   **`trigger_repository_update`**: `qdrantModule.batchUpsertVectors` spy not called.
+
+### Result (After Applying Changes from Attempt 27):
+*   **TypeScript Compilation Errors**: All TypeScript compilation errors remained resolved (as of Attempt 26).
+*   **`src/tests/index.test.ts`**:
+    *   **SUCCESS**: The `ReferenceError: Cannot access 'MOCKED_SERVER_MODULE_PATH' before initialization` (and similar for config service) was **resolved**. The `vi.doMock` strategy with relative paths within `runMainWithArgs` correctly applied the mocks for the dynamically imported SUT.
+    *   Other failures in `index.test.ts` (e.g., related to `--port` assertion, `--json` output capturing debug logs) might still persist but the primary `ReferenceError` blocker was fixed.
+*   **`src/tests/server.test.ts`**:
+    *   **FAIL**: 4 tests in the `startProxyServer` suite continued to time out after 20000ms. This indicates an ongoing problem with the asynchronous mocking of `findFreePort` or `http.Server.listen` within this suite.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**: 4 failures persisted:
+    *   **`should call trigger_repository_update`**: **FAIL**. The `qdrantModule.batchUpsertVectors` spy was still not called.
+    *   **`should call generate_suggestion`**: **FAIL** (Timeout). Likely due to issues with LLM mocking in the spawned server process.
+    *   **`should call get_repository_context`**: **FAIL**. The test received actual LLM output instead of the mocked response, pointing to LLM mocking issues in the spawned server.
+    *   **`should perform some actions and then retrieve session history`**: **FAIL**. The retrieved session history was missing the second query.
+        *   Debug logging confirmed that `addQueryToSession` in `src/lib/state.ts` successfully adds the second query to the session object.
+        *   However, the `get_session_history` tool handler in `src/lib/server.ts` (when invoked by the test) retrieved a session object that only contained the first query. This strongly suggests a problem with session state consistency or retrieval within the spawned server process, or how the session object is being passed/referenced.
+
+### Analysis/Retrospection for Attempt 27:
+*   The `vi.doMock` strategy with relative paths from the SUT's perspective, executed immediately before the SUT import within `runMainWithArgs`, was key to solving the `ReferenceError` in `index.test.ts`.
+*   The `startProxyServer` timeouts in `server.test.ts` remain a significant blocker, pointing to complex async/mock interactions.
+*   The session history issue in integration tests is critical. The discrepancy between `state.ts` logging (query added) and `server.ts` tool handler logging (query missing from retrieved session) indicates that the server's tool handler might be operating on a stale or different session instance than the one updated by `agent_query`.
+
+### Next Step / Plan for Next Attempt (Attempt 28):
+1.  **`src/tests/integration/stdio-client-server.integration.test.ts` - `get_session_history` Failure (Highest Priority):**
+    *   Add more detailed logging in `src/lib/server.ts` (specifically in `agent_query` and `get_session_history` handlers) and `src/lib/agent-service.ts` (around `processAgentQuery` and session interactions) to trace:
+        *   The exact session object reference/ID being used at each step.
+        *   The state of `session.queries` immediately before and after any modification or retrieval.
+        *   How `agentState` is passed and potentially re-hydrated between tool calls if applicable.
+2.  **`src/tests/server.test.ts` Timeouts (4 - `startProxyServer` suite):**
+    *   Ensure the `findFreePortSpy` mock is correctly reset for each test within the `startProxyServer` suite's `beforeEach` or `beforeAll` to prevent state leakage. Specifically, ensure `findFreePortSpy.mockReset().mockResolvedValue(proxyListenPort);` is effective for each test run.
+3.  **Deferred Issues:**
+    *   LLM mocking issues in `src/tests/integration/stdio-client-server.integration.test.ts` (`generate_suggestion`, `get_repository_context`).
+    *   `trigger_repository_update` failure (`qdrantModule.batchUpsertVectors` spy not called).
+
+---
+
 ## Attempt 20: Address TypeScript Errors, `index.test.ts` Failures, `server.test.ts` Timeouts, and Integration Test Logic
 
 **Git Commit (Before Attempt 20 changes):** f876a61
