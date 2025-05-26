@@ -497,8 +497,8 @@ describe('Stdio Client-Server Integration Tests', () => {
       { id: 'sugg-ctx', score: 0.85, payload: { dataType: 'file_chunk', filepath: 'file1.ts', file_content_chunk: 'context for suggestion', chunk_index: 0, total_chunks: 1, last_modified: 'date' } }
     ]);
     
-    // Mock ollama.generateText directly for this test
-    vi.mocked(ollamaGenerateText).mockClear()
+    // Mock LLMProvider's generateText for this specific test
+    mockLLMProviderInstance.generateText.mockClear()
         .mockResolvedValueOnce("Mocked refined query for generate_suggestion") // For potential refinement step
         .mockResolvedValueOnce("This is a generated suggestion based on context from file1.ts"); // For final suggestion
 
@@ -539,8 +539,8 @@ describe('Stdio Client-Server Integration Tests', () => {
       { id: 'repo-ctx', score: 0.75, payload: { dataType: 'file_chunk', filepath: 'file2.txt', file_content_chunk: 'repository context information', chunk_index: 0, total_chunks: 1, last_modified: 'date' } }
     ]);
 
-    // Mock ollama.generateText directly for this test
-    vi.mocked(ollamaGenerateText).mockClear()
+    // Mock LLMProvider's generateText for this specific test
+    mockLLMProviderInstance.generateText.mockClear()
         .mockResolvedValueOnce("Mocked refined query for get_repository_context") // For potential refinement step
         .mockResolvedValueOnce("This is a summary of the repository context, using info from file2.txt"); // For final summary
 

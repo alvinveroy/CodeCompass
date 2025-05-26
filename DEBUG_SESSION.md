@@ -574,7 +574,7 @@ The `npm run build` command fails due to:
 ## Attempt 15: Address `index.test.ts` Mocks, `server.test.ts` Timeouts, Integration Test LLM Mocking & Session History
 
 **Git Commit (Before Attempt 15 changes):** 5c10a56
-**Git Commit (After Attempt 15 changes):** (User to fill after applying changes from Attempt 15)
+**Git Commit (After Attempt 15 changes):** 24f3bc4
 
 ### Issues Addressed (Based on Plan for Attempt 15):
 1.  **`src/tests/index.test.ts` (20 failures):**
