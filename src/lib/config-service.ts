@@ -443,8 +443,20 @@ class ConfigService {
     this._maxDirListingEntriesForCapability = parseInt(process.env.MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY || '', 10) || this.DEFAULT_MAX_DIR_LISTING_ENTRIES_FOR_CAPABILITY;
     // this._httpPort = parseInt(process.env.HTTP_PORT || '', 10) || this.DEFAULT_HTTP_PORT; // Original
     // Change to:
-    this.logger.debug(`[config-service reload] process.env.HTTP_PORT before Number(): '${process.env.HTTP_PORT}' (type: ${typeof process.env.HTTP_PORT})`); // THIS LOG
-    this._httpPort = Number(process.env.HTTP_PORT) || this._httpPortFallback;
+    this.logger.debug(`[config-service reload] process.env.HTTP_PORT before parsing: '${process.env.HTTP_PORT}' (type: ${typeof process.env.HTTP_PORT})`);
+    const httpPortEnvReload = process.env.HTTP_PORT;
+    if (httpPortEnvReload !== undefined && httpPortEnvReload !== null && httpPortEnvReload.trim() !== "") {
+      const parsedPortReload = parseInt(httpPortEnvReload, 10);
+      if (!isNaN(parsedPortReload) && parsedPortReload >= 0 && parsedPortReload <= 65535) { // Allow 0
+        this._httpPort = parsedPortReload;
+      } else {
+        this.logger.warn(`Invalid HTTP_PORT environment variable during reload: "${httpPortEnvReload}". Falling back to default: ${this._httpPortFallback}`);
+        this._httpPort = this._httpPortFallback;
+      }
+    } else {
+      // If HTTP_PORT is not in env during reload, fall back to default.
+      this._httpPort = this._httpPortFallback;
+    }
     this.logger.debug(`[ConfigService reload] After re-evaluating from env, _httpPort: ${this._httpPort}`);
     
     // Initialize from env, file loading will override if present, then derive.

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock as VitestMock } from 'vitest';
 // Import types needed for the stable mocks FIRST
+// MockInstance is already imported above, ensure Mock is aliased if used directly.
 import type { ConfigService as ActualConfigServiceType } from '../lib/config-service'; // For typing the stable mock
 import type { Logger as WinstonLogger } from 'winston';
 import type * as httpModule from 'http'; // For types
@@ -26,7 +27,7 @@ type MockedConfigService = Pick<
   // | 'AGENT_QUERY_TIMEOUT' // Omit if readonly in base type
 > & {
   AGENT_QUERY_TIMEOUT: number; // Add it here as mutable
-  reloadConfigsFromFile: VitestMock<[], void>;
+  reloadConfigsFromFile: VitestMock<[], void>; // This usage VitestMock<Args[], ReturnType> is correct
   VERSION: string;
   IS_UTILITY_SERVER_DISABLED: boolean;
   RELAY_TARGET_UTILITY_PORT?: number;
@@ -73,8 +74,8 @@ const capturedToolHandlers: Record<string, (...args: any[]) => any> = {};
 // --- END STABLE MOCK INSTANCES DEFINITIONS ---
 
 vi.mock('../lib/config-service', () => ({
-  configService: stableMockConfigServiceInstance,
-  logger: stableMockLoggerInstance,
+  get configService() { return stableMockConfigServiceInstance; },
+  get logger() { return stableMockLoggerInstance; },
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
@@ -464,9 +465,9 @@ describe('Server Startup and Port Handling', () => {
   // Use the new mock-aware types
   let mcs: MockedConfigService; // mcs for mockedConfigService, type defined at top
   let ml: MockedLogger; // ml for mockedLogger, type defined at top
-  let mockedMcpServerConnect: MockInstance; // Typed the mock instance
+  let mockedMcpServerConnect: VitestMock<any[], any>; // Use VitestMock or a more specific MockInstance
   let originalNodeEnv: string | undefined;
-  let mockConsoleError: MockInstance<typeof console.error>; // Declare mockConsoleError
+  let mockConsoleError: MockInstance<typeof console.error>; // Declare mockConsoleError, MockInstance is suitable for spies
 
   beforeEach(async () => {
     originalNodeEnv = process.env.NODE_ENV; // Store original NODE_ENV
@@ -879,7 +880,7 @@ describe('Server Startup and Port Handling', () => {
 describe('findFreePort', () => {
   // findFreePortSpy will be initialized in beforeEach of the startProxyServer suite
   // For findFreePort direct tests, we don't need a module-level spy on it.
-  let mockedHttpCreateServer: Mock<(...args: any[]) => httpModule.Server>; // Changed to hold the createServer mock directly
+  let mockedHttpCreateServer: VitestMock<(...args: any[]) => httpModule.Server>; // Changed to hold the createServer mock directly
 
   let portCounter: number;
 
@@ -1067,7 +1068,7 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: VitestMock<[startPort: number], Promise<number>>;
+  let findFreePortSpy: VitestMock<[number], Promise<number>>; // Corrected: VitestMock<[argTypes], returnType>
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {
