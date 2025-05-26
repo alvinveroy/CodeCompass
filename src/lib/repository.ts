@@ -77,6 +77,7 @@ export async function validateGitRepository(repoPath: string): Promise<boolean> 
 
 // Index Repository
 export async function indexRepository(qdrantClient: QdrantClient, repoPath: string, llmProvider: LLMProvider): Promise<void> {
+  logger.info(`[REPO_TS_DEBUG] indexRepository called. Repo: ${repoPath}`);
   currentIndexingStatus = {
     status: 'initializing',
     message: `Starting repository indexing for: ${repoPath}`,
@@ -216,6 +217,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
   let successCount = 0;
   let errorCount = 0;
 
+  logger.info(`[REPO_TS_DEBUG] Starting file content indexing. Total files: ${filteredFiles.length}`); // Add this log
   if (filteredFiles.length > 0) {
     currentIndexingStatus.message = 'Stale entry cleanup complete. Starting file content indexing.';
     currentIndexingStatus.status = 'indexing_file_content';
@@ -272,8 +274,10 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
         }
 
         if (pointsToUpsert.length > 0) {
+          logger.info(`[REPO_TS_DEBUG] indexRepository (file chunks): About to call batchUpsertVectors with ${pointsToUpsert.length} points for file ${filepath}.`); // Add this log
           const simplePointsFileChunks = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
           await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsFileChunks, configService.QDRANT_BATCH_UPSERT_SIZE);
+          logger.info(`[REPO_TS_DEBUG] indexRepository (file chunks): batchUpsertVectors call complete for file ${filepath}.`); // Add this log
           logger.info(`Successfully indexed ${pointsToUpsert.length} chunks for ${filepath}`);
           if (currentIndexingStatus.filesIndexed !== undefined && currentIndexingStatus.totalFilesToIndex && currentIndexingStatus.totalFilesToIndex > 0) {
             currentIndexingStatus.filesIndexed++;
@@ -299,6 +303,7 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
     }
   }
 
+  logger.info(`[REPO_TS_DEBUG] File content indexing complete.`); // Add this log
   currentIndexingStatus.status = 'indexing_commits_diffs';
   currentIndexingStatus.message = 'File content indexing complete. Starting commit and diff indexing.';
   currentIndexingStatus.currentFile = undefined;
@@ -306,13 +311,16 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
   currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
 
   try {
+    logger.info(`[REPO_TS_DEBUG] Starting commit and diff indexing.`); // Add this log
     logger.info(`Starting indexing of commit history and diffs for ${repoPath}`);
     await indexCommitsAndDiffs(qdrantClient, repoPath, llmProvider);
+    logger.info(`[REPO_TS_DEBUG] Commit and diff indexing complete.`); // Add this log
   } catch (commitIndexError) {
     currentIndexingStatus.status = 'error';
     currentIndexingStatus.message = 'Failed to index commit history and diffs.';
     currentIndexingStatus.errorDetails = commitIndexError instanceof Error ? commitIndexError.message : String(commitIndexError);
     currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+    logger.error(`[REPO_TS_DEBUG] Error during indexCommitsAndDiffs: ${commitIndexError instanceof Error ? commitIndexError.message : String(commitIndexError)}`); // Add this log
     logger.error(`Failed to index commit history and diffs for ${repoPath}`, {
       message: commitIndexError instanceof Error ? commitIndexError.message : String(commitIndexError),
       stack: commitIndexError instanceof Error ? commitIndexError.stack : undefined,
@@ -635,6 +643,7 @@ async function indexCommitsAndDiffs(
   llmProvider: LLMProvider,
   // allRepoFiles: string[] // Potentially useful context, currently unused
 ): Promise<void> {
+  logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs called for repository: ${repoPath}`); // Add this log
   logger.info(`Indexing commit history and diffs for repository: ${repoPath}`);
   currentIndexingStatus.message = 'Fetching commit history...';
   currentIndexingStatus.totalCommitsToIndex = 0;
@@ -655,6 +664,7 @@ async function indexCommitsAndDiffs(
   currentIndexingStatus.totalCommitsToIndex = commits.length;
   currentIndexingStatus.message = `Found ${commits.length} commits to process for diffs and history.`;
   currentIndexingStatus.lastUpdatedAt = new Date().toISOString();
+  logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs: Processing ${commits.length} commits.`); // Add this log
   
   const pointsToUpsert: QdrantPoint[] = [];
 
@@ -758,12 +768,15 @@ async function indexCommitsAndDiffs(
 
     // Batch upsert periodically
     if (pointsToUpsert.length >= configService.QDRANT_BATCH_UPSERT_SIZE) {
+        logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (periodic): About to call batchUpsertVectors with ${pointsToUpsert.length} points.`); // Add this log
         logger.info(`Upserting batch of ${pointsToUpsert.length} commit/diff points...`);
         const simplePointsBatch1 = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
         await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsBatch1, configService.QDRANT_BATCH_UPSERT_SIZE);
+        logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (periodic): batchUpsertVectors call complete.`); // Add this log
         pointsToUpsert.length = 0; // Clear the array
     }
-  }
+  } // This is the end of the for (const commit of commits) loop
+  // The next log for overallProgress was here, so the loop ends before it.
   if (currentIndexingStatus.commitsIndexed !== undefined && currentIndexingStatus.totalCommitsToIndex && currentIndexingStatus.totalCommitsToIndex > 0) {
     currentIndexingStatus.commitsIndexed++;
     const commitProgressContribution = 25; // Commits are 70% to 95%
@@ -773,9 +786,13 @@ async function indexCommitsAndDiffs(
 
   // Upsert any remaining points
   if (pointsToUpsert.length > 0) {
+    logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (final): About to call batchUpsertVectors with ${pointsToUpsert.length} points.`); // Add this log
     logger.info(`Upserting final batch of ${pointsToUpsert.length} commit/diff points...`);
     const simplePointsFinalBatch = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
     await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsFinalBatch, configService.QDRANT_BATCH_UPSERT_SIZE);
+    logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (final): batchUpsertVectors call complete.`); // Add this log
+  } else {
+    logger.info("[REPO_TS_DEBUG] indexCommitsAndDiffs (final): No remaining points to upsert."); // Add this log
   }
 
   currentIndexingStatus.message = `Commit and diff indexing phase complete. Finalizing...`;
