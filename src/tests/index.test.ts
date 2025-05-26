@@ -48,6 +48,8 @@ let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null
 
 // The fs mock is now defined at the top using mockedFsSpies
 
+const mockSpawnFn = vi.fn(); // Moved here
+
 vi.mock('child_process', async () => {
   const actualCp = await vi.importActual('child_process') as typeof import('child_process');
   return {
@@ -136,7 +138,7 @@ vi.mock('../../src/lib/server.ts', () => {
 
 import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
 
-const mockSpawnFn = vi.fn();
+// const mockSpawnFn = vi.fn(); // Moved up
 
 let mockProcessExit: MockInstance<typeof process.exit>;
 let mockConsoleLog: MockInstance<typeof console.log>;

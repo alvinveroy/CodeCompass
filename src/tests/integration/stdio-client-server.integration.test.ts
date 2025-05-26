@@ -180,8 +180,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockLLMProviderInstance.processFeedback = vi.fn(); // Keep this line
       
     // Set LLM_PROVIDER to 'mocked-for-test' in the environment for the spawned server
-    currentTestSpawnEnv.LLM_PROVIDER = 'mocked-for-test';
-    console.log('[INTEGRATION_TEST_DEBUG] beforeEach: Set currentTestSpawnEnv.LLM_PROVIDER to "mocked-for-test"');
+    // currentTestSpawnEnv.LLM_PROVIDER = 'mocked-for-test'; // MOVED
+    // console.log('[INTEGRATION_TEST_DEBUG] beforeEach: Set currentTestSpawnEnv.LLM_PROVIDER to "mocked-for-test"'); // MOVED
 
     // Re-initialize methods on the shared mockLLMProviderInstance
     mockLLMProviderInstance.checkConnection.mockResolvedValue(true);
@@ -237,6 +237,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is NOT set in currentTestSpawnEnv
     // as we are relying on the Vitest module mock.
     delete (currentTestSpawnEnv as {[key: string]: any})['CODECOMPASS_INTEGRATION_TEST_MOCK_LLM'];
+  
+    currentTestSpawnEnv.LLM_PROVIDER = 'mocked-for-test'; // MOVED HERE
+    console.log('[INTEGRATION_TEST_DEBUG] beforeEach: Set currentTestSpawnEnv.LLM_PROVIDER to "mocked-for-test" for the upcoming spawn.'); // MOVED HERE
+
     // eslint-disable-next-line no-console
     console.log(`[INTEGRATION_BEFORE_EACH_SPAWN_ENV] For test "${expect.getState().currentTestName}": ${JSON.stringify(currentTestSpawnEnv)}`);
 
