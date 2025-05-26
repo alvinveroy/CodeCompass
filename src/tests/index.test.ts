@@ -314,8 +314,10 @@ describe('CLI with yargs (index.ts)', () => {
             repoPath, // Custom repoPath
             '--port', '0',
           ],
-          env: expect.objectContaining({
-            HTTP_PORT: '0',
+          options: expect.objectContaining({
+            env: expect.objectContaining({
+              HTTP_PORT: '0',
+            }),
           }),
         })
       );
@@ -424,20 +426,13 @@ describe('CLI with yargs (index.ts)', () => {
           args: [
             expect.stringContaining('index.js'),
             'start',
-            '.', // Default repoPath
+            repoPath, // Custom repoPath from --repo
             '--port', '0', // Client-spawned server still uses port '0' in args
           ],
-          env: expect.objectContaining({
-            // The parent process.env.HTTP_PORT is customPort,
-            // but serverProcessParams.env explicitly sets HTTP_PORT: '0' for the child.
-          args: [
-            expect.stringContaining('index.js'),
-            'start',
-            repoPath, // Custom repoPath from --repo
-            '--port', '0',
-          ],
-          env: expect.objectContaining({
-            HTTP_PORT: '0',
+          options: expect.objectContaining({
+            env: expect.objectContaining({
+              HTTP_PORT: '0', // Client-spawned servers use dynamic utility port
+            }),
           }),
         })
       );
@@ -558,4 +553,4 @@ describe('CLI with yargs (index.ts)', () => {
     
     // New tests for spawn failures or server premature exit are added above.
   });
-});
+// }); // This closing }); was identified as extraneous at line 561
