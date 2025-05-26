@@ -62,6 +62,7 @@ vi.mock('../../lib/ollama', () => ({
     const dimension = 768; // Default for nomic-embed-text
     return Array(dimension).fill(0.1).map((_, i) => (i + 1) * 0.001 * text.length); // Simple deterministic mock
   }),
+  generateText: vi.fn().mockResolvedValue("Mocked Ollama text response for integration"), // Added for Attempt 14
 }));
 
 const mockLLMProviderInstance = {
@@ -171,6 +172,9 @@ describe('Stdio Client-Server Integration Tests', () => {
       ...process.env,
       NODE_ENV: 'test', // Crucial for configService behavior in spawned process
       HTTP_PORT: '0', // Ensure dynamic port for the server utility HTTP interface
+      LLM_PROVIDER: "ollama", // Added for Attempt 14
+      SUGGESTION_PROVIDER: "ollama", // Added for Attempt 14
+      EMBEDDING_PROVIDER: "ollama", // Added for Attempt 14
       // Unique worker ID for test isolation if needed by other parts of the system
       VITEST_WORKER_ID: process.env.VITEST_WORKER_ID || `integration_worker_${Math.random().toString(36).substring(7)}`,
     };

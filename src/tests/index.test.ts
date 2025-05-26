@@ -403,14 +403,15 @@ describe('CLI with yargs (index.ts)', () => {
     // (This test name is slightly misleading, it checks process.env in the *current* process after yargs parsing)
     it('--port option should set HTTP_PORT environment variable after yargs parsing', async () => {
       const customPort = 1234;
-      // originalProcessEnv is saved in global beforeEach and restored in afterEach.
-      // We modify process.env directly here, and yargs' apply function will also modify it.
-      delete process.env.HTTP_PORT; // Ensure it's not set before test
+      // Use vi.stubEnv to isolate environment variable changes for this test
+      vi.stubEnv('HTTP_PORT', undefined); // Ensure HTTP_PORT is initially undefined or some known state
 
-      await runMainWithArgs(['--port', String(customPort)]); 
-      // The import inside runMainWithArgs triggers yargs parsing and the 'apply' function.
-      // process.env.HTTP_PORT should now be set.
+      await runMainWithArgs(['--port', String(customPort)]);
+      
+      // process.env.HTTP_PORT should now be set by yargs' apply function
       expect(process.env.HTTP_PORT).toBe(String(customPort));
+
+      vi.unstubAllEnvs(); // Clean up environment stubs
     });
 
     it('--repo option should be used by startServerHandler', async () => {
