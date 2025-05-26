@@ -448,16 +448,18 @@ class ConfigService {
     if (httpPortEnvReload !== undefined && httpPortEnvReload !== null && httpPortEnvReload.trim() !== "") {
       const parsedPortReload = parseInt(httpPortEnvReload, 10);
       if (!isNaN(parsedPortReload) && parsedPortReload >= 0 && parsedPortReload <= 65535) { // Allow 0
-        this._httpPort = parsedPortReload;
+        this._httpPort = parsedPortReload; // Set if new valid port is in env
+        this.logger.debug(`[ConfigService reload] _httpPort set to ${this._httpPort} from env var.`);
       } else {
-        this.logger.warn(`Invalid HTTP_PORT environment variable during reload: "${httpPortEnvReload}". Falling back to default: ${this._httpPortFallback}`);
-        this._httpPort = this._httpPortFallback;
+        // Invalid env var during reload, _httpPort retains its current value (from constructor or previous valid setting).
+        this.logger.warn(`Invalid HTTP_PORT environment variable during reload: "${httpPortEnvReload}". _httpPort remains ${this._httpPort}.`);
       }
     } else {
-      // If HTTP_PORT is not in env during reload, fall back to default.
-      this._httpPort = this._httpPortFallback;
+      // HTTP_PORT env var is empty during reload. _httpPort retains its current value.
+      // This prevents falling back to _httpPortFallback if _httpPort was, for example, 0 from constructor.
+      this.logger.debug(`HTTP_PORT environment variable is empty during reload. _httpPort remains ${this._httpPort}.`);
     }
-    this.logger.debug(`[ConfigService reload] After re-evaluating from env, _httpPort: ${this._httpPort}`);
+    this.logger.debug(`[ConfigService reload] After re-evaluating from env (if applicable), _httpPort: ${this._httpPort}`);
     
     // Initialize from env, file loading will override if present, then derive.
     this._summarizationModel = process.env.SUMMARIZATION_MODEL || "";

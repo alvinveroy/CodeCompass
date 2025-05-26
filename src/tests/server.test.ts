@@ -1158,7 +1158,7 @@ describe('startProxyServer', () => {
   });
 
   it('should resolve with null if findFreePort fails', async () => {
-    const findFreePortError = new Error("No ports for proxy!");
+    const findFreePortError = new Error("No free ports available."); // Match specific error message
     findFreePortSpy.mockRejectedValue(findFreePortError);
 
     await expect(
@@ -1166,9 +1166,8 @@ describe('startProxyServer', () => {
     ).resolves.toBeNull(); // Correct: startProxyServer resolves null on findFreePort error
         
     expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
-      // Message from startProxyServer: `startProxyServer: Failed to find free port for proxy: ${error}`
-      // Winston might stringify the error object.
-      expect.stringContaining(`startProxyServer: Failed to find free port for proxy: Error: ${findFreePortError.message}`)
+      // Updated expected log message to match the new error message
+      expect.stringContaining(`[ProxyServer] Failed to find free port for proxy: Error: ${findFreePortError.message}`)
     );
   }, 15000);
 

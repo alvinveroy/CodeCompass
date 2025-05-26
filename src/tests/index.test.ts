@@ -165,8 +165,8 @@ describe('CLI with yargs (index.ts)', () => {
     const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
     
     vi.doMock(path.join(resolvedSUTLibPath, 'config-service.js'), () => ({
-      configService: currentMockConfigServiceInstance, 
-      logger: currentMockLoggerInstance,             
+      get configService() { return currentMockConfigServiceInstance; },
+      get logger() { return currentMockLoggerInstance; },
     }));
     vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
       Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
