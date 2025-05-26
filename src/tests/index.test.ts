@@ -67,7 +67,6 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Mock for StdioC
 
 // Store the original configService mock structure to reset it
 const originalMockConfigServiceInstance = { HTTP_PORT: 0, AGENT_QUERY_TIMEOUT: 180000, /* other relevant defaults, use 0 for HTTP_PORT in tests */ };
-const distLibServerPath = path.resolve(__dirname, '../../../dist/lib/server.js');
 // These will be freshly created in beforeEach for use with vi.doMock
 let currentMockConfigServiceInstance: typeof originalMockConfigServiceInstance;
 let currentMockLoggerInstance: {

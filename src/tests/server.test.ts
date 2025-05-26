@@ -62,7 +62,7 @@ const stableMockLoggerInstance: MockedLogger = {
 // --- END STABLE MOCK INSTANCES DEFINITIONS ---
 
 // serverLibModule import removed from here, will be re-added later
-import { normalizeToolParams, ServerStartupError } from '../lib/server'; // Keep specific imports if needed elsewhere
+import { normalizeToolParams, ServerStartupError } from '../lib/server.js'; // Keep specific imports if needed elsewhere
 import { IndexingStatusReport, getGlobalIndexingStatus } from '../lib/repository'; // For mock status
 
 // Define stable mock for McpServer.connect
@@ -411,59 +411,59 @@ Test content
 
 
 // New test suite for Server Startup and Port Handling
-import { ConfigService } from '../lib/config-service'; // Assuming ConfigService is the class/type of the instance
-import { Logger as WinstonLogger } from 'winston';
+// import { ConfigService } from '../lib/config-service'; // Assuming ConfigService is the class/type of the instance
+// import { Logger as WinstonLogger } from 'winston'; // Duplicate import removed
 
 // Type for the mocked logger instance where each method is a vi.Mock
-type MockedLogger = {
-  [K in keyof WinstonLogger]: WinstonLogger[K] extends (...args: infer A) => infer R
-    ? Mock<(...args: A) => R> // Corrected generic usage
-    : WinstonLogger[K];
-};
+// type MockedLogger = { // Duplicate type definition removed
+//   [K in keyof WinstonLogger]: WinstonLogger[K] extends (...args: infer A) => infer R
+//     ? Mock<(...args: A) => R> // Corrected generic usage
+//     : WinstonLogger[K];
+// };
 
 // Type for the mocked configService instance
 // Adjust properties based on what server.ts actually uses from configService
-type MockedConfigService = Pick<
-  ConfigService,
-  | 'HTTP_PORT'
-  | 'OLLAMA_HOST' // Add other properties accessed by server.ts
-  | 'QDRANT_HOST'
-  | 'COLLECTION_NAME'
-  | 'SUGGESTION_MODEL'
-  // | 'LLM_PROVIDER' // This seems to be an alias or older name, SUGGESTION_PROVIDER is used in server.ts
-  | 'SUGGESTION_PROVIDER'
-  | 'EMBEDDING_MODEL'
-  | 'EMBEDDING_PROVIDER'
-  | 'DEEPSEEK_API_KEY'
-  | 'OPENAI_API_KEY'
-  | 'GEMINI_API_KEY'
-  | 'CLAUDE_API_KEY'
-  // VERSION removed from Pick as it's not in the original ConfigService type
-  | 'SUMMARIZATION_MODEL'
-  | 'REFINEMENT_MODEL'
-  | 'MAX_SNIPPET_LENGTH'
-  // Add any other relevant properties from ConfigService
-> & {
-  // logger removed as it's a separate export, not a property of configService mock
-  reloadConfigsFromFile: Mock<() => void>; // Corrected generic usage
-  VERSION: string; // VERSION is part of the mock, but not original ConfigService
-  IS_UTILITY_SERVER_DISABLED: boolean; // Added
-  RELAY_TARGET_UTILITY_PORT?: number; // Added
-  // Add other methods from ConfigService that are mocked and used by server.ts
-};
+// type MockedConfigService = Pick< // Duplicate type definition removed
+//   ConfigService,
+//   | 'HTTP_PORT'
+//   | 'OLLAMA_HOST' // Add other properties accessed by server.ts
+//   | 'QDRANT_HOST'
+//   | 'COLLECTION_NAME'
+//   | 'SUGGESTION_MODEL'
+//   // | 'LLM_PROVIDER' // This seems to be an alias or older name, SUGGESTION_PROVIDER is used in server.ts
+//   | 'SUGGESTION_PROVIDER'
+//   | 'EMBEDDING_MODEL'
+//   | 'EMBEDDING_PROVIDER'
+//   | 'DEEPSEEK_API_KEY'
+//   | 'OPENAI_API_KEY'
+//   | 'GEMINI_API_KEY'
+//   | 'CLAUDE_API_KEY'
+//   // VERSION removed from Pick as it's not in the original ConfigService type
+//   | 'SUMMARIZATION_MODEL'
+//   | 'REFINEMENT_MODEL'
+//   | 'MAX_SNIPPET_LENGTH'
+//   // Add any other relevant properties from ConfigService
+// > & {
+//   // logger removed as it's a separate export, not a property of configService mock
+//   reloadConfigsFromFile: Mock<() => void>; // Corrected generic usage
+//   VERSION: string; // VERSION is part of the mock, but not original ConfigService
+//   IS_UTILITY_SERVER_DISABLED: boolean; // Added
+//   RELAY_TARGET_UTILITY_PORT?: number; // Added
+//   // Add other methods from ConfigService that are mocked and used by server.ts
+// };
 
 // Type for the module imported from '../lib/config-service.js'
-type ConfigServiceModuleType = {
-  configService: MockedConfigService;
-  logger: MockedLogger;
+type ConfigServiceModuleType = { // This type is still used
+  configService: MockedConfigService; // MockedConfigService is defined at the top
+  logger: MockedLogger; // MockedLogger is defined at the top
   // If the mock factory for '../lib/config-service' spreads `actual` and `actual`
   // contains other exports that are used, they should be typed here as well.
 };
 
 describe('Server Startup and Port Handling', () => {
   // Use the new mock-aware types
-  let mcs: MockedConfigService; // mcs for mockedConfigService
-  let ml: MockedLogger; // ml for mockedLogger
+  let mcs: MockedConfigService; // mcs for mockedConfigService, type defined at top
+  let ml: MockedLogger; // ml for mockedLogger, type defined at top
   let mockedMcpServerConnect: MockInstance; // Typed the mock instance
   let originalNodeEnv: string | undefined;
   let mockConsoleError: MockInstance<typeof console.error>; // Declare mockConsoleError
@@ -879,25 +879,20 @@ describe('Server Startup and Port Handling', () => {
 describe('findFreePort', () => {
   // findFreePortSpy will be initialized in beforeEach of the startProxyServer suite
   // For findFreePort direct tests, we don't need a module-level spy on it.
-  let mockedHttp: {
-    createServer: Mock<() => httpModule.Server>;
-    default?: { createServer: Mock<() => httpModule.Server> }; // Optional default
-  };
+  let mockedHttpCreateServer: Mock<(...args: any[]) => httpModule.Server>; // Changed to hold the createServer mock directly
+
   let portCounter: number;
 
   beforeEach(async () => {
     vi.clearAllMocks(); // Clear all mocks
     // Dynamically import http to get the mocked version
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    mockedHttp = await import('http') as unknown as {
-      createServer: Mock<() => httpModule.Server>;
-      default?: { createServer: Mock<() => httpModule.Server> };
+    const httpMockModule = await import('http') as unknown as {
+      createServer: Mock<(...args: any[]) => httpModule.Server>;
+      default?: { createServer: Mock<(...args: any[]) => httpModule.Server> };
     };
-    // Ensure we are using the default export if that's how server.ts imports it
-    // Based on server.ts `import http from 'http'`, it uses the default export.
-    if (mockedHttp.default && mockedHttp.default.createServer) {
-        mockedHttp.createServer = mockedHttp.default.createServer;
-    }
+    // Ensure we are using the correct createServer mock function
+    mockedHttpCreateServer = (httpMockModule.default?.createServer || httpMockModule.createServer);
+
 
     portCounter = 0; // Reset for EADDRINUSE simulations
 
@@ -953,7 +948,7 @@ describe('findFreePort', () => {
     });
 
     await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort);
-    expect(mockedHttp.createServer).toHaveBeenCalledTimes(1);
+    expect(mockedHttpCreateServer).toHaveBeenCalledTimes(1); // Use the direct mock
     expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost');
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1);
   });
@@ -1003,7 +998,7 @@ describe('findFreePort', () => {
     });
 
     await expect(serverLibModule.findFreePort(startPort)).rejects.toThrow(otherError);
-    expect(mockedHttp.createServer).toHaveBeenCalledTimes(1);
+    expect(mockedHttpCreateServer).toHaveBeenCalledTimes(1); // Use the direct mock
     expect(mockHttpServerCloseFn).not.toHaveBeenCalled();
   });
 
@@ -1060,12 +1055,12 @@ describe('findFreePort', () => {
     const expectedAttempts = (65535 - startPort) + 1;
 
     await expect(serverLibModule.findFreePort(startPort)).rejects.toThrow('No free ports available.');
-    expect(mockedHttp.createServer).toHaveBeenCalledTimes(expectedAttempts);
+    expect(mockedHttpCreateServer).toHaveBeenCalledTimes(expectedAttempts); // Use the direct mock
   }, 10000); // Increase timeout if needed for many iterations
 });
 
 // Import nock for Mocking Target Server
-import nock from 'nock';
+// import nock from 'nock'; // Duplicate import removed
 
 describe('startProxyServer', () => {
   const targetInitialPort = 3005; // Port the main server instance initially tried
