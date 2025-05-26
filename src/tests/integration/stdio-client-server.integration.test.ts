@@ -164,7 +164,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     }
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset mocks for LLM provider before each test if needed
     vi.clearAllMocks(); // Clears call history etc. for all mocks
     // Re-apply mock implementations if vi.clearAllMocks clears them
