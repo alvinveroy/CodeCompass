@@ -846,17 +846,20 @@ describe('Server Startup and Port Handling', () => {
 
     for (const callArgs of ml.error.mock.calls) {
       const firstArg = callArgs[0];
-      const secondArg = callArgs.length > 1 ? callArgs[1] : undefined;
+      // const secondArg = callArgs.length > 1 ? callArgs[1] : undefined; // Removed
 
       if (typeof firstArg === 'string') {
         if (firstArg.includes(expectedStatusFetchErrorMessage)) {
           statusFetchErrorLogFound = true;
         }
         if (firstArg === "Failed to start CodeCompass" && 
-            secondArg && 
-            typeof secondArg === 'object' && 
-            (secondArg as { message?: string })?.message?.includes(expectedFailedToStartMessage)) {
-          failedToStartLogCallFound = true;
+            callArgs.length > 1) { // Check length before accessing callArgs[1]
+          const secondArg = callArgs[1]; // Define secondArg safely
+          if (secondArg && 
+              typeof secondArg === 'object' && 
+              (secondArg as { message?: string })?.message?.includes(expectedFailedToStartMessage)) {
+            failedToStartLogCallFound = true;
+          }
         }
       } else if (typeof firstArg === 'object' && firstArg !== null) {
         const logObject = firstArg as { message?: string, error?: { message?: string } };
