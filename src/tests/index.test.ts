@@ -114,18 +114,6 @@ vi.mock('./dist/lib/server.js', () => ({ // This mock might still be needed if S
 // The mock for server.js will be handled by vi.doMock within runMainWithArgs
 
 // vi.mock('../lib/config-service.js', () => ({ // This is the mock for the SUT's import
-//   get configService() { return currentMockConfigServiceInstance; },
-//   get logger() { return currentMockLoggerInstance; },
-// }));
-
-// Use vi.doMock here, at the top level, after constants are defined.
-vi.doMock(MOCKED_SERVER_MODULE_PATH, () => {
-  // console.log(`[INDEX_TEST_DEBUG] Top-level doMock for ${MOCKED_SERVER_MODULE_PATH} factory executing`);
-  return {
-    startServer: mockStartServer,
-    // ... other server exports if needed by the SUT indirectly via index.ts
-  };
-});
 
 import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
 
@@ -193,33 +181,20 @@ describe('CLI with yargs (index.ts)', () => {
     // and this test file is src/tests/index.test.ts
     // The path from src/tests/index.test.ts to dist/lib/config-service.js is '../../dist/lib/config-service.js'
     
-    // vi.doMock('../../dist/lib/config-service.js', () => ({ // REMOVED as per plan
-    //   configService: currentMockConfigServiceInstance, // REMOVED as per plan
-    //   logger: currentMockLoggerInstance, // REMOVED as per plan
-    // })); // REMOVED as per plan
-
-    // Ensure mockStartServer is a vi.fn() defined in the test scope
-    // and reset in beforeEach: mockStartServer.mockClear().mockResolvedValue(undefined);
-    // MOCKED_SERVER_MODULE_PATH should resolve to what src/index.ts imports for startServerHandler
-    // If src/index.ts has `require(path.join(libPath, 'server.js'))`
-    // then MOCKED_SERVER_MODULE_PATH needs to match that resolved string.
-    // For now, assuming it's the direct path to the .ts file for vi.doMock's resolution.
-    // Ensure mockStartServer is a vi.fn() defined in the test scope
-    // and reset in beforeEach: mockStartServer.mockClear().mockResolvedValue(undefined);
-
-    vi.doMock(path.resolve(__dirname, '../../src/lib/server.ts'), () => { // Use string literal
-      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../../src/lib/server.ts EXECUTED.`);
+    // Use direct relative paths as the SUT (dist/index.js) would see them.
+    // These paths are relative to `dist/src/index.js`.
+    vi.doMock('../lib/config-service.js', () => {
+      // console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../lib/config-service.js EXECUTED.`);
       return {
-        startServerHandler: mockStartServer,
-        // Mock ServerStartupError if it's checked with instanceof by the SUT
-        ServerStartupError: class MockedServerStartupError extends Error {
-          public exitCode: number;
-          constructor(message: string, exitCode = 1) {
-            super(message);
-            this.name = "ServerStartupError";
-            this.exitCode = exitCode;
-          }
-        }
+        configService: currentMockConfigServiceInstance,
+        logger: currentMockLoggerInstance,
+      };
+    });
+    vi.doMock('../lib/server.js', () => { // Use string literal for the path SUT imports
+      // console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../lib/server.js EXECUTED.`);
+      return {
+        startServerHandler: mockStartServer, // Assuming startServerHandler is the correct export
+        ServerStartupError: ServerStartupError, // Ensure ServerStartupError is also mocked if checked by SUT
       };
     });
     
