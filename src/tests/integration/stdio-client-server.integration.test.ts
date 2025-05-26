@@ -75,12 +75,17 @@ const mockLLMProviderInstance = {
   }),
   processFeedback: vi.fn().mockResolvedValue("Mocked improved LLM response."),
 };
-vi.mock('../../lib/llm-provider', () => ({
-  getLLMProvider: vi.fn().mockImplementation(async () => { // Make it async if it returns a Promise
-    console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider in llm-provider mock factory CALLED! Returning mockLLMProviderInstance.');
-    return mockLLMProviderInstance;
-  }),
-  switchSuggestionModel: vi.fn().mockResolvedValue(true),
+
+vi.mock('../../lib/llm-provider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/llm-provider')>();
+  return {
+    ...actual,
+    getLLMProvider: vi.fn(() => {
+      // This log is crucial
+      console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider CALLED in factory. Returning shared mock instance.');
+      return mockLLMProviderInstance; // Return the shared instance
+    }),
+    switchSuggestionModel: vi.fn().mockResolvedValue(true), // Keep other mocked exports
   clearProviderCache: vi.fn(),
   // Export LLMProvider type if needed by other mocks, though not strictly for this file.
 }));
@@ -148,8 +153,14 @@ describe('Stdio Client-Server Integration Tests', () => {
     vi.clearAllMocks(); // This clears call history etc. Re-mock implementations if they are stateful per test.
     // Re-apply mock implementations if vi.clearAllMocks clears them
     // Re-apply default mock for generateText before specific tests use mockResolvedValueOnce
-    vi.mocked(mockLLMProviderInstance.generateText).mockResolvedValue("Mocked LLM response for integration test.");
-    mockLLMProviderInstance.generateText.mockResolvedValue("Mocked LLM response for integration test."); // Ensure this is the one used if vi.mocked isn't sufficient
+    // vi.mocked(mockLLMProviderInstance.generateText).mockResolvedValue("Mocked LLM response for integration test.");
+    // mockLLMProviderInstance.generateText.mockResolvedValue("Mocked LLM response for integration test."); // Ensure this is the one used if vi.mocked isn't sufficient
+    
+    // Re-initialize/reset the mock functions on the SHARED instance
+    mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
+    mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default mock LLM response from integration beforeEach');
+    mockLLMProviderInstance.generateEmbedding.mockReset().mockResolvedValue([0.1, 0.2, 0.3]);
+    mockLLMProviderInstance.processFeedback.mockReset().mockResolvedValue(undefined);
 
     // Ensure configService mock is reset or its relevant properties are set for the test
     // This might involve dynamically importing and mocking configService if its state needs to be test-specific
@@ -181,9 +192,12 @@ describe('Stdio Client-Server Integration Tests', () => {
       EMBEDDING_PROVIDER: "ollama", // Added for Attempt 14
       // Unique worker ID for test isolation if needed by other parts of the system
       VITEST_WORKER_ID: process.env.VITEST_WORKER_ID || `integration_worker_${Math.random().toString(36).substring(7)}`,
-      CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Added for Attempt 19
+      // CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Removed: Rely on Vitest module mock
     };
     const currentTestSpawnEnv = { ...baseSpawnEnv };
+    // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is NOT set in currentTestSpawnEnv
+    // as we are relying on the Vitest module mock.
+    delete currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM;
     // eslint-disable-next-line no-console
     console.log(`[INTEGRATION_BEFORE_EACH_SPAWN_ENV] For test "${expect.getState().currentTestName}": ${JSON.stringify(currentTestSpawnEnv)}`);
 
@@ -502,9 +516,12 @@ describe('Stdio Client-Server Integration Tests', () => {
     ]);
     
     // Mock LLMProvider's generateText for this specific test
-    mockLLMProviderInstance.generateText.mockClear()
+    mockLLMProviderInstance.generateText.mockClear(); // Clear any previous specific mocks
+    // Configure the method on the SHARED instance for this specific call
+    const specificSuggestionResponse = "This is a generated suggestion based on context from file1.ts";
+    mockLLMProviderInstance.generateText
         .mockResolvedValueOnce("Mocked refined query for generate_suggestion") // For potential refinement step
-        .mockResolvedValueOnce("This is a generated suggestion based on context from file1.ts"); // For final suggestion
+        .mockResolvedValueOnce(specificSuggestionResponse); // For final suggestion
 
     const suggestionQuery = "Suggest how to use file1.ts";
     const suggestionResult = await client.callTool({ name: 'generate_suggestion', arguments: { query: suggestionQuery } });
@@ -516,7 +533,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
     // Check for key parts of a suggestion response
     expect(suggestionText).toContain("## Suggestion");
-    expect(suggestionText).toContain("based on context from file1.ts"); // Check for specific mocked content
+    expect(suggestionText).toContain(specificSuggestionResponse); // Check for specific mocked content
     // Optionally, still check that "Context Used" section exists if it's part of the format
     expect(suggestionText).toContain("Context Used");
     // And that file1.ts is mentioned somewhere in that context section if important
@@ -544,9 +561,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     ]);
 
     // Mock LLMProvider's generateText for this specific test
-    mockLLMProviderInstance.generateText.mockClear()
+    mockLLMProviderInstance.generateText.mockClear(); // Clear any previous specific mocks
+    const specificSummaryResponse = "This is a summary of the repository context, using info from file2.txt";
+    mockLLMProviderInstance.generateText
         .mockResolvedValueOnce("Mocked refined query for get_repository_context") // For potential refinement step
-        .mockResolvedValueOnce("This is a summary of the repository context, using info from file2.txt"); // For final summary
+        .mockResolvedValueOnce(specificSummaryResponse); // For final summary
 
     const repoContextQuery = "What is the main purpose of this repo?";
     const repoContextResult = await client.callTool({ name: 'get_repository_context', arguments: { query: repoContextQuery } });
@@ -558,7 +577,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
     // Check for key parts of a repo context summary
     expect(repoContextText).toContain("## Summary");
-    expect(repoContextText).toContain("using info from file2.txt"); // Check for specific mocked content
+    expect(repoContextText).toContain(specificSummaryResponse); // Check for specific mocked content
     // Optionally, still check that "Relevant Information Used for Summary" section exists
     expect(repoContextText).toContain("Relevant Information Used for Summary");
     // And that file2.txt is mentioned somewhere in that context section if important
