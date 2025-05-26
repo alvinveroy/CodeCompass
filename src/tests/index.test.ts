@@ -174,16 +174,20 @@ describe('CLI with yargs (index.ts)', () => {
     vi.doMock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({ // Keep for now if any test path uses it
       StreamableHTTPClientTransport: vi.fn(),
     }));
-    // REMOVE: vi.doMock for stdio.js, rely on top-level vi.mock
-    // vi.doMock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-    //   StdioClientTransport: vi.fn().mockImplementation(() => ({ close: vi.fn() })),
-    // }));
     
-    vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({ // Add this vi.doMock for server.js
-      startServer: mockStartServer,
-      startProxyServer: mockStartProxyServer,
-      ServerStartupError: ServerStartupError,
-    }));
+    // Ensure server.js is also mocked using vi.doMock within runMainWithArgs
+    // This is crucial for tests that invoke the 'start' command of the CLI.
+    const MOCKED_SERVER_MODULE_PATH_FOR_INDEX_TEST = path.join(resolvedSUTLibPath, 'server.js');
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting to vi.doMock: ${MOCKED_SERVER_MODULE_PATH_FOR_INDEX_TEST}`);
+    vi.doMock(MOCKED_SERVER_MODULE_PATH_FOR_INDEX_TEST, () => {
+      console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: vi.doMock for server.js EXECUTING. mockStartServer is defined: ${!!mockStartServer}, mockStartProxyServer defined: ${!!mockStartProxyServer}, ServerStartupError defined: ${!!ServerStartupError}`);
+      return {
+        startServer: mockStartServer,
+        startProxyServer: mockStartProxyServer, 
+        ServerStartupError: ServerStartupError, 
+      };
+    });
+    console.log('[INDEX_TEST_DEBUG] mockStartServer type before SUT import:', typeof mockStartServer);
     
     await import(indexPath); 
 
