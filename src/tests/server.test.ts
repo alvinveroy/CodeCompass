@@ -1124,8 +1124,7 @@ describe('startProxyServer', () => {
     realAxiosInstance = (await import('axios')).default as any; // Cast to any
 
     // Spy on findFreePort from the freshly imported serverLibModule
-    // Ensure findFreePortSpy is correctly typed and assigned
-    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as VitestMock<[number], Promise<number>>;
+    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as MockInstance<[number], Promise<number>>;
 
     // stableMockConfigServiceInstance and stableMockLoggerInstance are already defined globally
     // and used by the vi.mock for '../lib/config-service'.

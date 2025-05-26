@@ -27,6 +27,7 @@ interface StdioTransportParams {
 
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node'; // For cloning if needed, or just local init
+import { generateText as ollamaGenerateText } from '../../lib/ollama.js'; // Import for specific mocking
 
 // Mock external services and providers
 const mockQdrantClientInstance = {
