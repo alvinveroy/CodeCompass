@@ -19,6 +19,8 @@ let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null
 // StdioClientTransport would need to expose a way to access the child process's streams,
 // or tests would need to use a more integrated approach.
 
+const distLibServerPath = path.resolve(__dirname, '../../../dist/lib/server.js');
+
 // --- Mocks for modules dynamically required by index.ts handlers ---
 // axios mock removed as it's no longer directly used by handleClientCommand's primary path
 
@@ -74,10 +76,6 @@ let currentMockLoggerInstance: {
 
 const mockStartServer = vi.fn();
 const mockStartProxyServer = vi.fn();
-// Define distLibServerPath BEFORE it's used in vi.mock
-// This path points to the compiled server.js in dist/lib
-const distLibServerPath = path.resolve(__dirname, '../../../dist/lib/server.js');
-
 const ServerStartupError = class ServerStartupError extends Error {
   exitCode: number;
   originalError?: Error;
@@ -221,7 +219,7 @@ describe('CLI with yargs (index.ts)', () => {
     });
 
     it('should handle startServer failure (fatal error, exitCode 1) and log via yargs .fail()', async () => {
-      const startupError = new ServerStartupError("Server failed to boot with fatal error", 1);
+      const startupError = new ServerStartupError("Server failed to boot with fatal error", 1, {}); // Add empty options object
       mockStartServer.mockRejectedValue(startupError);
       process.env.VITEST_TESTING_FAIL_HANDLER = "true"; 
       await runMainWithArgs(['start']);

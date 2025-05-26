@@ -144,6 +144,19 @@ describe('Stdio Client-Server Integration Tests', () => {
     // If specific config (like EMBEDDING_DIMENSION) is crucial, ensure it's correctly mocked.
     vi.spyOn(actualConfigServiceForMock, 'EMBEDDING_DIMENSION', 'get').mockReturnValue(768);
 
+    // Add this to ensure previous test's transport is fully closed if not already
+    if (transport && typeof transport.close === 'function') {
+        transport.close();
+    }
+    if (client && typeof client.close === 'function') {
+        // Vitest's `afterEach` runs before `beforeEach` of the next test.
+        // Explicitly awaiting here might be redundant if afterEach handles it,
+        // but can be a safeguard. Consider if await is truly needed or if
+        // just calling close is sufficient if afterEach guarantees cleanup.
+        // For now, let's keep it simple without await here, assuming afterEach does its job.
+        client.close().catch(err => console.error("Error closing client in beforeEach pre-cleanup:", err));
+    }
+
     // Setup transport and client for each test to ensure fresh state and proper env application
     const baseSpawnEnv = {
       ...process.env,
@@ -166,6 +179,14 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   afterEach(async () => {
     // serverProcess cleanup removed from afterEach.
+    if (client) {
+      await client.close().catch(err => console.error("Error closing client in afterEach:", err));
+      client = undefined as any; // Help GC and prevent reuse, cast to any to satisfy TS if client is not initially undefined
+    }
+    if (transport) {
+      transport.close(); // This should terminate the child process
+      transport = undefined as any; // Help GC, cast to any
+    }
   });
 
   it('should start the server, connect a client via stdio, and call get_indexing_status', async () => {

@@ -22,8 +22,9 @@ type MockedConfigService = Pick<
   | 'SUGGESTION_MODEL' | 'SUGGESTION_PROVIDER' | 'EMBEDDING_MODEL' | 'EMBEDDING_PROVIDER'
   | 'DEEPSEEK_API_KEY' | 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'CLAUDE_API_KEY'
   | 'SUMMARIZATION_MODEL' | 'REFINEMENT_MODEL' | 'MAX_SNIPPET_LENGTH'
-  | 'AGENT_QUERY_TIMEOUT'
+  // | 'AGENT_QUERY_TIMEOUT' // Omit if readonly in base type
 > & {
+  AGENT_QUERY_TIMEOUT: number; // Add it here as mutable
   reloadConfigsFromFile: Mock<[], void>;
   VERSION: string;
   IS_UTILITY_SERVER_DISABLED: boolean;
@@ -189,20 +190,30 @@ vi.mock('http', async (importOriginal) => {
 
 // Mock for axios
 vi.mock('axios', () => {
-  const mockAxiosInstance = vi.fn();
-  mockAxiosInstance.get = vi.fn();
-  mockAxiosInstance.post = vi.fn();
-  mockAxiosInstance.delete = vi.fn();
-  mockAxiosInstance.isAxiosError = vi.fn((payload: any): payload is import('axios').AxiosError => {
-    return payload && typeof payload === 'object' && 'isAxiosError' in payload && payload.isAxiosError === true;
-  });
+  // Create an object that mimics an Axios instance with mocked methods
+  const mockAxiosInstanceMethods = {
+    get: vi.fn(),
+    post: vi.fn(),
+    delete: vi.fn(),
+    // Add other methods if your code uses them, e.g., put, patch
+  };
 
   return {
-    default: mockAxiosInstance,
-    get: mockAxiosInstance.get,
-    post: mockAxiosInstance.post,
-    delete: mockAxiosInstance.delete,
-    isAxiosError: mockAxiosInstance.isAxiosError,
+    // default is what's usually imported via `import axios from 'axios'`
+    default: {
+      ...mockAxiosInstanceMethods, // Spread the methods here
+      // If `axios.create()` is used, mock it to return the same set of mocked methods
+      create: vi.fn(() => mockAxiosInstanceMethods),
+      // Mock `isAxiosError` as a static function on the default export
+      isAxiosError: vi.fn((payload: any): payload is import('axios').AxiosError => {
+        return payload && typeof payload === 'object' && 'isAxiosError' in payload && payload.isAxiosError === true;
+      }),
+    },
+    // Also export them as named exports if your code uses `import { get } from 'axios'`
+    ...mockAxiosInstanceMethods,
+    isAxiosError: vi.fn((payload: any): payload is import('axios').AxiosError => {
+      return payload && typeof payload === 'object' && 'isAxiosError' in payload && payload.isAxiosError === true;
+    }),
   };
 });
 
@@ -1058,14 +1069,14 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: Mock<((startPort: number, endPort?: number) => Promise<number>)>;
+  let findFreePortSpy: Mock<[startPort: number], Promise<number>>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {
     vi.resetModules(); // Crucial to get fresh modules and apply unmocking correctly
 
     // Re-import serverLibModule to get a fresh instance for spying
-    serverLibModule = await import('../lib/server'); 
+    serverLibModule = await import('../lib/server.js'); 
     
     // Unmock axios specifically for this suite so test calls to the proxy are real
     vi.doUnmock('axios'); 

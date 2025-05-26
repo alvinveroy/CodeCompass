@@ -510,17 +510,19 @@ class ConfigService {
     this.logger.debug(`[ConfigService HTTP_PORT getter] global.CURRENT_HTTP_PORT: ${global.CURRENT_HTTP_PORT}, this._httpPort: ${this._httpPort}, process.env.HTTP_PORT: "${process.env.HTTP_PORT}"`);
     let resolvedPort: number;
 
-    // _httpPort is initialized from process.env.HTTP_PORT or a fallback in the constructor.
-    // global.CURRENT_HTTP_PORT is used if a port is dynamically found by findFreePort in server.ts.
-    if (global.CURRENT_HTTP_PORT !== undefined) {
+    // Priority:
+    // 1. global.CURRENT_HTTP_PORT (set by findFreePort if dynamic port was used)
+    // 2. this._httpPort (from env var HTTP_PORT or config file, can be 0)
+    // 3. this._httpPortFallback (default if nothing else is set or if _httpPort is invalid)
+
+    if (global.CURRENT_HTTP_PORT !== undefined && !isNaN(global.CURRENT_HTTP_PORT)) {
       resolvedPort = global.CURRENT_HTTP_PORT;
     } else if (this._httpPort !== undefined && !isNaN(this._httpPort)) {
+      // _httpPort can be 0, which is a valid setting for "dynamic port"
       resolvedPort = this._httpPort;
     } else {
       resolvedPort = this._httpPortFallback;
     }
-    // Removed noisy console.error, using logger.debug if necessary.
-    // this.logger.debug(`[DEBUG ConfigService.HTTP_PORT getter] returning: ${resolvedPort}. (global: ${global.CURRENT_HTTP_PORT}, internal: ${this._httpPort}, env: ${process.env.HTTP_PORT})`);
     return resolvedPort;
   }
 
