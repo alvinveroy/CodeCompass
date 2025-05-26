@@ -201,7 +201,7 @@ vi.mock('http', async (importOriginal) => {
   const mockCreateServerFn = vi.fn(createNewMockServerObject);
 
   const mockHttpMethods = {
-    createServer: mockCreateServerFn as unknown as vi.MockedFunction<typeof http.createServer>,
+    createServer: mockCreateServerFn as unknown as MockedFunction<typeof http.createServer>,
     Server: vi.fn().mockImplementation(createNewMockServerObject) as unknown as typeof httpModule.Server,
     IncomingMessage: actualHttpModule.IncomingMessage,
     ServerResponse: actualHttpModule.ServerResponse,
@@ -1010,7 +1010,7 @@ describe('Server Startup and Port Handling', () => {
 describe('findFreePort', () => {
   // findFreePortSpy will be initialized in beforeEach of the startProxyServer suite
   // For findFreePort direct tests, we don't need a module-level spy on it.
-  let mockedHttpCreateServer: vi.MockedFunction<typeof http.createServer>;
+  let mockedHttpCreateServer: MockedFunction<typeof http.createServer>;
 
   let portCounter: number;
 
@@ -1212,7 +1212,7 @@ describe('startProxyServer', () => {
     realAxiosInstance = (await import('axios')).default as any; // Cast to any
 
     // Spy on findFreePort from the freshly imported serverLibModule
-    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as vi.MockedFunction<typeof serverLibModule.findFreePort>;
+    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as MockedFunction<typeof serverLibModule.findFreePort>;
 
     // stableMockConfigServiceInstance and stableMockLoggerInstance are already defined globally
     // and used by the vi.mock for '../lib/config-service'.
