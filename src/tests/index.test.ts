@@ -2,6 +2,25 @@
 const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Adjusted path
 const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts');
 
+// At the top, after imports:
+const mockedFsSpies = {
+  statSync: vi.fn(),
+  readFileSync: vi.fn(),
+  // Add any other fs functions if index.ts uses them
+};
+vi.mock('fs', () => ({ // This is the top-level mock for fs
+  default: mockedFsSpies,
+  ...mockedFsSpies,
+}));
+
+const mockStdioClientTransportInstanceClose = vi.fn();
+const mockStdioClientTransportConstructor = vi.fn().mockImplementation(() => ({
+  close: mockStdioClientTransportInstanceClose,
+  // Add other methods if MCPClientSdk interacts with them directly
+  // For example, if connect is called on the transport instance itself:
+  // connect: vi.fn().mockResolvedValue(undefined), 
+}));
+
 import path from 'path';
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
@@ -27,19 +46,7 @@ let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null
 // --- Mocks for modules dynamically required by index.ts handlers ---
 // axios mock removed as it's no longer directly used by handleClientCommand's primary path
 
-// Mock fs for changelog command - ensure it's correctly structured
-vi.mock('fs', () => {
-  const mockFsFunctionsInFactory = {
-    statSync: vi.fn(),
-    readFileSync: vi.fn(),
-    // Add any other fs functions if index.ts uses them, e.g. existsSync
-    // For changelog, only statSync and readFileSync are directly used by displayChangelog
-  };
-  return {
-    default: mockFsFunctionsInFactory,
-    ...mockFsFunctionsInFactory, // Also make them available at the root for easier test access if needed
-  };
-});
+// The fs mock is now defined at the top using mockedFsSpies
 
 vi.mock('child_process', async () => {
   const actualCp = await vi.importActual('child_process') as typeof import('child_process');
@@ -62,10 +69,8 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
   StreamableHTTPClientTransport: vi.fn(), // This might become StdioClientTransport
 }));
 
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Mock for StdioClientTransport
-  StdioClientTransport: vi.fn().mockImplementation(() => ({
-    close: vi.fn(), // Ensure the transport instance has a close method
-  })),
+vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+  StdioClientTransport: mockStdioClientTransportConstructor,
 }));
 
 // Store the original configService mock structure to reset it
@@ -163,9 +168,17 @@ describe('CLI with yargs (index.ts)', () => {
   });
     
   async function runMainWithArgs(args: string[]) {
-    const indexPath = require.resolve('../../dist/index.js'); // Define indexPath first
-    process.argv = ['node', indexPath, ...args]; // Use absolute indexPath here
+    const indexPath = require.resolve('../../dist/index.js');
+    process.argv = ['node', indexPath, ...args];
     vi.resetModules();
+
+    // Re-apply fs mock after vi.resetModules() using vi.doMock
+    vi.doMock('fs', () => ({
+      default: mockedFsSpies, // Use the spies defined above
+      ...mockedFsSpies,
+    }));
+
+    const SUT_distPath = path.dirname(indexPath); // Correctly define SUT_distPath
     
     // Dynamically resolve paths as src/index.ts would
     const SUT_distPath = path.dirname(indexPath);
@@ -183,23 +196,23 @@ describe('CLI with yargs (index.ts)', () => {
     
     // Use direct relative paths as the SUT (dist/index.js) would see them.
     // These paths are relative to `dist/src/index.js`.
-    vi.doMock('../lib/config-service.js', () => {
-      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../lib/config-service.js EXECUTED.`);
+    vi.doMock(path.resolve(SUT_distPath, 'lib', 'config-service.js'), () => { // Corrected path
+      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ${path.resolve(SUT_distPath, 'lib', 'config-service.js')} EXECUTED.`);
       return {
         configService: currentMockConfigServiceInstance,
         logger: currentMockLoggerInstance,
       };
     });
-    vi.doMock('../lib/server.js', () => { // Use string literal for the path SUT imports
-      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../lib/server.js EXECUTED.`);
+    vi.doMock(path.resolve(SUT_distPath, 'lib', 'server.js'), () => { // Corrected path
+      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ${path.resolve(SUT_distPath, 'lib', 'server.js')} EXECUTED.`);
       return {
-        startServerHandler: mockStartServer, // Assuming startServerHandler is the correct export
-        ServerStartupError: ServerStartupError, // Ensure ServerStartupError is also mocked if checked by SUT
+        startServerHandler: mockStartServer,
+        ServerStartupError: ServerStartupError,
       };
     });
     
     console.log('[INDEX_TEST_DEBUG] mockStartServer type before SUT import:', typeof mockStartServer);
-    console.log(`[INDEX_TEST_DEBUG] About to import SUT: ${indexPath} after vi.doMock for server module.`);
+    console.log(`[INDEX_TEST_DEBUG] About to import SUT: ${indexPath} after vi.doMock for SUT's direct dependencies.`);
     
     const mainModule = await import(indexPath);
     // console.log('[INDEX_TEST_DEBUG] SUT imported. Module keys:', mainModule ? Object.keys(mainModule) : 'null');
@@ -273,6 +286,8 @@ describe('CLI with yargs (index.ts)', () => {
       actualStderrDataCallbackForClientTests = null; // Reset for each test
       mockSpawnedProcessExitCallbackForClientTests = null;
       mockSpawnedProcessErrorCallbackForClientTests = null;
+      mockStdioClientTransportConstructor.mockClear(); // Clear the mock constructor
+      mockStdioClientTransportInstanceClose.mockClear();
       // Initialize mockSpawnInstance (it's declared at a higher scope)
       mockSpawnInstance = {
         on: vi.fn((event, cb) => {
@@ -307,7 +322,7 @@ describe('CLI with yargs (index.ts)', () => {
     it('should spawn server and call tool via stdio for "agent_query"', { timeout: 30000 }, async () => {
       await runMainWithArgs(['agent_query', '{"query":"test_stdio"}']);
 
-      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalledWith(
+      expect(mockStdioClientTransportConstructor).toHaveBeenCalledWith(
         expect.objectContaining({
           command: process.execPath,
           args: [
@@ -335,7 +350,7 @@ describe('CLI with yargs (index.ts)', () => {
       const repoPath = '/custom/path';
       await runMainWithArgs(['agent_query', '{"query":"test_repo"}', '--repo', repoPath]);
 
-      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalledWith(
+      expect(mockStdioClientTransportConstructor).toHaveBeenCalledWith(
         expect.objectContaining({
           command: process.execPath,
           args: [
@@ -476,7 +491,7 @@ describe('CLI with yargs (index.ts)', () => {
       const repoPath = '/my/client/repo';
       await runMainWithArgs(['agent_query', '{"query":"test_repo_opt"}', '--repo', repoPath]);
       
-      expect(vi.mocked(ActualStdioClientTransport)).toHaveBeenCalledWith(
+      expect(mockStdioClientTransportConstructor).toHaveBeenCalledWith(
         expect.objectContaining({
           command: process.execPath,
           args: [
@@ -514,11 +529,11 @@ describe('CLI with yargs (index.ts)', () => {
   
   describe('Changelog Command', () => {
     it('should display changelog', async () => {
-      vi.mocked(fs.statSync).mockReturnValue({ mtimeMs: Date.now() } as fs.Stats);
-      vi.mocked(fs.readFileSync).mockReturnValue('## Test Changelog Content');
+      mockedFsSpies.statSync.mockReturnValue({ mtimeMs: Date.now() } as fs.Stats); // NEW
+      mockedFsSpies.readFileSync.mockReturnValue('## Test Changelog Content'); // NEW
       
       await runMainWithArgs(['changelog']);
-      expect(fs.readFileSync).toHaveBeenCalledWith(expect.stringContaining('CHANGELOG.md'), 'utf8');
+      expect(mockedFsSpies.readFileSync).toHaveBeenCalledWith(expect.stringContaining('CHANGELOG.md'), 'utf8'); // NEW
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('## Test Changelog Content'));
     });
   });
@@ -578,11 +593,21 @@ describe('CLI with yargs (index.ts)', () => {
       const rawToolResult = { content: [{ type: 'text', text: 'Success' }], id: '123' };
       mockMcpClientInstance.callTool.mockResolvedValue(rawToolResult);
       
-      mockConsoleLog.mockClear();
+      mockConsoleLog.mockClear(); // Clear before running the command
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
       
-      const consoleOutput = mockConsoleLog.mock.calls.map(call => call.join(' ')).join('\n'); // Join call arguments if multiple
-      expect(consoleOutput).toEqual(expect.stringContaining(JSON.stringify(rawToolResult, null, 2)));
+      // Find the specific log call that contains the JSON output
+      const jsonOutputCall = mockConsoleLog.mock.calls.find(call => {
+        if (typeof call[0] === 'string') {
+          try {
+            // A simple check: does it look like our expected JSON?
+            // This is not perfect but avoids parsing every log line if not necessary.
+            return call[0].includes(`"id": "${rawToolResult.id}"`) && call[0].includes(rawToolResult.content[0].text);
+          } catch (e) { return false; }
+        }
+        return false;
+      });
+      expect(jsonOutputCall?.[0]).toEqual(JSON.stringify(rawToolResult, null, 2));
     });
 
     it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)', { timeout: 30000 }, async () => {
