@@ -773,6 +773,7 @@ function registerTools( // Removed async
 
       const query = args.query;
       const sessionId = args.sessionId;
+      logger.debug(`[SERVER_TOOL_HANDLER] agent_query entered. Args: ${JSON.stringify(args)}, Query: "${query}", SessionId: "${sessionId}"`);
 
       if (!query || typeof query !== 'string' || query.trim() === "") {
         const errorMsg = "Invalid or missing 'query' parameter for agent_query. Please provide a non-empty query string.";
@@ -977,6 +978,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       logger.info("Received args for get_session_history", { args });
 
       const sessionIdValue = args.sessionId;
+      logger.debug(`[SERVER_TOOL_HANDLER] get_session_history entered. Requested sessionId: ${sessionIdValue}`);
 
       if (typeof sessionIdValue !== 'string' || !sessionIdValue) {
         const errorMsg = "Session ID is required and must be a non-empty string.";

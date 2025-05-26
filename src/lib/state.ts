@@ -65,6 +65,7 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
 
 // Get or create a session
 export function getOrCreateSession(sessionId?: string, repoPath?: string): SessionState {
+  logger.debug(`[STATE_DEBUG] getOrCreateSession called. Requested sessionId: ${sessionId}, repoPath: ${repoPath}, Existing session IDs: ${Array.from(sessions.keys()).join(', ')}`);
   if (sessionId && sessions.has(sessionId)) {
     const session = sessions.get(sessionId)!;
     session.lastUpdated = Date.now();
@@ -190,6 +191,7 @@ export function updateContext(
 
 // Get session history
 export function getSessionHistory(sessionId: string): SessionState {
+  logger.debug(`[STATE_DEBUG] getSessionHistory called. Requested Session ID: ${sessionId}, Found: ${sessions.has(sessionId)}`);
   if (!sessions.has(sessionId)) {
     throw new Error(`Session not found: ${sessionId}`);
   }
