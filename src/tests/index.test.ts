@@ -60,31 +60,35 @@ const mockSpawnFn = vi.fn(); // DEFINED HERE
 
 // END MOCK DEFINITIONS
 
-// NOW THE VI.MOCK CALLS
+// NOW THE VI.MOCK CALLS - APPLY GETTER PATTERN
 
 vi.mock('fs', () => ({ // Uses mockedFsSpies
-  default: mockedFsSpies,
-  ...mockedFsSpies,
+  // default: mockedFsSpies, // Getter pattern might be complex for default export
+  // ...mockedFsSpies,
+  get default() { return mockedFsSpies; },
+  get statSync() { return mockedFsSpies.statSync; },
+  get readFileSync() { return mockedFsSpies.readFileSync; },
 }));
 
 vi.mock('child_process', async () => { // Uses mockSpawnFn
   const actualCp = await vi.importActual('child_process') as typeof import('child_process');
   return {
     ...actualCp,
-    spawn: mockSpawnFn,
+    get spawn() { return mockSpawnFn; },
   };
 });
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ // Uses mockMcpClientInstance
-  Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
+  get Client() { return vi.fn().mockImplementation(() => mockMcpClientInstance); },
 }));
 
 vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
-  StreamableHTTPClientTransport: vi.fn(),
+  // StreamableHTTPClientTransport: vi.fn(), // If this mock is simple and doesn't use hoisted vars, it's fine
+  get StreamableHTTPClientTransport() { return vi.fn(); } // Or apply getter if needed
 }));
 
 vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Uses mockStdioClientTransportConstructor
-  StdioClientTransport: mockStdioClientTransportConstructor,
+  get StdioClientTransport() { return mockStdioClientTransportConstructor; },
 }));
 
 vi.mock('../../src/lib/config-service.ts', () => { // Uses currentMockConfigServiceInstance, currentMockLoggerInstance
@@ -96,9 +100,8 @@ vi.mock('../../src/lib/config-service.ts', () => { // Uses currentMockConfigServ
 
 vi.mock('../../src/lib/server.ts', () => { // Uses mockStartServer, ServerStartupError
   return {
-    startServerHandler: mockStartServer,
-    ServerStartupError: ServerStartupError,
-    // startProxyServer: mockStartProxyServer, // Only if exported and used by index.ts
+    get startServerHandler() { return mockStartServer; },
+    get ServerStartupError() { return ServerStartupError; },
   };
 });
 // --- End Mocks ---

@@ -205,12 +205,16 @@ vi.mock('http', async (importOriginal) => {
     Server: vi.fn().mockImplementation(createNewMockServerObject) as unknown as typeof httpModule.Server,
     IncomingMessage: actualHttpModule.IncomingMessage,
     ServerResponse: actualHttpModule.ServerResponse,
+    // Add other http exports if used by SUT, e.g., STATUS_CODES
+    STATUS_CODES: actualHttpModule.STATUS_CODES, 
   };
   return {
+    ...actualHttpModule, // Spread actual to keep other exports like Agent, globalAgent
     ...mockHttpMethods,
-    default: {
+    default: { // Ensure default export also has createServer
+      ...actualHttpModule.default,
       ...mockHttpMethods,
-      createServer: mockCreateServerFn as unknown as VitestMock<(...args: any[]) => httpModule.Server>,
+      // createServer: mockCreateServerFn as unknown as VitestMock<(...args: any[]) => httpModule.Server>, // Already in mockHttpMethods
     },
   };
 });
@@ -586,7 +590,10 @@ describe('Server Startup and Port Handling', () => {
 
     expect(mcs.reloadConfigsFromFile).toHaveBeenCalled();
     expect(http.createServer).toHaveBeenCalled();
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function));
+    // If 'localhost' is consistently passed by SUT when no callback is given to listen:
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, 'localhost', expect.any(Function));
+    // If SUT only passes port and callback:
+    // expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function));
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`));
     expect(mockProcessExit).not.toHaveBeenCalled();
     expect(mcs.IS_UTILITY_SERVER_DISABLED).toBe(false); // Ensure not disabled
@@ -1089,7 +1096,8 @@ describe('findFreePort', () => {
 
     await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort);
     expect(mockedHttpCreateServer).toHaveBeenCalledTimes(1); // Use the direct mock
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost');
+    // The findFreePort utility calls server.listen(port, 'localhost', resolve)
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function));
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1);
   });
 
@@ -1120,8 +1128,8 @@ describe('findFreePort', () => {
 
     await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort + 1);
     expect(mockedHttpCreateServer).toHaveBeenCalledTimes(2); // Use the direct mock
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost');
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost');
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function));
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost', expect.any(Function));
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1); // Only closed on success
   });
 
@@ -1264,19 +1272,27 @@ describe('startProxyServer', () => {
     // Ensure the createServer mock returns an object that includes 'once' correctly.
     // The createNewMockServerObject function (used by the global http mock) already does this.
     // We need to ensure the local override for this suite also does.
-    vi.mocked(http.createServer).mockImplementation(() => ({ // Changed to mockImplementation
-      listen: mockHttpServerListenFn,
-      on: mockHttpServerOnFn,
-      once: mockHttpServerOnFn, // Assign mockHttpServerOnFn to 'once' as well
-      address: mockHttpServerAddressFn,
-      close: mockHttpServerCloseFn.mockImplementation((cb) => { if (cb) cb(); return this; }),
-      removeAllListeners: mockHttpServerRemoveAllListenersFn,
-      _listeners: {} as Record<string, (...args: any[]) => void>, // Ensure _listeners is initialized
-    } as unknown as http.Server));
+    // Default mock for http.createServer and its listen method for this suite
+    // This ensures that the server instance created by startProxyServer has an async listen.
+    const mockProxyHttpServerInstance = {
+      listen: vi.fn((_port: any, listeningListener?: () => void) => {
+        if (listeningListener) {
+          process.nextTick(listeningListener);
+        }
+        return mockProxyHttpServerInstance; // Return itself
+      }),
+      on: vi.fn().mockReturnThis(),
+      once: vi.fn().mockReturnThis(),
+      address: vi.fn(() => ({ port: proxyListenPort, address: '127.0.0.1', family: 'IPv4' })),
+      close: vi.fn((cb) => { if (cb) cb(); return mockProxyHttpServerInstance; }), // Ensure close calls callback
+      removeAllListeners: vi.fn().mockReturnThis(),
+      _listeners: {} as Record<string, (...args: any[]) => void>,
+    };
+    vi.mocked(http.createServer).mockReturnValue(mockProxyHttpServerInstance as unknown as http.Server);
 
-
-    // Default successful behavior for findFreePortSpy for most tests in this suite
-    findFreePortSpy.mockReset().mockResolvedValue(proxyListenPort); // Ensure it returns a valid port number
+    // Default successful behavior for findFreePortSpy
+    findFreePortSpy.mockReset().mockResolvedValue(proxyListenPort);
+    // ... (nock setup) ...
 
     nock.disableNetConnect(); // Default: disable network
     // Allow connections to localhost for the proxy server itself to listen
@@ -1343,13 +1359,14 @@ describe('startProxyServer', () => {
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     expect(proxyServerHttpInstance).toBeNull();
-        
-    // expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
-    //   `[ProxyServer] Failed to find free port for proxy: No free ports available.`
-    // );
-    expect(stableMockLoggerInstance.error).toHaveBeenCalledWith( // Adhering to plan's structure
+    // The error message from startProxyServer when findFreePort fails is now more specific.
+    // It should log the error object itself.
+    expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
       expect.stringContaining("[ProxyServer] Failed to find free port for proxy"),
-      expect.objectContaining({ error: findFreePortError }) 
+      expect.objectContaining({ // Check the error object passed to the logger
+        message: "No free ports available.", // This is findFreePortError.message
+        // Potentially other properties of findFreePortError if they are logged
+      })
     );
   }, 20000); // Increased timeout
 

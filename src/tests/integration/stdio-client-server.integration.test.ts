@@ -81,14 +81,13 @@ const mockLLMProviderInstance = {
   generateText: vi.fn(),
   generateEmbedding: vi.fn(),
   processFeedback: vi.fn(),
-  // Uncomment this:
-  mockId: 'test-suite-mock-llm-provider-instance' // Unique ID
+  mockId: 'test-suite-mock-llm-provider-instance' // Uncommented
 };
 
 vi.mock('../../lib/llm-provider', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/llm-provider')>();
-  // Uncomment this log:
-  console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING, returning mockLLMProviderInstance ID:', mockLLMProviderInstance.mockId); // Log with ID
+  // Uncommented this log:
+  console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING, returning mockLLMProviderInstance ID:', mockLLMProviderInstance.mockId);
   return {
     ...actual,
     getLLMProvider: vi.fn(async (providerName?: string, 
@@ -97,12 +96,12 @@ vi.mock('../../lib/llm-provider', async (importOriginal) => {
                                 _configServiceOverride?: any, 
                                 _loggerOverride?: any) => {
       const effectiveProvider = providerName || process.env.LLM_PROVIDER;
-      console.log(`[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider called. Effective provider: ${effectiveProvider}, mockLLMProviderInstance.mockId: ${mockLLMProviderInstance.mockId}`);
+      // console.log(`[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider called. Effective provider: ${effectiveProvider}, mockLLMProviderInstance.mockId: ${mockLLMProviderInstance.mockId}`);
       if (effectiveProvider === 'mocked-for-test') {
-        console.log('[INTEGRATION_TEST_DEBUG] Returning mockLLMProviderInstance for "mocked-for-test"');
+        // console.log('[INTEGRATION_TEST_DEBUG] Returning mockLLMProviderInstance for "mocked-for-test"');
         return mockLLMProviderInstance;
       }
-      console.warn('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider falling back to actual for provider:', effectiveProvider);
+      // console.warn('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider falling back to actual for provider:', effectiveProvider);
       // Ensure actual.getLLMProvider is called in a way that doesn't cause infinite recursion.
       // This might require careful handling if the actual implementation also uses process.env.LLM_PROVIDER.
       // For tests, we primarily care about the 'mocked-for-test' path.
