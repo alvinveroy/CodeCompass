@@ -630,34 +630,39 @@ This guard seems correct for preventing runtime errors, but TypeScript might sti
 **Git Commit (Before Attempt 38 changes):** (User to fill with git commit SHA after applying Attempt 37 changes)
 **Git Commit (After Attempt 38 changes):** (User to fill with git commit SHA after applying these changes)
 
-### Issues Addressed (Intended from Attempt 37/38 Plan):
-1.  **`src/tests/server.test.ts` TypeScript Error (TS2352 - logger call with object):**
-    *   Refined the type assertion for logger calls to correctly handle cases where the first argument is an object (e.g., `logger.info({ message: '...', details: '...' })`).
-2.  **`src/tests/integration/stdio-client-server.integration.test.ts` DeepSeek Mock:**
-    *   Re-applied the mock for `testDeepSeekConnection` from `../../lib/deepseek.js` to return `true` to prevent actual API calls during tests.
-3.  **`src/lib/server.ts` "Tool not found" Debugging:**
-    *   Added `console.log` statements in `src/lib/server.ts` within the `handleStdioConnection`'s `client.on('message', ...)` handler to log received messages and registered tool handlers, to help diagnose "Tool not found" errors.
+### Changes Applied in Attempt 39 (Partial Application):
+*   **`src/index.ts`**: Some diagnostic logging added, but key logs for tracing imported types of `startServerHandler` and `StdioClientTransport` were missed.
+*   **`src/lib/server.ts`**: Requested diagnostic logging for session queries in `agent_query` and `get_session_history` handlers was not applied.
+*   **`src/tests/index.test.ts`**:
+    *   The diagnostic log within the `vi.doMock` factory for `../lib/server.js` was added but is currently commented out.
+    *   The assertion for the `--json` output test was not modified as requested to be less strict.
+*   **`src/tests/server.test.ts`**: Changes to update `mockHttpServerListenFn` implementation and `listen` mock assertions were correctly applied.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+    *   `vi.mock('../../lib/deepseek.js', ...)` is correctly placed at the top.
+    *   The `qdrant` mock correctly includes `batchUpsertVectors: vi.fn()`.
+    *   The `beforeEach` logic for LLM mocking (`mockLLMProviderInstance.generateText = vi.fn()...`) was correctly applied.
+    *   However, the `mockId` property on `mockLLMProviderInstance` and its associated `console.log` in the `llm-provider` mock factory are currently commented out.
 
-### Result (Based on User's `npm run build` Output from 2025-05-26 ~21:54 UTC):
+### Result (Based on User's `npm run build` Output from 2025-05-26 ~21:54 UTC - reflecting state *before* Attempt 39 changes were fully applied):
 *   **TypeScript Compilation Errors: ALL RESOLVED!**
-    *   The `tsc` command completed successfully. This is a significant milestone.
-*   **Total Test Failures: 30** (No change in total count from previous, but some tests shifted status)
-    *   **`src/tests/index.test.ts` (19 failures - previously 20, 1 new pass):**
-        *   `mockStartServer` not called / `StdioClientTransport` constructor not called: 12 tests still fail due to these core mocking issues.
+    *   The `tsc` command completed successfully.
+*   **Total Test Failures: 30**
+    *   **`src/tests/index.test.ts` (19 failures):**
+        *   `mockStartServer` not called / `StdioClientTransport` constructor not called: 12 tests still fail.
         *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests fail.
-        *   `--json` output test: Still fails due to capturing debug logs instead of the expected JSON. (1 failure)
+        *   `--json` output test: Fails due to capturing debug logs. (1 failure)
         *   `fs.readFileSync` for `changelog` command: Mock not called. (1 failure)
-        *   **IMPROVEMENT**: The `--port` option test (`--port option should set HTTP_PORT environment variable, and configService should see it`) now **PASSES**.
-    *   **`src/tests/server.test.ts` (7 failures - no change):**
+        *   **IMPROVEMENT (from Attempt 38)**: The `--port` option test now **PASSES**.
+    *   **`src/tests/server.test.ts` (7 failures):**
         *   3 tests fail due to `mockHttpServerListenFn` assertions (extra `undefined` arguments).
         *   4 tests in the `startProxyServer` suite are still timing out.
-    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures - previously 4, 1 new pass, 1 new fail/change in reason):**
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
         *   `should call trigger_repository_update and verify indexing starts`: **FAIL**. `qdrantModule.batchUpsertVectors` spy still not called.
         *   `should perform some actions and then retrieve session history with get_session_history`: **FAIL**. Retrieved session history is missing "Query 2".
         *   `should call generate_suggestion and get a mocked LLM response`: **FAIL**. Test receives actual LLM output instead of the mock.
         *   `should call get_repository_context and get a mocked LLM summary`: **FAIL**. Test receives actual LLM output instead of the mock.
-        *   **IMPROVEMENT**: `should call switch_suggestion_model and get a success response` now **PASSES**.
-    *   **DeepSeek API Connection Errors in Logs:** The `getaddrinfo ENOTFOUND api.deepseek.com` errors are still present in the `stderr` output during integration tests, despite the `switch_suggestion_model` test passing and the re-application of the `testDeepSeekConnection` mock. This suggests other unmocked calls or that the mock isn't universally effective.
+        *   **IMPROVEMENT (from Attempt 38)**: `should call switch_suggestion_model and get a success response` now **PASSES**.
+    *   **DeepSeek API Connection Errors in Logs:** The `getaddrinfo ENOTFOUND api.deepseek.com` errors are still present in the `stderr` output during integration tests.
 
 ### Analysis/Retrospection for Attempt 38:
 *   **TypeScript Success:** All type errors are resolved! This allows full focus on runtime test failures.
