@@ -183,7 +183,7 @@ vi.mock('http', async (importOriginal) => {
   });
 
   const mockHttpMethods = {
-    createServer: mockCreateServerFn as VitestMock<(...args: any[]) => httpModule.Server>,
+    createServer: mockCreateServerFn as unknown as VitestMock<(...args: any[]) => httpModule.Server>,
     Server: vi.fn().mockImplementation(createNewMockServerObject) as unknown as typeof httpModule.Server,
     IncomingMessage: actualHttpModule.IncomingMessage,
     ServerResponse: actualHttpModule.ServerResponse,
@@ -192,7 +192,7 @@ vi.mock('http', async (importOriginal) => {
     ...mockHttpMethods,
     default: {
       ...mockHttpMethods,
-      createServer: mockCreateServerFn as VitestMock<(...args: any[]) => httpModule.Server>,
+      createServer: mockCreateServerFn as unknown as VitestMock<(...args: any[]) => httpModule.Server>,
     },
   };
 });
@@ -273,8 +273,8 @@ vi.mock('fs/promises', async (importOriginal) => {
 
 // Import serverLibModule AFTER all top-level mocks that it might depend on indirectly.
 // This also resolves TS2440.
-import * as actualServerLibModule from '../lib/server.js'; // Use .js extension
-let serverLibModule: typeof actualServerLibModule; // This will be assigned in beforeEach for suites needing resetModules
+// import * as actualServerLibModule from '../lib/server.js'; // Use .js extension // Removed duplicate
+// let serverLibModule: typeof actualServerLibModule; // This will be assigned in beforeEach for suites needing resetModules // Removed duplicate
 
 
 describe('Server Tool Response Formatting', () => {
@@ -1074,7 +1074,7 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: VitestMock<(startPort: number) => Promise<number>>;
+  let findFreePortSpy: MockInstance<(startPort: number) => Promise<number>>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {

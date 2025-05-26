@@ -97,7 +97,7 @@ const ServerStartupError = class ServerStartupError extends Error {
 // Vitest typically runs with the project root as the CWD.
 const MOCKED_SERVER_MODULE_PATH = './dist/lib/server.js';
 
-vi.mock(MOCKED_SERVER_MODULE_PATH, () => ({
+vi.mock('./dist/lib/server.js', () => ({
   startServer: mockStartServer,
   startProxyServer: mockStartProxyServer,
   ServerStartupError: ServerStartupError,
