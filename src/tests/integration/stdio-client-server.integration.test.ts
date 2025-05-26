@@ -81,10 +81,24 @@ vi.mock('../../lib/llm-provider', async (importOriginal) => {
   console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING, returning mockLLMProviderInstance ID:', mockLLMProviderInstance.mockId); // Log with ID
   return {
     ...actual,
-    getLLMProvider: vi.fn(() => {
-      // This log is crucial (can be kept or removed if the factory log is preferred)
-      // console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider CALLED in factory. Returning shared mock instance.');
-      return mockLLMProviderInstance; // Return the shared instance
+    getLLMProvider: vi.fn(async (providerName?: string, 
+                                _suggestionModel?: string, 
+                                _embeddingModel?: string, 
+                                _configServiceOverride?: any, 
+                                _loggerOverride?: any) => {
+      const effectiveProvider = providerName || process.env.LLM_PROVIDER;
+      console.log(`[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider called. Effective provider: ${effectiveProvider}, mockLLMProviderInstance.mockId: ${mockLLMProviderInstance.mockId}`);
+      if (effectiveProvider === 'mocked-for-test') {
+        console.log('[INTEGRATION_TEST_DEBUG] Returning mockLLMProviderInstance for "mocked-for-test"');
+        return mockLLMProviderInstance;
+      }
+      console.warn('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider falling back to actual for provider:', effectiveProvider);
+      // Ensure actual.getLLMProvider is called in a way that doesn't cause infinite recursion.
+      // This might require careful handling if the actual implementation also uses process.env.LLM_PROVIDER.
+      // For tests, we primarily care about the 'mocked-for-test' path.
+      // If the actual getLLMProvider is complex, this fallback might be tricky.
+      // A safer fallback might be to throw an error if an unexpected provider is requested in test mode.
+      return (await vi.importActual('../../lib/llm-provider') as any).getLLMProvider(providerName, _suggestionModel, _embeddingModel, _configServiceOverride, _loggerOverride);
     }),
     switchSuggestionModel: vi.fn().mockResolvedValue(true), // Keep other mocked exports
     clearProviderCache: vi.fn(),
@@ -160,11 +174,33 @@ describe('Stdio Client-Server Integration Tests', () => {
     
     // Re-initialize/reset the mock functions on the SHARED instance
     // Re-assign methods for robust mocking after vi.clearAllMocks()
-    mockLLMProviderInstance.checkConnection = vi.fn();
-    mockLLMProviderInstance.generateText = vi.fn();
-    mockLLMProviderInstance.generateEmbedding = vi.fn();
-    mockLLMProviderInstance.processFeedback = vi.fn();
+    mockLLMProviderInstance.checkConnection = vi.fn(); // Keep this line
+    mockLLMProviderInstance.generateText = vi.fn(); // Keep this line
+    mockLLMProviderInstance.generateEmbedding = vi.fn(); // Keep this line
+    mockLLMProviderInstance.processFeedback = vi.fn(); // Keep this line
       
+    // Set LLM_PROVIDER to 'mocked-for-test' in the environment for the spawned server
+    currentTestSpawnEnv.LLM_PROVIDER = 'mocked-for-test';
+    console.log('[INTEGRATION_TEST_DEBUG] beforeEach: Set currentTestSpawnEnv.LLM_PROVIDER to "mocked-for-test"');
+
+    // Re-initialize methods on the shared mockLLMProviderInstance
+    mockLLMProviderInstance.checkConnection.mockResolvedValue(true);
+    // Ensure generateText is a fresh mock function for each test to allow mockResolvedValueOnce
+    mockLLMProviderInstance.generateText = vi.fn().mockResolvedValue('Default Mocked LLM Response from beforeEach reset');
+    mockLLMProviderInstance.generateEmbedding.mockResolvedValue([0.1, 0.2, 0.3, 0.4]);
+    mockLLMProviderInstance.processFeedback.mockResolvedValue(undefined);
+    
+    // Reset qdrant mocks
+    const qdrantModule = await import('../../lib/qdrant');
+    vi.mocked(qdrantModule.batchUpsertVectors).mockReset();
+
+    // Reset DeepSeek mocks
+    const deepseekModule = await import('../../lib/deepseek.js');
+    vi.mocked(deepseekModule.testDeepSeekConnection).mockResolvedValue(true);
+    vi.mocked(deepseekModule.checkDeepSeekApiKey).mockReturnValue(true);
+    vi.mocked(deepseekModule.generateWithDeepSeek).mockResolvedValue("Mocked DeepSeek from beforeEach reset");
+    vi.mocked(deepseekModule.generateEmbeddingWithDeepSeek).mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5]);
+    
     // Ensure configService mock is reset or its relevant properties are set for the test
     // This might involve dynamically importing and mocking configService if its state needs to be test-specific
     // For now, we assume the top-level vi.mock for configService in unit tests is sufficient or
