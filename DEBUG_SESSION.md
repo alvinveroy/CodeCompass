@@ -444,3 +444,65 @@ This attempt focused on resolving any remaining TypeScript compilation errors ac
     *   **LLM Mocking**: In `beforeEach`, after `vi.clearAllMocks()`, explicitly re-assign methods of the *existing* `mockLLMProviderInstance` object (e.g., `mockLLMProviderInstance.generateText = vi.fn().mockResolvedValue(...)`). Then use `mockLLMProviderInstance.generateText.mockResolvedValueOnce(...)` in specific tests.
     *   **`get_session_history`**: Add logging within `get_session_history` tool handler just before formatting response to dump `session.queries`.
     *   **`trigger_repository_update`**: Defer.
+
+---
+
+## Attempt 34
+
+**Git Commit (Before Attempt 34 changes):** (User to fill with git commit SHA after applying Attempt 33 changes)
+
+### Previous State (End of Attempt 33 / Start of Attempt 34):
+*   User confirmed applying changes from the plan for Attempt 33.
+*   The build output analyzed in Attempt 33 (which was from *before* the user applied Attempt 33's changes) showed that the critical `SyntaxError: Unexpected token '{'` in `dist/lib/server.js` (line 393, col 161, originating from `src/lib/server.ts`) **still persisted**. This was the primary blocker, indicating a persistent `tsc` transpilation issue.
+*   The problematic `logger.debug` call in `src/lib/server.ts` (around line 390, specifically `tempLogger.debug(\`[Spawned Server ENV DEBUG]...\`);`) was identified as the most likely cause of this `SyntaxError`.
+*   Some TypeScript errors were fixed by Attempt 33's changes:
+    *   `TS2345` in `src/tests/integration/stdio-client-server.integration.test.ts`.
+    *   `TS2707` for `findFreePortSpy` in `src/tests/server.test.ts`.
+*   Other TypeScript errors in `src/tests/server.test.ts` remained:
+    *   `TS2552`: Cannot find name 'mockHttpServer'.
+    *   `TS2677`: A 'get' accessor must not have any parameters.
+    *   `TS2339`: Property '...' does not exist on type 'never'.
+    *   `TS2493`: Tuple type '...' has no element at index '1'.
+*   The plan for Attempt 34 (this current attempt) was to:
+    1.  Further simplify the problematic `logger.debug` call in `src/lib/server.ts`.
+    2.  Recommend cleaning the `dist` directory and rebuilding.
+    3.  Refine the `http.createServer` mock in `src/tests/server.test.ts` to address the `mockHttpServer is not defined` error.
+    4.  Refine logger type guards in `src/tests/server.test.ts` to fix remaining TypeScript errors.
+
+### Current Action (Attempt 34 - User's Request):
+*   The user has now added the following files to the chat:
+    *   `src/tests/config.test.ts`
+    *   `tsconfig.json`
+    *   `src/tests/integration/stdio-client-server.integration.test.ts`
+    *   `src/tests/server.test.ts`
+    *   `src/lib/server.ts`
+    *   `src/tests/server-tools.test.ts`
+    *   `src/lib/qdrant.ts`
+    *   `src/lib/state.ts`
+*   The user has requested to prioritize updating this `DEBUG_SESSION.md` file before any code changes are proposed.
+
+### Analysis of Provided Files (Preliminary):
+*   Upon reviewing the provided `src/lib/server.ts`, the complex `tempLogger.debug(\`[Spawned Server ENV DEBUG]...\`);` call (previously identified around line 390 and suspected of causing the `SyntaxError`) is **now commented out**.
+
+### Plan for Next Steps (After this DEBUG_SESSION.md update):
+1.  **Verify Transpilation (Crucial First Step):**
+    *   Since the primary suspect for the `SyntaxError` in `src/lib/server.ts` is now commented out, the immediate next step will be to ask the user to:
+        *   Clean the `dist` directory (e.g., `npm run clean` or `rm -rf dist`).
+        *   Run `npm run build` again.
+        *   Provide the **new, complete build output**.
+2.  **Analyze New Build Output:**
+    *   **If `SyntaxError` in `dist/lib/server.js` is GONE:** Proceed to fix remaining TypeScript errors and test failures based on the new build output.
+    *   **If `SyntaxError` in `dist/lib/server.js` STILL PERSISTS:** This would indicate that there's *another* JavaScript construct in `src/lib/server.ts` (or a related file, if `tsc` is bundling/transforming in an unexpected way) that is causing transpilation issues with the `ES2020` target. This would necessitate a very careful, line-by-line review of `src/lib/server.ts` for any other complex template literals, spread syntaxes in specific contexts, or other modern syntax that `tsc` might be mishandling for the ES2020 target. The `tsconfig.json` might also need closer inspection for subtle issues.
+3.  **Address Remaining TypeScript Errors (if transpilation succeeds):**
+    *   Focus on `src/tests/server.test.ts` to fix:
+        *   `TS2552`: Cannot find name 'mockHttpServer'. (Likely a scoping issue with the `http.createServer` mock).
+        *   `TS2677`: A 'get' accessor must not have any parameters.
+        *   `TS2339`: Property '...' does not exist on type 'never'.
+        *   `TS2493`: Tuple type '...' has no element at index '1'.
+4.  **Address Test Failures (if transpilation and TS errors are resolved):**
+    *   **`src/tests/server.test.ts`**:
+        *   Fix the `mockHttpServer is not defined` runtime error in the `startProxyServer` suite. This is related to `TS2552` and involves ensuring the `http.createServer` mock (and the instance it returns, `mockHttpServer`) is correctly defined, scoped, and accessible within the tests.
+        *   Address the 4 timeouts in the `startProxyServer` suite, likely related to async operations in mocks not resolving/rejecting correctly (e.g., `findFreePort` or `http.Server.listen` mocks).
+    *   **`src/tests/index.test.ts` (20 failures)**: Re-evaluate and fix issues related to `mockStartServer` not being called, `--port` option assertions, and `--json` output capturing debug logs.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures)**: Re-evaluate and fix issues related to `trigger_repository_update` (spy not called), `get_session_history` (missing second query), and LLM mocking for `generate_suggestion` / `get_repository_context`.
+    *   Address any new failures revealed by the clean build.
