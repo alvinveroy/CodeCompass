@@ -1189,6 +1189,7 @@ describe('startProxyServer', () => {
     nock(`http://localhost:${targetExistingServerPort}`) // Nock the TARGET server
       .get('/api/ping')
       .reply(200, { service: "CodeCompassTarget", status: "ok_target_ping", version: "1.0.0" });
+      findFreePortSpy.mockResolvedValue(proxyListenPort); // Explicitly mock for this test
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     
@@ -1214,6 +1215,7 @@ describe('startProxyServer', () => {
     nock(`http://localhost:${targetExistingServerPort}`) // Nock the TARGET server
       .post('/mcp')
       .replyWithError({ message: 'Connection refused by target', code: 'ECONNREFUSED' });
+      findFreePortSpy.mockResolvedValue(proxyListenPort); // Explicitly mock for this test
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     expect(proxyServerHttpInstance).toBeDefined();
@@ -1246,6 +1248,7 @@ describe('startProxyServer', () => {
     nock(`http://localhost:${targetExistingServerPort}`) // Nock the TARGET server
       .post('/mcp')
       .reply(500, errorBody, { 'Content-Type': 'application/json' });
+    findFreePortSpy.mockResolvedValue(proxyListenPort); // Explicitly mock for this test
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     expect(proxyServerHttpInstance).toBeDefined();

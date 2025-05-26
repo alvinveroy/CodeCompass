@@ -292,7 +292,7 @@ describe('CLI with yargs (index.ts)', () => {
             HTTP_PORT: '0', // Client-spawned servers use dynamic utility port
           }),
         })
-      );
+      });
       // We expect the MCP client's callTool to be invoked.
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_stdio' } });
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');

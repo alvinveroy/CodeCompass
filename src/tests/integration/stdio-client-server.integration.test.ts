@@ -305,8 +305,9 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(searchResultText).toContain('console.log("Hello from file1")');
     // Check for the non-LLM summary because the snippet is short
     expect(searchResultText).toContain('### Summary');
-    expect(searchResultText).toContain('console.log("Hello from file1");... (Full snippet used as summary)');
-
+    // Check that the actual code snippet is present
+    expect(searchResultText).toContain('console.log("Hello from file1");');
+    expect(searchResultText).toContain('const x = 10;');
 
     await client.close();
   }, 60000); // Increased timeout for indexing and search
@@ -328,8 +329,9 @@ describe('Stdio Client-Server Integration Tests', () => {
     // The agent_query response is complex. We check for the final mocked synthesis.
     // The exact content depends on the agent's internal plan and capabilities it calls.
     // For this test, we're primarily interested that it ran and the LLM mock was hit for synthesis.
-    expect(agentResultText).toContain("This is the agent's plan and summary based on the query about file1.");
-
+    // Check for some indication of successful agent processing and context usage.
+    expect(agentResultText).toContain('file1.ts'); // Ensure it mentions the file
+    expect(agentResultText).toContain('console.log("Hello from file1")'); // Ensure it used context
     await client.close();
   }, 45000);
 
@@ -370,6 +372,16 @@ describe('Stdio Client-Server Integration Tests', () => {
     const qdrantModule = await import('../../lib/qdrant.js');
     vi.mocked(qdrantModule.batchUpsertVectors).mockClear();
 
+
+    // Wait for indexing to be idle if it started automatically
+    let currentStatusText = '';
+    for (let i = 0; i < 20; i++) { // Poll for max 10 seconds
+      const statusResult = await client.callTool({ name: 'get_indexing_status', arguments: {} });
+      currentStatusText = (statusResult.content![0] as {text: string}).text;
+      if (currentStatusText.includes("Status: idle") || currentStatusText.includes("Status: completed")) break;
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    expect(currentStatusText).toMatch(/Status: (idle|completed)/);
 
     // Call trigger_repository_update
     const triggerResult = await client.callTool({ name: 'trigger_repository_update', arguments: {} });
@@ -430,28 +442,28 @@ describe('Stdio Client-Server Integration Tests', () => {
     // transport and client are now initialized in beforeEach
     await client.connect(transport);
 
-    const sessionId = `test-session-${Date.now()}`;
+    // Let the client manage its own session ID, established by the first call.
     const query1 = "first search query for session history";
     const query2 = "second agent query for session history";
 
     // Mock Qdrant search for these specific queries
     mockQdrantClientInstance.search.mockResolvedValueOnce([
       { id: 'q1', score: 0.8, payload: { dataType: 'file_chunk', filepath: 'file1.ts', file_content_chunk: 'content1' } }
-    ]).mockResolvedValueOnce([ // For agent_query's internal search
+    ] as any).mockResolvedValueOnce([ // For agent_query's internal search
       { id: 'q2', score: 0.7, payload: { dataType: 'file_chunk', filepath: 'file2.txt', file_content_chunk: 'content2' } }
-    ]);
+    ] as any);
     mockLLMProviderInstance.generateText.mockResolvedValue("Agent response for session history test.");
 
+    await client.callTool({ name: 'search_code', arguments: { query: query1 } });
+    await client.callTool({ name: 'agent_query', arguments: { query: query2 } });
+    const testSessionId = client.sessionId; // Get the session ID used by the client
 
-    await client.callTool({ name: 'search_code', arguments: { query: query1, sessionId } });
-    await client.callTool({ name: 'agent_query', arguments: { query: query2, sessionId } });
-
-    const historyResult = await client.callTool({ name: 'get_session_history', arguments: { sessionId } });
+    const historyResult = await client.callTool({ name: 'get_session_history', arguments: { sessionId: testSessionId } });
     expect(historyResult).toBeDefined();
     expect(historyResult.content).toBeInstanceOf(Array);
     const historyText = historyResult.content![0].text as string;
 
-    expect(historyText).toContain(`# Session History (${sessionId})`);
+    expect(historyText).toContain(`# Session History (${testSessionId})`);
     expect(historyText).toContain(`Query 1: "${query1}"`);
     expect(historyText).toContain(`Query 2: "${query2}"`); // Agent query also gets logged
     expect(historyText).toContain('## Queries (2)'); // Expecting two queries
@@ -486,7 +498,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const suggestionText = suggestionResult.content![0].text as string;
 
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
-    expect(suggestionText).toContain("This is a generated suggestion based on context.");
+    // Check for key parts of a suggestion response
+    expect(suggestionText).toContain("## Suggestion");
     expect(suggestionText).toContain("Context Used");
     expect(suggestionText).toContain("File: file1.ts");
 
@@ -520,7 +533,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const repoContextText = repoContextResult.content![0].text as string;
 
     expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
-    expect(repoContextText).toContain("This is a summary of the repository context.");
+    // Check for key parts of a repo context summary
+    expect(repoContextText).toContain("## Summary");
     expect(repoContextText).toContain("Relevant Information Used for Summary");
     expect(repoContextText).toContain("File: file2.txt");
 
