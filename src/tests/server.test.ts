@@ -1282,6 +1282,23 @@ describe('startProxyServer', () => {
     // Allow connections to localhost for the proxy server itself to listen
     // and for axios in the test to connect to the proxy.
     nock.enableNetConnect((host) => host.startsWith('127.0.0.1') || host.startsWith('localhost'));
+
+    // Ensure http.createServer mock returns a server with an async listen for this suite
+    const mockReturnedHttpServer = http.createServer(); // This will use the mock from global setup
+    // Override listen for instances created in this suite's context if needed,
+    // or ensure the global mockHttpServerListenFn (used by createNewMockServerObject) is async.
+    // The global mockHttpServerListenFn is already designed to be async with process.nextTick.
+    // This specific override ensures any http.Server instance created *within this suite's tests*
+    // (if http.createServer is called directly in test logic or by SUT functions called here)
+    // will have this specific async listen behavior.
+    if (mockReturnedHttpServer && typeof mockReturnedHttpServer.listen === 'function') {
+        vi.mocked(mockReturnedHttpServer.listen).mockImplementation((_port: any, listeningListener?: () => void) => {
+            if (listeningListener) {
+                process.nextTick(listeningListener);
+            }
+            return mockReturnedHttpServer; // Return the instance
+        });
+    }
   });
 
   afterEach(async () => {

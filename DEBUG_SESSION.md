@@ -787,32 +787,47 @@ This guard seems correct for preventing runtime errors, but TypeScript might sti
     *   Relocated the assignment `currentTestSpawnEnv.LLM_PROVIDER = 'ollama';` to occur after the `currentTestSpawnEnv` object is fully initialized.
     *   Changed dynamic imports `await import('../../lib/qdrant')` to `await import('../../lib/qdrant.js')` and `await import('../../lib/deepseek')` to `await import('../../lib/deepseek.js')`.
 
-### Result (Based on User's Next `npm run build` Output):
-*   (User to fill after applying changes and running the build)
-    *   Vitest Transform Errors:
-    *   TypeScript Compilation Errors:
-    *   Test Failures:
+### Result (Based on User's `npm run build` Output from ~02:05 UTC 2025-05-27, after Attempt 42 changes):
+
+*   **Vitest Transform Errors (Build Blockers for these test files):**
+    *   **`src/tests/index.test.ts` (REGRESSION/PERSISTENT):**
+        *   `Error: [vitest] There was an error when mocking a module... Caused by: ReferenceError: Cannot access 'mockStdioClientTransportConstructor' before initialization`. The hoisting fix from Attempt 42 was ineffective or regressed.
+*   **TypeScript Compilation Errors (`tsc` after Vitest run):**
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (1 error - REGRESSION):**
+        *   `TS2835: Relative import paths need explicit file extensions... Did you mean '../../lib/qdrant.js'?` for `await import('../../lib/qdrant')`. The fix to add `.js` seems to have been lost or not applied correctly.
+*   **Test Failures (Vitest Runtime):**
+    *   **`src/tests/index.test.ts`**: Tests did not run due to the transform error.
+    *   **`src/tests/server.test.ts` (7 failures - no change from plan):**
+        *   3 tests fail due to `mockHttpServerListenFn` assertions (e.g., `expected "spy" to be called with arguments: [ 3001, Any<Function> ]` but received `[ 3001, [Function anonymous], undefined, undefined ]`).
+        *   4 tests in the `startProxyServer` suite are still timing out (20000ms).
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (9 failures - NEW ERRORS):**
+        *   All 9 tests fail with `TypeError: vi.mocked(...).mockResolvedValue is not a function`. This error occurs when trying to mock methods of the dynamically imported `deepseekModule` (e.g., `vi.mocked(deepseekModule.testDeepSeekConnection).mockResolvedValue(true)`).
+    *   **DeepSeek API Connection Errors in Logs:** Still present in `stderr` during integration tests.
 
 ### Analysis/Retrospection for Attempt 42:
-*   This attempt focuses on resolving critical build-blocking errors identified in the previous build.
-*   The hoisting issue in `src/tests/index.test.ts` is a common pitfall with Vitest mocks.
-*   The errors in `src/tests/integration/stdio-client-server.integration.test.ts` were due to incorrect async usage, variable initialization order, and module import paths.
-*   If these changes are successful, the build should pass, allowing us to address the runtime test failures.
+*   The hoisting fix in `src/tests/index.test.ts` for `mockStdioClientTransportConstructor` and other mock variables was not successful or has regressed. This needs careful re-application, ensuring the mock definitions are truly at the top, before any `vi.mock` that uses them.
+*   The TypeScript error `TS2835` for the `qdrant` import in `stdio-client-server.integration.test.ts` indicates the `.js` extension fix was lost or incorrectly applied.
+*   The new `TypeError: vi.mocked(...).mockResolvedValue is not a function` in `stdio-client-server.integration.test.ts` is critical. It means that the functions on the `deepseekModule` (obtained via dynamic `import`) are not `vi.fn()` instances. The top-level `vi.mock('../../lib/deepseek.js', ...)` needs to ensure its factory returns an object where each exported function is explicitly a `vi.fn()`.
+*   The `server.test.ts` `listen` mock assertion failures and `startProxyServer` timeouts persist and require focused attention once build-blocking errors are resolved.
 
-### Next Step / Plan for Next Attempt (Attempt 43):
-1.  **Analyze Build Output:** Verify that all Vitest transform errors and TypeScript compilation errors are resolved.
-2.  **Address `src/tests/server.test.ts` Failures (7 failures):**
-    *   **`listen` mock assertions (3 tests):** Adjust assertions for `mockHttpServerListenFn` to expect only the port and callback arguments.
+### Next Step / Plan for Next Attempt (Attempt 44):
+
+1.  **Fix `src/tests/index.test.ts` Vitest Transform Error (Hoisting - Highest Priority):**
+    *   Re-verify and ensure that all mock variables (`mockStdioClientTransportConstructor`, `mockMcpClientInstance`, `mockStartServerHandler`, `mockConfigServiceInstance`, `mockLoggerInstance`, etc.) are defined *before* any `vi.mock` statements that use them within their factory functions. Pay extremely close attention to the order.
+2.  **Fix `src/tests/integration/stdio-client-server.integration.test.ts` TypeScript Error (TS2835):**
+    *   Change `const qdrantModule = await import('../../lib/qdrant');` back to `const qdrantModule = await import('../../lib/qdrant.js');`.
+3.  **Fix `src/tests/integration/stdio-client-server.integration.test.ts` Test Failures (`vi.mocked(...).mockResolvedValue is not a function`):**
+    *   Modify the top-level `vi.mock('../../lib/deepseek.js', ...)`:
+        *   The factory function must return an object where each function from `deepseek.js` (e.g., `testDeepSeekConnection`, `checkDeepSeekApiKey`, `generateWithDeepSeek`, `generateEmbeddingWithDeepSeek`) is explicitly a `vi.fn()`.
+        *   Example: `vi.mock('../../lib/deepseek.js', () => ({ testDeepSeekConnection: vi.fn(), checkDeepSeekApiKey: vi.fn(), generateWithDeepSeek: vi.fn(), generateEmbeddingWithDeepSeek: vi.fn() /*, ... other functions */ }));`
+    *   Then, in `beforeEach`, after `const deepseekModule = await import('../../lib/deepseek.js');`, the calls like `vi.mocked(deepseekModule.testDeepSeekConnection).mockResolvedValue(true);` should work.
+4.  **Address `src/tests/server.test.ts` Failures (7 - after build errors are fixed):**
+    *   **`listen` mock assertions (3 tests):** The assertion `expect(mockHttpServerListenFn).toHaveBeenCalledWith(PORT, expect.any(Function))` is correct. The issue is that the mock is being called with extra `undefined` arguments. Review the `mockHttpServerListenFn` implementation within `createNewMockServerObject` (or its equivalent). For now, the assertion is fine; the unexpected arguments are a separate observation. No change to the assertion itself, but acknowledge the discrepancy.
     *   **`startProxyServer` Timeouts (4 tests):**
-        *   Ensure `mockHttpServerListenFn` in the `startProxyServer` suite's `beforeEach` correctly calls its callback asynchronously (e.g., using `process.nextTick`).
-        *   Verify `findFreePortSpy` is correctly mocked to resolve or reject as needed for each test case (e.g., `mockRejectedValueOnce` for port conflict simulations).
-3.  **Address `src/tests/index.test.ts` Runtime Failures (Previously 19):**
-    *   If `mockStartServer` and `StdioClientTransport` mocks are still ineffective, re-evaluate the `vi.doMock` strategy for `dist` files within `runMainWithArgs`.
-    *   Address failures related to yargs `.fail()` handler and `--json` output.
-4.  **Address `src/tests/integration/stdio-client-server.integration.test.ts` Runtime Failures (Previously 4):**
-    *   **LLM Mocking:** Re-verify the shared `mockLLMProviderInstance` strategy. Ensure the spawned server uses the test's mock instance.
-    *   **`get_session_history`:** Continue tracing session state discrepancies.
-    *   **`trigger_repository_update` (`qdrant` spy):** Ensure the `qdrant` mock (especially `batchUpsertVectors`) is correctly applied and called.
-    *   **DeepSeek Connection Errors:** Confirm `testDeepSeekConnection` is effectively mocked to prevent actual API calls.
+        *   In the `beforeEach` for the `startProxyServer` suite, re-confirm `mockHttpServerListenFn.mockImplementation((_portOrPath: any, listeningListener?: () => void) => { if (listeningListener) { process.nextTick(listeningListener); } return mockHttpServer; });`.
+        *   Ensure `findFreePortSpy.mockReset().mockResolvedValue(proxyListenPort);` is correctly applied for success cases and `mockRejectedValueOnce` for failure cases.
+5.  **Deferred (After Build/Runtime Blockers Fixed):**
+    *   Remaining runtime failures in `src/tests/index.test.ts`.
+    *   Remaining runtime logic failures in `src/tests/integration/stdio-client-server.integration.test.ts` (LLM mocking, session history, qdrant spy).
 
 ---

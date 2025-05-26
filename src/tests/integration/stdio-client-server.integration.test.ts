@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 // actualConfigServiceForMock will be initialized in beforeAll
-let actualConfigServiceForMock: typeof import('../../lib/config-service').configService;
+let actualConfigServiceForMock: typeof import('../../lib/config-service').configService; // Use .js if it's a JS file
 
 // CustomStdioClientTransportOptions interface removed as it's no longer used.
 
@@ -64,6 +64,16 @@ vi.mock('../../lib/ollama', () => ({
     return Array(dimension).fill(0.1).map((_, i) => (i + 1) * 0.001 * text.length); // Simple deterministic mock
   }),
   generateText: vi.fn().mockResolvedValue("Mocked Ollama text response for integration"), // Added for Attempt 14
+  // Add any other functions exported by ollama.js that might be relevant
+}));
+
+// Mock for deepseek.js - ensure all exported functions are vi.fn()
+vi.mock('../../lib/deepseek.js', () => ({
+  testDeepSeekConnection: vi.fn(),
+  checkDeepSeekApiKey: vi.fn(),
+  generateWithDeepSeek: vi.fn(),
+  generateEmbeddingWithDeepSeek: vi.fn(),
+  // Add any other functions exported by deepseek.js that might be relevant
 }));
 
 const mockLLMProviderInstance = {
@@ -191,11 +201,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockLLMProviderInstance.processFeedback.mockResolvedValue(undefined);
     
     // Reset qdrant mocks
-    const qdrantModule = await import('../../lib/qdrant');
+    const qdrantModule = await import('../../lib/qdrant.js'); // Ensure .js extension
     vi.mocked(qdrantModule.batchUpsertVectors).mockReset();
 
     // Reset DeepSeek mocks
-    const deepseekModule = await import('../../lib/deepseek.js');
+    const deepseekModule = await import('../../lib/deepseek.js'); // .js extension already here
     vi.mocked(deepseekModule.testDeepSeekConnection).mockResolvedValue(true);
     vi.mocked(deepseekModule.checkDeepSeekApiKey).mockReturnValue(true);
     vi.mocked(deepseekModule.generateWithDeepSeek).mockResolvedValue("Mocked DeepSeek from beforeEach reset");

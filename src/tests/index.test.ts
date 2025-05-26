@@ -1,34 +1,109 @@
 // Define these constants at the very top, before any imports or other code.
-const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Adjusted path
-const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts');
+// const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Not strictly needed if vi.mock path is direct
+// const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts'); // Not strictly needed
 
-// At the top, after imports:
+import path from 'path';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
+import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { Client as ActualMcpClient } from '@modelcontextprotocol/sdk/client/index.js';
+import fs from 'fs';
+
+// BEGIN MOCK DEFINITIONS (MUST BE BEFORE VI.MOCK CALLS USING THEM)
+
 const mockedFsSpies = {
   statSync: vi.fn(),
   readFileSync: vi.fn(),
-  // Add any other fs functions if index.ts uses them
 };
-vi.mock('fs', () => ({ // This is the top-level mock for fs
+
+const mockStdioClientTransportInstanceClose = vi.fn();
+const mockStdioClientTransportConstructor = vi.fn().mockImplementation(() => ({ // DEFINED HERE
+  close: mockStdioClientTransportInstanceClose,
+  // connect: vi.fn().mockResolvedValue(undefined), 
+}));
+
+const mockMcpClientInstance = { // DEFINED HERE
+  connect: vi.fn(),
+  callTool: vi.fn(),
+  close: vi.fn(),
+};
+
+// Store the original configService mock structure to reset it
+const originalMockConfigServiceInstance = { HTTP_PORT: 0, AGENT_QUERY_TIMEOUT: 180000 };
+// These will be freshly created in beforeEach
+let currentMockConfigServiceInstance: typeof originalMockConfigServiceInstance; // DEFINED HERE (as let)
+let currentMockLoggerInstance: { // DEFINED HERE (as let)
+  info: Mock; warn: Mock; error: Mock; debug: Mock;
+};
+
+// Define mock functions and ServerStartupError class first
+const mockStartServer = vi.fn().mockResolvedValue({ close: vi.fn() }); // DEFINED HERE
+const mockStartProxyServer = vi.fn(); // DEFINED HERE
+const ServerStartupError = class ServerStartupError extends Error { // DEFINED HERE
+  exitCode: number;
+  originalError?: Error;
+  existingServerStatus?: any;
+  requestedPort?: number;
+  detectedServerPort?: number;
+
+  constructor(message: string, exitCode = 1, options?: any) {
+    super(message);
+    this.name = "ServerStartupError";
+    this.exitCode = exitCode;
+    this.originalError = options?.originalError;
+    this.existingServerStatus = options?.existingServerStatus;
+    this.requestedPort = options?.requestedPort;
+    this.detectedServerPort = options?.detectedServerPort;
+  }
+};
+
+const mockSpawnFn = vi.fn(); // DEFINED HERE
+
+// END MOCK DEFINITIONS
+
+// NOW THE VI.MOCK CALLS
+
+vi.mock('fs', () => ({ // Uses mockedFsSpies
   default: mockedFsSpies,
   ...mockedFsSpies,
 }));
 
-const mockStdioClientTransportInstanceClose = vi.fn();
-const mockStdioClientTransportConstructor = vi.fn().mockImplementation(() => ({
-  close: mockStdioClientTransportInstanceClose,
-  // Add other methods if MCPClientSdk interacts with them directly
-  // For example, if connect is called on the transport instance itself:
-  // connect: vi.fn().mockResolvedValue(undefined), 
+vi.mock('child_process', async () => { // Uses mockSpawnFn
+  const actualCp = await vi.importActual('child_process') as typeof import('child_process');
+  return {
+    ...actualCp,
+    spawn: mockSpawnFn,
+  };
+});
+
+vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ // Uses mockMcpClientInstance
+  Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
 }));
 
-import path from 'path';
+vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
+  StreamableHTTPClientTransport: vi.fn(),
+}));
 
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
-import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'; // Import for vi.mocked
-import { Client as ActualMcpClient } from '@modelcontextprotocol/sdk/client/index.js'; // Import for vi.mocked
+vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Uses mockStdioClientTransportConstructor
+  StdioClientTransport: mockStdioClientTransportConstructor,
+}));
+
+vi.mock('../../src/lib/config-service.ts', () => { // Uses currentMockConfigServiceInstance, currentMockLoggerInstance
+  return {
+    get configService() { return currentMockConfigServiceInstance; },
+    get logger() { return currentMockLoggerInstance; },
+  };
+});
+
+vi.mock('../../src/lib/server.ts', () => { // Uses mockStartServer, ServerStartupError
+  return {
+    startServerHandler: mockStartServer,
+    ServerStartupError: ServerStartupError,
+    // startProxyServer: mockStartProxyServer, // Only if exported and used by index.ts
+  };
+});
+// --- End Mocks ---
+
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
-
-import fs from 'fs'; // For mocking fs in changelog test
 
 // Near the top of src/tests/index.test.ts, after imports
 let actualStderrDataCallbackForClientTests: ((data: Buffer) => void) | null = null;
@@ -48,92 +123,13 @@ let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null
 
 // The fs mock is now defined at the top using mockedFsSpies
 
-const mockSpawnFn = vi.fn(); // Moved here
-
-vi.mock('child_process', async () => {
-  const actualCp = await vi.importActual('child_process') as typeof import('child_process');
-  return {
-    ...actualCp,
-    spawn: mockSpawnFn,
-  };
-});
-
-const mockMcpClientInstance = {
-  connect: vi.fn(),
-  callTool: vi.fn(),
-  close: vi.fn(),
-};
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
-  Client: vi.fn().mockImplementation(() => mockMcpClientInstance),
-}));
-
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
-  StreamableHTTPClientTransport: vi.fn(), // This might become StdioClientTransport
-}));
-
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-  StdioClientTransport: mockStdioClientTransportConstructor,
-}));
-
-// Store the original configService mock structure to reset it
-const originalMockConfigServiceInstance = { HTTP_PORT: 0, AGENT_QUERY_TIMEOUT: 180000, /* other relevant defaults, use 0 for HTTP_PORT in tests */ };
-// These will be freshly created in beforeEach
-let currentMockConfigServiceInstance: typeof originalMockConfigServiceInstance;
-let currentMockLoggerInstance: {
-  info: Mock; warn: Mock; error: Mock; debug: Mock;
-};
-
-// Define mock functions and ServerStartupError class first
-const mockStartServer = vi.fn().mockResolvedValue({ close: vi.fn() }); // Returns a mock server object with a close method
-const mockStartProxyServer = vi.fn(); // This mock might not be used if startProxyServer is not exported by server.ts
-const ServerStartupError = class ServerStartupError extends Error { // Ensure this matches the actual class if imported
-  exitCode: number;
-  originalError?: Error;
-  existingServerStatus?: any;
-  requestedPort?: number;
-  detectedServerPort?: number;
-
-  constructor(message: string, exitCode = 1, options?: any) {
-    super(message); // Pass message to the base Error constructor
-    this.name = "ServerStartupError"; // Set the name of the error
-    this.exitCode = exitCode;
-    this.originalError = options?.originalError;
-    this.existingServerStatus = options?.existingServerStatus;
-    this.requestedPort = options?.requestedPort;
-    this.detectedServerPort = options?.detectedServerPort;
-  }
-};
-
-// Define the path to be mocked using a relative path from the project root.
-// Vitest typically runs with the project root as the CWD.
-// const MOCKED_SERVER_MODULE_PATH = './dist/lib/server.js'; // Original path
-// const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts'); // MOVED TO TOP
+// const mockSpawnFn = vi.fn(); // Moved up
 
 // --- Mocks for source files ---
 // Mocking the source files directly, as these are what the SUT (dist/index.js) will ultimately resolve
 // if its imports like `require('./lib/server.js')` are transpiled from `import ... from './lib/server'`
 // and module resolution + tsconfig paths work as expected.
 // Vitest's mocking mechanism should intercept these at the source level.
-
-vi.mock('../../src/lib/config-service.ts', () => {
-  // console.log('[INDEX_TEST_DEBUG] Top-level mock factory for ../../src/lib/config-service.ts EXECUTED.');
-  return {
-    // Ensure this returns an object that can be destructured for configService and logger
-    // and that currentMockConfigServiceInstance / currentMockLoggerInstance are defined and updated in beforeEach
-    get configService() { return currentMockConfigServiceInstance; },
-    get logger() { return currentMockLoggerInstance; },
-  };
-});
-
-vi.mock('../../src/lib/server.ts', () => {
-  // console.log('[INDEX_TEST_DEBUG] Top-level mock factory for ../../src/lib/server.ts EXECUTED.');
-  return {
-    startServerHandler: mockStartServer, // Assuming startServerHandler is the correct export from server.ts
-    ServerStartupError: ServerStartupError, // Ensure this class is correctly defined and exported
-    // Add startProxyServer if it's exported and used:
-    // startProxyServer: mockStartProxyServer,
-  };
-});
 // --- End Mocks ---
 
 import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
