@@ -624,3 +624,80 @@ This guard seems correct for preventing runtime errors, but TypeScript might sti
 **AI Action for `TS2345`:** Await `src/lib/stdio-client.ts` before suggesting specific code changes.
 
 ---
+
+## Attempt 38: Fix Final TypeScript Error, Re-mock DeepSeek, Add Logging for "Tool not found"
+
+**Git Commit (Before Attempt 38 changes):** (User to fill with git commit SHA after applying Attempt 37 changes)
+**Git Commit (After Attempt 38 changes):** (User to fill with git commit SHA after applying these changes)
+
+### Issues Addressed (Intended from Attempt 37/38 Plan):
+1.  **`src/tests/server.test.ts` TypeScript Error (TS2352 - logger call with object):**
+    *   Refined the type assertion for logger calls to correctly handle cases where the first argument is an object (e.g., `logger.info({ message: '...', details: '...' })`).
+2.  **`src/tests/integration/stdio-client-server.integration.test.ts` DeepSeek Mock:**
+    *   Re-applied the mock for `testDeepSeekConnection` from `../../lib/deepseek.js` to return `true` to prevent actual API calls during tests.
+3.  **`src/lib/server.ts` "Tool not found" Debugging:**
+    *   Added `console.log` statements in `src/lib/server.ts` within the `handleStdioConnection`'s `client.on('message', ...)` handler to log received messages and registered tool handlers, to help diagnose "Tool not found" errors.
+
+### Result (Based on User's `npm run build` Output from 2025-05-26 ~21:54 UTC):
+*   **TypeScript Compilation Errors: ALL RESOLVED!**
+    *   The `tsc` command completed successfully. This is a significant milestone.
+*   **Total Test Failures: 30** (No change in total count from previous, but some tests shifted status)
+    *   **`src/tests/index.test.ts` (19 failures - previously 20, 1 new pass):**
+        *   `mockStartServer` not called / `StdioClientTransport` constructor not called: 12 tests still fail due to these core mocking issues.
+        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests fail.
+        *   `--json` output test: Still fails due to capturing debug logs instead of the expected JSON. (1 failure)
+        *   `fs.readFileSync` for `changelog` command: Mock not called. (1 failure)
+        *   **IMPROVEMENT**: The `--port` option test (`--port option should set HTTP_PORT environment variable, and configService should see it`) now **PASSES**.
+    *   **`src/tests/server.test.ts` (7 failures - no change):**
+        *   3 tests fail due to `mockHttpServerListenFn` assertions (extra `undefined` arguments).
+        *   4 tests in the `startProxyServer` suite are still timing out.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures - previously 4, 1 new pass, 1 new fail/change in reason):**
+        *   `should call trigger_repository_update and verify indexing starts`: **FAIL**. `qdrantModule.batchUpsertVectors` spy still not called.
+        *   `should perform some actions and then retrieve session history with get_session_history`: **FAIL**. Retrieved session history is missing "Query 2".
+        *   `should call generate_suggestion and get a mocked LLM response`: **FAIL**. Test receives actual LLM output instead of the mock.
+        *   `should call get_repository_context and get a mocked LLM summary`: **FAIL**. Test receives actual LLM output instead of the mock.
+        *   **IMPROVEMENT**: `should call switch_suggestion_model and get a success response` now **PASSES**.
+    *   **DeepSeek API Connection Errors in Logs:** The `getaddrinfo ENOTFOUND api.deepseek.com` errors are still present in the `stderr` output during integration tests, despite the `switch_suggestion_model` test passing and the re-application of the `testDeepSeekConnection` mock. This suggests other unmocked calls or that the mock isn't universally effective.
+
+### Analysis/Retrospection for Attempt 38:
+*   **TypeScript Success:** All type errors are resolved! This allows full focus on runtime test failures.
+*   **`src/tests/index.test.ts`:**
+    *   The core issue remains the `vi.doMock` for `dist/lib/server.js` (and `config-service.js`) not effectively mocking `startServerHandler` or `StdioClientTransport` when `src/index.ts` (the SUT) is dynamically imported. The debug logs (`[INDEX_TEST_DEBUG] mockStartServer type before SUT import: function`) confirm the mock *exists* before the SUT import, but it's not being *used* by the SUT.
+    *   The `--port` test passing is a good sign that yargs argument parsing and environment variable setting within the SUT's context (when run via `runMainWithArgs`) is somewhat working.
+    *   The `--json` output test needs to be more robust against debug logs.
+*   **`src/tests/server.test.ts`:**
+    *   The `startProxyServer` timeouts are a major blocker. The async interactions with `findFreePort` and `http.Server.listen` mocks are not behaving as expected.
+    *   The `listen` mock assertion failures (extra undefined args) point to a mismatch between the mock's signature/implementation and the test's expectation.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`:**
+    *   LLM mocking (`generate_suggestion`, `get_repository_context`) is still ineffective in the spawned server process. The mock `llm-provider` is likely not the one being used by the server.
+    *   The `get_session_history` failure, despite `addQuery` being called for the second query (as per previous debug logs), indicates a problem with session state persistence/retrieval across different tool calls within the same test client's lifecycle or how the session object is being handled in the server.
+    *   The `trigger_repository_update` failure (`qdrantModule.batchUpsertVectors` not called) suggests an issue with the mock setup for `qdrant` or the conditions for indexing not being met.
+    *   The `switch_suggestion_model` test passing is positive, but the lingering DeepSeek connection errors in the logs are concerning and point to incomplete mocking of `testDeepSeekConnection` or other DeepSeek-related calls.
+
+### Next Step / Plan for Next Attempt (Attempt 39):
+1.  **`src/tests/index.test.ts` Failures (19 - Highest Priority for this file):**
+    *   **`mockStartServer` / `StdioClientTransport` not called (12 tests):**
+        *   Re-examine `vi.doMock` paths in `runMainWithArgs`. Ensure they are *exactly* relative to the SUT (`indexPath`, which is `dist/index.js`).
+        *   Add `console.log` *inside the mock factory itself* for `dist/lib/server.js` to see if the factory runs and what it returns.
+        *   Add `console.log` in `src/index.ts` (SUT) immediately before `startServerHandler` or `StdioClientTransport` is imported/used, to log the imported object/function itself. This will show if the SUT is getting the mock or the real implementation.
+    *   **`--json` output test (1 test):** Modify assertion to use `expect.stringContaining()` for the core JSON part, ignoring surrounding debug logs for now.
+    *   **yargs `.fail()` handler / `currentMockLoggerInstance.error` (5 tests):** Verify `VITEST_TESTING_FAIL_HANDLER` environment variable is correctly set and that `yargsInstance.fail()` is indeed calling the mocked logger.
+    *   **`fs.readFileSync` for `changelog` (1 test):** Ensure `vi.mock('fs')` is active and `readFileSync` is properly spied on.
+2.  **`src/tests/server.test.ts` Failures (7):**
+    *   **`startProxyServer` Timeouts (4 tests):**
+        *   In the `beforeEach` for this suite, ensure `mockHttpServerListenFn.mockImplementation((_portOrPath: any, listeningListener?: () => void) => { if (listeningListener) { process.nextTick(listeningListener); } return mockHttpServer; });` is used to make the listen callback asynchronous.
+        *   Ensure `findFreePortSpy.mockReset().mockResolvedValue(proxyListenPort);` is correctly resetting and applying for each test.
+    *   **`listen` mock assertions (3 tests):** Change assertions from `toHaveBeenCalledWith(port, expect.any(Function), undefined, undefined)` to `toHaveBeenCalledWith(port, expect.any(Function))`.
+3.  **`src/tests/integration/stdio-client-server.integration.test.ts` Failures (4):**
+    *   **LLM Mocking (`generate_suggestion`, `get_repository_context`):**
+        *   In the `vi.mock('../../lib/llm-provider', ...)` factory, add a unique identifier to `mockLLMProviderInstance` (e.g., `mockLLMProviderInstance.mockId = 'test-suite-mock-provider';`).
+        *   In `src/lib/llm-provider.ts` (read-only, for understanding): If `getLLMProvider` creates/returns an instance, conceptually log its `mockId` (or lack thereof) to see if the SUT gets the test's instance.
+        *   In `beforeEach`, after `vi.clearAllMocks()`, try: `mockLLMProviderInstance.generateText = vi.fn();` then in tests: `mockLLMProviderInstance.generateText.mockResolvedValueOnce('Mocked LLM Response');`.
+    *   **`get_session_history` (missing "Query 2"):**
+        *   In `src/lib/server.ts`, in the `agent_query` handler, log `sessions[sessionId].queries` *after* `addQueryToSession` is called.
+        *   In `src/lib/server.ts`, in the `get_session_history` handler, log `sessions[sessionId].queries` *before* formatting the response.
+    *   **`trigger_repository_update` (`qdrantModule.batchUpsertVectors` spy not called):**
+        *   Ensure the `qdrant` mock in `src/tests/integration/stdio-client-server.integration.test.ts` includes `batchUpsertVectors: vi.fn(),` and that this mock is active.
+    *   **DeepSeek API Connection Errors:** In `src/tests/integration/stdio-client-server.integration.test.ts`, ensure the `vi.mock('../../lib/deepseek.js', ...)` mock for `testDeepSeekConnection` is at the very top of the file, before any other imports or describe blocks, to ensure it's applied globally for all tests in this file.
+
+---
