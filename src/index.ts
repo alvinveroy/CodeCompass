@@ -168,6 +168,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       ...process.env, // Inherit parent env
       HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
       // Any other specific env vars the child server needs
+      DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false', // Propagate debug flag
     },
   };
 

@@ -1178,7 +1178,7 @@ describe('startProxyServer', () => {
         
     expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
       // Match the exact string logged by server.ts
-      `[ProxyServer] Failed to find free port for proxy: ${findFreePortError.message}`
+      `[ProxyServer] Failed to find free port for proxy: No free ports available.`
     );
   }, 15000);
 
@@ -1301,6 +1301,28 @@ describe('MCP Tool Relaying', () => {
     // This is typically done by importing serverLibModule or specific functions from it.
     // If serverLibModule was imported in the describe's beforeEach, that's sufficient.
   });
+
+  // Test for get_indexing_status (which does not relay)
+  it('get_indexing_status tool should return local status and not relay', async () => {
+    stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = true; // Set to true to test "no relay" part
+    stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = 3005;   // Set a relay port
+
+    const mockStatus: IndexingStatusReport = {
+      status: 'idle', message: 'Test local idle status', overallProgress: 0, lastUpdatedAt: new Date().toISOString(),
+    };
+    vi.mocked(getGlobalIndexingStatus).mockReturnValue(mockStatus);
+
+    const handler = capturedToolHandlers['get_indexing_status'];
+    expect(handler, "get_indexing_status handler should be captured").toBeDefined();
+    const result = await handler({} /* args */, {} /* extra */);
+
+    expect(axios.get).not.toHaveBeenCalled(); // Crucial: ensure no relay attempt
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(result.content[0].text).toContain('# Indexing Status');
+    expect(result.content[0].text).toContain(`- Status: ${mockStatus.status}`);
+    expect(result.content[0].text).toContain(`- Message: ${mockStatus.message}`);
+  });
+
 
   it('trigger_repository_update should relay if IS_UTILITY_SERVER_DISABLED is true', async () => {
     stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = true;

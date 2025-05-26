@@ -174,9 +174,10 @@ describe('CLI with yargs (index.ts)', () => {
     vi.doMock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({ // Keep for now if any test path uses it
       StreamableHTTPClientTransport: vi.fn(),
     }));
-    vi.doMock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Add mock for stdio transport
-      StdioClientTransport: vi.fn().mockImplementation(() => ({ close: vi.fn() })),
-    }));
+    // REMOVE: vi.doMock for stdio.js, rely on top-level vi.mock
+    // vi.doMock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+    //   StdioClientTransport: vi.fn().mockImplementation(() => ({ close: vi.fn() })),
+    // }));
     
     vi.doMock(path.join(resolvedSUTLibPath, 'server.js'), () => ({ // Add this vi.doMock for server.js
       startServer: mockStartServer,
