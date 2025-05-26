@@ -729,37 +729,48 @@ describe('Server Startup and Port Handling', () => {
     const expectedNonCodeCompassMessage = `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server`;
     const relevantNonCodeCompassCall = stableMockLoggerInstance.error.mock.calls.find(callArgs => {
       if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string') {
-        // Ensure firstArg is treated as string for .includes
         const firstArg = callArgs[0] as string;
         return firstArg.includes("Port") && firstArg.includes("in use by non-CodeCompass server");
       }
       return false;
     });
-    expect(relevantNonCodeCompassCall).toBeDefined();
-    if (relevantNonCodeCompassCall) {
-      // First arg is the message string
-      expect(relevantNonCodeCompassCall[0]).toEqual(expect.stringContaining(expectedNonCodeCompassMessage));
-      // Second arg (meta object)
-      // Note: The SUT logs the error message string directly, not a meta object with existingServerStatus for this specific log.
-      // The ServerStartupError *contains* existingServerStatus, but the log message itself is a string.
-      // The original plan's check for `meta.existingServerStatus?.service` might not apply to this specific log call.
-      // For now, adhering to the plan's structure. If this fails, the SUT's logging for this case needs review
-      // or this assertion needs to be adjusted.
-      // The current SUT logs: logger.error(`Port ${httpPort} is in use by non-CodeCompass server. Response: ${JSON.stringify(pingResponse.data)}`);
-      // This is a single string. The plan's structure implies a second argument to the logger.
-      // Forcing the plan's structure:
-      if (relevantNonCodeCompassCall.length > 1 && typeof relevantNonCodeCompassCall[1] === 'object' && relevantNonCodeCompassCall[1] !== null) {
-        const meta = relevantNonCodeCompassCall[1] as { existingServerStatus?: { service?: string } };
-        expect(meta.existingServerStatus?.service).toBe("OtherService");
+
+    expect(relevantNonCodeCompassCall).toBeDefined(); // Ensure the log was found
+    if (!relevantNonCodeCompassCall) {
+      // Fail test explicitly if log not found, to prevent further errors
+      throw new Error("Expected non-CodeCompass server error log not found.");
+    }
+            
+    // First arg is the message string
+    const firstArgOfNonCodeCompassCall = relevantNonCodeCompassCall[0];
+    if (typeof firstArgOfNonCodeCompassCall === 'string') {
+        expect(firstArgOfNonCodeCompassCall).toEqual(expect.stringContaining(expectedNonCodeCompassMessage));
+    } else {
+        throw new Error("First argument of non-CodeCompass server error log was not a string.");
+    }
+
+    // Second arg (meta object)
+    if (relevantNonCodeCompassCall.length > 1) {
+      const metaArg = relevantNonCodeCompassCall[1];
+      if (typeof metaArg === 'object' && metaArg !== null) {
+        // The SUT logs a string directly, not a meta object with existingServerStatus for this specific log.
+        // The ServerStartupError itself contains existingServerStatus.
+        // The plan's original expectation for meta.existingServerStatus.service might be based on a different log or desired SUT change.
+        // For now, we check if metaArg itself could be the error or status object if the SUT changes.
+        // If the SUT logs `logger.error(message, { existingServerStatus: data })`, then this check is valid.
+        // Given the current SUT logs a single string, this path might not be hit as metaArg would be undefined.
+        const meta = metaArg as { existingServerStatus?: { service?: string } };
+        expect(meta.existingServerStatus?.service).toBe("OtherService"); 
       } else {
-        // If the plan expects a meta object and it's not there, this will fail.
-        // This part of the assertion might need to be removed if the SUT only logs a string.
-        // For now, let's assume the plan is to make the SUT log a meta object or this is a misunderstanding.
-        // To make the test pass with current SUT, this else block should not be hit, or the check should be different.
-        // If the SUT only logs a string, relevantNonCodeCompassCall[1] would be undefined.
-        // The plan implies it should be defined.
-        // expect(relevantNonCodeCompassCall[1]).toBeDefined(); 
-        // expect(typeof relevantNonCodeCompassCall[1]).toBe('object');
+        // This branch will be hit if the SUT logs only a string message and no second argument.
+        // The plan implies a second argument might exist or should exist.
+        // If the test requires a second argument, this indicates a mismatch or a need for SUT change.
+        // For now, let's assume the plan's structure is to be enforced.
+        // If the SUT only logs a string, this error will highlight that the second arg is missing.
+        // However, the current SUT logs a single string, so this check might be too strict if metaArg is truly undefined.
+        // The original plan had: throw new Error("Expected meta object... not found or not an object.");
+        // This seems appropriate if a meta object is strictly expected.
+        // console.warn("[DEBUG] Second argument for non-CodeCompass log was not an object or was null.");
       }
     }
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
@@ -845,7 +856,7 @@ describe('Server Startup and Port Handling', () => {
     const expectedPingRefusedMessage = `Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
     const relevantPingRefusedCall = stableMockLoggerInstance.error.mock.calls.find(callArgs => {
       if (callArgs && callArgs.length > 0) {
-        const firstArg = callArgs[0];
+        const firstArg = callArgs[0]; // Keep as is, type check below
         if (typeof firstArg === 'string') {
           // The SUT logs various messages for this scenario, check for the one matching ServerStartupError
           return firstArg.includes(expectedPingRefusedMessage) || firstArg.includes(`Connection refused on port ${stableMockConfigServiceInstance.HTTP_PORT}`);
@@ -857,11 +868,16 @@ describe('Server Startup and Port Handling', () => {
     // console.log('[DEBUG] mockLogger.error.mock.calls for EADDRINUSE ping fails:', JSON.stringify(stableMockLoggerInstance.error.mock.calls, null, 2));
 
     expect(relevantPingRefusedCall).toBeDefined();
-    if (relevantPingRefusedCall) { // If find was successful, call[0] matched all criteria
-      // The find condition already ensures call[0] contains 'ECONNREFUSED'.
-      // This assertion was causing issues due to how Vitest reports the "actual" string.
-      // expect(relevantPingRefusedCall[0]).toEqual(expect.stringContaining('ECONNREFUSED')); 
-      expect(relevantPingRefusedCall[0]).toEqual(expect.stringContaining(`port ${stableMockConfigServiceInstance.HTTP_PORT}`));
+    if (!relevantPingRefusedCall) {
+      throw new Error("Expected ping refused error log not found.");
+    }
+
+    const firstArgOfRelevantCall = relevantPingRefusedCall[0];
+    if (typeof firstArgOfRelevantCall === 'string') {
+      expect(firstArgOfRelevantCall).toEqual(expect.stringContaining(`port ${stableMockConfigServiceInstance.HTTP_PORT}`));
+      // The find condition already checks for ECONNREFUSED or the specific message.
+    } else {
+      throw new Error("First argument of ping refused log was not a string.");
     }
 
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
@@ -954,32 +970,48 @@ describe('Server Startup and Port Handling', () => {
     
     const relevantStatusFetchCall = stableMockLoggerInstance.error.mock.calls.find(callArgs => {
       if (callArgs && callArgs.length > 0) {
-        const firstArg = callArgs[0];
-        if (typeof firstArg === 'string') {
+        const firstArg = callArgs[0]; // Keep as is, type check below
+        if (typeof firstArg === 'string') { // Explicit type check
           return firstArg.includes(expectedStatusFetchErrorMessage);
         }
       }
       return false;
     });
-    expect(relevantStatusFetchCall).toBeDefined();
+    expect(relevantStatusFetchCall).toBeDefined(); // Ensure the log was found
+
+    if (!relevantStatusFetchCall) {
+      throw new Error("Expected status fetch error log not found.");
+    }
+    
+    // Check first argument of the found log call
+    const firstArgOfStatusCall = relevantStatusFetchCall[0];
+    if (typeof firstArgOfStatusCall === 'string') {
+        expect(firstArgOfStatusCall).toEqual(expect.stringContaining(expectedStatusFetchErrorMessage));
+    } else {
+        throw new Error("First argument of status fetch error log was not a string.");
+    }
 
     let statusFetchErrorVerified = false;
-    if (relevantStatusFetchCall) {
-      expect(relevantStatusFetchCall[0]).toEqual(expect.stringContaining(expectedStatusFetchErrorMessage));
-      if (relevantStatusFetchCall.length > 1) {
-        const secondArg = relevantStatusFetchCall[1];
-        if (typeof secondArg === 'object' && secondArg !== null) {
-          if (secondArg instanceof Error) {
-            if (secondArg.message.includes(expectedFailedToStartMessage)) {
-              statusFetchErrorVerified = true;
-            }
-          } else if ('message' in secondArg && typeof (secondArg as { message: unknown }).message === 'string') {
-            // Handle cases where it might be an error-like object but not an Error instance
-            if (((secondArg as { message: string }).message).includes(expectedFailedToStartMessage)) {
-              statusFetchErrorVerified = true;
-            }
+    // Check second argument for error details, if it exists
+    if (relevantStatusFetchCall.length > 1) {
+      const secondArg = relevantStatusFetchCall[1];
+      if (secondArg instanceof Error) { // Check if it's an actual Error instance
+        if (secondArg.message.includes(expectedFailedToStartMessage)) {
+          statusFetchErrorVerified = true;
+        }
+      } else if (typeof secondArg === 'object' && secondArg !== null && 'message' in secondArg) {
+        // Handle cases where it might be an error-like object with a message property
+        const messageProp = (secondArg as { message: unknown }).message;
+        if (typeof messageProp === 'string') {
+          if (messageProp.includes(expectedFailedToStartMessage)) {
+            statusFetchErrorVerified = true;
           }
         }
+      } else if (typeof secondArg === 'string') {
+        // Handle cases where the second argument itself might be the error string
+          if (secondArg.includes(expectedFailedToStartMessage)) {
+              statusFetchErrorVerified = true;
+          }
       }
     }
     // This assertion might be too strong if the SUT logs "Failed to start CodeCompass" as a separate call.
@@ -999,10 +1031,11 @@ describe('Server Startup and Port Handling', () => {
       const firstArg = call[0];
       // The SUT logs: logger.error(`Error fetching status ...: ${String(statusError)}`);
       // So, the error message "Failed to fetch status" will be part of the firstArg string.
-      if (typeof firstArg === 'string') {
-        if (firstArg.includes(expectedStatusFetchErrorSubstring) && firstArg.includes(expectedAxiosErrorSubstring)) {
-          statusFetchErrorVerifiedForTest = true;
-          break;
+      if (typeof firstArg === 'string') { // Ensure firstArg is a string
+        const firstArgAsString = firstArg as string; // Use new variable after check
+        if (firstArgAsString.includes(expectedStatusFetchErrorSubstring) && firstArgAsString.includes(expectedAxiosErrorSubstring)) {
+            statusFetchErrorVerifiedForTest = true;
+            break;
         }
       }
     }
@@ -1235,7 +1268,7 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: MockInstance<[number], Promise<number>>;
+  let findFreePortSpy: MockInstance<[startPort: number, endPort?: number], Promise<number>>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {
@@ -1249,7 +1282,7 @@ describe('startProxyServer', () => {
     realAxiosInstance = (await import('axios')).default as any; // Cast to any
 
     // Spy on findFreePort from the freshly imported serverLibModule
-    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as MockInstance<[number], Promise<number>>;
+    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as MockInstance<[number, number?], Promise<number>>;
 
     // stableMockConfigServiceInstance and stableMockLoggerInstance are already defined globally
     // and used by the vi.mock for '../lib/config-service'.
@@ -1270,19 +1303,17 @@ describe('startProxyServer', () => {
 
     // Default mock for http.createServer and its listen method for this suite
     // This needs to be robust for startProxyServer's internal usage.
-    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, _port: number, _host_or_cb?: string | (() => void), cb?: () => void) { // Explicitly use _host and cb
-      // const host = typeof hostOrCb === 'string' ? hostOrCb : 'localhost';
-      // const callback = typeof hostOrCb === 'function' ? hostOrCb : cbOrUndefined;
-      // Simplified based on plan's signature: (_port, _host, cb)
-      // The actual port and host are passed, but the mock focuses on the callback behavior.
-      const callbackToUse = typeof _host_or_cb === 'function' ? _host_or_cb : cb;
-
-
-      // mockHttpServerAddressFn.mockReturnValue({ port: portToListen, address: host, family: 'IPv4' }); // Address can be set if needed by SUT
-      if (typeof callbackToUse === 'function') {
-        process.nextTick(callbackToUse); // Ensure async callback
+    mockHttpServerListenFn.mockReset().mockImplementation((_port: any, arg2: any, arg3?: any) => {
+      let callback: (() => void) | undefined;
+      if (typeof arg2 === 'function') {
+        callback = arg2;
+      } else if (typeof arg3 === 'function') {
+        callback = arg3;
       }
-      return this; // Return the mock server instance
+      if (callback) {
+        process.nextTick(callback);
+      }
+      return mockHttpServer; // Assuming mockHttpServer is the instance, as per plan's REPLACE
     });
 
     mockHttpServerOnFn.mockReset().mockImplementation(function(this: any, event: string, callback: (...args: any[]) => void) {

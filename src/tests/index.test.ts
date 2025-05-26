@@ -229,7 +229,7 @@ describe('CLI with yargs (index.ts)', () => {
 
     // Clean up the specific mock for this run
     // vi.unmock(path.resolve(__dirname, '../../src/lib/config-service.ts')); // Use string literal
-    vi.unmock(path.resolve(__dirname, '../../src/lib/server.ts')); // Use string literal // Important to clean up
+    // vi.unmock(path.resolve(__dirname, '../../src/lib/server.ts')); // Use string literal // Important to clean up // Diagnostic: Comment out unmock
 
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
     // to allow assertions on console.error or logger.error before process.exit is checked.
