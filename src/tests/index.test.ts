@@ -19,8 +19,6 @@ let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null
 // StdioClientTransport would need to expose a way to access the child process's streams,
 // or tests would need to use a more integrated approach.
 
-const distLibServerPath = path.resolve(__dirname, '../../../dist/lib/server.js');
-
 // --- Mocks for modules dynamically required by index.ts handlers ---
 // axios mock removed as it's no longer directly used by handleClientCommand's primary path
 
@@ -74,6 +72,7 @@ let currentMockLoggerInstance: {
 };
 
 
+// Define mock functions and ServerStartupError class first
 const mockStartServer = vi.fn();
 const mockStartProxyServer = vi.fn();
 const ServerStartupError = class ServerStartupError extends Error {
@@ -94,11 +93,14 @@ const ServerStartupError = class ServerStartupError extends Error {
   }
 };
 
-// Mock the compiled path that dist/index.js will require
-vi.mock(distLibServerPath, () => ({
+// Define the path to be mocked using a relative path from the project root.
+// Vitest typically runs with the project root as the CWD.
+const MOCKED_SERVER_MODULE_PATH = './dist/lib/server.js';
+
+vi.mock(MOCKED_SERVER_MODULE_PATH, () => ({
   startServer: mockStartServer,
-  startProxyServer: mockStartProxyServer, // Add mock for startProxyServer
-  ServerStartupError: ServerStartupError, // Use the class defined in the test
+  startProxyServer: mockStartProxyServer,
+  ServerStartupError: ServerStartupError,
 }));
 // --- End Mocks ---
 

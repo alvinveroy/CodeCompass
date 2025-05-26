@@ -1599,134 +1599,121 @@ async function streamToString(stream: NodeJS.ReadableStream | unknown): Promise<
 }
 
 export async function startProxyServer(
-  requestedPort: number, // The port this instance originally tried to use
-  targetServerPort: number, // The port the existing CodeCompass server is running on
+  requestedPort: number,
+  targetServerPort: number,
   existingServerVersion?: string
-): Promise<http.Server> { // Changed return type from Promise<void> to Promise<http.Server>
-  // Attempt to find a free port starting from requestedPort + 1, or a fixed offset
-  return new Promise<http.Server>(async (resolveProxyStart, rejectProxyStart) => {
-    let proxyListenPort: number;
-    try {
-      logger.debug(`[DEBUG startProxyServer] About to call findFreePort. Requested: ${requestedPort}, Target: ${targetServerPort}`);
-      proxyListenPort = await findFreePort(requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50); 
-      logger.debug(`[DEBUG startProxyServer] findFreePort returned: ${proxyListenPort}`);
-    } catch (error) {
-      logger.error(`startProxyServer: Failed to find free port for proxy: ${error}`);
-      rejectProxyStart(error); // Reject the main promise
-      return;
-    }
-    const targetBaseUrl = `http://localhost:${targetServerPort}`;
+): Promise<http.Server | null> {
+  let proxyListenPort: number;
+  try {
+    const initialPortForProxy = requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50;
+    proxyListenPort = await findFreePort(initialPortForProxy);
+    logger.debug(`[DEBUG startProxyServer] findFreePort returned: ${proxyListenPort}`);
+  } catch (error) {
+    logger.error(`[ProxyServer] Failed to find free port for proxy: ${error instanceof Error ? error.message : String(error)}`);
+    return null; // Directly return null if findFreePort fails
+  }
 
+  // If findFreePort succeeded, proceed to create and listen on the proxy server
+  return new Promise<http.Server | null>((resolveProxyListen, rejectProxyListen) => {
     const app = express();
+    // Ensure express.raw middleware is correctly applied for /mcp
+    app.use('/mcp', express.raw({ type: '*/*', limit: '50mb' }));
 
-  // Middleware to get raw body for POST/PUT etc.
-  // MCP requests can be large, adjust limit as needed.
-  // Use express.raw for all content types going to /mcp
-  app.use('/mcp', express.raw({ type: '*/*', limit: '50mb' })); // Increased limit
+    app.all('/mcp', async (req, res) => {
+      const targetUrl = `http://localhost:${targetServerPort}/mcp`;
+      logger.info(`[PROXY_DEBUG] MCP Request received by proxy: ${req.method} ${req.url}`);
+      logger.info(`Proxy: ${req.method} /mcp from client ${req.ip} -> ${targetUrl}`);
 
-  app.all('/mcp', async (req, res) => {
-    const targetUrl = `${targetBaseUrl}/mcp`;
-    logger.info(`[PROXY_DEBUG] MCP Request received by proxy: ${req.method} ${req.url}`);
-    logger.info(`Proxy: ${req.method} /mcp from client ${req.ip} -> ${targetUrl}`);
+      const headersToForward: Record<string, string | string[] | undefined> = {};
+      if (req.headers['content-type']) headersToForward['Content-Type'] = req.headers['content-type'];
+      if (req.headers['accept']) headersToForward['Accept'] = req.headers['accept'];
+      if (req.headers['mcp-session-id']) headersToForward['mcp-session-id'] = req.headers['mcp-session-id'];
+      if (req.headers['authorization']) headersToForward['Authorization'] = req.headers['authorization'];
 
-    const headersToForward: Record<string, string | string[] | undefined> = {};
-    // Standard headers
-    if (req.headers['content-type']) headersToForward['Content-Type'] = req.headers['content-type'];
-    if (req.headers['accept']) headersToForward['Accept'] = req.headers['accept'];
-    // MCP specific headers
-    if (req.headers['mcp-session-id']) headersToForward['mcp-session-id'] = req.headers['mcp-session-id'];
-    if (req.headers['authorization']) headersToForward['Authorization'] = req.headers['authorization']; // Forward auth
+      try {
+        const mcpResponse = await axios({
+          method: req.method as 'GET' | 'POST' | 'DELETE',
+          url: targetUrl,
+          data: (req.method !== 'GET' && req.method !== 'DELETE' && req.body && Object.keys(req.body).length > 0) ? req.body : undefined,
+          headers: headersToForward,
+          responseType: 'stream',
+          timeout: configService.AGENT_QUERY_TIMEOUT + 10000,
+        });
 
-    try {
-      const mcpResponse = await axios({
-        method: req.method as 'GET' | 'POST' | 'DELETE', // Cast for Axios
-        url: targetUrl,
-        data: (req.method !== 'GET' && req.method !== 'DELETE' && req.body && Object.keys(req.body).length > 0) ? req.body : undefined,
-        headers: headersToForward,
-        responseType: 'stream', // Important for piping the response
-        timeout: configService.AGENT_QUERY_TIMEOUT + 10000, // Slightly more than agent timeout
-      });
+        res.status(mcpResponse.status);
+        if (mcpResponse.headers['content-type']) res.setHeader('Content-Type', mcpResponse.headers['content-type'] as string);
+        if (mcpResponse.headers['mcp-session-id']) res.setHeader('mcp-session-id', mcpResponse.headers['mcp-session-id'] as string);
+        if (mcpResponse.headers['cache-control']) res.setHeader('Cache-Control', mcpResponse.headers['cache-control'] as string);
+        if (mcpResponse.headers['connection']) res.setHeader('Connection', mcpResponse.headers['connection'] as string);
 
-      res.status(mcpResponse.status);
-      // Forward relevant headers from target server's response
-      if (mcpResponse.headers['content-type']) res.setHeader('Content-Type', mcpResponse.headers['content-type'] as string);
-      if (mcpResponse.headers['mcp-session-id']) res.setHeader('mcp-session-id', mcpResponse.headers['mcp-session-id'] as string);
-      if (mcpResponse.headers['cache-control']) res.setHeader('Cache-Control', mcpResponse.headers['cache-control'] as string);
-      if (mcpResponse.headers['connection']) res.setHeader('Connection', mcpResponse.headers['connection'] as string);
+        (mcpResponse.data as NodeJS.ReadableStream).pipe(res);
 
-      (mcpResponse.data as NodeJS.ReadableStream).pipe(res); // Pipe the stream
+      } catch (error: unknown) {
+        const axiosError = error as import('axios').AxiosError;
+        const errorResponseData = axiosError.response?.data ? await streamToString(axiosError.response.data as NodeJS.ReadableStream) : undefined;
+        logger.error('Proxy: Error proxying MCP request to target server.', {
+          message: axiosError.message,
+          targetUrl,
+          requestMethod: req.method,
+          responseStatus: axiosError.response?.status,
+          responseDataPreview: errorResponseData?.substring(0, 500),
+          axiosErrorDetails: JSON.stringify(axiosError, Object.getOwnPropertyNames(axiosError), 2)
+        });
 
-    } catch (error: unknown) { // Changed from any to unknown
-      const axiosError = error as import('axios').AxiosError; // Type assertion
-      const errorResponseData = axiosError.response?.data ? await streamToString(axiosError.response.data as NodeJS.ReadableStream) : undefined;
-      logger.error('Proxy: Error proxying MCP request to target server.', {
-        message: axiosError.message,
-        targetUrl,
-        requestMethod: req.method,
-        responseStatus: axiosError.response?.status,
-        responseDataPreview: errorResponseData?.substring(0, 500), // Log a preview
-        // More detailed Axios error logging
-        axiosErrorDetails: JSON.stringify(axiosError, Object.getOwnPropertyNames(axiosError), 2)
-      });
-
-      if (axiosError.response) {
-        res.status(axiosError.response.status);
-        if (axiosError.response.headers['content-type']) res.setHeader('Content-Type', axiosError.response.headers['content-type'] as string);
-        if (errorResponseData) {
-            res.send(errorResponseData);
-        } else if (axiosError.response.data && typeof (axiosError.response.data as NodeJS.ReadableStream).pipe === 'function') {
-             (axiosError.response.data as NodeJS.ReadableStream).pipe(res);
-        } else if (axiosError.response.data) { 
-             res.send(axiosError.response.data);
+        if (axiosError.response) {
+          res.status(axiosError.response.status);
+          if (axiosError.response.headers['content-type']) res.setHeader('Content-Type', axiosError.response.headers['content-type'] as string);
+          if (errorResponseData) {
+              res.send(errorResponseData);
+          } else if (axiosError.response.data && typeof (axiosError.response.data as NodeJS.ReadableStream).pipe === 'function') {
+               (axiosError.response.data as NodeJS.ReadableStream).pipe(res);
+          } else if (axiosError.response.data) {
+               res.send(axiosError.response.data);
+          } else {
+               res.end();
+          }
         } else {
-             res.end();
+          res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: axiosError.message }, id: null });
         }
-      } else {
-        // Network error or other issue before getting a response from target
-        res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: axiosError.message }, id: null });
       }
-    }
-  });
+    });
 
-  // Proxy /api/ping
-  app.get('/api/ping', async (_req, res) => {
-    try {
-      logger.debug(`Proxy: GET /api/ping -> ${targetBaseUrl}/api/ping`);
-      const pingResponse = await axios.get(`${targetBaseUrl}/api/ping`, { timeout: 2000 });
-      res.status(pingResponse.status).json(pingResponse.data);
-    } catch (error: unknown) { // Changed from any to unknown
-      const axiosError = error as import('axios').AxiosError; // Type assertion
-      logger.error('Proxy: Error proxying /api/ping.', { message: axiosError.message, responseStatus: axiosError.response?.status });
-      res.status(axiosError.response?.status || 502).json({ error: 'Proxy error for /api/ping', details: axiosError.message });
-    }
-  });
+    app.get('/api/ping', async (_req, res) => {
+      try {
+        logger.debug(`Proxy: GET /api/ping -> http://localhost:${targetServerPort}/api/ping`);
+        const pingResponse = await axios.get(`http://localhost:${targetServerPort}/api/ping`, { timeout: 2000 });
+        res.status(pingResponse.status).json(pingResponse.data);
+      } catch (error: unknown) {
+        const axiosError = error as import('axios').AxiosError;
+        logger.error('Proxy: Error proxying /api/ping.', { message: axiosError.message, responseStatus: axiosError.response?.status });
+        res.status(axiosError.response?.status || 502).json({ error: 'Proxy error for /api/ping', details: axiosError.message });
+      }
+    });
 
-  // Proxy /api/indexing-status
-  app.get('/api/indexing-status', async (_req, res) => {
-     try {
-      logger.debug(`Proxy: GET /api/indexing-status -> ${targetBaseUrl}/api/indexing-status`);
-      const statusResponse = await axios.get(`${targetBaseUrl}/api/indexing-status`, { timeout: 5000 });
-      res.status(statusResponse.status).json(statusResponse.data);
-    } catch (error: unknown) { // Changed from any to unknown
-      const axiosError = error as import('axios').AxiosError; // Type assertion
-      logger.error('Proxy: Error proxying /api/indexing-status.', { message: axiosError.message, responseStatus: axiosError.response?.status });
-      res.status(axiosError.response?.status || 502).json({ error: 'Proxy error for /api/indexing-status', details: axiosError.message });
-    }
-  });
+    app.get('/api/indexing-status', async (_req, res) => {
+       try {
+        logger.debug(`Proxy: GET /api/indexing-status -> http://localhost:${targetServerPort}/api/indexing-status`);
+        const statusResponse = await axios.get(`http://localhost:${targetServerPort}/api/indexing-status`, { timeout: 5000 });
+        res.status(statusResponse.status).json(statusResponse.data);
+      } catch (error: unknown) {
+        const axiosError = error as import('axios').AxiosError;
+        logger.error('Proxy: Error proxying /api/indexing-status.', { message: axiosError.message, responseStatus: axiosError.response?.status });
+        res.status(axiosError.response?.status || 502).json({ error: 'Proxy error for /api/indexing-status', details: axiosError.message });
+      }
+    });
 
-    // Proxy server listen logic
     const proxyServer = http.createServer(app);
     proxyServer.listen(proxyListenPort, 'localhost', () => {
       logger.info(`Original CodeCompass server (v${existingServerVersion || 'N/A'}) is running on port ${targetServerPort}.`);
       logger.info(`This instance (CodeCompass Proxy) is running on port ${proxyListenPort}.`);
-      logger.info(`MCP requests to http://localhost:${proxyListenPort}/mcp will be forwarded to ${targetBaseUrl}/mcp`);
+      logger.info(`MCP requests to http://localhost:${proxyListenPort}/mcp will be forwarded to http://localhost:${targetServerPort}/mcp`);
       logger.info(`API endpoints /api/ping and /api/indexing-status are also proxied.`);
       console.error(`CodeCompass Proxy running on port ${proxyListenPort}, forwarding to main server on ${targetServerPort}.`);
-      resolveProxyStart(proxyServer); // Resolve with the server instance
+      resolveProxyListen(proxyServer);
     });
     proxyServer.on('error', (err: NodeJS.ErrnoException) => {
       logger.error(`Proxy server failed to start on port ${proxyListenPort}: ${err.message}`);
-      rejectProxyStart(err);
+      rejectProxyListen(err); // Reject if listen fails
     });
-  }); // End of the main Promise constructor
+  });
 }
