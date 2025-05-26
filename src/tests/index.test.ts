@@ -195,7 +195,7 @@ describe('CLI with yargs (index.ts)', () => {
     const SUT_distPath = path.dirname(indexPath); // Correctly define SUT_distPath
     
     // Dynamically resolve paths as src/index.ts would
-    const SUT_distPath = path.dirname(indexPath);
+    // const SUT_distPath = path.dirname(indexPath); // This was the duplicate declaration
     const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
 
     // Ensure config-service is mocked for the SUT (dist/index.js -> dist/lib/config-service.js)
