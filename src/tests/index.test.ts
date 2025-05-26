@@ -1,8 +1,8 @@
-import path from 'path';
-// Define these constants at the top, before any vi.mock calls that might use them,
-// including those within other vi.mock factory functions if they reference these.
+// Define these constants at the very top, before any imports or other code.
 const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Adjusted path
 const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts');
+
+import path from 'path';
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'; // Import for vi.mocked
