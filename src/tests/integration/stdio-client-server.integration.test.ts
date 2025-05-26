@@ -67,13 +67,10 @@ vi.mock('../../lib/ollama', () => ({
 }));
 
 const mockLLMProviderInstance = {
-  checkConnection: vi.fn().mockResolvedValue(true),
-  generateText: vi.fn().mockResolvedValue("Mocked LLM response for integration test."),
-  generateEmbedding: vi.fn().mockImplementation(async (text: string) => {
-    const { generateEmbedding: ollamaGenerateEmbedding } = await import('../../lib/ollama.js');
-    return ollamaGenerateEmbedding(text);
-  }),
-  processFeedback: vi.fn().mockResolvedValue("Mocked improved LLM response."),
+  checkConnection: vi.fn(),
+  generateText: vi.fn(),
+  generateEmbedding: vi.fn(),
+  processFeedback: vi.fn(),
 };
 
 vi.mock('../../lib/llm-provider', async (importOriginal) => {
@@ -150,7 +147,7 @@ describe('Stdio Client-Server Integration Tests', () => {
 
   beforeEach(() => {
     // Reset mocks for LLM provider before each test if needed
-    vi.clearAllMocks(); // This clears call history etc. Re-mock implementations if they are stateful per test.
+    vi.clearAllMocks(); // Clears call history etc. for all mocks
     // Re-apply mock implementations if vi.clearAllMocks clears them
     // Re-apply default mock for generateText before specific tests use mockResolvedValueOnce
     // vi.mocked(mockLLMProviderInstance.generateText).mockResolvedValue("Mocked LLM response for integration test.");
@@ -161,7 +158,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default mock LLM response from integration beforeEach');
     mockLLMProviderInstance.generateEmbedding.mockReset().mockResolvedValue([0.1, 0.2, 0.3]);
     mockLLMProviderInstance.processFeedback.mockReset().mockResolvedValue(undefined);
-
+      
     // Ensure configService mock is reset or its relevant properties are set for the test
     // This might involve dynamically importing and mocking configService if its state needs to be test-specific
     // For now, we assume the top-level vi.mock for configService in unit tests is sufficient or
@@ -519,21 +516,28 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockLLMProviderInstance.generateText.mockClear(); // Clear any previous specific mocks
     // Configure the method on the SHARED instance for this specific call
     const specificSuggestionResponse = "This is a generated suggestion based on context from file1.ts";
-    mockLLMProviderInstance.generateText
-        .mockResolvedValueOnce("Mocked refined query for generate_suggestion") // For potential refinement step
-        .mockResolvedValueOnce(specificSuggestionResponse); // For final suggestion
+    // mockLLMProviderInstance.generateText // This line was incomplete in the plan, assuming it's for the specific response
+    //     .mockResolvedValueOnce("Mocked refined query for generate_suggestion") // For potential refinement step
+    //     .mockResolvedValueOnce(specificSuggestionResponse); // For final suggestion
+    mockLLMProviderInstance.generateText.mockResolvedValueOnce(specificSuggestionResponse);
+
 
     const suggestionQuery = "Suggest how to use file1.ts";
-    const suggestionResult = await client.callTool({ name: 'generate_suggestion', arguments: { query: suggestionQuery } });
+    const result = await client.callTool('generate_suggestion', { query: suggestionQuery }); // Use suggestionQuery
     
-    expect(suggestionResult).toBeDefined();
-    expect(suggestionResult.content).toBeInstanceOf(Array);
-    const suggestionText = suggestionResult.content![0].text as string;
+    expect(result).toBeDefined();
+    expect(result.content).toBeInstanceOf(Array);
+    // const suggestionText = result.content![0].text as string;
+    const suggestionText = (result.content as Array<{text?: string}>)[0]?.text;
+
 
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
     // Check for key parts of a suggestion response
     expect(suggestionText).toContain("## Suggestion");
-    expect(suggestionText).toContain(specificSuggestionResponse); // Check for specific mocked content
+    // expect(suggestionText).toContain(specificSuggestionResponse); // Check for specific mocked content
+    // The plan's assertion was: expect(suggestionText).toContain(specificResponse);
+    // where specificResponse was the same as specificSuggestionResponse.
+    expect(suggestionText).toContain(specificSuggestionResponse);
     // Optionally, still check that "Context Used" section exists if it's part of the format
     expect(suggestionText).toContain("Context Used");
     // And that file1.ts is mentioned somewhere in that context section if important
