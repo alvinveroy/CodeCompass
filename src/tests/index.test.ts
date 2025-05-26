@@ -599,15 +599,24 @@ describe('CLI with yargs (index.ts)', () => {
       // Find the specific log call that contains the JSON output
       const jsonOutputCall = mockConsoleLog.mock.calls.find(call => {
         if (typeof call[0] === 'string') {
+          // A more robust check: try to parse and compare.
           try {
-            // A simple check: does it look like our expected JSON?
-            // This is not perfect but avoids parsing every log line if not necessary.
-            return call[0].includes(`"id": "${rawToolResult.id}"`) && call[0].includes(rawToolResult.content[0].text);
-          } catch (e) { return false; }
+            const parsedLog = JSON.parse(call[0]);
+            // Compare key parts of the object to avoid issues with order or extra fields
+            return parsedLog.id === rawToolResult.id && 
+                    parsedLog.content && 
+                    parsedLog.content[0].text === rawToolResult.content[0].text;
+          } catch (e) { 
+            // console.warn(`[INDEX_TEST_DEBUG] Failed to parse log call: ${call[0]}`, e);
+            return false; 
+          }
         }
         return false;
       });
-      expect(jsonOutputCall?.[0]).toEqual(JSON.stringify(rawToolResult, null, 2));
+      expect(jsonOutputCall).toBeDefined(); // Ensure a call matching the criteria was found
+      if (jsonOutputCall) { // Type guard for TypeScript
+        expect(JSON.parse(jsonOutputCall[0] as string)).toEqual(rawToolResult);
+      }
     });
 
     it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)', { timeout: 30000 }, async () => {
