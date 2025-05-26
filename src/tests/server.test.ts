@@ -735,7 +735,7 @@ describe('Server Startup and Port Handling', () => {
     // expect(failedToStartLogCall).toBeDefined();
 
     const expectedNonCodeCompassMessage = `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server`;
-    const relevantNonCodeCompassCall = stableMockLoggerInstance.error.mock.calls.find((callArgs): callArgs is [string, ...unknown[]] => {
+    const relevantNonCodeCompassCall = stableMockLoggerInstance.error.mock.calls.find((callArgs: readonly any[]) => {
       if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string') {
         return callArgs[0].includes("Port") && callArgs[0].includes("in use by non-CodeCompass server");
       }
@@ -749,16 +749,20 @@ describe('Server Startup and Port Handling', () => {
     }
             
     // First arg is the message string
-    const firstArgOfNonCodeCompassCall = relevantNonCodeCompassCall[0]; 
-    expect(firstArgOfNonCodeCompassCall).toEqual(expect.stringContaining(expectedNonCodeCompassMessage));
+    if (relevantNonCodeCompassCall && typeof relevantNonCodeCompassCall[0] === 'string') {
+      const firstArgOfNonCodeCompassCall = relevantNonCodeCompassCall[0]; 
+      expect(firstArgOfNonCodeCompassCall).toEqual(expect.stringContaining(expectedNonCodeCompassMessage));
+    } else {
+      throw new Error("First argument of non-CodeCompass server error log was not a string or log call was not found.");
+    }
 
     // Second arg (meta object)
-    if (relevantNonCodeCompassCall.length > 1) {
+    if (relevantNonCodeCompassCall && relevantNonCodeCompassCall.length > 1) {
       const metaArg = relevantNonCodeCompassCall[1];
       if (typeof metaArg === 'object' && metaArg !== null) {
-        // Check for existingServerStatus property before accessing its 'service' property
-        if ('existingServerStatus' in metaArg && typeof (metaArg as any).existingServerStatus === 'object' && (metaArg as any).existingServerStatus !== null) {
-          expect((metaArg as { existingServerStatus: { service?: string } }).existingServerStatus.service).toBe("OtherService");
+        const meta = metaArg as { existingServerStatus?: { service?: string } }; // Type assertion
+        if (meta.existingServerStatus && typeof meta.existingServerStatus === 'object' && meta.existingServerStatus !== null) {
+          expect(meta.existingServerStatus.service).toBe("OtherService");
         } else {
           // Optional: throw error if existingServerStatus is expected but not found in the correct shape
           // throw new Error("Expected 'existingServerStatus' property in meta object of non-CodeCompass server error log.");
