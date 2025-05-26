@@ -212,7 +212,7 @@ vi.mock('http', async (importOriginal) => {
     ...actualHttpModule, // Spread actual to keep other exports like Agent, globalAgent
     ...mockHttpMethods,
     default: { // Ensure default export also has createServer
-      ...actualHttpModule.default,
+      // ...actualHttpModule.default, // Property 'default' does not exist on type 'typeof import("http")'.
       ...mockHttpMethods,
       // createServer: mockCreateServerFn as unknown as VitestMock<(...args: any[]) => httpModule.Server>, // Already in mockHttpMethods
     },
