@@ -42,8 +42,8 @@ export interface SessionState {
 const sessions: Map<string, SessionState> = new Map();
 
 // Create a new session
-export function createSession(repoPath: string): SessionState {
-  const sessionId = generateSessionId();
+export function createSession(repoPath: string, sessionIdToUse?: string): SessionState {
+  const sessionId = sessionIdToUse || generateSessionId();
   const session: SessionState = {
     id: sessionId,
     queries: [],
@@ -72,10 +72,13 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
   }
   
   if (!repoPath) {
-    throw new Error("Repository path is required to create a new session");
+    // If sessionId was provided but not found, and no repoPath to create a new one, then error.
+    // If sessionId was NOT provided, and no repoPath, then also error.
+    throw new Error("Repository path is required to create a new session if sessionId is not found or not provided.");
   }
-  
-  return createSession(repoPath);
+  // If sessionId was provided but not found, create it with that ID.
+  // If sessionId was not provided, createSession will generate one.
+  return createSession(repoPath, sessionId);
 }
 
 // Add a query to session

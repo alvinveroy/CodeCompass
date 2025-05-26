@@ -1164,6 +1164,7 @@ describe('startProxyServer', () => {
     vi.mocked(http.createServer).mockReturnValue({
       listen: mockHttpServerListenFn,
       on: mockHttpServerOnFn,
+      once: mockHttpServerOnFn, // Ensure 'once' is also mocked here
       address: mockHttpServerAddressFn,
       close: mockHttpServerCloseFn.mockImplementation((cb) => { if (cb) cb(); }), // Ensure close calls callback
       removeAllListeners: mockHttpServerRemoveAllListenersFn,

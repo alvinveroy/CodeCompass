@@ -491,7 +491,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockQdrantClientInstance.search.mockResolvedValue([ // Mock search results for context
       { id: 'sugg-ctx', score: 0.85, payload: { dataType: 'file_chunk', filepath: 'file1.ts', file_content_chunk: 'context for suggestion', chunk_index: 0, total_chunks: 1, last_modified: 'date' } }
     ]);
-    mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce("This is a generated suggestion based on context from file1.ts");
+    // First mock for potential refinement, second for the actual suggestion
+    mockLLMProviderInstance.generateText.mockClear()
+        .mockResolvedValueOnce("Mocked refined query for generate_suggestion") 
+        .mockResolvedValueOnce("This is a generated suggestion based on context from file1.ts");
 
     const suggestionQuery = "Suggest how to use file1.ts";
     const suggestionResult = await client.callTool({ name: 'generate_suggestion', arguments: { query: suggestionQuery } });
@@ -529,7 +532,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockQdrantClientInstance.search.mockResolvedValue([ // Mock search results for context
       { id: 'repo-ctx', score: 0.75, payload: { dataType: 'file_chunk', filepath: 'file2.txt', file_content_chunk: 'repository context information', chunk_index: 0, total_chunks: 1, last_modified: 'date' } }
     ]);
-    mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce("This is a summary of the repository context, using info from file2.txt");
+    // First mock for potential refinement, second for the actual summary
+    mockLLMProviderInstance.generateText.mockClear()
+        .mockResolvedValueOnce("Mocked refined query for get_repository_context")
+        .mockResolvedValueOnce("This is a summary of the repository context, using info from file2.txt");
 
     const repoContextQuery = "What is the main purpose of this repo?";
     const repoContextResult = await client.callTool({ name: 'get_repository_context', arguments: { query: repoContextQuery } });
