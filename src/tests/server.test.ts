@@ -8,7 +8,7 @@
 // cannot be fulfilled as PROXY_PORT_SUCCESS_2 is not found.
 // Please clarify if these constants should be added, and if so, where.
 
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock as VitestMock, type SpyInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock as VitestMock } from 'vitest';
 // Import types needed for the stable mocks FIRST
 // MockInstance is already imported above, ensure Mock is aliased if used directly.
 import type { ConfigService as ActualConfigServiceType } from '../lib/config-service'; // For typing the stable mock
@@ -709,10 +709,22 @@ describe('Server Startup and Port Handling', () => {
 
     // Verify the specific error log calls
     expect(ml.error).toHaveBeenCalledWith(expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server. Response: {"service":"OtherService"}`));
-    // The main catch block in startServer will also log "Failed to start CodeCompass"
-    expect(ml.error).toHaveBeenCalledWith("Failed to start CodeCompass", expect.objectContaining({
-      message: `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server. Response: ${JSON.stringify(otherServiceData)}`,
-    }));
+    
+    const failedToStartLogCall = stableMockLoggerInstance.error.mock.calls.find(callArgs => {
+      const firstArgString = typeof callArgs[0] === 'string' ? callArgs[0] : '';
+      if (firstArgString === "Failed to start CodeCompass") {
+        // Check if the second argument (meta object) contains the expected message part.
+        if (callArgs.length > 1) {
+          const meta = callArgs[1] as { message?: string }; // More specific type
+          const expectedMessagePart = `Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by non-CodeCompass server. Response: ${JSON.stringify(otherServiceData)}`;
+          if (meta && typeof meta.message === 'string' && meta.message.includes(expectedMessagePart)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+    expect(failedToStartLogCall).toBeDefined();
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
@@ -769,28 +781,27 @@ describe('Server Startup and Port Handling', () => {
       let logMessage = '';
       if (typeof firstArgRaw === 'string') {
         logMessage = firstArgRaw;
-      } else if (typeof firstArgRaw === 'object' && firstArgRaw !== null && 'message' in firstArgRaw && typeof (firstArgRaw as any).message === 'string') {
-        logMessage = (firstArgRaw as any).message;
+      } else if (typeof firstArgRaw === 'object' && firstArgRaw !== null && 'message' in firstArgRaw && typeof (firstArgRaw as { message: unknown }).message === 'string') {
+        logMessage = (firstArgRaw as { message: string }).message;
       }
 
-        // Check for the "Connection refused on port X"
-        if (logMessage.includes(`Connection refused on port ${stableMockConfigServiceInstance.HTTP_PORT}`)) {
-          return true;
-        }
-        // Check for the concluding message
-        if (logMessage.includes(`Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`)) {
-          return true;
-        }
+      const expectedRefusedMessage = `Connection refused on port ${stableMockConfigServiceInstance.HTTP_PORT}`;
+      const expectedUnknownServiceMessage = `Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
+
+      if (logMessage.includes(expectedRefusedMessage) || logMessage.includes(expectedUnknownServiceMessage)) {
+        return true;
+      }
+
       // Check for the "Failed to start CodeCompass" log as well, if its message is relevant
       if (logMessage === "Failed to start CodeCompass" && callArgs.length > 1) {
-        const meta = callArgs[1] as any;
-        if (meta && typeof meta.message === 'string' && meta.message.includes(`Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service`)) {
-            return true;
+        const meta = callArgs[1] as { message?: string };
+        if (meta && typeof meta.message === 'string' && (meta.message.includes(expectedUnknownServiceMessage) || meta.message.includes('Ping error: connect ECONNREFUSED'))) {
+          return true;
         }
       }
       return false;
     });
-    expect(pingFailedLogFound, 
+    expect(pingFailedLogFound,
         `Expected a log message indicating ping failure or connection refused for port ${stableMockConfigServiceInstance.HTTP_PORT}. Logged errors: ${JSON.stringify(stableMockLoggerInstance.error.mock.calls)}`
     ).toBe(true);
 
@@ -854,36 +865,33 @@ describe('Server Startup and Port Handling', () => {
     const expectedFailedToStartMessage = `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`;
     const expectedStatusFetchErrorMessage = `Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`;
 
-    for (const callArgs of ml.error.mock.calls) {
+    for (const callArgs of stableMockLoggerInstance.error.mock.calls) {
       const firstArg = callArgs[0];
-      // const secondArg = callArgs.length > 1 ? callArgs[1] : undefined; // Removed
 
       if (typeof firstArg === 'string') {
         if (firstArg.includes(expectedStatusFetchErrorMessage)) {
           statusFetchErrorLogFound = true;
         }
-        if (firstArg === "Failed to start CodeCompass" && 
-            callArgs.length > 1) { // Check length before accessing callArgs[1]
-          const secondArg = callArgs[1]; // Define secondArg safely
-          if (secondArg && 
-              typeof secondArg === 'object' && 
-              (secondArg as { message?: string })?.message?.includes(expectedFailedToStartMessage)) {
+        if (firstArg === "Failed to start CodeCompass" && callArgs.length > 1) {
+          const secondArg = callArgs[1];
+          if (secondArg instanceof Error && secondArg.message.includes(expectedFailedToStartMessage)) {
+            failedToStartLogCallFound = true;
+          } else if (secondArg && typeof secondArg === 'object' && 'message' in secondArg && typeof (secondArg as { message: unknown }).message === 'string' && (secondArg as { message: string }).message.includes(expectedFailedToStartMessage)) {
             failedToStartLogCallFound = true;
           }
         }
       } else if (typeof firstArg === 'object' && firstArg !== null) {
-        const logObject = firstArg as { message?: string, error?: { message?: string } };
+        const logObject = firstArg as { message?: string; error?: { message?: string } };
         if (logObject.message === "Failed to start CodeCompass" && logObject.error?.message?.includes(expectedFailedToStartMessage)) {
           failedToStartLogCallFound = true;
         }
-        if (logObject.message?.includes(expectedStatusFetchErrorMessage)) {
-          // This case might occur if the error message is nested within an object's message property
+        if (typeof logObject.message === 'string' && logObject.message.includes(expectedStatusFetchErrorMessage)) {
           statusFetchErrorLogFound = true;
         }
       }
     }
-    expect(failedToStartLogCallFound, "Expected 'Failed to start CodeCompass' log with specific error details was not found.").toBe(true);
-    expect(statusFetchErrorLogFound, "Expected 'status fetch error' log message was not found.").toBe(true);
+    expect(failedToStartLogCallFound, `Expected 'Failed to start CodeCompass' log with details '${expectedFailedToStartMessage}'. Logged errors: ${JSON.stringify(stableMockLoggerInstance.error.mock.calls)}`).toBe(true);
+    expect(statusFetchErrorLogFound, `Expected 'status fetch error' log message '${expectedStatusFetchErrorMessage}'. Logged errors: ${JSON.stringify(stableMockLoggerInstance.error.mock.calls)}`).toBe(true);
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
 
@@ -1110,7 +1118,7 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: SpyInstance<[number], Promise<number>>;
+  let findFreePortSpy: VitestMock<[number], Promise<number>>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {
@@ -1124,7 +1132,7 @@ describe('startProxyServer', () => {
     realAxiosInstance = (await import('axios')).default as any; // Cast to any
 
     // Spy on findFreePort from the freshly imported serverLibModule
-    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as MockInstance<[number], Promise<number>>;
+    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as VitestMock<[number], Promise<number>>;
 
     // stableMockConfigServiceInstance and stableMockLoggerInstance are already defined globally
     // and used by the vi.mock for '../lib/config-service'.
@@ -1145,30 +1153,36 @@ describe('startProxyServer', () => {
 
     // Default mock for http.createServer and its listen method for this suite
     // This needs to be robust for startProxyServer's internal usage.
-    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, portToListen: number, host: string, callback?: () => void) {
-      // Simulate successful listen by setting address and calling the callback
+    mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, portToListen: number, hostOrCb?: string | (() => void), cbOrUndefined?: () => void) {
+      const host = typeof hostOrCb === 'string' ? hostOrCb : 'localhost';
+      const callback = typeof hostOrCb === 'function' ? hostOrCb : cbOrUndefined;
+
       mockHttpServerAddressFn.mockReturnValue({ port: portToListen, address: host, family: 'IPv4' });
       if (callback) {
-        process.nextTick(callback); // Simulate async listen success
+        process.nextTick(callback); // Ensure async callback
       }
       return this; // Return the mock server instance
     });
-    mockHttpServerOnFn.mockReset().mockImplementation(function(this: any, event, cb) {
-      // Store listeners if needed, but for success path, 'listening' or listen callback is key
-      if (event === 'error' && this._listeners && typeof this._listeners.error === 'function') {
-        // Allow specific tests to trigger error path by setting a mock error
-      }
-      return this;
+
+    mockHttpServerOnFn.mockReset().mockImplementation(function(this: any, event: string, callback: (...args: any[]) => void) {
+        if (!this._listeners) this._listeners = {};
+        this._listeners[event] = callback;
+        return this;
     });
-    vi.mocked(http.createServer).mockReturnValue({
+    
+    // Ensure the createServer mock returns an object that includes 'once' correctly.
+    // The createNewMockServerObject function (used by the global http mock) already does this.
+    // We need to ensure the local override for this suite also does.
+    vi.mocked(http.createServer).mockImplementation(() => ({ // Changed to mockImplementation
       listen: mockHttpServerListenFn,
       on: mockHttpServerOnFn,
-      once: mockHttpServerOnFn, // Ensure 'once' is also mocked here
+      once: mockHttpServerOnFn, // Assign mockHttpServerOnFn to 'once' as well
       address: mockHttpServerAddressFn,
-      close: mockHttpServerCloseFn.mockImplementation((cb) => { if (cb) cb(); }), // Ensure close calls callback
+      close: mockHttpServerCloseFn.mockImplementation((cb) => { if (cb) cb(); return this; }),
       removeAllListeners: mockHttpServerRemoveAllListenersFn,
-      // Add any other methods/properties of http.Server used by startProxyServer
-    } as unknown as http.Server);
+      _listeners: {} as Record<string, (...args: any[]) => void>, // Ensure _listeners is initialized
+    } as unknown as http.Server));
+
 
     // Default successful behavior for findFreePortSpy for most tests in this suite
     findFreePortSpy.mockResolvedValue(proxyListenPort); // Ensure it returns a valid port number

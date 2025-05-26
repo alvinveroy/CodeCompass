@@ -181,6 +181,7 @@ describe('Stdio Client-Server Integration Tests', () => {
       EMBEDDING_PROVIDER: "ollama", // Added for Attempt 14
       // Unique worker ID for test isolation if needed by other parts of the system
       VITEST_WORKER_ID: process.env.VITEST_WORKER_ID || `integration_worker_${Math.random().toString(36).substring(7)}`,
+      CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Added for Attempt 19
     };
     const currentTestSpawnEnv = { ...baseSpawnEnv };
     // eslint-disable-next-line no-console

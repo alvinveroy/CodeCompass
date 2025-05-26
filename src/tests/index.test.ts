@@ -157,18 +157,36 @@ describe('CLI with yargs (index.ts)', () => {
   async function runMainWithArgs(args: string[]) {
     const indexPath = require.resolve('../../dist/index.js'); // Define indexPath first
     process.argv = ['node', indexPath, ...args]; // Use absolute indexPath here
-    vi.resetModules(); 
-      
-    // Dynamically resolve paths as src/index.ts would
-    // const indexPath = require.resolve('../../dist/index.js'); // This line is now effectively moved up
-    const SUT_distPath = path.dirname(indexPath); 
-    const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
+    vi.resetModules();
     
-    // Top-level vi.mock calls will handle these dependencies.
-    // vi.doMock calls removed from here.
+    // Dynamically resolve paths as src/index.ts would
+    const SUT_distPath = path.dirname(indexPath);
+    const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
+
+    // Ensure config-service is mocked for the SUT (dist/index.js -> dist/lib/config-service.js)
+    // The top-level vi.mock('../lib/config-service', ...) might not be picked up correctly
+    // by the SUT if it resolves paths differently.
+    // Using vi.doMock here to ensure the mock is applied just before the SUT import.
+    // This path should be relative from THIS test file to the SUT's expected import path.
+    // If dist/index.js imports from './lib/config-service.js', then this mock path needs to target that.
+    // Assuming dist/index.js imports from './lib/config-service.js'
+    // and this test file is src/tests/index.test.ts
+    // The path from src/tests/index.test.ts to dist/lib/config-service.js is '../../dist/lib/config-service.js'
+    
+    // vi.doMock('../../dist/lib/config-service.js', () => ({ // REMOVED as per plan
+    //   configService: currentMockConfigServiceInstance, // REMOVED as per plan
+    //   logger: currentMockLoggerInstance, // REMOVED as per plan
+    // })); // REMOVED as per plan
+
+    // vi.doMock(MOCKED_SERVER_MODULE_PATH, () => ({ // REMOVED as per plan
+    //   startServer: mockStartServer, // REMOVED as per plan
+    //   startProxyServer: mockStartProxyServer, // REMOVED as per plan
+    //   ServerStartupError: ServerStartupError, // REMOVED as per plan
+    // })); // REMOVED as per plan
+    
     console.log('[INDEX_TEST_DEBUG] mockStartServer type before SUT import:', typeof mockStartServer);
     
-    await import(indexPath); 
+    await import(indexPath);
 
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
     // to allow assertions on console.error or logger.error before process.exit is checked.
