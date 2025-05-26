@@ -530,6 +530,66 @@ The `npm run build` command fails due to:
 
 ---
 
+## Attempt 15: Address `index.test.ts` Mocks, `server.test.ts` Timeouts, Integration Test LLM Mocking & Session History
+
+**Git Commit (Before Attempt 15 changes):** 5c10a56
+**Git Commit (After Attempt 15 changes):** (User to fill after applying changes from Attempt 15)
+
+### Issues Addressed (Based on Plan for Attempt 15):
+1.  **`src/tests/index.test.ts` (20 failures):**
+    *   Re-evaluated `vi.doMock` for `dist/lib/server.js` within `runMainWithArgs`.
+    *   Reviewed `--port` option test and `process.env.HTTP_PORT` assertion timing.
+    *   Verified `mockMcpClientInstance.callTool` result for `--json` output test.
+2.  **`src/tests/server.test.ts` (4 Timeouts):**
+    *   Focused on `http.createServer().listen()` mock in `startProxyServer` suite's `beforeEach`.
+    *   Verified `findFreePortSpy.mockResolvedValue(proxyListenPort)` setup.
+3.  **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
+    *   **`get_session_history`**: Added `addQuery(...)` call in `src/lib/agent-service.ts` within `processAgentQuery`.
+    *   **`generate_suggestion` & `get_repository_context` (LLM Mocking)**: Attempted to mock `mockLLMProviderInstance.generateText` in `beforeEach` and use `mockResolvedValueOnce` in specific tests.
+4.  **TypeScript Errors**: All were previously resolved in Attempt 14.
+
+### Result (After Applying Changes from Attempt 15 - based on user's summary):
+*   **`src/tests/index.test.ts`**: 20 failures persisted. Issues with mocks for `startServerHandler` and `StdioClientTransport` not being called, problems with the `--port` option test asserting `process.env.HTTP_PORT`, and incorrect logging in the `--json` output test remained.
+*   **`src/tests/server.test.ts`**: 4 timeouts in the `startProxyServer` suite persisted.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**: 4 failures continued:
+    *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy was not called.
+    *   `get_session_history`: The second query (from `agent_query`) was not recorded in the session history.
+    *   `generate_suggestion` & `get_repository_context`: Tests failed due to incorrect LLM mocking (still using a direct mock of `ollama.generateText` instead of the intended `mockLLMProviderInstance.generateText`).
+*   **New TypeScript Errors (5)**:
+    *   `src/tests/integration/stdio-client-server.integration.test.ts`: Issues with importing/mocking `generateText` from `../../lib/ollama.js`.
+    *   `src/tests/server.test.ts`: Tuple/type errors (TS2493, TS2339, TS2707) related to logger mocks and `MockInstance` generics.
+
+### Analysis/Retrospection for Attempt 15:
+*   The changes made in Attempt 15 did not resolve the persistent test failures.
+*   The attempt to fix LLM mocking in integration tests was either incorrect or insufficient, leading to continued failures for `generate_suggestion` and `get_repository_context`.
+*   The addition of `addQuery` in `agent-service.ts` did not fix the `get_session_history` test, indicating the issue might be elsewhere in session state management or test logic.
+*   Crucially, new TypeScript errors were introduced, indicating regressions or issues with the applied changes. These need to be prioritized.
+
+### Next Step / Plan for Next Attempt (Attempt 16):
+1.  **Fix New TypeScript Errors (Highest Priority):**
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+        *   Correct the import and mocking strategy for LLM calls. Remove direct import/mocking of `generateText` from `../../lib/ollama.js`.
+        *   Ensure `generate_suggestion` and `get_repository_context` tests consistently use `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce(...)` for their specific LLM responses, and that `mockLLMProviderInstance` is the one used by the SUT.
+    *   **`src/tests/server.test.ts`**:
+        *   Address TS2493 (tuple type length mismatch, e.g., `callArgs[1]` access on a 1-element tuple).
+        *   Address TS2339 (property does not exist on type).
+        *   Address TS2707 (generic type `MockInstance` / `Mock` requires different number of type arguments). This involves carefully checking Vitest's `Mock` and `MockInstance` type definitions and usage.
+2.  **Address `src/tests/index.test.ts` Mocking Issues (20 failures):**
+    *   Remove `vi.doMock` for `dist/lib/server.js` from the `runMainWithArgs` helper. Rely on the top-level `vi.mock` that provides `mockStartServerHandler`.
+    *   For the `--port` option test, ensure `process.env.HTTP_PORT` is checked *after* yargs has parsed arguments and applied them to `process.env`.
+    *   For the `--json` output test, ensure `mockConsoleLog.mock.calls` is cleared or inspected correctly before the assertion for the JSON output.
+3.  **Address `src/tests/server.test.ts` Timeouts (4 timeouts):**
+    *   In the `startProxyServer` test suite's `beforeEach` (or wherever `http.createServer().listen()` is mocked), ensure the `mockHttpServerListen.mockImplementation(...)`'s callback (which simulates the server listening) is executed asynchronously. Wrap the call to the `listeningCallback` in `process.nextTick(() => listeningCallback());`.
+4.  **Address `src/tests/integration/stdio-client-server.integration.test.ts` Logic Failures:**
+    *   **`get_session_history`**: Re-verify the `addQuery` logic in `src/lib/agent-service.ts` (specifically within `processAgentQuery`) and how session state is managed by `src/lib/session-state.ts`. Ensure that queries made via `agent_query` are correctly captured.
+    *   **`trigger_repository_update`**: Defer if other fixes are extensive. The `qdrantModule.batchUpsertVectors` spy not being called points to an issue within `indexRepository` or its interaction with the mocked Qdrant module.
+
+### Blockers:
+*   New TypeScript errors.
+*   Persistent test failures across `index.test.ts`, `server.test.ts`, and `integration/stdio-client-server.integration.test.ts`.
+
+---
+
 ## Attempt 11: Address Syntax Errors, `server.test.ts` Mocking, and Integration Test Logic
 
 **Git Commit (Initial for Attempt 11):** 16e1192
