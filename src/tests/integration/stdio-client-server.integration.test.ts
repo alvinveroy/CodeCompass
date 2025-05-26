@@ -81,13 +81,12 @@ const mockLLMProviderInstance = {
   generateText: vi.fn(),
   generateEmbedding: vi.fn(),
   processFeedback: vi.fn(),
-  mockId: 'test-suite-mock-llm-provider-instance' // Uncommented
+  mockId: 'test-suite-mock-llm-provider-instance' 
 };
 
 vi.mock('../../lib/llm-provider', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/llm-provider')>();
-  // Uncommented this log:
-  console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING, returning mockLLMProviderInstance ID:', mockLLMProviderInstance.mockId);
+  console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING, mockLLMProviderInstance.mockId is:', mockLLMProviderInstance.mockId); // Log the ID
   return {
     ...actual,
     getLLMProvider: vi.fn(async (providerName?: string, 

@@ -29,9 +29,9 @@ const childMockLLMProviderInstance = {
   generateText: vi.fn().mockResolvedValue('Mocked LLM Response from CHILD PROCESS'),
   generateEmbedding: vi.fn().mockResolvedValue([0.5, 0.6, 0.7, 0.8]),
   processFeedback: vi.fn().mockResolvedValue(undefined),
-  mockId: 'child-process-mock-llm-instance'
+  mockId: 'child-process-mock-llm-instance' // Ensure this ID is unique and identifiable
 };
-console.log('[mock-llm-child-setup] Child process mock LLM instance created with ID:', childMockLLMProviderInstance.mockId);
+console.log('[mock-llm-child-setup] Child process mock LLM instance created with ID:', childMockLLMProviderInstance.mockId); // Log the ID
 
 
 // Mock llm-provider.js
@@ -65,7 +65,10 @@ try {
   vi.mock(deepseekPath, () => {
     console.log('[mock-llm-child-setup] deepseek.js mock factory EXECUTING in child.');
     return ({
-      testDeepSeekConnection: vi.fn().mockResolvedValue(true),
+      testDeepSeekConnection: vi.fn().mockImplementation(async () => {
+        console.log('[mock-llm-child-setup] Mocked testDeepSeekConnection in CHILD CALLED');
+        return true;
+      }),
       checkDeepSeekApiKey: vi.fn().mockReturnValue(true),
       generateWithDeepSeek: vi.fn().mockResolvedValue("Mocked DeepSeek Response from CHILD PROCESS"),
       generateEmbeddingWithDeepSeek: vi.fn().mockResolvedValue([0.5, 0.5, 0.5]),

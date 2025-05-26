@@ -16,10 +16,8 @@ const mockedFsSpies = {
 };
 
 const mockStdioClientTransportInstanceClose = vi.fn();
-const mockStdioClientTransportConstructor = vi.fn().mockImplementation(() => ({ // DEFINED HERE
-  close: mockStdioClientTransportInstanceClose,
-  // connect: vi.fn().mockResolvedValue(undefined), 
-}));
+// Simpler definition at the top level for hoisting
+const mockStdioClientTransportConstructor = vi.fn(); // DEFINED HERE (simplified)
 
 const mockMcpClientInstance = { // DEFINED HERE
   connect: vi.fn(),
@@ -184,6 +182,12 @@ describe('CLI with yargs (index.ts)', () => {
     mockMcpClientInstance.connect.mockReset().mockResolvedValue(undefined);
     mockMcpClientInstance.close.mockReset().mockResolvedValue(undefined);
     
+    // Set up the implementation for the hoisted mock
+    mockStdioClientTransportConstructor.mockImplementation(() => ({
+      close: mockStdioClientTransportInstanceClose,
+      // connect: vi.fn().mockResolvedValue(undefined), // If needed, manage its mock state too
+    }));
+
     delete process.env.HTTP_PORT;
   });
 
