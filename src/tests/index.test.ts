@@ -1,6 +1,6 @@
 // Define these constants at the very top, before any imports or other code.
-const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Adjusted path
-const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts');
+// const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Adjusted path
+// const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts');
 
 import path from 'path';
 
@@ -113,6 +113,11 @@ vi.mock('./dist/lib/server.js', () => ({ // This mock might still be needed if S
 // REMOVE the top-level vi.mock('../lib/server.js', ...)
 // The mock for server.js will be handled by vi.doMock within runMainWithArgs
 
+// vi.mock('../lib/config-service.js', () => ({ // This is the mock for the SUT's import
+//   get configService() { return currentMockConfigServiceInstance; },
+//   get logger() { return currentMockLoggerInstance; },
+// }));
+
 import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
 
 const mockSpawnFn = vi.fn();
@@ -193,8 +198,8 @@ describe('CLI with yargs (index.ts)', () => {
     // Ensure mockStartServer is a vi.fn() defined in the test scope
     // and reset in beforeEach: mockStartServer.mockClear().mockResolvedValue(undefined);
 
-    vi.doMock(MOCKED_SERVER_MODULE_PATH, () => {
-      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ${MOCKED_SERVER_MODULE_PATH} EXECUTED.`);
+    vi.doMock(path.resolve(__dirname, '../../src/lib/server.ts'), () => { // Use string literal
+      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../../src/lib/server.ts EXECUTED.`);
       return {
         startServerHandler: mockStartServer,
         // Mock ServerStartupError if it's checked with instanceof by the SUT
@@ -223,8 +228,8 @@ describe('CLI with yargs (index.ts)', () => {
     // No explicit call needed.
 
     // Clean up the specific mock for this run
-    // vi.unmock(MOCKED_CONFIG_SERVICE_MODULE_PATH); // Causes issues if unmocked before test ends
-    vi.unmock(MOCKED_SERVER_MODULE_PATH); // Important to clean up
+    // vi.unmock(path.resolve(__dirname, '../../src/lib/config-service.ts')); // Use string literal
+    vi.unmock(path.resolve(__dirname, '../../src/lib/server.ts')); // Use string literal // Important to clean up
 
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
     // to allow assertions on console.error or logger.error before process.exit is checked.

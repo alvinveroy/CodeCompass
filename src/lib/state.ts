@@ -103,6 +103,8 @@ export function addQuery(
   });
   
   session.lastUpdated = Date.now();
+  logger.debug(`Query added to session ${sessionId}. Total queries: ${session.queries.length}`, { sessionId, query: query }); // Corrected to use 'query'
+  logger.debug(`[STATE_DEBUG] Session ${sessionId} after addQuery. Queries: ${JSON.stringify(session.queries.map(q=>q.query))}`);
   return session;
 }
 

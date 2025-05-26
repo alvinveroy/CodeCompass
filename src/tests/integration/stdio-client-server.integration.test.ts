@@ -155,10 +155,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     // mockLLMProviderInstance.generateText.mockResolvedValue("Mocked LLM response for integration test."); // Ensure this is the one used if vi.mocked isn't sufficient
     
     // Re-initialize/reset the mock functions on the SHARED instance
-    mockLLMProviderInstance.checkConnection.mockReset().mockResolvedValue(true);
-    mockLLMProviderInstance.generateText.mockReset().mockResolvedValue('Default mock LLM response from integration beforeEach');
-    mockLLMProviderInstance.generateEmbedding.mockReset().mockResolvedValue([0.1, 0.2, 0.3]);
-    mockLLMProviderInstance.processFeedback.mockReset().mockResolvedValue(undefined);
+    mockLLMProviderInstance.checkConnection.mockClear();
+    mockLLMProviderInstance.generateText.mockClear();
+    mockLLMProviderInstance.generateEmbedding.mockClear();
+    mockLLMProviderInstance.processFeedback.mockClear();
       
     // Ensure configService mock is reset or its relevant properties are set for the test
     // This might involve dynamically importing and mocking configService if its state needs to be test-specific
@@ -524,7 +524,7 @@ describe('Stdio Client-Server Integration Tests', () => {
 
 
     const suggestionQuery = "Suggest how to use file1.ts";
-    const result = await client.callTool('generate_suggestion', { query: suggestionQuery }); // Use suggestionQuery
+    const result = await client.callTool('generate_suggestion', { params: { query: suggestionQuery } }); // Use suggestionQuery
     
     expect(result).toBeDefined();
     expect(result.content).toBeInstanceOf(Array);

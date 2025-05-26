@@ -532,15 +532,15 @@ describe('Server Startup and Port Handling', () => {
     });
 
     mockHttpServerListenFn.mockReset().mockImplementation(function(this: any, portOrPathOrOptions, arg2, arg3, arg4) {
-      let callback: (() => void) | undefined;
+      let actualCallback: (() => void) | undefined;
       if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { // Options object
-        callback = arg2 as (() => void);
+        actualCallback = arg2 as (() => void);
       } else if (typeof arg2 === 'function') { // listen(port, callback)
-        callback = arg2;
+        actualCallback = arg2;
       } else if (typeof arg3 === 'function') { // listen(port, host, callback)
-        callback = arg3;
+        actualCallback = arg3;
       } else if (typeof arg4 === 'function') { // listen(port, host, backlog, callback)
-        callback = arg4;
+        actualCallback = arg4;
       }
 
       // Simulate EADDRINUSE if port is mcs.HTTP_PORT and a specific test flag is set
@@ -549,15 +549,15 @@ describe('Server Startup and Port Handling', () => {
         if (this._listeners && typeof this._listeners.error === 'function') {
           const error = new Error('listen EADDRINUSE test from mockHttpServerListenFn') as NodeJS.ErrnoException;
           error.code = 'EADDRINUSE';
-          process.nextTick(() => this._listeners.error(error));
+          process.nextTick(() => this._listeners.error(error)); // Keep async error
         }
       } else { // Simulate successful listen
-        process.nextTick(() => {
+        process.nextTick(() => { // Ensure listening and callback are async
           if (this._listeners && typeof this._listeners.listening === 'function') {
             this._listeners.listening();
           }
-          if (typeof callback === 'function') {
-            callback();
+          if (typeof actualCallback === 'function') {
+            actualCallback();
           }
         });
       }
@@ -842,9 +842,12 @@ describe('Server Startup and Port Handling', () => {
     
     const expectedPingRefusedMessage = `Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings.`;
     const relevantPingRefusedCall = stableMockLoggerInstance.error.mock.calls.find(callArgs => {
-      if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string') {
-        // The SUT logs various messages for this scenario, check for the one matching ServerStartupError
-        return callArgs[0].includes(expectedPingRefusedMessage) || callArgs[0].includes(`Connection refused on port ${stableMockConfigServiceInstance.HTTP_PORT}`);
+      if (callArgs && callArgs.length > 0) {
+        const firstArg = callArgs[0];
+        if (typeof firstArg === 'string') {
+          // The SUT logs various messages for this scenario, check for the one matching ServerStartupError
+          return firstArg.includes(expectedPingRefusedMessage) || firstArg.includes(`Connection refused on port ${stableMockConfigServiceInstance.HTTP_PORT}`);
+        }
       }
       return false;
     });
@@ -948,8 +951,11 @@ describe('Server Startup and Port Handling', () => {
     // expect(statusFetchErrorLogFound, `Expected 'status fetch error' log message '${expectedStatusFetchErrorMessage}'. Logged errors: ${JSON.stringify(stableMockLoggerInstance.error.mock.calls)}`).toBe(true);
     
     const relevantStatusFetchCall = stableMockLoggerInstance.error.mock.calls.find(callArgs => {
-      if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string') {
-        return callArgs[0].includes(expectedStatusFetchErrorMessage);
+      if (callArgs && callArgs.length > 0) {
+        const firstArg = callArgs[0];
+        if (typeof firstArg === 'string') {
+          return firstArg.includes(expectedStatusFetchErrorMessage);
+        }
       }
       return false;
     });
@@ -961,14 +967,15 @@ describe('Server Startup and Port Handling', () => {
       if (relevantStatusFetchCall.length > 1) {
         const secondArg = relevantStatusFetchCall[1];
         if (typeof secondArg === 'object' && secondArg !== null) {
-          if (secondArg instanceof Error) { 
-            if (secondArg.message.includes(expectedFailedToStartMessage)) { 
+          if (secondArg instanceof Error) {
+            if (secondArg.message.includes(expectedFailedToStartMessage)) {
               statusFetchErrorVerified = true;
             }
-          } else if (typeof (secondArg as { message?: unknown }).message === 'string') { 
-             if (((secondArg as { message: string }).message).includes(expectedFailedToStartMessage)) {
-               statusFetchErrorVerified = true;
-             }
+          } else if ('message' in secondArg && typeof (secondArg as { message: unknown }).message === 'string') {
+            // Handle cases where it might be an error-like object but not an Error instance
+            if (((secondArg as { message: string }).message).includes(expectedFailedToStartMessage)) {
+              statusFetchErrorVerified = true;
+            }
           }
         }
       }
@@ -990,9 +997,11 @@ describe('Server Startup and Port Handling', () => {
       const firstArg = call[0];
       // The SUT logs: logger.error(`Error fetching status ...: ${String(statusError)}`);
       // So, the error message "Failed to fetch status" will be part of the firstArg string.
-      if (typeof firstArg === 'string' && firstArg.includes(expectedStatusFetchErrorSubstring) && firstArg.includes(expectedAxiosErrorSubstring)) {
-        statusFetchErrorVerifiedForTest = true;
-        break;
+      if (typeof firstArg === 'string') {
+        if (firstArg.includes(expectedStatusFetchErrorSubstring) && firstArg.includes(expectedAxiosErrorSubstring)) {
+          statusFetchErrorVerifiedForTest = true;
+          break;
+        }
       }
     }
     // For now, applying the plan's structure.
@@ -1036,7 +1045,7 @@ describe('Server Startup and Port Handling', () => {
 describe('findFreePort', () => {
   // findFreePortSpy will be initialized in beforeEach of the startProxyServer suite
   // For findFreePort direct tests, we don't need a module-level spy on it.
-  let mockedHttpCreateServer: VitestMock<(...args: any[]) => httpModule.Server>;
+  let mockedHttpCreateServer: MockInstance<(...args: any[]) => httpModule.Server>;
 
   let portCounter: number;
 
@@ -1220,19 +1229,11 @@ describe('findFreePort', () => {
 // import nock from 'nock'; // Duplicate import removed
 
 describe('startProxyServer', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   const targetInitialPort = 3005; // Port the main server instance initially tried
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: VitestMock<[number], Promise<number>>;
+  let findFreePortSpy: MockInstance<[number], Promise<number>>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {
@@ -1246,7 +1247,7 @@ describe('startProxyServer', () => {
     realAxiosInstance = (await import('axios')).default as any; // Cast to any
 
     // Spy on findFreePort from the freshly imported serverLibModule
-    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as VitestMock<[number], Promise<number>>;
+    findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as MockInstance<[number], Promise<number>>;
 
     // stableMockConfigServiceInstance and stableMockLoggerInstance are already defined globally
     // and used by the vi.mock for '../lib/config-service'.
@@ -1352,7 +1353,6 @@ describe('startProxyServer', () => {
     findFreePortSpy.mockRejectedValueOnce(findFreePortError);
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
-    await vi.runAllTicks();
     expect(proxyServerHttpInstance).toBeNull();
         
     // expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
@@ -1369,7 +1369,6 @@ describe('startProxyServer', () => {
     // The http.createServer().listen() mock in beforeEach should also simulate success.
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
-    await vi.runAllTicks();
     
     expect(proxyServerHttpInstance).toBeDefined();
     expect(proxyServerHttpInstance).not.toBeNull(); // This should now pass
@@ -1395,7 +1394,6 @@ describe('startProxyServer', () => {
     // http.createServer().listen() mock in beforeEach simulates success
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
-    await vi.runAllTicks();
     expect(proxyServerHttpInstance).toBeDefined();
     expect(proxyServerHttpInstance).not.toBeNull(); // Should pass
     const actualProxyListenPort = (proxyServerHttpInstance!.address() as import('net').AddressInfo).port;
@@ -1431,7 +1429,6 @@ describe('startProxyServer', () => {
     // http.createServer().listen() mock in beforeEach simulates success
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
-    await vi.runAllTicks();
     expect(proxyServerHttpInstance).toBeDefined();
     expect(proxyServerHttpInstance).not.toBeNull(); // Should pass
     const actualProxyListenPort = (proxyServerHttpInstance!.address() as import('net').AddressInfo).port;
