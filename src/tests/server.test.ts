@@ -1,3 +1,13 @@
+// DEVELOPER NOTE: The following constants, which were part of the context for adding PROXY_PORT_SUCCESS_3,
+// appear to be missing from this version of the file:
+//   const PROXY_TEST_PORT_BASE = 3000; // (Example base value, actual might differ)
+//   const PROXY_TARGET_PORT_MCP_ERROR = PROXY_TEST_PORT_BASE + 7; // 3007
+//   const PROXY_PORT_SUCCESS = PROXY_TEST_PORT_BASE + 8; // 3008
+//   const PROXY_PORT_SUCCESS_2 = PROXY_TEST_PORT_BASE + 9; // 3009 for another test
+// The original request to add PROXY_PORT_SUCCESS_3 (PROXY_TEST_PORT_BASE + 10) after PROXY_PORT_SUCCESS_2
+// cannot be fulfilled as PROXY_PORT_SUCCESS_2 is not found.
+// Please clarify if these constants should be added, and if so, where.
+
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock as VitestMock } from 'vitest';
 // Import types needed for the stable mocks FIRST
 // MockInstance is already imported above, ensure Mock is aliased if used directly.
