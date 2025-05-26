@@ -155,10 +155,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     // mockLLMProviderInstance.generateText.mockResolvedValue("Mocked LLM response for integration test."); // Ensure this is the one used if vi.mocked isn't sufficient
     
     // Re-initialize/reset the mock functions on the SHARED instance
-    mockLLMProviderInstance.checkConnection.mockClear();
-    mockLLMProviderInstance.generateText.mockClear();
-    mockLLMProviderInstance.generateEmbedding.mockClear();
-    mockLLMProviderInstance.processFeedback.mockClear();
+    // Re-assign methods for robust mocking after vi.clearAllMocks()
+    mockLLMProviderInstance.checkConnection = vi.fn();
+    mockLLMProviderInstance.generateText = vi.fn();
+    mockLLMProviderInstance.generateEmbedding = vi.fn();
+    mockLLMProviderInstance.processFeedback = vi.fn();
       
     // Ensure configService mock is reset or its relevant properties are set for the test
     // This might involve dynamically importing and mocking configService if its state needs to be test-specific
