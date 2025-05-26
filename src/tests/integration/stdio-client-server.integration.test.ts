@@ -83,9 +83,10 @@ vi.mock('../../lib/llm-provider', async (importOriginal) => {
       return mockLLMProviderInstance; // Return the shared instance
     }),
     switchSuggestionModel: vi.fn().mockResolvedValue(true), // Keep other mocked exports
-  clearProviderCache: vi.fn(),
-  // Export LLMProvider type if needed by other mocks, though not strictly for this file.
-};);
+    clearProviderCache: vi.fn(),
+    // Export LLMProvider type if needed by other mocks, though not strictly for this file.
+  };
+});
 
 // Partially mock repository.ts: use actual indexRepository and getGlobalIndexingStatus
 vi.mock('../../lib/repository', async () => {
@@ -194,7 +195,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     const currentTestSpawnEnv = { ...baseSpawnEnv };
     // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is NOT set in currentTestSpawnEnv
     // as we are relying on the Vitest module mock.
-    delete currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM;
+    delete (currentTestSpawnEnv as {[key: string]: any})['CODECOMPASS_INTEGRATION_TEST_MOCK_LLM'];
     // eslint-disable-next-line no-console
     console.log(`[INTEGRATION_BEFORE_EACH_SPAWN_ENV] For test "${expect.getState().currentTestName}": ${JSON.stringify(currentTestSpawnEnv)}`);
 
