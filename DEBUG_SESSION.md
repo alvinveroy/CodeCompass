@@ -608,11 +608,112 @@ The `npm run build` command fails due to:
     *   **`trigger_repository_update`**: Defer detailed investigation for now, focus on other issues.
 
 ### Blockers:
-*   Persistent TypeScript errors in `src/tests/server.test.ts`.
-*   Persistent test failures in `src/tests/index.test.ts` related to mocking and yargs option handling.
-*   Persistent timeouts in `src/tests/server.test.ts` (`startProxyServer` suite).
-*   Persistent logic failures in `src/tests/integration/stdio-client-server.integration.test.ts` related to LLM mocking and session state.
-*   Lack of visibility into debug logs from spawned processes or specific mock interactions.
+*   Numerous TypeScript compilation errors in `src/tests/server.test.ts`.
+*   Persistent test failures (20) in `src/tests/index.test.ts` due to ineffective mocking of `dist` code and yargs option handling.
+*   Persistent timeouts (4) in `src/tests/server.test.ts` (`startProxyServer` suite), likely due to http/findFreePort mocking issues.
+*   Persistent logic failures (4) in `src/tests/integration/stdio-client-server.integration.test.ts` related to LLM mocking, session state (`repoPath` missing for `get_session_history`), and `trigger_repository_update` mock interaction.
+*   Debug logs for yargs `--port` apply and `mockConsoleLog.mockClear()` for `--json` test in `index.test.ts` were not confirmed as applied/effective.
+*   `sessionId` logging in `server.ts`, `state.ts`, and `agent-service.ts` was not confirmed as applied/effective.
+
+---
+
+## Attempt 20: Address TypeScript Errors, `index.test.ts` Failures, `server.test.ts` Timeouts, and Integration Test Logic
+
+**Git Commit (Before Attempt 20 changes):** ba47abf
+**Git Commit (After Attempt 20 changes):** (User to fill after applying these changes)
+
+### Issues Addressed (Intended from Attempt 19 Plan):
+1.  **`src/tests/server.test.ts` TypeScript Errors (TS2493, TS2339, TS2707)**:
+    *   Fix `TS2493` (tuple length for logger call args) by ensuring `callArgs.length > 1` before accessing `callArgs[1]`.
+    *   Fix `TS2339` (`.includes` on `never` for logger call args) by ensuring `callArgs[0]` is type-checked as a string before calling `.includes()`.
+    *   Fix `TS2707` (`MockInstance` generics for `findFreePortSpy`) by ensuring `findFreePortSpy` is typed as `VitestMock<[number], Promise<number>>`.
+2.  **`src/tests/index.test.ts` Failures (20)**:
+    *   Add diagnostic `console.log` in `runMainWithArgs` for `mockStartServer` status.
+    *   Add `console.log` in `src/index.ts` yargs `.option('port', { apply: ... })` for `process.env.HTTP_PORT`.
+    *   Ensure `mockConsoleLog.mockClear()` in `--json` test.
+3.  **`src/tests/server.test.ts` Timeouts (4 - `startProxyServer` suite)**:
+    *   Re-verify `mockHttpServerListenFn` in `startProxyServer` suite's `beforeEach` for async listen and callback for all `listen` calls (including from `findFreePort`).
+4.  **`src/tests/integration/stdio-client-server.integration.test.ts` Failures (4)**:
+    *   **LLM Mocking**: Add `console.log` in `vi.mock('../../lib/llm-provider', ...)` factory. Ensure `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce(...)` is used.
+    *   **`get_session_history`**: Add `console.log` for `sessionId` and `repoPath` in `src/lib/server.ts` (tool handler), `src/lib/state.ts` (`getOrCreateSession`, `addQuery`), and `src/lib/agent-service.ts` (`processAgentQuery`).
+
+### Changes Applied in Attempt 19 (Based on user's provided files reflecting Attempt 19's plan):
+*   **`src/tests/server.test.ts`**:
+    *   TypeScript fixes for `TS2493`, `TS2339`, `TS2707` were intended.
+*   **`src/index.ts`**:
+    *   `console.log` for yargs `--port` apply was intended.
+*   **`src/tests/index.test.ts`**:
+    *   Diagnostic `console.log` for `mockStartServer` status was intended.
+    *   `mockConsoleLog.mockClear()` for `--json` test was intended.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+    *   `console.log` in `llm-provider` mock factory was added.
+    *   `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce(...)` was used.
+*   **`src/lib/server.ts`, `src/lib/state.ts`, `src/lib/agent-service.ts`**:
+    *   `sessionId` and `repoPath` logging was intended.
+
+### Result (After Applying Changes from Attempt 19 - based on build log from 2024-05-26 17:32 UTC):
+*   **Total Test Failures: 28**
+    *   **`src/tests/index.test.ts`**: 20 failures persisted.
+        *   `mockStartServer` (mocked as `mockStartServerHandler`) was not called. The debug log `[INDEX_TEST_DEBUG] mockStartServer type before SUT import: function` was visible, indicating the mock function itself is defined.
+        *   `StdioClientTransport` constructor not called with expected arguments.
+        *   `currentMockLoggerInstance.error` not called as expected.
+        *   `--port` option test failed: `process.env.HTTP_PORT` was '0' instead of '1234'.
+        *   `--json` output test failed: `mockConsoleLog` received debug logs (`[INDEX_TEST_DEBUG] mockStartServer type...`, `[INDEX_TS_DEBUG] Before cli.parseAsync()`) instead of only the JSON output.
+    *   **`src/tests/server.test.ts`**: 4 tests timed out in the `startProxyServer` suite.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`**: 4 failures persisted.
+        *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy was not called.
+        *   `get_session_history`: Test failed with assertion `expected '# Session History (manual-session-174…' to contain 'Query 2: "second agent query for sess…'`. The actual output showed only "Query 1". The previous error about "Repository path is required" seems resolved, but the second query is not being logged.
+        *   `generate_suggestion` & `get_repository_context`: Tests failed because the actual LLM output was received instead of the specific test-scoped mock (e.g., expected "based on context from file1.ts", got a full LLM response). The `[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider in llm-provider mock factory CALLED! Returning mockLLMProviderInstance.` log was visible.
+*   **TypeScript Compilation Errors (11) in `src/tests/server.test.ts`**:
+    *   `TS2367: This comparison appears to be unintentional because the types '""' and '"Failed to start CodeCompass"' have no overlap.` (Line 715)
+    *   `TS2352: Conversion of type 'undefined' to type '{ message?: string | undefined; }' may be a mistake...` (Lines 718, 797)
+    *   `TS2493: Tuple type '[infoObject: object]' of length '1' has no element at index '1'.` (Lines 718, 797, 876)
+    *   `TS2339: Property 'includes' does not exist on type 'never'.` (Line 872, for `firstArg.includes`)
+    *   `TS2358: The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter.` (Line 877, for `secondArg instanceof Error`)
+    *   `TS2339: Property 'message' does not exist on type 'never'.` (Line 877, for `secondArg.message`)
+    *   `TS2707: Generic type 'Mock<T>' requires between 0 and 1 type arguments.` (Lines 1121, 1135, for `findFreePortSpy: VitestMock<[number], Promise<number>>`).
+
+### Analysis/Retrospection for Attempt 19:
+*   **TypeScript Errors in `server.test.ts`**: The planned fixes for TS2493, TS2339, TS2707 were either not correctly applied or were insufficient. New TS errors (TS2367, TS2352, TS2358) emerged, primarily related to type assertions and checks within logger mock call argument validation. The `VitestMock` type usage for `findFreePortSpy` is still problematic.
+*   **`index.test.ts` Failures**:
+    *   The `mockStartServer` issue persists. The top-level `vi.mock('./dist/lib/server.js', ...)` is not effectively mocking the `startServer` function when `dist/index.js` (the SUT) dynamically requires `dist/lib/server.js`. The SUT seems to get the original, unmocked version.
+    *   The `--port` test failure indicates `yargs` `apply` function isn't setting `process.env.HTTP_PORT` as expected in the test environment, or the assertion timing is off. The planned debug log for this was not confirmed as added/visible.
+    *   The `--json` test failure (unexpected logs) means `mockConsoleLog.mockClear()` was not added or was ineffective, and/or other `console.log` calls (like the debug ones) are interfering.
+*   **`server.test.ts` Timeouts**: The `startProxyServer` timeouts remain, suggesting the async nature of `http.createServer().listen()` or `findFreePort` interactions within these tests is still not correctly handled by the mocks.
+*   **Integration Test Failures**:
+    *   LLM Mocking: The `llm-provider` mock factory *is* being called. However, the `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce()` calls are not working. This could mean the `mockLLMProviderInstance` object itself is not the one the SUT (spawned server) is using, or the mock calls are being reset/overridden elsewhere. The `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` env var is present but not used by the read-only `llm-provider.ts`.
+    *   `get_session_history`: The "Repository path is required" error is gone, which is progress. However, "Query 2" (from `agent_query`) is still missing. This points to an issue in `addQuery` within `agent-service.ts` or how `processAgentQuery` interacts with session state. The planned `sessionId` logging was not confirmed as added/visible.
+    *   `trigger_repository_update`: `batchUpsertVectors` spy not called. This remains an issue with `indexRepository` or the qdrant mock.
+
+### Next Step / Plan for Next Attempt (Attempt 20):
+1.  **`src/tests/server.test.ts` TypeScript Errors (Highest Priority - 11 errors):**
+    *   **TS2707 (`VitestMock` generics)**: Change `VitestMock<[number], Promise<number>>` to `MockInstance<[number], Promise<number>>` for `findFreePortSpy` type, as `MockInstance` is the correct Vitest type for spies and takes the expected number of generic arguments.
+    *   **TS2493 (tuple length)** & **TS2352 (undefined conversion)**: For logger call assertions like `const meta = callArgs[1] as { message?: string };`, first check `callArgs && callArgs.length > 1 && callArgs[1] !== undefined && typeof callArgs[1] === 'object' && callArgs[1] !== null` before trying to access `message`.
+    *   **TS2339 (`.includes` on `never`)**: For `firstArg.includes(...)`, ensure `firstArg` is explicitly checked `typeof firstArg === 'string'` before calling `.includes()`.
+    *   **TS2358 (`instanceof` LHS) & TS2339 (`.message` on `never`)**: For `secondArg instanceof Error && secondArg.message.includes(...)`, ensure `secondArg` is first checked `typeof secondArg === 'object' && secondArg !== null` and then potentially cast to `Error` or use a type guard before accessing `message`.
+    *   **TS2367 (unintentional comparison)**: For `if (firstArgString === "Failed to start CodeCompass")`, if `firstArgString` can be `""`, this comparison is valid. If TypeScript infers `firstArgString` as `""` incorrectly, the type inference leading to that needs to be fixed. For now, assume the comparison is intentional and the type inference is the issue to be addressed by other fixes.
+2.  **`src/tests/index.test.ts` Failures (20):**
+    *   **`mockStartServer` not called**:
+        *   Modify `runMainWithArgs`: Instead of relying on top-level `vi.mock` for `dist/lib/server.js`, use `vi.doMock(MOCKED_SERVER_MODULE_PATH, () => ({ startServer: mockStartServer, ... }))` *inside* `runMainWithArgs` just before `await import(indexPath)`. This ensures the mock is in place for the dynamic import.
+        *   Ensure `MOCKED_SERVER_MODULE_PATH` correctly points to `'../../dist/lib/server.js'` relative to `index.test.ts` if `indexPath` is `dist/index.js`.
+    *   **`--port` test**: Add the `console.log` inside the `yargs` `.option('port', { apply: (value) => { ... } })` function in `src/index.ts` (as planned for A19) to see if it's called and what `process.env.HTTP_PORT` is.
+    *   **`--json` test**: Add `mockConsoleLog.mockClear()` immediately before `await runMainWithArgs(...)` in this specific test. Filter out the `[INDEX_TEST_DEBUG]` and `[INDEX_TS_DEBUG]` logs from the assertion if they are unavoidable.
+3.  **`src/tests/server.test.ts` Timeouts (4 - `startProxyServer` suite):**
+    *   In the `startProxyServer` suite's `beforeEach`, ensure the `mockHttpServerListenFn` correctly simulates asynchronous listen by calling its callback (if any) with `process.nextTick`. Also, ensure the `http.createServer` mock consistently returns server instances that have properly mocked `on`, `once`, `listen`, `close`, `address` methods, especially for `findFreePort`'s internal usage.
+4.  **`src/tests/integration/stdio-client-server.integration.test.ts` Failures (4):**
+    *   **LLM Mocking (`generate_suggestion`, `get_repository_context`)**:
+        *   The `llm-provider` mock factory is confirmed to be called. The issue is likely that the `mockLLMProviderInstance` used by the SUT is not the one being configured with `mockResolvedValueOnce` in the test.
+        *   **Strategy**: In `src/tests/integration/stdio-client-server.integration.test.ts`, ensure the `mockLLMProviderInstance.generateText` is reset in `beforeEach` *after* `vi.clearAllMocks()`: `mockLLMProviderInstance.generateText.mockClear().mockResolvedValue("Default integration mock response");`. Then, in specific tests, use `mockLLMProviderInstance.generateText.mockResolvedValueOnce("Specific response for test A").mockResolvedValueOnce("Specific response for test B if needed");`.
+    *   **`get_session_history`**:
+        *   Add the planned logging to `src/lib/server.ts` (tool handler), `src/lib/state.ts` (`getOrCreateSession`, `addQuery`), and `src/lib/agent-service.ts` (`processAgentQuery`) to trace `sessionId` and `repoPath` flow.
+        *   In `src/lib/state.ts`, modify `addQuery`, `addSuggestion`, `addFeedback`, `updateContext`, `addAgentSteps` to throw an error if `sessions.get(sessionId)` fails (i.e., session not found), instead of trying to create one if `repoPath` is missing. This makes the "session not found" case explicit. `getOrCreateSession` should remain the primary way to obtain/create sessions.
+    *   **`trigger_repository_update`**: Defer.
+
+### Blockers:
+*   TypeScript errors in `src/tests/server.test.ts`.
+*   `index.test.ts` failures (mocking `dist` code, yargs options).
+*   `server.test.ts` timeouts (`startProxyServer` suite).
+*   Integration test failures (LLM mocking, session state for `get_session_history`).
 
 ---
 
