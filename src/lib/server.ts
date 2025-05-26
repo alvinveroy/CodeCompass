@@ -1010,6 +1010,16 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         };
       }
       
+      // Adding logger here for [SERVER_TOOLS_DEBUG]
+      logger.debug(
+        `[SERVER_TOOLS_DEBUG] formatSessionHistory for session ${session.id}. Queries:`,
+        session.queries.map(q => ({
+          query: q.query,
+          ts: q.timestamp,
+          results_count: q.results.length,
+        }))
+      );
+      
       return {
         content: [{
           type: "text",
@@ -1019,8 +1029,6 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 - Created: ${new Date(session.createdAt).toISOString()}
 - Last Updated: ${new Date(session.lastUpdated).toISOString()}
 - Repository: ${session.context.repoPath}
-
-${""/* Adding logger here */}logger.debug(`[SERVER_TOOLS_DEBUG] formatSessionHistory for session ${session.id}. Queries:`, JSON.stringify(session.queries.map(q => ({ query: q.query, ts: q.timestamp, results_count: q.results.length }) ), null, 2));
 
 ## Queries (${session.queries.length})
 ${session.queries.map((q, i) => `
