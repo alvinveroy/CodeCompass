@@ -530,6 +530,47 @@ The `npm run build` command fails due to:
 
 ---
 
+## Attempt 14: Resolve Remaining TypeScript Errors and Stabilize Ollama Mocks
+
+**Git Commit (Before Attempt 14 changes):** (User to fill - commit after Attempt 13's changes)
+**Git Commit (After Attempt 14 changes):** 5c10a56
+
+### Issues Addressed (Intended):
+1.  Resolve any TypeScript compilation errors that remained or were introduced after the changes in Attempt 13.
+2.  Ensure `ollama.generateText` is correctly and type-safely mocked at the module level in `src/tests/integration/stdio-client-server.integration.test.ts` to support `vi.mocked(ollama.generateText)` usage in individual tests.
+
+### Changes Applied in Attempt 14:
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
+    *   Added `generateText: vi.fn().mockResolvedValue("Mocked Ollama text response for integration")` to the `vi.mock('../../lib/ollama', ...)` factory. This change is noted by the comment `// Added for Attempt 14` in the codebase.
+*   Addressed any other minor TypeScript errors across the test suite to achieve a clean compile.
+
+### Result (After Applying Changes from Attempt 14):
+*   All TypeScript compilation errors were resolved. The build was clean from a TypeScript perspective.
+*   Persistent runtime test failures from previous attempts (e.g., in `index.test.ts`, `server.test.ts`, and other integration test logic) remained.
+
+### Analysis/Retrospection for Attempt 14:
+*   Successfully cleared all TypeScript errors. This allowed the focus to shift entirely to diagnosing and fixing the runtime test failures.
+*   The explicit addition of `generateText` to the `ollama` mock factory in `stdio-client-server.integration.test.ts` provided a more stable and correctly typed mock for subsequent test-specific overrides.
+
+### Next Step / Plan for Next Attempt (Attempt 15):
+1.  **Address `src/tests/index.test.ts` Mocking Issues (20 failures):**
+    *   Re-evaluate `vi.doMock` usage for `dist/lib/server.js` within the `runMainWithArgs` helper.
+    *   Review the `--port` option test, focusing on the timing of `process.env.HTTP_PORT` assertion.
+    *   Verify the `mockMcpClientInstance.callTool` result for the `--json` output test.
+2.  **Address `src/tests/server.test.ts` Timeouts (4 timeouts):**
+    *   Investigate the `http.createServer().listen()` mock within the `startProxyServer` suite's `beforeEach` to ensure the callback is handled asynchronously.
+    *   Verify the `findFreePortSpy.mockResolvedValue(proxyListenPort)` setup is effective.
+3.  **Address `src/tests/integration/stdio-client-server.integration.test.ts` Logic Failures (4 failures):**
+    *   **`get_session_history`**: Investigate why the second query might not be recorded. Consider adding an explicit `addQuery(...)` call in `src/lib/agent-service.ts` within `processAgentQuery`.
+    *   **`generate_suggestion` & `get_repository_context` (LLM Mocking)**: Ensure these tests correctly mock `mockLLMProviderInstance.generateText` (from the `llm-provider.ts` mock) using `mockResolvedValueOnce` for their specific expected outputs, distinct from any default mock.
+
+### Blockers:
+*   Persistent runtime test failures in `src/tests/index.test.ts` (mocking of `dist` code, option handling).
+*   Persistent timeouts in `src/tests/server.test.ts` (`startProxyServer` suite).
+*   Persistent logic failures in `src/tests/integration/stdio-client-server.integration.test.ts` (session history, LLM response assertions, `trigger_repository_update` mock interaction).
+
+---
+
 ## Attempt 15: Address `index.test.ts` Mocks, `server.test.ts` Timeouts, Integration Test LLM Mocking & Session History
 
 **Git Commit (Before Attempt 15 changes):** 5c10a56
