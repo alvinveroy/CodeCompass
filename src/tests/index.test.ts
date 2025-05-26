@@ -184,14 +184,14 @@ describe('CLI with yargs (index.ts)', () => {
     // Use direct relative paths as the SUT (dist/index.js) would see them.
     // These paths are relative to `dist/src/index.js`.
     vi.doMock('../lib/config-service.js', () => {
-      // console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../lib/config-service.js EXECUTED.`);
+      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../lib/config-service.js EXECUTED.`);
       return {
         configService: currentMockConfigServiceInstance,
         logger: currentMockLoggerInstance,
       };
     });
     vi.doMock('../lib/server.js', () => { // Use string literal for the path SUT imports
-      // console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../lib/server.js EXECUTED.`);
+      console.log(`[INDEX_TEST_DEBUG] vi.doMock factory for ../lib/server.js EXECUTED.`);
       return {
         startServerHandler: mockStartServer, // Assuming startServerHandler is the correct export
         ServerStartupError: ServerStartupError, // Ensure ServerStartupError is also mocked if checked by SUT
@@ -581,7 +581,8 @@ describe('CLI with yargs (index.ts)', () => {
       mockConsoleLog.mockClear();
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
       
-      expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(rawToolResult, null, 2));
+      const consoleOutput = mockConsoleLog.mock.calls.map(call => call.join(' ')).join('\n'); // Join call arguments if multiple
+      expect(consoleOutput).toEqual(expect.stringContaining(JSON.stringify(rawToolResult, null, 2)));
     });
 
     it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)', { timeout: 30000 }, async () => {

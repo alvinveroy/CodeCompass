@@ -172,6 +172,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     },
   };
 
+  console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport); // Or the specific import used here
   const transport = new StdioClientTransport(serverProcessParams);
   const client = new MCPClientSdk({ name: "codecompass-cli-client", version: getPackageVersion() });
 
