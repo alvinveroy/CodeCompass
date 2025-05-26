@@ -1,4 +1,9 @@
 import path from 'path';
+// Define these constants at the top, before any vi.mock calls that might use them,
+// including those within other vi.mock factory functions if they reference these.
+const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Adjusted path
+const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts');
+
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'; // Import for vi.mocked
 import { Client as ActualMcpClient } from '@modelcontextprotocol/sdk/client/index.js'; // Import for vi.mocked
@@ -96,7 +101,7 @@ const ServerStartupError = class ServerStartupError extends Error {
 // Define the path to be mocked using a relative path from the project root.
 // Vitest typically runs with the project root as the CWD.
 // const MOCKED_SERVER_MODULE_PATH = './dist/lib/server.js'; // Original path
-const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts'); // Or .js if that's what's imported
+// const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts'); // Or .js if that's what's imported // MOVED TO TOP
 
 vi.mock('./dist/lib/server.js', () => ({ // This mock might still be needed if SUT imports from dist
   startServer: mockStartServer,

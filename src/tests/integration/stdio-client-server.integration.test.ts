@@ -85,7 +85,7 @@ vi.mock('../../lib/llm-provider', async (importOriginal) => {
     switchSuggestionModel: vi.fn().mockResolvedValue(true), // Keep other mocked exports
   clearProviderCache: vi.fn(),
   // Export LLMProvider type if needed by other mocks, though not strictly for this file.
-}));
+});
 
 // Partially mock repository.ts: use actual indexRepository and getGlobalIndexingStatus
 vi.mock('../../lib/repository', async () => {
