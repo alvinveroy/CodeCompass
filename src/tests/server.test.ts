@@ -9,6 +9,7 @@ import axios from 'axios'; // Import axios // Keep for typing realAxiosInstance 
 import * as net from 'net'; // For net.ListenOptions
 import nock from 'nock'; // Added nock import here as it's a top-level import
 
+// --- STABLE MOCK INSTANCES DEFINITIONS ---
 // Define MockedLogger and MockedConfigService types
 type MockedLogger = {
   [K in keyof WinstonLogger]: WinstonLogger[K] extends (...args: infer A) => infer R
@@ -69,6 +70,8 @@ const mcpConnectStableMock = vi.fn();
 const capturedToolHandlers: Record<string, (...args: any[]) => any> = {};
 
 // Mock dependencies
+// --- END STABLE MOCK INSTANCES DEFINITIONS ---
+
 vi.mock('../lib/config-service', () => ({
   configService: stableMockConfigServiceInstance,
   logger: stableMockLoggerInstance,
