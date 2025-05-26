@@ -607,14 +607,43 @@ The `npm run build` command fails due to:
 *   Crucially, new TypeScript errors were introduced, indicating regressions or issues with the applied changes. These need to be prioritized.
 
 ### Next Step / Plan for Next Attempt (Attempt 16):
-1.  **Fix New TypeScript Errors (Highest Priority):**
-    *   **`src/tests/integration/stdio-client-server.integration.test.ts`**:
-        *   Correct the import and mocking strategy for LLM calls. Remove direct import/mocking of `generateText` from `../../lib/ollama.js`.
-        *   Ensure `generate_suggestion` and `get_repository_context` tests consistently use `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce(...)` for their specific LLM responses, and that `mockLLMProviderInstance` is the one used by the SUT.
-    *   **`src/tests/server.test.ts`**:
-        *   Address TS2493 (tuple type length mismatch, e.g., `callArgs[1]` access on a 1-element tuple).
-        *   Address TS2339 (property does not exist on type).
-        *   Address TS2707 (generic type `MockInstance` / `Mock` requires different number of type arguments). This involves carefully checking Vitest's `Mock` and `MockInstance` type definitions and usage.
+
+**Git Commit (After Attempt 15 changes, before Attempt 16 Part 1):** 24f3bc4
+**Git Commit (After Attempt 16 Part 1 - integration test LLM mock fix):** 9ad4873
+
+**Summary of Current Issues (after Attempt 16 Part 1, based on build output 2024-05-26 16:43:42 UTC):**
+*   **`src/tests/index.test.ts`**: 20 failures persist.
+    *   `mockStartServerHandler` (mocked as `mockStartServer`) not called with expected repoPath.
+    *   `StdioClientTransport` constructor (mocked as `ActualStdioClientTransport`) not called with expected arguments.
+    *   `currentMockLoggerInstance.error` (from `config-service` mock) not called as expected in various failure scenarios.
+    *   `--port` option test: `process.env.HTTP_PORT` is '0' instead of '1234' after yargs parsing.
+    *   `--json` output test: `mockConsoleLog` received debug logs instead of the expected JSON output.
+*   **`src/tests/server.test.ts`**: 4 test timeouts in the `startProxyServer` suite.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts`**: 4 failures remain.
+    *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy was not called.
+    *   `get_session_history`: The second query (from `agent_query`) was not recorded in the session history (expected "Query 2" missing).
+    *   `generate_suggestion` & `get_repository_context`: Tests failed because the actual LLM output was received instead of the specific test-scoped mock (e.g., "based on context from file1.ts"). The `mockLLMProviderInstance.generateText.mockClear().mockResolvedValueOnce()` strategy needs re-evaluation or the mock instance being used by the SUT is not the one being configured in the test.
+*   **New TypeScript Errors (4) in `src/tests/server.test.ts`**:
+    *   `TS2493: Tuple type '[infoObject: object]' of length '1' has no element at index '1'.` (at lines 786 and 867, related to logger mock call argument access).
+    *   `TS2339: Property 'includes' does not exist on type 'never'.` (at line 862, related to logger mock call argument access).
+    *   `TS2707: Generic type 'MockInstance<T>' requires between 0 and 1 type arguments.` (at line 1127, for `findFreePortSpy` typing).
+
+**Plan for Attempt 16 (Continued):**
+
+1.  **Fix New TypeScript Errors in `src/tests/server.test.ts` (Build Blocker - Highest Priority):**
+    *   Address TS2493: Ensure `callArgs[1]` is accessed only after checking `callArgs.length > 1` in logger mock assertions.
+    *   Address TS2339: Ensure `callArgs[0]` is treated as a string and safely accessed before calling `.includes()` in logger mock assertions.
+    *   Address TS2707: Correct the type assertion for `findFreePortSpy` using `VitestMock<[number], Promise<number>>` or `MockInstance<(...args: [number]) => Promise<number>>`.
+2.  **Address `src/tests/server.test.ts` Timeouts (4 timeouts):**
+    *   In the `startProxyServer` test suite's `beforeEach` (specifically the `http.createServer().listen()` mock, likely within `createNewMockServerObject`), ensure the `listeningCallback` is executed asynchronously using `process.nextTick(() => listeningCallback());`.
+3.  **Address `src/tests/index.test.ts` Mocking Issues (20 failures):**
+    *   Remove `vi.doMock` for `dist/lib/server.js` from the `runMainWithArgs` helper. Rely on the top-level `vi.mock` that provides `mockStartServerHandler`.
+    *   For the `--port` option test, ensure `process.env.HTTP_PORT` is checked *after* yargs has parsed arguments and potentially applied them to `process.env`. Use `vi.stubEnv` and `vi.unstubAllEnvs` carefully.
+    *   For the `--json` output test, ensure `mockConsoleLog.mock.calls` is cleared or inspected correctly (e.g., `mockConsoleLog.mockClear()`) before the assertion for the JSON output.
+4.  **Address `src/tests/integration/stdio-client-server.integration.test.ts` Logic Failures:**
+    *   **`get_session_history`**: Re-verify the `addQuery` logic in `src/lib/agent-service.ts` (specifically within `processAgentQuery`) and how session state is managed by `src/lib/session-state.ts`. Ensure that queries made via `agent_query` are correctly captured.
+    *   **`generate_suggestion` & `get_repository_context`**: Re-verify that `mockLLMProviderInstance` is the exact same instance used by the server logic and that `mockClear().mockResolvedValueOnce()` is effective.
+    *   **`trigger_repository_update`**: Defer if other fixes are extensive. The `qdrantModule.batchUpsertVectors` spy not being called points to an issue within `indexRepository` or its interaction with the mocked Qdrant module.
 2.  **Address `src/tests/index.test.ts` Mocking Issues (20 failures):**
     *   Remove `vi.doMock` for `dist/lib/server.js` from the `runMainWithArgs` helper. Rely on the top-level `vi.mock` that provides `mockStartServerHandler`.
     *   For the `--port` option test, ensure `process.env.HTTP_PORT` is checked *after* yargs has parsed arguments and applied them to `process.env`.
