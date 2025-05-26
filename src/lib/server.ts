@@ -794,6 +794,15 @@ function registerTools( // Removed async
         logger.debug(`[SERVER_TOOL_HANDLER] agent_query calling processAgentQuery. Query: "${query}", SessionId: "${sessionId}"`);
         const agentResponseText = await processAgentQuery(query, sessionId); // processAgentQuery only accepts two arguments
         logger.debug(`[SERVER_TOOL_HANDLER] agent_query processAgentQuery completed. Response: ${JSON.stringify(agentResponseText)}`);
+
+        // Add this log:
+        if (sessionId) {
+          // repoPath is available from the registerTools function's scope
+          const currentSession = getOrCreateSession(sessionId, repoPath); 
+          if (currentSession) {
+            console.log(`[SERVER_TS_DEBUG] After agent_query for session ${sessionId}, state.queries:`, JSON.stringify(currentSession.queries));
+          }
+        }
         
         return {
           content: [{
@@ -1019,6 +1028,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       logger.debug(
         `[SERVER_TOOLS_DEBUG] formatSessionHistory for session ${session.id}. Query count check.` // Temporarily removed the second argument.
       );
+      
+      // Add this log:
+      console.log(`[SERVER_TS_DEBUG] In get_session_history for session ${session.id}, session.queries BEFORE formatting:`, JSON.stringify(session.queries));
       
       return {
         content: [{

@@ -71,15 +71,19 @@ const mockLLMProviderInstance = {
   generateText: vi.fn(),
   generateEmbedding: vi.fn(),
   processFeedback: vi.fn(),
+  // Uncomment this:
+  mockId: 'test-suite-mock-llm-provider-instance' // Unique ID
 };
 
 vi.mock('../../lib/llm-provider', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/llm-provider')>();
+  // Uncomment this log:
+  console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING, returning mockLLMProviderInstance ID:', mockLLMProviderInstance.mockId); // Log with ID
   return {
     ...actual,
     getLLMProvider: vi.fn(() => {
-      // This log is crucial
-      console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider CALLED in factory. Returning shared mock instance.');
+      // This log is crucial (can be kept or removed if the factory log is preferred)
+      // console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider CALLED in factory. Returning shared mock instance.');
       return mockLLMProviderInstance; // Return the shared instance
     }),
     switchSuggestionModel: vi.fn().mockResolvedValue(true), // Keep other mocked exports
