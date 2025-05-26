@@ -409,6 +409,7 @@ export async function startServer(repoPath: string): Promise<void> {
 
   try {
     configService.reloadConfigsFromFile(true); 
+    logger.info(`[server.ts startServer] Before getting httpPort. configService instance used: ${configService.constructor.name}. process.env.HTTP_PORT: "${process.env.HTTP_PORT}"`);
     // logger.info(`[DEBUG server.ts] After reloadConfigsFromFile, configService.HTTP_PORT: ${configService.HTTP_PORT}`);
     logger.info(`Initial suggestion model from config: ${configService.SUGGESTION_MODEL}`);
     
@@ -520,8 +521,10 @@ export async function startServer(repoPath: string): Promise<void> {
 
     // Read HTTP_PORT *after* reloadConfigsFromFile has definitely run
     let httpPort = configService.HTTP_PORT; 
+    logger.info(`[server.ts startServer] Initial httpPort from configService.HTTP_PORT: ${httpPort}`);
     // logger.info(`[INTEGRATION_DEBUG] server.ts: configService.HTTP_PORT initially: ${httpPort}`);
     if (httpPort === 0) {
+      logger.info(`[server.ts startServer] httpPort is 0, about to call findFreePort.`);
       logger.info(`HTTP_PORT is 0, attempting to find a free port dynamically.`);
       httpPort = await findFreePort(10000 + Math.floor(Math.random() * 10000)); // Start search from a high random port
       logger.info(`findFreePort selected: ${httpPort}. Setting global.CURRENT_HTTP_PORT.`);

@@ -1,19 +1,78 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock } from 'vitest';
-// Add findFreePort and startProxyServer to the import from ../lib/server
-import * as serverLibModule from '../lib/server'; // Import the whole module to spy on its exports
-import { normalizeToolParams, ServerStartupError } from '../lib/server'; // Keep specific imports if needed elsewhere
-import { IndexingStatusReport, getGlobalIndexingStatus } from '../lib/repository'; // For mock status
+// Import types needed for the stable mocks FIRST
+import type { ConfigService as ActualConfigServiceType } from '../lib/config-service'; // For typing the stable mock
+import type { Logger as WinstonLogger } from 'winston';
 import type * as httpModule from 'http'; // For types
 // Import actual modules to be mocked
-import http from 'http';
-import axios from 'axios'; // Import axios
+import http from 'http'; // Keep this for the vi.mock('http', ...) factory
+import axios from 'axios'; // Import axios // Keep for typing realAxiosInstance & global mock
 import * as net from 'net'; // For net.ListenOptions
+import nock from 'nock'; // Added nock import here as it's a top-level import
+
+// Define MockedLogger and MockedConfigService types
+type MockedLogger = {
+  [K in keyof WinstonLogger]: WinstonLogger[K] extends (...args: infer A) => infer R
+    ? Mock<A, R>
+    : WinstonLogger[K];
+};
+
+type MockedConfigService = Pick<
+  ActualConfigServiceType,
+  | 'HTTP_PORT' | 'OLLAMA_HOST' | 'QDRANT_HOST' | 'COLLECTION_NAME' 
+  | 'SUGGESTION_MODEL' | 'SUGGESTION_PROVIDER' | 'EMBEDDING_MODEL' | 'EMBEDDING_PROVIDER'
+  | 'DEEPSEEK_API_KEY' | 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'CLAUDE_API_KEY'
+  | 'SUMMARIZATION_MODEL' | 'REFINEMENT_MODEL' | 'MAX_SNIPPET_LENGTH'
+  | 'AGENT_QUERY_TIMEOUT'
+> & {
+  reloadConfigsFromFile: Mock<[], void>;
+  VERSION: string;
+  IS_UTILITY_SERVER_DISABLED: boolean;
+  RELAY_TARGET_UTILITY_PORT?: number;
+};
+
+// --- STABLE MOCK INSTANCES DEFINITIONS ---
+const stableMockConfigServiceInstance: MockedConfigService = {
+  HTTP_PORT: 3001,
+  IS_UTILITY_SERVER_DISABLED: false,
+  RELAY_TARGET_UTILITY_PORT: undefined,
+  OLLAMA_HOST: 'http://127.0.0.1:11434',
+  QDRANT_HOST: 'http://127.0.0.1:6333',
+  COLLECTION_NAME: 'test-collection',
+  SUGGESTION_MODEL: 'test-model',
+  SUGGESTION_PROVIDER: 'ollama',
+  EMBEDDING_MODEL: 'nomic-embed-text:v1.5',
+  EMBEDDING_PROVIDER: 'ollama',
+  DEEPSEEK_API_KEY: '',
+  OPENAI_API_KEY: '',
+  GEMINI_API_KEY: '',
+  CLAUDE_API_KEY: '',
+  VERSION: 'test-version-stable-mock',
+  reloadConfigsFromFile: vi.fn(),
+  SUMMARIZATION_MODEL: 'test-summary-model',
+  REFINEMENT_MODEL: 'test-refinement-model',
+  MAX_SNIPPET_LENGTH: 500,
+  AGENT_QUERY_TIMEOUT: 180000,
+};
+
+const stableMockLoggerInstance: MockedLogger = {
+  info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
+} as unknown as MockedLogger;
+// --- END STABLE MOCK INSTANCES DEFINITIONS ---
+
+// serverLibModule import removed from here, will be re-added later
+import { normalizeToolParams, ServerStartupError } from '../lib/server'; // Keep specific imports if needed elsewhere
+import { IndexingStatusReport, getGlobalIndexingStatus } from '../lib/repository'; // For mock status
 
 // Define stable mock for McpServer.connect
 const mcpConnectStableMock = vi.fn();
 const capturedToolHandlers: Record<string, (...args: any[]) => any> = {};
 
 // Mock dependencies
+vi.mock('../lib/config-service', () => ({
+  configService: stableMockConfigServiceInstance,
+  logger: stableMockLoggerInstance,
+}));
+
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const actual = await importOriginal() as typeof import('@modelcontextprotocol/sdk/server/mcp.js');
@@ -34,47 +93,7 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
   };
 });
 
-// Corrected mock path for configService and logger
-vi.mock('../lib/config-service', async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  const actual = await importOriginal() as typeof import('../lib/config-service');
-  return {
-    ...actual, // Spread actual to keep non-mocked parts if any, or specific exports
-    configService: {
-      // Provide all properties and methods accessed by server.ts
-      // Basic defaults, specific tests can override via vi.spyOn or direct mock value changes
-      HTTP_PORT: 3001,
-      IS_UTILITY_SERVER_DISABLED: false, // Added
-      RELAY_TARGET_UTILITY_PORT: undefined, // Added
-      OLLAMA_HOST: 'http://127.0.0.1:11434',
-      QDRANT_HOST: 'http://127.0.0.1:6333',
-      COLLECTION_NAME: 'test-collection',
-      SUGGESTION_MODEL: 'test-model',
-      SUGGESTION_PROVIDER: 'ollama',
-      EMBEDDING_MODEL: 'nomic-embed-text:v1.5',
-      EMBEDDING_PROVIDER: 'ollama',
-      DEEPSEEK_API_KEY: '',
-      OPENAI_API_KEY: '',
-      GEMINI_API_KEY: '',
-      CLAUDE_API_KEY: '',
-      VERSION: 'test-version', // Add if server.ts uses configService.VERSION
-      reloadConfigsFromFile: vi.fn(),
-      // Add any other properties/methods from ConfigService that server.ts uses
-      // For example, if it uses specific model names for summarization/refinement:
-      SUMMARIZATION_MODEL: 'test-summary-model',
-      REFINEMENT_MODEL: 'test-refinement-model',
-      // Add any other config values used in startServer
-      MAX_SNIPPET_LENGTH: 500,
-    },
-    logger: {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(), // Add debug if used
-      add: vi.fn(), // If logger.add is called
-    }
-  };
-});
+// The vi.mock for '../lib/config-service' is now above, using stable instances.
 
 vi.mock('../lib/ollama', () => ({
   checkOllama: vi.fn().mockResolvedValue(true),
@@ -169,11 +188,26 @@ vi.mock('http', async (importOriginal) => {
 });
 
 // Mock for axios
-// vi.mock('axios'); // Keep this global mock for other suites if they rely on it.
-// We will unmock it specifically for the startProxyServer suite.
+vi.mock('axios', () => {
+  const mockAxiosInstance = vi.fn();
+  mockAxiosInstance.get = vi.fn();
+  mockAxiosInstance.post = vi.fn();
+  mockAxiosInstance.delete = vi.fn();
+  mockAxiosInstance.isAxiosError = vi.fn((payload: any): payload is import('axios').AxiosError => {
+    return payload && typeof payload === 'object' && 'isAxiosError' in payload && payload.isAxiosError === true;
+  });
+
+  return {
+    default: mockAxiosInstance,
+    get: mockAxiosInstance.get,
+    post: mockAxiosInstance.post,
+    delete: mockAxiosInstance.delete,
+    isAxiosError: mockAxiosInstance.isAxiosError,
+  };
+});
 
 // Make serverLibModule mutable if it's re-assigned in beforeEach
-let serverLibModule: typeof import('../lib/server');
+// let serverLibModule: typeof import('../lib/server'); // This is now handled by the new import style
 // To store the real axios for the proxy tests
 let realAxiosInstance: typeof axios;
 
@@ -216,6 +250,11 @@ vi.mock('fs/promises', async (importOriginal) => {
     readFile: vi.fn<(path: fs.PathOrFileDescriptor, options?: fs.ObjectEncodingOptions | BufferEncoding | null) => Promise<string | Buffer>>().mockResolvedValue('mock file content'),
   };
 });
+
+// Import serverLibModule AFTER all top-level mocks that it might depend on indirectly.
+// This also resolves TS2440.
+import * as actualServerLibModule from '../lib/server.js'; // Use .js extension
+let serverLibModule: typeof actualServerLibModule; // This will be assigned in beforeEach for suites needing resetModules
 
 
 describe('Server Tool Response Formatting', () => {
@@ -848,6 +887,10 @@ describe('findFreePort', () => {
 
     portCounter = 0; // Reset for EADDRINUSE simulations
 
+    // Dynamically import serverLibModule for this suite
+    // Add .js extension for ESM module resolution
+    serverLibModule = await import('../lib/server.js'); 
+
     // Reset implementations for each test
     mockHttpServerListenFn.mockReset();
     mockHttpServerOnFn.mockReset();
@@ -1015,7 +1058,7 @@ describe('startProxyServer', () => {
   const targetExistingServerPort = 3000; // Port the actual existing CodeCompass server is on
   let proxyListenPort: number; // Port the proxy server will listen on
   
-  let findFreePortSpy: MockInstance<[number, (number | undefined)?], Promise<number>>;
+  let findFreePortSpy: Mock<((startPort: number, endPort?: number) => Promise<number>)>;
   let proxyServerHttpInstance: httpModule.Server | null = null; // Renamed to avoid confusion
 
   beforeEach(async () => {
@@ -1026,7 +1069,7 @@ describe('startProxyServer', () => {
     
     // Unmock axios specifically for this suite so test calls to the proxy are real
     vi.doUnmock('axios'); 
-    realAxiosInstance = (await import('axios')).default;
+    realAxiosInstance = (await import('axios')).default as any; // Cast to any
 
     // stableMockConfigServiceInstance and stableMockLoggerInstance are already defined globally
     // and used by the vi.mock for '../lib/config-service'.

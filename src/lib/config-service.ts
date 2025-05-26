@@ -253,6 +253,7 @@ class ConfigService {
     } else {
       this._httpPort = this._httpPortFallback;
     }
+    this.logger.debug(`[ConfigService constructor] Initial process.env.HTTP_PORT: "${process.env.HTTP_PORT}", _httpPort set to: ${this._httpPort}, _httpPortFallback: ${this._httpPortFallback}`);
 
     // For _summarizationModel and _refinementModel, we'll set them properly in loadConfigurationsFromFile
     // and reloadConfigsFromFile after _suggestionModel is definitively set.
@@ -408,6 +409,7 @@ class ConfigService {
   }
   
   public reloadConfigsFromFile(_forceSet = true): void {
+    this.logger.debug(`[ConfigService reload] Entry. process.env.HTTP_PORT: "${process.env.HTTP_PORT}"`);
       // Re-initialize from env/defaults
     this._llmProvider = process.env.LLM_PROVIDER || "ollama";
     this._suggestionModel = process.env.SUGGESTION_MODEL || "llama3.1:8b";
@@ -443,6 +445,7 @@ class ConfigService {
     // Change to:
     this.logger.debug(`[config-service reload] process.env.HTTP_PORT before Number(): '${process.env.HTTP_PORT}' (type: ${typeof process.env.HTTP_PORT})`); // THIS LOG
     this._httpPort = Number(process.env.HTTP_PORT) || this._httpPortFallback;
+    this.logger.debug(`[ConfigService reload] After re-evaluating from env, _httpPort: ${this._httpPort}`);
     
     // Initialize from env, file loading will override if present, then derive.
     this._summarizationModel = process.env.SUMMARIZATION_MODEL || "";
@@ -504,6 +507,7 @@ class ConfigService {
   // get HTTP_PORT(): number { return parseInt(process.env.HTTP_PORT || '', 10) || this._httpPort; } // Original
   // Change to:
   get HTTP_PORT(): number {
+    this.logger.debug(`[ConfigService HTTP_PORT getter] global.CURRENT_HTTP_PORT: ${global.CURRENT_HTTP_PORT}, this._httpPort: ${this._httpPort}, process.env.HTTP_PORT: "${process.env.HTTP_PORT}"`);
     let resolvedPort: number;
 
     // _httpPort is initialized from process.env.HTTP_PORT or a fallback in the constructor.
