@@ -984,15 +984,18 @@ describe('Server Startup and Port Handling', () => {
     const expectedStatusFetchErrorSubstring = `Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT})`;
     const expectedAxiosErrorSubstring = "Failed to fetch status"; // This is the message of the error thrown by axios.get mock
 
-    let statusFetchErrorVerifiedNew = false;
+    let statusFetchErrorVerifiedForTest = false; // Use a different variable name to avoid conflict if statusFetchErrorVerified is used elsewhere
     for (const call of stableMockLoggerInstance.error.mock.calls) {
       const firstArg = call[0];
+      // The SUT logs: logger.error(`Error fetching status ...: ${String(statusError)}`);
+      // So, the error message "Failed to fetch status" will be part of the firstArg string.
       if (typeof firstArg === 'string' && firstArg.includes(expectedStatusFetchErrorSubstring) && firstArg.includes(expectedAxiosErrorSubstring)) {
-        statusFetchErrorVerifiedNew = true;
+        statusFetchErrorVerifiedForTest = true;
         break;
       }
     }
-    expect(statusFetchErrorVerifiedNew).toBe(true);
+    // For now, applying the plan's structure.
+    expect(statusFetchErrorVerifiedForTest).toBe(true);
 
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
   });
