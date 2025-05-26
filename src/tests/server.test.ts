@@ -736,7 +736,8 @@ describe('Server Startup and Port Handling', () => {
 
     const expectedNonCodeCompassMessage = `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server`;
     // Assert the structure of mock calls to help TypeScript for TS2493
-    const errorCalls = stableMockLoggerInstance.error.mock.calls as [string, any?][];
+    // Use unknown as intermediary to safely cast between incompatible types
+    const errorCalls = stableMockLoggerInstance.error.mock.calls as unknown as [string, any?][];
     const relevantNonCodeCompassCall = errorCalls.find(
       // The predicate ensures that we only deal with calls where the first arg is a string.
       // The 'as' cast above helps inform TS about the general expected structure.
