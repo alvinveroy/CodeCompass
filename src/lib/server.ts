@@ -1017,8 +1017,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
         results_count: q.results.length,
       }));
       logger.debug(
-        `[SERVER_TOOLS_DEBUG] formatSessionHistory for session ${session.id}. Queries count: ${queriesForLog.length}`,
-        JSON.stringify(queriesForLog, null, 2) // Explicitly stringify as a separate argument
+        `[SERVER_TOOLS_DEBUG] formatSessionHistory for session ${session.id}. Query count check.` // Temporarily removed the second argument.
       );
       
       return {
