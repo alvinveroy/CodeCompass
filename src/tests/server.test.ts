@@ -1308,7 +1308,7 @@ describe('startProxyServer', () => {
 
 
     // Default successful behavior for findFreePortSpy for most tests in this suite
-    findFreePortSpy.mockResolvedValue(proxyListenPort); // Ensure it returns a valid port number
+    findFreePortSpy.mockReset().mockResolvedValue(proxyListenPort); // Ensure it returns a valid port number
 
     nock.disableNetConnect(); // Default: disable network
     // Allow connections to localhost for the proxy server itself to listen
