@@ -288,8 +288,10 @@ describe('CLI with yargs (index.ts)', () => {
             '.', // Default repoPath
             '--port', '0', // Client-spawned servers use dynamic utility port
           ],
-          env: expect.objectContaining({
-            HTTP_PORT: '0', // Client-spawned servers use dynamic utility port
+          options: expect.objectContaining({ // Correctly nest env under options
+            env: expect.objectContaining({
+              HTTP_PORT: '0', // Client-spawned servers use dynamic utility port
+            }),
           }),
         })
       });
