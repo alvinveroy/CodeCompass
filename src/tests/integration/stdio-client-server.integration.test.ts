@@ -142,7 +142,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Reset mocks for LLM provider before each test if needed
     vi.clearAllMocks(); // This clears call history etc. Re-mock implementations if they are stateful per test.
     // Re-apply mock implementations if vi.clearAllMocks clears them
-     vi.mocked(mockLLMProviderInstance.generateText).mockResolvedValue("Mocked LLM response for integration test.");
+    // Re-apply default mock for generateText before specific tests use mockResolvedValueOnce
+    vi.mocked(mockLLMProviderInstance.generateText).mockResolvedValue("Mocked LLM response for integration test.");
 
     // Ensure configService mock is reset or its relevant properties are set for the test
     // This might involve dynamically importing and mocking configService if its state needs to be test-specific
