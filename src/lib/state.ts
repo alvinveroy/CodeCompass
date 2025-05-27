@@ -57,11 +57,12 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
     agentSteps: [],
     createdAt: Date.now(),
     lastUpdated: Date.now(),
+    _debug_retrievalCount: 0, // Initialize
   };
-  
+      
   sessions.set(sessionId, session);
   logger.info(`Created new session: ${sessionId}`);
-  logger.debug(`[STATE_DEBUG] createSession: Session '${sessionId}' created and stored. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
+  logger.debug(`[STATE_DEBUG] createSession: Session '${sessionId}' created and stored. Retrieval count: ${session._debug_retrievalCount}`);
   return session;
 }
 
@@ -72,7 +73,9 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
   if (sessionId && sessions.has(sessionId)) {
     const session = sessions.get(sessionId)!;
     session.lastUpdated = Date.now();
-    logger.debug(`[STATE_DEBUG] getOrCreateSession: Returning existing session '${sessionId}'. Queries: ${session.queries.length}.`);
+    session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
+    session._debug_lastRetrievedAt = Date.now(); // Timestamp
+    logger.debug(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt}`);
     return session;
   }
   
@@ -201,8 +204,10 @@ export function getSessionHistory(sessionId: string): SessionState {
     throw new Error(`Session not found: ${sessionId}`);
   }
   const session = sessions.get(sessionId)!;
+  session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
+  session._debug_lastRetrievedAt = Date.now(); // Timestamp
   const queryLog = session.queries.slice(-3).map(q => q.query.substring(0,30) + '...');
-  logger.debug(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}`);
+  logger.debug(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt}`);
   return session;
 }
 

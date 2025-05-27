@@ -324,8 +324,12 @@ const createMockLLMProvider = (): LLMProvider => {
       }
       if (prompt.toLowerCase().includes("suggest") && prompt.toLowerCase().includes("commit message")) {
         return Promise.resolve("SUT_SELF_MOCK: Mocked commit message suggestion.");
+      } else { // Add else block for logging non-matches
+        const lowerPrompt = prompt.toLowerCase(); // Ensure lowerPrompt is defined for the log
+        logger.warn(`[MOCK_LLM_PROVIDER] SUT self-mock: Prompt did NOT match specific conditions. Full prompt (lower): "${lowerPrompt}"`);
+        logger.info("[MOCK_LLM_PROVIDER] SUT self-mock: No specific prompt matched, returning generic response.");
+        return Promise.resolve("SUT_SELF_MOCK: Generic mocked LLM response.");
       }
-      return Promise.resolve("SUT_SELF_MOCK: Generic mocked LLM response.");
     }),
     generateEmbedding: vi.fn().mockResolvedValue([0.01, 0.02, 0.03, 0.04, 0.05]),
     processFeedback: vi.fn().mockResolvedValue(undefined),

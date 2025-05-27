@@ -33,7 +33,7 @@ import { validateGitRepository, indexRepository, getRepositoryDiff, getGlobalInd
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
 import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults } from "./state";
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults, getSessionHistory } from "./state";
 import winston from "winston"; // Added for temporary logger
 
 // RequestBodyWithId removed as it was only used by the /mcp HTTP endpoint
@@ -1718,12 +1718,15 @@ export async function startProxyServer(
           responseDataPreview: errorResponseData?.substring(0, 200), // Limit preview
         });
 
-        if (axiosError.response) {
+        if (axiosError.response && axiosError.response.headers) {
           res.status(axiosError.response.status);
           // Forward relevant headers from error response
           Object.keys(axiosError.response.headers).forEach(key => {
-            if (['content-type', 'content-length'].includes(key.toLowerCase())) {
-              res.setHeader(key, axiosError.response.headers[key] as string | string[]);
+            const headerValue = axiosError.response!.headers[key];
+            if (headerValue !== undefined) {
+              if (['content-type', 'content-length'].includes(key.toLowerCase())) {
+                res.setHeader(key, headerValue as string | string[]);
+              }
             }
           });
           if (errorResponseData) {
