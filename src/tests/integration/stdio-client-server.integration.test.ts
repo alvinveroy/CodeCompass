@@ -599,10 +599,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
     // Check for key parts of a suggestion response
     expect(suggestionText).toContain("## Suggestion");
-    expect(suggestionText).toContain("### Suggested Implementation"); // Added as per plan
-    expect(suggestionText).toContain("Based on the provided context and snippets"); // Added as per plan
+    expect(suggestionText).toContain("### Suggested Implementation"); 
+    expect(suggestionText).toContain("Based on the provided context and snippets"); 
     // Check for specific SUT self-mocked content based on debug logs
-    expect(suggestionText).toContain("calculateSquare(value: number = x): number"); // A code snippet from the mock
+    expect(suggestionText).toContain("calculateSquare(value: number = x): number"); 
     // Ensure the formatting for "Suggested Implementation" is also present if the SUT_SELF_MOCK includes it or if it's part of a standard wrapper
     // Based on Attempt 58's debug log, the test failed because it expected '**Suggested Implementation**:' (colon inside bold)
     // but received '**Suggested Implementation**:' (colon outside bold).
@@ -652,10 +652,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
     // Check for key parts of a repo context summary
     expect(repoContextText).toContain("## Summary");
-    expect(repoContextText).toContain("Unified Agent Orchestration"); // Added as per plan
-    expect(repoContextText).toContain("primary user-facing tool called `agent_query`"); // Added as per plan
+    expect(repoContextText).toContain("Unified Agent Orchestration"); 
+    expect(repoContextText).toContain("primary user-facing tool called `agent_query`"); 
     // Check for specific SUT self-mocked content based on debug logs
-    expect(repoContextText).toContain("### File: CHANGELOG.md"); // A section from the mock
+    expect(repoContextText).toContain("### File: CHANGELOG.md"); 
     // Ensure the formatting for "Key Purpose" is also present if the SUT_SELF_MOCK includes it or if it's part of a standard wrapper
     // Based on Attempt 58's debug log, the test failed because it expected 'Main Purpose' but got '### Key Purpose:'.
     // The current code already asserts `toContain("### Key Purpose:")`.
