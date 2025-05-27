@@ -34,7 +34,6 @@ import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provid
 import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
 import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults, getSessionHistory, getInMemorySessionKeys, getRawSessionForDebug } from "./state";
-import winston from "winston"; // Added for temporary logger
 
 // RequestBodyWithId removed as it was only used by the /mcp HTTP endpoint
 
