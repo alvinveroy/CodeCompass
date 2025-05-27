@@ -994,7 +994,159 @@ This guard seems correct for preventing runtime errors, but TypeScript might sti
 ### Analysis/Retrospection for Attempt 48 (Awaiting User's Build Output):
 *   (To be filled in after user provides `npm run build` output)
 
-### Plan for Next Attempt (Attempt 49) (Awaiting User's Build Output):
-*   (To be filled in after user provides `npm run build` output)
+## Attempt 49: Mixed Results - TypeScript Regressions, DeepSeek Mock Success, Persistent Test Failures
+
+**Summary of Attempt 49 Results:**
+
+*   **TypeScript Compilation Errors (3):**
+    *   `src/lib/server.ts:808:41 - error TS2304: Cannot find name 'getSessionHistory'.` (This was expected to be fixed by adding the import. The fix might not have been applied correctly or was reverted.)
+    *   `src/tests/index.test.ts:646:30 - error TS2339: Property 'withContext' does not exist on type 'Assertion<[message?: any, ...optionalParams: any[]] | undefined>'.` (The previous fix for this was to remove `withContext` and rely on `toBeDefined()` and a manual error throw. This error suggests `withContext` might have been re-introduced or the condition leading to `jsonOutputCall` being undefined persists.)
+    *   `src/tests/integration/stdio-client-server.integration.test.ts:260:25 - error TS2339: Property 'CODECOMPASS_INTEGRATION_TEST_MOCK_LLM' does not exist on type '{ ... }'.` (The fix was to add this optional property to the `TestSpawnEnv` interface. This suggests the interface update might not have been applied or was incorrect.)
+*   **Vitest Transform Errors:** **NONE!** This is good.
+*   **Test Failures (27 total):**
+    *   **`src/tests/index.test.ts` (19 failures):**
+        *   `mockStartServer` / `StdioClientTransport` not called: 12 tests.
+        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests.
+        *   `--json` output test: `expected undefined to be defined` (1 test). This means `jsonOutputCall` is still undefined. The diagnostic log `[JSON_TEST_DEBUG] mockConsoleLog calls for --json test:` should provide clues.
+        *   `fs.readFileSync` for `changelog` command: Mock not called (1 test).
+    *   **`src/tests/server.test.ts` (4 failures):**
+        *   All 4 are timeouts (20000ms) in the `startProxyServer` suite. The diagnostic logging added to `startProxyServer` in `src/lib/server.ts` should help pinpoint where these are hanging.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
+        *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy not called.
+        *   `get_session_history`: Assertion `expected '# Session History...' to contain 'Query 2: "second agent query...'` failed. The debug logs for session state should be very informative here.
+        *   `generate_suggestion` & `get_repository_context`: Tests receive actual LLM output. The SUT self-mocking for `llm-provider.ts` (via `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`) is still not effective. The diagnostic logs for `mockId` in `llm-provider.ts` and the specific mock responses in `createMockLLMProvider` should help.
+*   **DeepSeek API Connection Errors in Logs:** **RESOLVED!** The `getaddrinfo ENOTFOUND api.deepseek.com` errors are **GONE**. This confirms that the SUT self-mocking for `deepseek.ts` (via `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`) is working correctly.
+*   **Misleading Log:** The "Preload script not found" log in `stdio-client-server.integration.test.ts` was correctly removed.
+
+**Analysis of Key Issues:**
+
+1.  **TypeScript Errors:** These are regressions or indicate previous fixes were not correctly applied/saved. They are the top priority.
+2.  **`src/tests/index.test.ts` Mocking:** The fundamental issue of `mockStartServer` and `StdioClientTransport` not being picked up by the SUT (`dist/index.js`) remains the biggest challenge in this file. The `--json` test failure is a symptom of `mockConsoleLog` not capturing the expected JSON output.
+3.  **`src/tests/server.test.ts` Timeouts:** The `startProxyServer` timeouts point to issues in the async flow of its mocks (`findFreePortSpy`, internal `http.Server.listen`).
+4.  **Integration Test LLM Mocking:** The SUT self-mocking for `llm-provider.ts` is not working. The server process is not using the mocked LLM provider.
+5.  **Integration Test Session History:** The "Query 2 missing" issue is critical. The extensive logging added to `src/lib/state.ts` and `src/lib/server.ts` (tool handlers) should provide clear evidence of where the session state diverges.
+
+**Plan for Attempt 50:**
+
+Here are the instructions for the editor engineer:
+
+**1. Fix TypeScript Compilation Errors (Highest Priority):**
+
+*   **File:** `src/lib/server.ts`
+    *   **Ensure `getSessionHistory` is imported:**
+        Verify that the import statement at the top of the file correctly includes `getSessionHistory` from `./state`. It should look like this (preserving other existing imports):
+        ```typescript
+        import { 
+          // ... other existing imports from state ...
+          getSessionHistory 
+        } from './state';
+        ```
+        If it's missing, add it.
+
+*   **File:** `src/tests/index.test.ts`
+    *   **Correct the `--json` output test assertion:**
+        Locate the test: `'should output raw JSON when --json flag is used on successful tool call'` (around line 630).
+        Ensure the assertion block is as follows (this version removes `withContext` and relies on `toBeDefined` and a manual error if `jsonOutputCall` is not found):
+        ```typescript
+        // console.log('[JSON_TEST_DEBUG] mockConsoleLog calls for --json test:', JSON.stringify(mockConsoleLog.mock.calls, null, 2)); // Keep for debugging
+        const jsonOutputCall = mockConsoleLog.mock.calls.find(call => {
+          if (call.length > 0 && typeof call[0] === 'string') {
+            try {
+              JSON.parse(call[0]);
+              return true; 
+            } catch (e) {
+              return false;
+            }
+          }
+          return false;
+        });
+
+        if (!jsonOutputCall) {
+          console.error('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Calls were:', JSON.stringify(mockConsoleLog.mock.calls));
+          // Use Vitest's expect to fail the test clearly if jsonOutputCall is undefined
+          expect(jsonOutputCall, 'Expected to find a console.log call with valid JSON output, but none was found.').toBeDefined(); 
+        } else {
+          // If jsonOutputCall is found, proceed with parsing and checking content.
+          const parsedOutput = JSON.parse(jsonOutputCall[0] as string);
+          expect(parsedOutput).toEqual(expect.objectContaining(rawToolResult));
+        }
+        ```
+
+*   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
+    *   **Ensure `TestSpawnEnv` interface includes `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`:**
+        Locate the `interface TestSpawnEnv` definition (around line 155).
+        Verify that it includes the optional property:
+        ```typescript
+        interface TestSpawnEnv {
+          // ... other existing properties ...
+          CODECOMPASS_INTEGRATION_TEST_MOCK_LLM?: string; // Ensure this line is present
+        }
+        ```
+        If missing, add it.
+
+**2. Address `src/tests/index.test.ts` Mocking Failures (19 tests):**
+
+*   **File:** `src/tests/index.test.ts`
+    *   **Focus on `mockStartServer` and `StdioClientTransport`:**
+        *   Uncomment the diagnostic log inside the `vi.mock('../../src/lib/server.ts', ...)` factory (around line 71):
+            ```typescript
+            vi.mock('../../src/lib/server.ts', () => {
+              console.log('[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts IS RUNNING'); // Uncomment this
+              return {
+                get startServerHandler() { return mockStartServerHandler; },
+                // ... other exports
+              };
+            });
+            ```
+        *   Uncomment the diagnostic log inside the `vi.mock('@modelcontextprotocol/sdk/client/stdio.js', ...)` factory (around line 87):
+            ```typescript
+            vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => { // Uses mockStdioClientTransportConstructor
+              console.log('[INDEX_TEST_DEBUG] Mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING'); // Uncomment this
+              return { 
+                get StdioClientTransport() { return mockStdioClientTransportConstructor; },
+              };
+            });
+            ```
+        *   **In `src/index.ts` (SUT - temporarily modify for diagnostics):**
+            Just before `startServerHandler` is called (or `StdioClientTransport` is instantiated), add temporary logging to inspect what was imported.
+            Example (conceptual, adapt to actual import style in `src/index.ts`):
+            ```typescript
+            // In src/index.ts, before startServerHandler is used:
+            // import { startServerHandler } from './lib/server'; // If this is how it's imported
+            // console.log('[SUT_INDEX_TS_DEBUG] Imported startServerHandler type:', typeof startServerHandler);
+            // console.log('[SUT_INDEX_TS_DEBUG] Is startServerHandler a mock?', startServerHandler === mockStartServerHandler); // This comparison won't work directly due to scope, but typeof might give clues.
+            // console.log('[SUT_INDEX_TS_DEBUG] startServerHandler.isMockFunction:', !!startServerHandler.mock); // Check if it has Vitest mock properties
+
+            // Similarly for StdioClientTransport
+            // import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio';
+            // console.log('[SUT_INDEX_TS_DEBUG] Imported StdioClientTransport type:', typeof StdioClientTransport);
+            // console.log('[SUT_INDEX_TS_DEBUG] StdioClientTransport.isMockFunction:', !!(StdioClientTransport as any).mock);
+            ```
+            *Self-correction: The SUT is `dist/index.js`. Modifying `src/index.ts` and rebuilding is the way to get these logs into the SUT execution path for tests.*
+            **Action for Editor Engineer:** Add the above `console.log` lines in `src/index.ts` before the respective handlers/classes are used.
+
+**3. Address `src/tests/server.test.ts` Timeouts (4 tests - `startProxyServer` suite):**
+
+*   The diagnostic logging added in Attempt 48 to `startProxyServer` in `src/lib/server.ts` should provide detailed information in the test output. Analyze this output carefully to see where the tests are hanging. No new code changes for this file in this attempt, focus on analyzing the logs from the previous changes.
+
+**4. Address `src/tests/integration/stdio-client-server.integration.test.ts` Failures (4 tests):**
+
+*   **LLM Mocking (`generate_suggestion`, `get_repository_context`):**
+    *   **File:** `src/lib/llm-provider.ts`
+        *   Ensure the `mockId` logging added in Attempt 48 within `getLLMProvider` (when `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM === 'true'`) is active and not commented out. This is crucial to see if the SUT (spawned server) is creating/using the SUT-self-mocked provider.
+    *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
+        *   In the `vi.mock('../../lib/llm-provider', ...)` factory (around line 50), ensure the `mockLLMProviderInstance.mockId` assignment and its `console.log` are uncommented:
+            ```typescript
+            const mockLLMProviderInstance = {
+              // ... other mocked methods ...
+              mockId: 'test-suite-mock-llm-provider-instance' // Ensure this is set
+            };
+            // ...
+            console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING, mockLLMProviderInstance.mockId is: ', mockLLMProviderInstance.mockId); // Ensure this is uncommented
+            ```
+*   **`get_session_history` (missing "Query 2"):**
+    *   The extensive logging added in Attempt 48 to `src/lib/state.ts` and `src/lib/server.ts` (tool handlers) should provide a clear trace. Analyze this output carefully. No new code changes for these files in this attempt, focus on analyzing the logs.
+
+After these changes, please run `npm run build` and provide the full output. We will analyze the new TypeScript errors (if any), the diagnostic logs, and the test results to plan the next steps.
 
 ---
