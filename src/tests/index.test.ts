@@ -89,30 +89,23 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Uses mockStdioC
   get StdioClientTransport() { return mockStdioClientTransportConstructor; },
 }));
 
-// vi.mock('../../src/lib/config-service.ts', () => { // Uses currentMockConfigServiceInstance, currentMockLoggerInstance
-//  return {
-//    get configService() { return currentMockConfigServiceInstance; },
-//    get logger() { return currentMockLoggerInstance; },
-//  };
-// });
+vi.mock('../../src/lib/server.ts', () => { // Target .ts source file relative to this test file
+  console.log('[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts IS RUNNING');
+  return {
+    // Use a getter to help with potential hoisting issues if mockStartServerHandler is defined later
+    get startServerHandler() { return mockStartServer; }, // mockStartServer is the mock function
+    get ServerStartupError() { return ServerStartupError; } // ServerStartupError is the class
+  };
+});
 
-// vi.mock('../../src/lib/server.ts', () => { // Uses mockStartServer, ServerStartupError
-//  return {
-//    get startServerHandler() { return mockStartServer; },
-//    get ServerStartupError() { return ServerStartupError; },
-//  };
-// });
-// --- End Mocks ---
-//     get logger() { return currentMockLoggerInstance; },
-//   };
-// });
-
-// vi.mock('../../src/lib/server.ts', () => { // Uses mockStartServer, ServerStartupError
-//   return {
-//     get startServerHandler() { return mockStartServer; },
-//     get ServerStartupError() { return ServerStartupError; },
-//   };
-// });
+vi.mock('../../src/lib/config-service.ts', () => { // Target .ts source file relative to this test file
+  console.log('[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/config-service.ts IS RUNNING');
+  return {
+    // Use a getter
+    get configService() { return currentMockConfigServiceInstance; },
+    get logger() { return currentMockLoggerInstance; }
+  };
+});
 // --- End Mocks ---
 
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
@@ -201,37 +194,11 @@ describe('CLI with yargs (index.ts)', () => {
     const indexPath = require.resolve('../../dist/index.js');
     process.argv = ['node', indexPath, ...args];
     vi.resetModules(); // Keep this to ensure fresh SUT import
-
-    // Apply mocks for SUT dependencies using vi.doMock, paths relative to SUT (dist/index.js)
-    // Path from dist/index.js to dist/lib/server.js is './lib/server.js'
-    const SUT_RELATIVE_SERVER_MODULE_PATH = './lib/server.js'; 
-    // Path from dist/index.js to dist/lib/config-service.js is './lib/config-service.js'
-    const SUT_RELATIVE_CONFIG_MODULE_PATH = './lib/config-service.js';
-
-    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_CONFIG_MODULE_PATH: ${SUT_RELATIVE_CONFIG_MODULE_PATH}`);
-    vi.doMock(SUT_RELATIVE_CONFIG_MODULE_PATH, () => { // Path relative to dist/index.js
-      console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_CONFIG_MODULE_PATH (${SUT_RELATIVE_CONFIG_MODULE_PATH}) IS RUNNING`);
-      return {
-        configService: currentMockConfigServiceInstance, // SUT imports configService
-        logger: currentMockLoggerInstance, // SUT imports logger
-      };
-    });
-
-    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_SERVER_MODULE_PATH: ${SUT_RELATIVE_SERVER_MODULE_PATH}`);
-    vi.doMock(SUT_RELATIVE_SERVER_MODULE_PATH, () => { // Path relative to dist/index.js
-      console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_SERVER_MODULE_PATH (${SUT_RELATIVE_SERVER_MODULE_PATH}) IS RUNNING`);
-      return {
-        startServerHandler: mockStartServer, // SUT imports startServerHandler (mockStartServer is the mock fn)
-        ServerStartupError: ServerStartupError, // SUT imports ServerStartupError
-        // Add any other exports from server.js that src/index.ts might import directly
-      };
-    });
     
     // Re-apply fs mock if needed after vi.resetModules()
-    vi.doMock('fs', () => ({
-      default: mockedFsSpies,
-      ...mockedFsSpies,
-    }));
+    // fs mock is now top-level, vi.resetModules() might clear it if not handled by Vitest's own reset logic for top-level mocks.
+    // If issues arise, explicitly re-applying vi.doMock('fs', ...) might be needed here.
+    // For now, assume top-level fs mock persists or is correctly reset by Vitest.
 
     const SUT_distPath = path.dirname(indexPath); // Correctly define SUT_distPath
     

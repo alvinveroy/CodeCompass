@@ -33,7 +33,7 @@ import { validateGitRepository, indexRepository, getRepositoryDiff, getGlobalInd
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
 import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults, getSessionHistory, getInMemorySessionKeys } from "./state";
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults, getSessionHistory, getInMemorySessionKeys, getRawSessionForDebug } from "./state";
 import winston from "winston"; // Added for temporary logger
 
 // RequestBodyWithId removed as it was only used by the /mcp HTTP endpoint
@@ -811,6 +811,10 @@ function registerTools( // Removed async
             const updatedSessionForAgentQuery = getSessionHistory(args.sessionId); // Re-fetch to ensure we see what getSessionHistory would see
             logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): After addQuery. Query count from re-fetched session: ${updatedSessionForAgentQuery.queries.length}.`);
             logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Queries object after addQuery: ${JSON.stringify(updatedSessionForAgentQuery.queries, null, 2)}`);
+
+        // If you added getRawSessionForDebug to state.ts:
+        const currentSessionState = getRawSessionForDebug(session.id); // session.id should be available from processAgentQuery's return or args.sessionId
+        logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${session.id}): Full session state from map AFTER addQuery: ${JSON.stringify(currentSessionState, null, 2)}`);
         } else {
             logger.warn('[SERVER_TOOL_DEBUG] agent_query: sessionId is undefined in args after processAgentQuery.');
         }
@@ -1041,6 +1045,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       );
       
       // Add this log:
+      logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Queries array BEFORE formatSessionHistory: ${JSON.stringify(session.queries, null, 2)}`);
       console.log(`[SERVER_TS_DEBUG] In get_session_history for session ${session.id}, session.queries BEFORE formatting:`, JSON.stringify(session.queries));
       // User requested logging:
       const queryLog = session.queries.map(q => q.query.substring(0, 30) + '...');

@@ -113,10 +113,16 @@ export function addQuery(
   const newQueryEntry = { timestamp: Date.now(), query, results, relevanceScore };
   logger.info(`[STATE_DEBUG] addQuery: BEFORE adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Queries count: ${session.queries.length}, Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
   session.queries.push(newQueryEntry);
+  console.log(`[STATE_TS_CONSOLE_DEBUG] addQuery for ${session.id}: Directly after push - length: ${session.queries.length}, content: ${JSON.stringify(session.queries.map(q => q.query))}`);
   session.lastUpdated = Date.now();
   // Add a log after pushing the query
   logger.info(`[STATE_DEBUG] addQuery: AFTER adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Total queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
   return session;
+}
+
+// Add this new export if sessions map is not directly exportable/accessible
+export function getRawSessionForDebug(sessionId: string): SessionState | undefined {
+  return sessions.get(sessionId);
 }
 
 // Add this new export
