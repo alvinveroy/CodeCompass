@@ -33,7 +33,7 @@ import { validateGitRepository, indexRepository, getRepositoryDiff, getGlobalInd
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
 import { processAgentQuery } from './agent-service';
 import { VERSION } from "./version";
-import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults, getSessionHistory } from "./state";
+import { getOrCreateSession, addQuery, addSuggestion, updateContext, getRecentQueries, getRelevantResults, getSessionHistory, getInMemorySessionKeys } from "./state";
 import winston from "winston"; // Added for temporary logger
 
 // RequestBodyWithId removed as it was only used by the /mcp HTTP endpoint
@@ -1047,6 +1047,10 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Retrieved session. Query count: ${session.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
       logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Retrieved session. Query count from session object: ${session.queries.length}.`);
       logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Queries object: ${JSON.stringify(session.queries, null, 2)}`);
+      // Add this:
+      if (session.queries.length < 2 && sessionIdValue.startsWith("manual-session-")) { // Or some other condition indicating the problematic test case
+           logger.warn(`[SERVER_TOOL_DEBUG] get_session_history: Discrepancy detected for session ${sessionIdValue}. Current in-memory session keys: [${getInMemorySessionKeys().join(', ')}]`);
+      }
           
       return {
         content: [{

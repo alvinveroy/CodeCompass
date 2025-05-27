@@ -60,11 +60,12 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
     createdAt: Date.now(),
     lastUpdated: Date.now(),
     _debug_retrievalCount: 0, // Initialize
+    _debug_lastRetrievedAt: Date.now(), // Initialize
   };
       
   sessions.set(sessionId, session);
   logger.info(`Created new session: ${sessionId}`);
-  logger.debug(`[STATE_DEBUG] createSession: Session '${sessionId}' created and stored. Retrieval count: ${session._debug_retrievalCount}`);
+  logger.debug(`[STATE_DEBUG] createSession: Session '${sessionId}' created and stored. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt!).toISOString()}`);
   return session;
 }
 
@@ -77,7 +78,7 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
     session.lastUpdated = Date.now();
     session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
     session._debug_lastRetrievedAt = Date.now(); // Timestamp
-    logger.debug(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt}`);
+    logger.debug(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}`);
     return session;
   }
   
@@ -93,7 +94,7 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
 
 
   const newSession = createSession(repoPath!, sessionId); // repoPath should be guaranteed by now if creating
-  logger.debug(`[STATE_DEBUG] getOrCreateSession: Created new session '${newSession.id}' for repoPath '${repoPath}'. Queries: ${newSession.queries.length}.`);
+  logger.debug(`[STATE_DEBUG] getOrCreateSession: Created new session '${newSession.id}' for repoPath '${repoPath}'. Queries: ${newSession.queries.length}. Retrieval count: ${newSession._debug_retrievalCount}, Last retrieved at: ${new Date(newSession._debug_lastRetrievedAt!).toISOString()}`);
   sessions.set(newSession.id, newSession);
   return newSession;
 }
@@ -113,6 +114,11 @@ export function addQuery(
   const queryLog = session.queries.slice(-3).map(q => q.query.substring(0,30) + '...');
   logger.debug(`[STATE_DEBUG] addQuery: Added to session '${sessionId}'. Query: "${query.substring(0,50)}...". Total queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}`);
   return session;
+}
+
+// Add this new export
+export function getInMemorySessionKeys(): string[] {
+  return Array.from(sessions.keys());
 }
 
 // Add a suggestion to session
@@ -209,7 +215,7 @@ export function getSessionHistory(sessionId: string): SessionState {
   session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
   session._debug_lastRetrievedAt = Date.now(); // Timestamp
   const queryLog = session.queries.slice(-3).map(q => q.query.substring(0,30) + '...');
-  logger.debug(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt}`);
+  logger.debug(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}`);
   return session;
 }
 
