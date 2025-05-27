@@ -1,7 +1,3 @@
-// Define these constants at the very top, before any imports or other code.
-// const MOCKED_CONFIG_SERVICE_MODULE_PATH = path.resolve(__dirname, '../../src/lib/config-service.ts'); // Not strictly needed if vi.mock path is direct
-// const MOCKED_SERVER_MODULE_PATH = path.resolve(__dirname, '../../src/lib/server.ts'); // Not strictly needed
-
 import path from 'path';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -27,16 +23,17 @@ const mockMcpClientInstance = { // DEFINED HERE
 
 // Store the original configService mock structure to reset it
 const originalMockConfigServiceInstance = { HTTP_PORT: 0, AGENT_QUERY_TIMEOUT: 180000 };
+
 // These will be freshly created in beforeEach
-let currentMockConfigServiceInstance: typeof originalMockConfigServiceInstance; // DEFINED HERE (as let)
-let currentMockLoggerInstance: { // DEFINED HERE (as let)
+let currentMockConfigServiceInstance: typeof originalMockConfigServiceInstance; 
+let currentMockLoggerInstance: { 
   info: Mock; warn: Mock; error: Mock; debug: Mock;
 };
 
 // Define mock functions and ServerStartupError class first
-const mockStartServer = vi.fn().mockResolvedValue({ close: vi.fn() }); // DEFINED HERE
-const mockStartProxyServer = vi.fn(); // DEFINED HERE
-const ServerStartupError = class ServerStartupError extends Error { // DEFINED HERE
+const mockStartServer = vi.fn().mockResolvedValue({ close: vi.fn() }); 
+const mockStartProxyServer = vi.fn(); 
+const ServerStartupError = class ServerStartupError extends Error { 
   exitCode: number;
   originalError?: Error;
   existingServerStatus?: any;
@@ -58,17 +55,15 @@ const mockSpawnFn = vi.fn(); // DEFINED HERE
 
 // END MOCK DEFINITIONS
 
-// NOW THE VI.MOCK CALLS - APPLY GETTER PATTERN
+// NOW THE VI.MOCK CALLS
 
-vi.mock('fs', () => ({ // Uses mockedFsSpies
-  // default: mockedFsSpies, // Getter pattern might be complex for default export
-  // ...mockedFsSpies,
+vi.mock('fs', () => ({ 
   get default() { return mockedFsSpies; },
   get statSync() { return mockedFsSpies.statSync; },
   get readFileSync() { return mockedFsSpies.readFileSync; },
 }));
 
-vi.mock('child_process', async () => { // Uses mockSpawnFn
+vi.mock('child_process', async () => { 
   const actualCp = await vi.importActual('child_process') as typeof import('child_process');
   return {
     ...actualCp,
@@ -76,16 +71,15 @@ vi.mock('child_process', async () => { // Uses mockSpawnFn
   };
 });
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ // Uses mockMcpClientInstance
+vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ 
   get Client() { return vi.fn().mockImplementation(() => mockMcpClientInstance); },
 }));
 
 vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
-  // StreamableHTTPClientTransport: vi.fn(), // If this mock is simple and doesn't use hoisted vars, it's fine
-  get StreamableHTTPClientTransport() { return vi.fn(); } // Or apply getter if needed
+  get StreamableHTTPClientTransport() { return vi.fn(); } 
 }));
 
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => { // Uses mockStdioClientTransportConstructor
+vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => { 
   console.log('[INDEX_TEST_DEBUG] Mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING');
   return { 
     get StdioClientTransport() { 
@@ -98,7 +92,7 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => { // Uses mockStdioCl
 // Top-level vi.doMock for local SUT dependencies, targeting source files
 // These must be BEFORE any imports from these modules in this test file or by the SUT.
 console.log('[INDEX_TEST_DEBUG] Setting up top-level vi.doMock for ../../src/lib/server.ts');
-vi.doMock('../../src/lib/server.ts', () => { // This was already here from a previous attempt, ensuring it's the active strategy
+vi.doMock('../../src/lib/server.ts', () => {
   console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts (top-level doMock) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
   return {
     startServerHandler: mockStartServer,
@@ -119,6 +113,9 @@ vi.doMock('../../src/lib/config-service.ts', () => {
 
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
 
+// Import the SUT path
+const indexPath = path.resolve(__dirname, '../../../dist/index.js'); // Moved up as it's used by runMainWithArgs logic
+
 // Near the top of src/tests/index.test.ts, after imports
 let actualStderrDataCallbackForClientTests: ((data: Buffer) => void) | null = null;
 let mockSpawnedProcessExitCallbackForClientTests: ((code: number | null, signal: NodeJS.Signals | null) => void) | null = null;
@@ -137,18 +134,11 @@ let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null
 
 // The fs mock is now defined at the top using mockedFsSpies
 
-// const mockSpawnFn = vi.fn(); // Moved up
-
 // --- Mocks for source files ---
-// Mocking the source files directly, as these are what the SUT (dist/index.js) will ultimately resolve
-// if its imports like `require('./lib/server.js')` are transpiled from `import ... from './lib/server'`
-// and module resolution + tsconfig paths work as expected.
-// Vitest's mocking mechanism should intercept these at the source level.
+// Top-level vi.doMock calls are now used for SUT's direct dependencies.
 // --- End Mocks ---
 
 import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
-
-// const mockSpawnFn = vi.fn(); // Moved up
 
 let mockProcessExit: MockInstance<typeof process.exit>;
 let mockConsoleLog: MockInstance<typeof console.log>;
@@ -177,17 +167,15 @@ describe('CLI with yargs (index.ts)', () => {
       info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
     };
     // Reset other top-level mocks that might be stateful
-    mockStartServer.mockReset().mockResolvedValue(undefined);
+    mockStartServer.mockReset().mockResolvedValue(undefined); // mockStartServer is defined before vi.doMock
     mockStartProxyServer.mockReset().mockResolvedValue(undefined);
-    // mockAxiosGet reset removed as it's no longer the primary path for client commands
+    
     mockMcpClientInstance.callTool.mockReset().mockResolvedValue({ content: [{ type: 'text', text: 'Tool call success' }] });
     mockMcpClientInstance.connect.mockReset().mockResolvedValue(undefined);
     mockMcpClientInstance.close.mockReset().mockResolvedValue(undefined);
     
-    // Set up the implementation for the hoisted mock
-    mockStdioClientTransportConstructor.mockImplementation(() => ({
+    mockStdioClientTransportConstructor.mockImplementation(() => ({ // mockStdioClientTransportConstructor is defined before vi.mock
       close: mockStdioClientTransportInstanceClose,
-      // connect: vi.fn().mockResolvedValue(undefined), // If needed, manage its mock state too
     }));
 
     delete process.env.HTTP_PORT;
@@ -200,72 +188,30 @@ describe('CLI with yargs (index.ts)', () => {
   });
     
   async function runMainWithArgs(args: string[]) {
-    const indexPath = require.resolve('../../dist/index.js');
+    // indexPath is now defined at a higher scope
     process.argv = ['node', indexPath, ...args];
-    vi.resetModules(); // Keep this to ensure fresh SUT import
-
-    const SUT_RELATIVE_SERVER_MODULE_PATH = './lib/server.js'; // Relative to dist/index.js
-    const SUT_RELATIVE_CONFIG_MODULE_PATH = './lib/config-service.js'; // Relative to dist/index.js
-
-    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_SERVER_MODULE_PATH: ${SUT_RELATIVE_SERVER_MODULE_PATH}`);
-    vi.doMock(SUT_RELATIVE_SERVER_MODULE_PATH, () => {
-      console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_SERVER_MODULE_PATH (${SUT_RELATIVE_SERVER_MODULE_PATH}) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
-      return {
-        startServerHandler: mockStartServer, // Ensure mockStartServer is defined
-      };
-    });
-
-    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_CONFIG_MODULE_PATH: ${SUT_RELATIVE_CONFIG_MODULE_PATH}`);
-    vi.doMock(SUT_RELATIVE_CONFIG_MODULE_PATH, () => {
-      console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_CONFIG_MODULE_PATH (${SUT_RELATIVE_CONFIG_MODULE_PATH}) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
-      return {
-        configService: currentMockConfigServiceInstance, // Ensure mockConfigServiceInstance is defined (it's currentMockConfigServiceInstance)
-      };
-    });
     
+    // vi.resetModules() is crucial when using vi.doMock for modules that the SUT will import.
+    // It ensures that when the SUT (indexPath) is imported, it gets the freshly mocked versions.
+    vi.resetModules(); 
+
+    // The top-level vi.doMock calls for '../../src/lib/server.ts' and '../../src/lib/config-service.ts'
+    // should apply here because vi.resetModules() clears the module cache, and on next import (by SUT),
+    // Vitest will use the vi.doMock factories.
+
     // Re-apply fs mock if needed after vi.resetModules()
-    // fs mock is now top-level, vi.resetModules() might clear it if not handled by Vitest's own reset logic for top-level mocks.
-    // If issues arise, explicitly re-applying vi.doMock('fs', ...) might be needed here.
+    // The top-level vi.mock('fs', ...) should ideally be reapplied by Vitest's mechanisms.
+    // If fs calls fail, explicitly re-mocking fs here with vi.doMock might be necessary.
     // For now, assume top-level fs mock persists or is correctly reset by Vitest.
-
-    const SUT_distPath = path.dirname(indexPath); // Correctly define SUT_distPath
-    
-    // Dynamically resolve paths as src/index.ts would
-    // const SUT_distPath = path.dirname(indexPath); // This was the duplicate declaration
-    const resolvedSUTLibPath = path.join(SUT_distPath, 'lib'); // Path to SUT's lib dir
-
-    // Ensure config-service is mocked for the SUT (dist/index.js -> dist/lib/config-service.js)
-    // The top-level vi.mock('../lib/config-service', ...) might not be picked up correctly
-    // by the SUT if it resolves paths differently.
-    // Using vi.doMock here to ensure the mock is applied just before the SUT import.
-    // This path should be relative from THIS test file to the SUT's expected import path.
-    // If dist/index.js imports from './lib/config-service.js', then this mock path needs to target that.
-    // Assuming dist/index.js imports from './lib/config-service.js'
-    // and this test file is src/tests/index.test.ts
-    // The path from src/tests/index.test.ts to dist/lib/config-service.js is '../../dist/lib/config-service.js'
-    
-    // vi.doMock calls for server.js and config-service.js are removed as per strategy change.
-    // Top-level vi.mock for the source .ts files should handle this.
     
     console.log('[INDEX_TEST_DEBUG] mockStartServer type before SUT import:', typeof mockStartServer);
-    // console.log(`[INDEX_TEST_DEBUG] About to import SUT: ${indexPath}. Top-level mocks for src/lib/*.ts should be active.`);
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: About to import SUT from indexPath: ${indexPath}`);
     
+    // The import of the SUT (dist/index.js) will trigger its execution.
+    // It should pick up the mocks established by top-level vi.doMock calls due to vi.resetModules().
     const mainModule = await import(indexPath);
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT imported. main function type: ${typeof (mainModule as any)?.main}`);
-    // console.log('[INDEX_TEST_DEBUG] SUT imported. Module keys:', mainModule ? Object.keys(mainModule) : 'null');
     
-    // If main() is exported and needs to be called:
-    // if (mainModule && typeof mainModule.main === 'function') {
-    //   await mainModule.main();
-    // }
-    // If the import itself executes the CLI logic (e.g. top-level await yargs.parseAsync()):
-    // No explicit call needed.
-
-    // Clean up the specific mock for this run
-    // vi.unmock(path.resolve(__dirname, '../../src/lib/config-service.ts')); // Use string literal
-    // vi.unmock(path.resolve(__dirname, '../../src/lib/server.ts')); // Use string literal // Important to clean up // Diagnostic: Comment out unmock
-
     // Yargs fail handler might call process.exit. We catch errors from parseAsync
     // to allow assertions on console.error or logger.error before process.exit is checked.
     try {
