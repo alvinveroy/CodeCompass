@@ -813,8 +813,8 @@ function registerTools( // Removed async
             logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Queries object after addQuery: ${JSON.stringify(updatedSessionForAgentQuery.queries, null, 2)}`);
 
         // If you added getRawSessionForDebug to state.ts:
-        const currentSessionState = getRawSessionForDebug(session.id); // session.id should be available from processAgentQuery's return or args.sessionId
-        logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${session.id}): Full session state from map AFTER addQuery: ${JSON.stringify(currentSessionState, null, 2)}`);
+        const currentSessionState = getRawSessionForDebug(args.sessionId); 
+        logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Full session state from map AFTER addQuery: ${currentSessionState ? JSON.stringify(currentSessionState, null, 2) : 'SESSION_NOT_FOUND_IN_MAP'}`);
         } else {
             logger.warn('[SERVER_TOOL_DEBUG] agent_query: sessionId is undefined in args after processAgentQuery.');
         }
