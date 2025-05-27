@@ -1113,14 +1113,497 @@ ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
 
   // Add this new tool registration:
   server.tool(
-- Results: ${q.results.length}
-- Relevance Score: ${q.relevanceScore.toFixed(2)}
-`).join('')}
+    "trigger_repository_update",
+    "Triggers a re-indexing of the repository. If this server instance's utility HTTP endpoint is disabled (due to another primary instance running), this request will be relayed to the primary instance. Otherwise, it triggers indexing locally.",
+    {}, // No parameters for this tool
+    async (_args: Record<string, never>, _extra: any) => {
+      logger.info("Tool 'trigger_repository_update' execution started.");
+      // The configService and logger should be available in this scope
+      // or retrieved if necessary. qdrantClient and repoPath are parameters to registerTools.
+      // llmProvider would need to be fetched if triggering locally.
 
-## Suggestions (${session.suggestions.length})
-${session.suggestions.map((s, i) => `
-### Suggestion ${i+1}
-- Timestamp: ${new Date(s.timestamp).toISOString()}
+      if (configService.IS_UTILITY_SERVER_DISABLED && configService.RELAY_TARGET_UTILITY_PORT) {
+        const targetUrl = `http://localhost:${configService.RELAY_TARGET_UTILITY_PORT}/api/repository/notify-update`;
+        logger.info(`Utility server is disabled, relaying repository update trigger to: ${targetUrl}`);
+        try {
+          // axios is already imported in server.ts
+          const response = await axios.post(targetUrl, {}); // Empty body for POST
+          logger.info(`Relayed repository update trigger successful, target server responded with status ${response.status}`);
+          return {
+            content: [{
+              type: "text",
+              text: `# Repository Update Triggered (Relayed to :${configService.RELAY_TARGET_UTILITY_PORT})\n\n${response.data.message || 'Update initiated on target server.'}`
+            }]
+          };
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          let errorDetails = errorMessage;
+          if (axios.isAxiosError(error) && error.response) {
+            errorDetails = `Status ${error.response.status}: ${JSON.stringify(error.response.data)}`;
+          }
+          logger.error(`Failed to relay repository update trigger: ${errorDetails}`);
+          return {
+            content: [{
+              type: "text",
+              text: `# Repository Update Trigger Failed (Relay Error)\n\nCould not relay to target server: ${errorDetails}`
+            }]
+          };
+        }
+      } else {
+        logger.info("Utility server is active, triggering local repository update.");
+        const currentStatus = getGlobalIndexingStatus(); // getGlobalIndexingStatus is imported
+        if (['initializing', 'validating_repo', 'listing_files', 'cleaning_stale_entries', 'indexing_file_content', 'indexing_commits_diffs'].includes(currentStatus.status)) {
+          const message = 'Indexing already in progress locally.';
+          logger.warn(message);
+          return {
+            content: [{ type: "text", text: `# Repository Update Trigger Failed\n\n${message}` }]
+          };
+        }
+        try {
+          const llmProvider = await getLLMProvider(); // getLLMProvider is imported
+          // indexRepository is imported. qdrantClient and repoPath are available from registerTools params.
+          indexRepository(qdrantClient, repoPath, llmProvider)
+            .then(() => logger.info("Local re-indexing process completed successfully via tool trigger."))
+            .catch(err => logger.error("Local re-indexing error via tool trigger:", err));
+          
+          return {
+            content: [{
+              type: "text",
+              text: "# Repository Update Triggered (Locally)\n\nRe-indexing initiated in the background."
+            }]
+          };
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.error(`Error initiating local repository update: ${errorMessage}`);
+          return {
+            content: [{
+              type: "text",
+              text: `# Repository Update Trigger Failed (Local Error)\n\n${errorMessage}`
+            }]
+          };
+        }
+      }
+    }
+  );
+    
+  if (suggestionModelAvailable) {
+    server.tool(
+      "generate_suggestion", // Renamed
+      "Generates code suggestions, implementation ideas, or examples based on a natural language query. It leverages repository context and relevant code snippets to provide targeted advice. \nExample: `{\"query\": \"Suggest an optimized way to fetch user data\"}`. For a specific task: `{\"query\": \"Write a Python function to parse a CSV file\"}`.",
+      {
+        query: z.string().describe("The query or prompt for generating code suggestions"),
+        sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
+      },
+      async (args: { query: string; sessionId?: string }, _extra: any) => {
+        // ... (handler logic remains the same, ensure logs refer to 'generate_suggestion')
+        logger.info(`Tool 'generate_suggestion' execution started.`);
+        logger.info("Received args for generate_suggestion", { args });
+
+        const queryStr = args.query || "code suggestion"; 
+        const sessionIdFromParams = args.sessionId;
+
+        if (args.query === undefined || args.query === null || args.query.trim() === "") {
+          logger.warn("No query provided or query is empty for generate_suggestion, using default 'code suggestion'");
+        }
+        
+      try {
+        const session = getOrCreateSession(sessionIdFromParams, repoPath);
+      
+      logger.info("Using query for generate_suggestion", { query: queryStr, sessionId: session.id });
+      
+      const isGitRepo = await validateGitRepository(repoPath);
+      const files = isGitRepo
+        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
+        : [];
+      const _diff = await getRepositoryDiff(repoPath);
+      
+      updateContext(session.id, repoPath, files, _diff);
+      
+      const recentQueries = getRecentQueries(session.id);
+      const relevantResults = getRelevantResults(session.id);
+      
+      const { results, refinedQuery } = await searchWithRefinement(
+        qdrantClient, 
+        queryStr, 
+        files
+      );
+      
+      // Map search results to context
+      const context = results
+      .map(r => {
+        if (r.payload?.dataType === 'file_chunk') {
+          const payload = r.payload;
+          return {
+            type: 'file_chunk',
+            filepath: payload.filepath,
+            snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+            last_modified: payload.last_modified,
+            relevance: r.score,
+            note: ""
+          };
+        } else if (r.payload?.dataType === 'commit_info') {
+          const payload = r.payload;
+          return {
+            type: 'commit_info',
+            commit_oid: payload.commit_oid,
+            message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH),
+            author: payload.commit_author_name,
+            date: payload.commit_date,
+            relevance: r.score,
+            note: "Commit Information"
+          };
+        } else if (r.payload?.dataType === 'diff_chunk') {
+          const payload = r.payload;
+          return {
+            type: 'diff_chunk',
+            commit_oid: payload.commit_oid,
+            filepath: payload.filepath,
+            snippet: payload.diff_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+            change_type: payload.change_type,
+            relevance: r.score,
+            note: "Diff Information"
+          };
+        }
+        logger.warn(`generate_suggestion: Encountered result with unknown payload type or missing dataType: ID ${r.id}`);
+        return null;
+      })
+      .filter(item => item !== null) as Array<{type: string; relevance: number; note: string; [key: string]: unknown}>;
+      
+      if (context.length < 2 && relevantResults.length > 0) {
+        const additionalContext = relevantResults
+          .filter(rUnk => { // Check if this result is already in context by a more robust ID or combination
+            const r = rUnk as DetailedQdrantSearchResult; // Assuming relevantResults are DetailedQdrantSearchResult
+            if (r.payload?.dataType === 'file_chunk') {
+              return !context.some(c => c.type === 'file_chunk' && c.filepath === (r.payload as FileChunkPayload).filepath);
+            } else if (r.payload?.dataType === 'commit_info') {
+              return !context.some(c => c.type === 'commit_info' && c.commit_oid === (r.payload as CommitInfoPayload).commit_oid);
+            } else if (r.payload?.dataType === 'diff_chunk') {
+              // Diff uniqueness might be more complex, e.g., commit_oid + filepath + chunk_index
+              return !context.some(c => c.type === 'diff_chunk' && c.commit_oid === (r.payload as DiffChunkPayload).commit_oid && c.filepath === (r.payload as DiffChunkPayload).filepath);
+            }
+            return false; // Don't include if type is unknown or not handled
+          })
+          .slice(0, 2) // Limit additional context items
+          .map(rUnk => {
+            const r = rUnk as DetailedQdrantSearchResult; // Cast again for type safety
+            if (r.payload?.dataType === 'file_chunk') {
+              const payload = r.payload;
+              return {
+                type: 'file_chunk', // Removed 'as const'
+                filepath: payload.filepath,
+                snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+                last_modified: payload.last_modified,
+                relevance: r.score,
+                note: "From previous related query"
+              };
+            } else if (r.payload?.dataType === 'commit_info') {
+              const payload = r.payload;
+              return {
+                type: 'commit_info', // Removed 'as const'
+                commit_oid: payload.commit_oid,
+                message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH),
+                author: payload.commit_author_name,
+                date: payload.commit_date,
+                relevance: r.score,
+                note: "From previous related query (Commit Info)"
+              };
+            } else if (r.payload?.dataType === 'diff_chunk') {
+              const payload = r.payload;
+              return {
+                type: 'diff_chunk', // Removed 'as const'
+                commit_oid: payload.commit_oid,
+                filepath: payload.filepath,
+                snippet: payload.diff_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+                change_type: payload.change_type,
+                relevance: r.score,
+                note: "From previous related query (Diff Info)"
+              };
+            }
+            return null; // Should be filtered out by preceding filter if type is not handled
+          })
+          .filter(item => item !== null); // Ensure no nulls from mapping
+        
+        context.push(...additionalContext as Array<{type: string; relevance: number; note: string; [key: string]: unknown}>); // Cast as it's a mix
+      }
+
+      const prompt = `
+**Context**:
+Repository: ${repoPath}
+Files: ${files.join(", ")}
+Recent Changes: ${_diff}
+${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
+
+**Relevant Snippets**:
+${context.map(c => {
+      let itemDetails = '';
+      if (c.type === 'file_chunk') {
+            // Assert to expected primitive types or string
+            const fc = c as unknown as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            itemDetails = `File: ${fc.filepath} (Last modified: ${String(fc.last_modified ?? 'N/A')}, Relevance: ${fc.relevance.toFixed(2)}${fc.note ? `, Note: ${String(fc.note)}` : ''})\nSnippet:\n${String(fc.snippet ?? '')}`;
+          } else if (c.type === 'commit_info') {
+            const ci = c as unknown as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
+            itemDetails = `Commit: ${ci.commit_oid} (Author: ${String(ci.author ?? 'N/A')}, Date: ${String(ci.date ?? 'N/A')}, Relevance: ${ci.relevance.toFixed(2)}${ci.note ? `, Note: ${String(ci.note)}` : ''})\nMessage Snippet:\n${String(ci.message ?? '')}`;
+          } else if (c.type === 'diff_chunk') {
+            const dc = c as unknown as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            itemDetails = `Diff: ${dc.filepath} in commit ${dc.commit_oid} (Type: ${String(dc.change_type ?? 'N/A')}, Relevance: ${dc.relevance.toFixed(2)}${dc.note ? `, Note: ${String(dc.note)}` : ''})\nDiff Snippet:\n${String(dc.snippet ?? '')}`;
+          }
+      return itemDetails;
+    }).join("\n\n")}
+
+**Instruction**:
+Based on the provided context and snippets, generate a detailed code suggestion for "${queryStr}". Include:
+- A suggested code implementation or improvement.
+- An explanation of how it addresses the query.
+- References to the provided snippets or context where applicable.
+Ensure the suggestion is concise, practical, and leverages the repository's existing code structure. If the query is ambiguous, provide a general solution with assumptions clearly stated.
+      `;
+      
+      const llmProvider: LLMProvider = await getLLMProvider();
+      
+      const suggestion = await llmProvider.generateText(prompt);
+      
+      addSuggestion(session.id, queryStr, suggestion);
+      
+      const formattedResponse = `# Code Suggestion for: "${queryStr}"
+${refinedQuery !== queryStr ? `\n> Query refined to: "${refinedQuery}"` : ''}
+
+## Suggestion
+${suggestion}
+
+## Context Used
+${context.map(c => {
+      if (c.type === 'file_chunk') {
+            const fc = c as unknown as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            return `
+### File: ${fc.filepath}
+- Last modified: ${String(fc.last_modified ?? 'N/A')}
+- Relevance: ${fc.relevance.toFixed(2)}
+${fc.note ? `- Note: ${String(fc.note)}` : ''}
+\`\`\`
+${String(fc.snippet ?? '')}
+\`\`\``;
+          } else if (c.type === 'commit_info') {
+            const ci = c as unknown as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
+            return `
+### Commit: ${ci.commit_oid}
+- Author: ${String(ci.author ?? 'N/A')}, Date: ${String(ci.date ?? 'N/A')}
+- Relevance: ${ci.relevance.toFixed(2)}
+${ci.note ? `- Note: ${String(ci.note)}` : ''}
+Message Snippet:
+\`\`\`
+${String(ci.message ?? '')}
+\`\`\``;
+          } else if (c.type === 'diff_chunk') {
+            const dc = c as unknown as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            return `
+### Diff: ${dc.filepath} (Commit: ${String(dc.commit_oid)})
+- Change Type: ${String(dc.change_type ?? 'N/A')}
+- Relevance: ${dc.relevance.toFixed(2)}
+${dc.note ? `- Note: ${String(dc.note)}` : ''}
+Diff Snippet:
+\`\`\`
+${String(dc.snippet ?? '')}
+\`\`\``;
+          }
+      return '';
+    }).join('\n')}
+
+## Recent Changes
+\`\`\`
+${_diff}
+\`\`\`
+
+Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
+      
+      return {
+          content: [{
+            type: "text",
+            text: formattedResponse,
+          }],
+        };
+      } catch (error: unknown) {
+        logger.error("Error in generate_suggestion tool", { error: error instanceof Error ? error.message : String(error) });
+        return {
+          content: [{
+            type: "text",
+            text: `# Error in Generate Suggestion Tool\n\nThere was an unexpected error processing your query: ${error instanceof Error ? error.message : String(error)}\n\nPlease check the server logs for more details.`,
+          }],
+        };
+      }
+    });
+    
+    // Add a new feedback tool - REMOVED (provide_feedback)
+
+    // Get Repository Context Tool with state management
+    server.tool(
+      "get_repository_context", // Renamed
+      "Provides a high-level summary of the repository's structure, common patterns, and conventions relevant to a specific query. It uses semantic search to find pertinent information and synthesizes it. \nExample: `{\"query\": \"What are the main components of the API service?\"}`. To understand coding standards: `{\"query\": \"coding conventions for frontend development\"}`.",
+      {
+        query: z.string().describe("The query to get repository context for"),
+        sessionId: z.string().optional().describe("Optional session ID to maintain context between requests")
+      },
+      async (args: { query: string; sessionId?: string }, _extra: any) => {
+        // ... (handler logic remains the same, ensure logs refer to 'get_repository_context')
+        logger.info("Received args for get_repository_context", { args });
+
+        const queryStrCtx = args.query || "repository context"; 
+        const sessionIdFromParamsCtx = args.sessionId;
+
+        if (args.query === undefined || args.query === null || args.query.trim() === "") {
+          logger.warn("No query provided or query is empty for get_repository_context, using default 'repository context'");
+        }
+      
+      const session = getOrCreateSession(sessionIdFromParamsCtx, repoPath);
+      
+      logger.info("Using query for repository context", { query: queryStrCtx, sessionId: session.id });
+      
+      const isGitRepo = await validateGitRepository(repoPath);
+      const files = isGitRepo
+        ? await git.listFiles({ fs, dir: repoPath, gitdir: path.join(repoPath, ".git"), ref: "HEAD" })
+        : [];
+      const _diff = await getRepositoryDiff(repoPath);
+      
+      updateContext(session.id, repoPath, files, _diff);
+      
+      const { results, refinedQuery } = await searchWithRefinement(
+        qdrantClient, 
+        queryStrCtx, 
+        files
+      );
+      
+      const recentQueries = getRecentQueries(session.id);
+      
+      const context = results
+      .map(r => {
+        if (r.payload?.dataType === 'file_chunk') {
+          const payload = r.payload;
+          return {
+            type: 'file_chunk',
+            filepath: payload.filepath,
+            snippet: payload.file_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH),
+            last_modified: payload.last_modified,
+            relevance: r.score,
+          };
+        } else if (r.payload?.dataType === 'commit_info') {
+          const payload = r.payload;
+          return {
+            type: 'commit_info',
+            commit_oid: payload.commit_oid,
+            message: payload.commit_message.slice(0, configService.MAX_SNIPPET_LENGTH), // Snippet of commit message
+            author: payload.commit_author_name,
+            date: payload.commit_date,
+            relevance: r.score,
+          };
+        } else if (r.payload?.dataType === 'diff_chunk') {
+          const payload = r.payload;
+          return {
+            type: 'diff_chunk',
+            commit_oid: payload.commit_oid,
+            filepath: payload.filepath,
+            snippet: payload.diff_content_chunk.slice(0, configService.MAX_SNIPPET_LENGTH), // Snippet of diff
+            change_type: payload.change_type,
+            relevance: r.score,
+          };
+        }
+        logger.warn(`get_repository_context: Encountered result with unknown payload type or missing dataType: ID ${r.id}`);
+        return null;
+      })
+      .filter(item => item !== null) as Array<{type: string; relevance: number; [key: string]: unknown}>; // Type for prompt construction
+      
+      const summaryPrompt = `
+**Context**:
+Repository: ${repoPath}
+Files: ${files.join(", ")}
+Recent Changes: ${_diff}
+${recentQueries.length > 0 ? `Recent Queries: ${recentQueries.join(", ")}` : ''}
+
+**Relevant Information Snippets**:
+${context.map(c => {
+  let itemDetails = '';
+  if (c.type === 'file_chunk') {
+            const fc = c as unknown as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            itemDetails = `File: ${fc.filepath} (Last modified: ${String(fc.last_modified ?? 'N/A')}, Relevance: ${fc.relevance.toFixed(2)}${fc.note ? `, Note: ${String(fc.note)}` : ''})\nSnippet:\n${String(fc.snippet ?? '')}`;
+          } else if (c.type === 'commit_info') {
+            const ci = c as unknown as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
+            itemDetails = `Commit: ${ci.commit_oid} (Author: ${String(ci.author ?? 'N/A')}, Date: ${String(ci.date ?? 'N/A')}, Relevance: ${ci.relevance.toFixed(2)}${ci.note ? `, Note: ${String(ci.note)}` : ''})\nMessage Snippet:\n${String(ci.message ?? '')}`;
+          } else if (c.type === 'diff_chunk') {
+            const dc = c as unknown as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            itemDetails = `Diff: ${dc.filepath} in commit ${dc.commit_oid} (Type: ${String(dc.change_type ?? 'N/A')}, Relevance: ${dc.relevance.toFixed(2)}${dc.note ? `, Note: ${String(dc.note)}` : ''})\nDiff Snippet:\n${String(dc.snippet ?? '')}`;
+          }
+  return itemDetails;
+}).join("\n\n")}
+
+**Instruction**:
+Provide a concise summary of the context for "${queryStrCtx}" based on the repository files, commit history, diffs, and recent changes. Highlight key information relevant to the query, referencing specific files, commits, or snippets where applicable.
+      `;
+      
+      const llmProvider = await getLLMProvider();
+      
+      const summary = await llmProvider.generateText(summaryPrompt);
+      
+      addQuery(session.id, queryStrCtx, results);
+      
+      const formattedResponse = `# Repository Context Summary for: "${queryStrCtx}"
+${refinedQuery !== queryStrCtx ? `\n> Query refined to: "${refinedQuery}"` : ''}
+
+## Summary
+${summary}
+
+## Relevant Information Used for Summary
+${context.map(c => {
+  if (c.type === 'file_chunk') {
+            const fc = c as unknown as { filepath: string; last_modified?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            return `
+### File: ${fc.filepath}
+- Last modified: ${String(fc.last_modified ?? 'N/A')}
+- Relevance: ${fc.relevance.toFixed(2)}
+${fc.note ? `- Note: ${String(fc.note)}` : ''}
+\`\`\`
+${String(fc.snippet ?? '')}
+\`\`\``;
+          } else if (c.type === 'commit_info') {
+            const ci = c as unknown as { commit_oid: string; author?: string | null; date?: string | null; relevance: number; note?: string | null; message?: string | null };
+            return `
+### Commit: ${ci.commit_oid}
+- Author: ${String(ci.author ?? 'N/A')}, Date: ${String(ci.date ?? 'N/A')}
+- Relevance: ${ci.relevance.toFixed(2)}
+${ci.note ? `- Note: ${String(ci.note)}` : ''}
+Message Snippet:
+\`\`\`
+${String(ci.message ?? '')}
+\`\`\``;
+          } else if (c.type === 'diff_chunk') {
+            const dc = c as unknown as { filepath: string; commit_oid: string; change_type?: string | null; relevance: number; note?: string | null; snippet?: string | null };
+            return `
+### Diff: ${dc.filepath} (Commit: ${String(dc.commit_oid)})
+- Change Type: ${String(dc.change_type ?? 'N/A')}
+- Relevance: ${dc.relevance.toFixed(2)}
+${dc.note ? `- Note: ${String(dc.note)}` : ''}
+Diff Snippet:
+\`\`\`
+${String(dc.snippet ?? '')}
+\`\`\``;
+          }
+  return '';
+}).join('\n')}
+
+## Recent Changes
+\`\`\`
+${_diff}
+\`\`\`
+
+Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
+      
+      return {
+        content: [{
+          type: "text",
+          text: formattedResponse,
+        }],
+      };
+    });
+    
+  }
+}
 - Prompt: "${s.prompt.substring(0, 100)}..."
 ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
 - Feedback Comments: ${s.feedback.comments}` : '- No feedback provided'}
