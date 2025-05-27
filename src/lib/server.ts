@@ -374,7 +374,6 @@ ${currentStatus.errorDetails ? `- Error: ${currentStatus.errorDetails}` : ''}
 export async function startServer(repoPath: string): Promise<void> {
   // Add these logs for debugging the spawned server's environment
   // Temporarily create a new logger instance for this debug line if the main logger isn't ready
-  const tempLogger = winston.createLogger({ transports: [new winston.transports.Console({ format: winston.format.simple() })]});
   
   // The reloadConfigsFromFile(true) should ensure it re-reads process.env if called early enough.
   // configService.reloadConfigsFromFile(true); // This is already called later
@@ -794,14 +793,14 @@ function registerTools( // Removed async
         logger.debug(`[SERVER_TOOL_HANDLER] agent_query calling processAgentQuery. Query: "${query}", SessionId: "${sessionId}"`);
         const agentResponseText = await processAgentQuery(query, sessionId); // processAgentQuery only accepts two arguments
         logger.debug(`[SERVER_TOOL_HANDLER] agent_query processAgentQuery completed. Response: ${JSON.stringify(agentResponseText)}`);
-        console.log(`[SERVER_TOOL_CONSOLE_DEBUG] agent_query handler: session.queries after processAgentQuery: ${JSON.stringify(getOrCreateSession(sessionId, repoPath).queries.map(q => q.query))}`);
+        logger.debug(`[SERVER_TOOL_DEBUG] agent_query handler: session.queries after processAgentQuery: ${JSON.stringify(getOrCreateSession(sessionId, repoPath).queries.map(q => q.query))}`);
 
         // Add this log:
         if (sessionId) {
           // repoPath is available from the registerTools function's scope
           const currentSession = getOrCreateSession(sessionId, repoPath); 
           if (currentSession) {
-            console.log(`[SERVER_TS_DEBUG] After agent_query for session ${sessionId}, state.queries:`, JSON.stringify(currentSession.queries));
+            logger.debug(`[SERVER_TS_DEBUG] After agent_query for session ${sessionId}, state.queries: ${JSON.stringify(currentSession.queries)}`);
           }
         }
         // User requested logging:
@@ -1054,7 +1053,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       
       // Add this log:
       logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Queries array BEFORE formatSessionHistory: ${JSON.stringify(session.queries, null, 2)}`);
-      console.log(`[SERVER_TS_DEBUG] In get_session_history for session ${session.id}, session.queries BEFORE formatting:`, JSON.stringify(session.queries));
+      logger.debug(`[SERVER_TS_DEBUG] In get_session_history for session ${session.id}, session.queries BEFORE formatting: ${JSON.stringify(session.queries)}`);
       // User requested logging:
       const queryLog = session.queries.map(q => q.query.substring(0, 30) + '...');
       logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Retrieved session. Query count: ${session.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
@@ -1075,21 +1074,13 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 - Last Updated: ${new Date(session.lastUpdated).toISOString()}
 - Repository: ${session.context.repoPath}
 
-${(() => { // Adding the log here, before the ## Queries header is constructed
-  console.log(`[SERVER_TOOL_CONSOLE_DEBUG] formatSessionHistory: session.queries.length for header: ${session.queries.length}`);
-  return ''; 
-})()}## Queries (${session.queries.length})${(() => {
-  console.log(`[SERVER_TOOL_CONSOLE_DEBUG] formatSessionHistory: About to loop ${session.queries.length} queries.`);
-  return '';
-})()}
-${session.queries.map((q, i) => {
-  console.log(`[SERVER_TOOL_CONSOLE_DEBUG] formatSessionHistory: Formatting Query ${i + 1}: "${q.query}"`);
-  return `
+## Queries (${session.queries.length})
+${session.queries.map((q, i) => `
 ### Query ${i+1}: "${q.query}"
 - Timestamp: ${new Date(q.timestamp).toISOString()}
 - Results: ${q.resultsCount ?? 'N/A'}
 - Relevance Score: ${q.relevanceScore?.toFixed(2) || 'N/A'}
-`;}).join('')}
+`).join('')}
 
 ## Suggestions (${session.suggestions.length})
 ${session.suggestions.map((s, i) => `
