@@ -253,7 +253,7 @@ describe('Stdio Client-Server Integration Tests', () => {
       // CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Will be set below
       // NODE_OPTIONS for preload script removed
     };
-    const currentTestSpawnEnv = { ...baseSpawnEnv };
+    const currentTestSpawnEnv: Record<string, string | undefined> = { ...baseSpawnEnv };
     // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is set to 'true'
     currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM = 'true';
   
