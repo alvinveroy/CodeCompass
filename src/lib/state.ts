@@ -114,10 +114,11 @@ export function addQuery(
   const session = getOrCreateSession(sessionId, repoPath);
   const newQueryEntry = { timestamp: Date.now(), query, results, relevanceScore };
   logger.info(`[STATE_DEBUG] addQuery: BEFORE adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Queries count: ${session.queries.length}, Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
-  session.queries.push(newQueryEntry);
-  console.log(`[STATE_TS_CONSOLE_DEBUG] addQuery for ${session.id}: Directly after push - length: ${session.queries.length}, content: ${JSON.stringify(session.queries.map(q => q.query))}`);
-  const queriesCopy = [...session.queries];
-  logger.info(`[STATE_DEBUG] addQuery for ${session.id}: Shallow copy after push - length: ${queriesCopy.length}, content: ${JSON.stringify(queriesCopy.map(q => q.query))}`);
+  // Immutable update:
+  session.queries = [...session.queries, newQueryEntry];
+  console.log(`[STATE_TS_CONSOLE_DEBUG] addQuery for ${session.id}: Directly after immutable update - length: ${session.queries.length}, content: ${JSON.stringify(session.queries.map(q => q.query))}`);
+  // Log reflects the immutable update
+  logger.info(`[STATE_DEBUG] addQuery for ${session.id}: REPLACED (immutable) queries array. New length: ${session.queries.length}, content: ${JSON.stringify(session.queries.map(q => q.query))}`);
   session.lastUpdated = Date.now();
   // Add a log after pushing the query
   logger.info(`[STATE_DEBUG] addQuery: AFTER adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Total queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);

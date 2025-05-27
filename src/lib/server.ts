@@ -805,9 +805,9 @@ function registerTools( // Removed async
         }
         // User requested logging:
         if (args.sessionId) { // Check if sessionId was provided in args
-            const currentSessionState = getSessionHistory(args.sessionId); 
-            const queryLog = currentSessionState.queries.map(q => q.query.substring(0, 30) + '...');
-            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): After adding query (via processAgentQuery). Total queries now: ${currentSessionState.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
+            const agentQueryLogicSession = getSessionHistory(args.sessionId); 
+            const queryLog = agentQueryLogicSession.queries.map(q => q.query.substring(0, 30) + '...');
+            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): After adding query (via processAgentQuery). Total queries now: ${agentQueryLogicSession.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
             const updatedSessionForAgentQuery = getSessionHistory(args.sessionId); // Re-fetch to ensure we see what getSessionHistory would see
             logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): After addQuery. Query count from re-fetched session: ${updatedSessionForAgentQuery.queries.length}.`);
             logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Queries object after addQuery: ${JSON.stringify(updatedSessionForAgentQuery.queries, null, 2)}`);
