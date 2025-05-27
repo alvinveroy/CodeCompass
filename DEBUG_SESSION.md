@@ -89,7 +89,7 @@ This document chronicles an extensive debugging session aimed at resolving a mul
 ### Analysis/Retrospection for Attempt 57:
 *   **TypeScript Redeclaration Error:** This is the absolute top priority. The fix from Attempt 56 was not correctly applied or was insufficient. This prevents `server.test.ts` and `server-tools.test.ts` from running.
 *   **`get_session_history` Discrepancy (CRITICAL & BAFFLING):** The immutable update to `session.queries` in `addQuery` was correctly applied, yet the discrepancy persists. This means that even when `session.queries` is completely replaced with a new array, `getSessionHistory` (when retrieving the *same session object by ID*) sees an old version of the `queries` array. This suggests something more fundamental:
-    *   Could there be *two different `sessions` Map instances* in play? One modified by `addQuery` and another (older or different scope) read by `getSessionHistory`? This seems unlikely if `_debug_retrievalCount` previously indicated the same parent session object.
+    *   Could there be *two different `sessions` Map instances* in play? One modified by `addQuery` and another (older or different scope) read by `getSessionHistory`? This seems unlikely if `_debug_retrievalCount` previously indicated the same parent session object. The `SESSIONS_MAP_INSTANCE_ID` logging added in this attempt should clarify this.
     *   Is there any caching layer for session objects *above* the `sessions` Map in `state.ts` that `getSessionHistory` might be hitting?
     *   Is there an issue with how the `StdioClientTransport` or MCP layer handles requests sequentially, perhaps leading to race conditions or stale closures if the server processes requests in an unexpected async manner? (Less likely for simple in-memory map).
 *   **`src/tests/index.test.ts` Mocking:** The `vi.doMock` strategy for `dist` files is still not working. The SUT does not see the mocks.
@@ -100,24 +100,10 @@ This document chronicles an extensive debugging session aimed at resolving a mul
 
 1.  **Fix TypeScript Redeclaration Error in `src/lib/server.ts` (CRITICAL BUILD BLOCKER - AGAIN):**
     *   **File:** `src/lib/server.ts`:
-        *   **Action:** Provide the *entire* `agent_query` tool handler function from `src/lib/server.ts` so I can see the full context and pinpoint the duplicate `currentSessionState` declarations. This is essential to resolve the TS2451 errors.
+        *   **Action:** Since I now have the content of `src/lib/server.ts`, I will provide a specific fix for the `agent_query` handler.
 2.  **`get_session_history` Discrepancy (Investigate Potential Multiple `sessions` Map Instances):**
     *   **File:** `src/lib/state.ts`:
-        *   Add a unique identifier to the `sessions` Map instance itself when it's created.
-            ```typescript
-            // At the top of state.ts where sessions is defined:
-            export const sessions = new Map<string, SessionState>();
-            const SESSIONS_MAP_INSTANCE_ID = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-            logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized. Instance ID: ${SESSIONS_MAP_INSTANCE_ID}`);
-
-            // In getOrCreateSession, when accessing 'sessions':
-            logger.info(`[STATE_DEBUG] getOrCreateSession accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
-            // In addQuery, when accessing 'sessions':
-            logger.info(`[STATE_DEBUG] addQuery accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
-            // In getSessionHistory, when accessing 'sessions':
-            logger.info(`[STATE_DEBUG] getSessionHistory accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
-            ```
-        *   This will help determine if all operations are indeed using the exact same `Map` object.
+        *   Ensure the `SESSIONS_MAP_INSTANCE_ID` logging (added in Attempt 57) is correctly placed in `getOrCreateSession`, `addQuery`, and `getSessionHistory` to verify if the same `Map` instance is used.
 3.  **`src/tests/integration/stdio-client-server.integration.test.ts` - Align LLM Mock Assertions:**
     *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`:
         *   For `generate_suggestion`: Change `toContain("**Suggested Implementation**:")` to `toContain("**Suggested Implementation**:")` (ensure colon is outside the bolding).
