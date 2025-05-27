@@ -1084,7 +1084,7 @@ ${session.queries.map((q, i) => {
   return `
 ### Query ${i+1}: "${q.query}"
 - Timestamp: ${new Date(q.timestamp).toISOString()}
-- Results: ${q.results?.length ?? 'N/A'}
+- Results: ${q.resultsCount ?? 'N/A'}
 - Relevance Score: ${q.relevanceScore?.toFixed(2) || 'N/A'}
 `;}).join('')}
 
