@@ -1206,6 +1206,91 @@ Here are the instructions for the editor engineer:
 After these changes, please run `npm run build` and provide the full output. The absolute priority is to get detailed logs from `src/lib/state.ts` for the session discrepancy. Then, any clues from the `src/index.ts` SUT logging.
 ---
 
+## Attempt 53: Further Debug `get_session_history` & Re-try `index.test.ts` Mocking
+
+**Git Commit (Before Attempt 53 changes):** (User to fill with git commit SHA after applying Attempt 52 changes)
+**Git Commit (After Attempt 53 changes):** (User to fill after applying Attempt 53 changes)
+
+### Issues Addressed (Based on Plan for Attempt 53):
+1.  **`get_session_history` Discrepancy:**
+    *   `src/lib/state.ts`: Re-verified and ensured `_debug_retrievalCount` and `_debug_lastRetrievedAt` logging (using `logger.info`) was active in `SessionState`, `createSession`, `getOrCreateSession`, and `getSessionHistory`.
+    *   `src/lib/state.ts`: Added `getInMemorySessionKeys` debug function.
+    *   `src/lib/server.ts`: Used `getInMemorySessionKeys` in `get_session_history` handler for logging.
+2.  **`src/tests/index.test.ts` Mocking:**
+    *   Re-instated `vi.doMock` within `runMainWithArgs` for `dist` files (`./lib/server.js`, `./lib/config-service.js`), ensuring paths were relative to the SUT (`dist/index.js`).
+    *   Removed conflicting top-level `vi.mock` calls for these `dist` modules.
+    *   Added diagnostic logging in `src/index.ts` (SUT) to inspect imported `startServerHandler` and `configService`.
+
+### Result (Based on User's `npm run build` Output after applying Attempt 53 changes):
+*   **TypeScript Compilation: ALL RESOLVED!** `tsc` completed successfully.
+*   **Vitest Transform Errors: NONE!**
+*   **Test Failures (27 total):**
+    *   **`src/tests/index.test.ts` (19 failures):**
+        *   `mockStartServer` / `StdioClientTransport` not called: 12 tests. The `vi.doMock` strategy for `dist` files within `runMainWithArgs` **did not work**. SUT (`dist/index.js`) still imports real modules. Diagnostic logs from mock factories (`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_SERVER_MODULE_PATH...IS RUNNING`) were visible, but SUT logs (`[SUT_INDEX_TS_DEBUG] Imported startServerHandler...`) showed real implementations.
+        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests.
+        *   `--json` output test: `mockConsoleLog.mock.calls` is `[]`.
+        *   `fs.readFileSync` for `changelog` command: Mock not called.
+    *   **`src/tests/server.test.ts` (4 failures):**
+        *   All 4 are timeouts (30000ms) in the `startProxyServer` suite.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
+        *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy not called.
+        *   `get_session_history`: Assertion `expected '# Session History...' to contain 'Query 2: "second agent query...'` failed.
+            *   **Diagnostic Logs (Crucial):**
+                *   Logs from `src/lib/state.ts` (using `logger.info` for `_debug_retrievalCount`, `_debug_lastRetrievedAt`, `repoPath`) **ARE NOW VISIBLE**.
+                *   `[STATE_DEBUG] getOrCreateSession: Returning EXISTING session 'manual-session-...'. Queries: 1. Retrieval count: 1, Last retrieved at: ..., RepoPath: /var/folders/...` (Example for first call)
+                *   `[STATE_DEBUG] addQuery: BEFORE adding to session 'manual-session-...'. Session ID: manual-session-..., Repo: /var/folders/..., Queries count: 1, Retrieval count: 1, Last retrieved: ...`
+                *   `[STATE_DEBUG] addQuery: AFTER adding to session 'manual-session-...'. Session ID: manual-session-..., Repo: /var/folders/..., Total queries: 2.`
+                *   `[SERVER_TOOL_DEBUG] agent_query (session: manual-session-...): After addQuery. Query count from re-fetched session: 2.`
+                *   `[STATE_DEBUG] getSessionHistory: Requested for sid='manual-session-...'. Found: true. ... Current session keys: [manual-session-... (and others)]`
+                *   `[STATE_DEBUG] getSessionHistory: Returning for session 'manual-session-...'. Queries: 1. ... Retrieval count: 2, Last retrieved at: ...`
+                *   `[SERVER_TOOL_DEBUG] get_session_history (session: manual-session-...): Retrieved session. Query count from session object: 1.`
+                *   These logs confirm the *same session object instance* (based on matching `sessionId`, `repoPath`, and sequential `_debug_retrievalCount`) is being used by `addQuery` and `getSessionHistory`.
+                *   `addQuery` successfully adds the second query (session object in memory has 2 queries).
+                *   `getSessionHistory` later retrieves this *same session object instance*, but it only has 1 query when logged by `getSessionHistory` and the tool handler.
+        *   `generate_suggestion` & `get_repository_context`: **FAILING AGAIN (REGRESSION)**. Tests receive generic "SUT_SELF_MOCK: Generic mocked LLM response." instead of the specific mocked responses. Failure messages: `expected '# Code Suggestion for: "Suggest how t…' to contain 'SUT_SELF_MOCK: This is a generated su…'` and similar for context.
+*   **DeepSeek API Connection Errors in Logs:** **RESOLVED!**
+
+### Analysis/Retrospection for Attempt 53:
+*   **`get_session_history` Discrepancy (CRITICAL):** The detailed logs confirm the same session object instance is being mutated by `addQuery` (correctly showing 2 queries) but is later retrieved by `getSessionHistory` (from the same `sessions` map, using the same key) with only 1 query. This is extremely perplexing and points to a very subtle state modification issue or a problem in how `session.queries` is handled or perceived between the two tool calls, despite being the same object reference.
+*   **`src/tests/index.test.ts` Mocking:** `vi.doMock` for `dist` files in `runMainWithArgs` is ineffective. The SUT (`dist/index.js`) is not picking up the mocks.
+*   **Integration Test LLM Mock Assertions (Regression):** `generate_suggestion` and `get_repository_context` regressed. The SUT's self-mocking logic is not providing the specific detailed responses expected by the tests, falling back to the generic one. This suggests the prompt matching conditions in `createMockLLMProvider` are no longer being met, or the test assertions were inadvertently changed.
+*   **Persistent Failures:** `server.test.ts` timeouts, `index.test.ts` `--json` output, `trigger_repository_update` spy.
+
+---
+
+## Attempt 54: Debug Session State, Align LLM Asserts, Revert `index.test.ts` Mocks
+
+**Git Commit (Before Attempt 54 changes):** (User to fill with git commit SHA after applying Attempt 53 changes)
+**Git Commit (After Attempt 54 changes):** (User to fill after applying these new changes for Attempt 54)
+
+### Issues Addressed (Based on Plan for Attempt 54):
+1.  **`get_session_history` Discrepancy:**
+    *   `src/lib/state.ts`: Added direct `console.log` in `addQueryToSession` (e.g., `[STATE_TS_CONSOLE_DEBUG] addQuery...`) for immediate feedback on the `queries` array *during* the push operation.
+    *   `src/lib/server.ts`: Added logging of the full session state object (deep copy using `JSON.parse(JSON.stringify(session))`) in the `agent_query` handler (after `addQueryToSession`, e.g., `[SERVER_TOOL_DEBUG] agent_query ... Full session state...`) and detailed logging of the `session.queries` array (deep copy) in the `get_session_history` handler (before `formatSessionHistory`, e.g., `[SERVER_TOOL_DEBUG] get_session_history ... Queries array BEFORE formatSessionHistory...`).
+2.  **`src/tests/integration/stdio-client-server.integration.test.ts` - Align LLM Mock Assertions:**
+    *   Updated assertions for `generate_suggestion` and `get_repository_context` tests to expect the more detailed, specific content from the SUT's self-mocked LLM responses (e.g., "Suggested Implementation:", "Main Purpose:", "SUT_SELF_MOCK: This is a generated suggestion...", "SUT_SELF_MOCK: This is a summary of the repository context...").
+3.  **`src/tests/index.test.ts` Mocking Strategy:**
+    *   Reverted from `vi.doMock` (targeting `dist` files in `runMainWithArgs`) back to top-level `vi.mock` calls that target the **source `.ts` files** (e.g., `vi.mock('../../src/lib/server.ts', ...)` and `vi.mock('../../src/lib/config-service.ts', ...)`), using getters in the mock factories.
+    *   Removed `vi.doMock` calls from `runMainWithArgs`.
+    *   Kept diagnostic logs in `src/index.ts` (SUT) to check if mocks are picked up. Diagnostic logs also added to the mock factories in `index.test.ts`.
+
+### Result (Awaiting User's `npm run build` Output after applying Attempt 54 changes):
+*   TypeScript Compilation: (To be filled)
+*   Vitest Transform Errors: (To be filled)
+*   Test Failures: (To be filled)
+    *   `src/tests/index.test.ts`: (To be filled)
+    *   `src/tests/server.test.ts`: (To be filled)
+    *   `src/tests/integration/stdio-client-server.integration.test.ts`: (To be filled, especially `get_session_history`, `generate_suggestion`, `get_repository_context`)
+*   Diagnostic Log Analysis: (To be filled based on new logs for session state and `index.test.ts` SUT mocking)
+
+### Analysis/Retrospection for Attempt 54 (Awaiting User's Build Output):
+*   (To be filled)
+
+### Plan for Next Attempt (Attempt 55) (Awaiting User's Build Output):
+*   (To be filled)
+
+---
+
 **Summary of Attempt 52 Results:**
 
 *   TypeScript Compilation Errors: ALL RESOLVED! `tsc` completed successfully. This is excellent and consistent.
