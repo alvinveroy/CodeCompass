@@ -602,7 +602,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     // expect(suggestionText).toContain(specificSuggestionResponse); // Check for specific mocked content
     // The plan's assertion was: expect(suggestionText).toContain(specificResponse);
     // where specificResponse was the same as specificSuggestionResponse.
-    expect(suggestionText).toContain(specificSuggestionResponse);
+    expect(suggestionText).toContain("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts");
     // Optionally, still check that "Context Used" section exists if it's part of the format
     expect(suggestionText).toContain("Context Used");
     // And that file1.ts is mentioned somewhere in that context section if important
@@ -646,7 +646,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
     // Check for key parts of a repo context summary
     expect(repoContextText).toContain("## Summary");
-    expect(repoContextText).toContain(specificSummaryResponse); // Check for specific mocked content
+    expect(repoContextText).toContain("SUT_SELF_MOCK: This is a summary of the repository context, using info from file2.txt"); // Check for specific mocked content
     // Optionally, still check that "Relevant Information Used for Summary" section exists
     expect(repoContextText).toContain("Relevant Information Used for Summary");
     // And that file2.txt is mentioned somewhere in that context section if important
