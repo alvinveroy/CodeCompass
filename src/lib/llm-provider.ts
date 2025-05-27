@@ -312,24 +312,33 @@ const createMockLLMProvider = (): LLMProvider => {
   return {
     checkConnection: vi.fn().mockResolvedValue(true),
     generateText: vi.fn().mockImplementation(async (prompt: string) => {
-      logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock generateText called with prompt (first 100 chars): ${prompt.substring(0, 100)}...`);
-      if (prompt.toLowerCase().includes("suggest how to use file1.ts")) {
+      const lowerPrompt = prompt.toLowerCase();
+      logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock generateText called. Prompt (lower, first 100): ${lowerPrompt.substring(0, 100)}...`);
+      
+      if (lowerPrompt.includes("suggest how to use file1.ts") && lowerPrompt.includes("index file1")) {
+        logger.info("[MOCK_LLM_PROVIDER] SUT self-mock: Matched 'suggest file1.ts index file1' prompt.");
         return Promise.resolve("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts");
       }
-      if (prompt.toLowerCase().includes("what is the main purpose of this repo?")) {
+      
+      if (lowerPrompt.includes("what is the main purpose of this repo?") && lowerPrompt.includes("pendencies")) {
+        logger.info("[MOCK_LLM_PROVIDER] SUT self-mock: Matched 'main purpose of repo pendencies' prompt.");
         return Promise.resolve("SUT_SELF_MOCK: This is a summary of the repository context, using info from file2.txt");
       }
-      if (prompt.toLowerCase().includes("repository context") || prompt.toLowerCase().includes("summarize")) {
+      
+      if (lowerPrompt.includes("repository context") || lowerPrompt.includes("summarize")) {
+        logger.info("[MOCK_LLM_PROVIDER] SUT self-mock: Matched 'repository context' or 'summarize' prompt.");
         return Promise.resolve("SUT_SELF_MOCK: Mocked repository context summary.");
       }
-      if (prompt.toLowerCase().includes("suggest") && prompt.toLowerCase().includes("commit message")) {
+      if (lowerPrompt.includes("suggest") && lowerPrompt.includes("commit message")) {
+        logger.info("[MOCK_LLM_PROVIDER] SUT self-mock: Matched 'suggest commit message' prompt.");
         return Promise.resolve("SUT_SELF_MOCK: Mocked commit message suggestion.");
-      } else { // Add else block for logging non-matches
-        const lowerPrompt = prompt.toLowerCase(); // Ensure lowerPrompt is defined for the log
-        logger.warn(`[MOCK_LLM_PROVIDER] SUT self-mock: Prompt did NOT match specific conditions. Full prompt (lower): "${lowerPrompt}"`);
-        logger.info("[MOCK_LLM_PROVIDER] SUT self-mock: No specific prompt matched, returning generic response.");
-        return Promise.resolve("SUT_SELF_MOCK: Generic mocked LLM response.");
       }
+
+      // This 'else' is effectively gone because the conditions above cover the previous 'else' cases,
+      // and the new final block acts as the catch-all.
+      logger.warn(`[MOCK_LLM_PROVIDER] SUT self-mock: Prompt did NOT match specific conditions. Full prompt (lower): "${lowerPrompt}"`);
+      logger.info("[MOCK_LLM_PROVIDER] SUT self-mock: No specific prompt matched, returning generic response.");
+      return Promise.resolve("SUT_SELF_MOCK: Generic mocked LLM response.");
     }),
     generateEmbedding: vi.fn().mockResolvedValue([0.01, 0.02, 0.03, 0.04, 0.05]),
     processFeedback: vi.fn().mockResolvedValue(undefined),
