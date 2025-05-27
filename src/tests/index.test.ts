@@ -98,7 +98,7 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => { // Uses mockStdioCl
 // Top-level vi.doMock for local SUT dependencies, targeting source files
 // These must be BEFORE any imports from these modules in this test file or by the SUT.
 console.log('[INDEX_TEST_DEBUG] Setting up top-level vi.doMock for ../../src/lib/server.ts');
-vi.doMock('../../src/lib/server.ts', () => {
+vi.doMock('../../src/lib/server.ts', () => { // This was already here from a previous attempt, ensuring it's the active strategy
   console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts (top-level doMock) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
   return {
     startServerHandler: mockStartServer,
