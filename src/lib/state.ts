@@ -77,31 +77,27 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
 // Get or create a session
 export function getOrCreateSession(sessionId?: string, repoPath?: string): SessionState {
   const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
-  logger.debug(`[STATE_DEBUG] getOrCreateSession: sid='${sessionId}', repo='${repoPath}'. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
+  // Change logger.debug to logger.info for the main entry log
+  logger.info(`[STATE_DEBUG] getOrCreateSession: sid='${sessionId}', repo='${repoPath}'. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
   if (sessionId && sessions.has(sessionId)) {
     const session = sessions.get(sessionId)!;
     session.lastUpdated = Date.now();
     session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
     session._debug_lastRetrievedAt = Date.now(); // Timestamp
-    logger.info(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.context.repoPath}`);
+    // Change logger.info to include new debug fields and ensure it's logger.info, and use session.repoPath
+    logger.info(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.repoPath}`);
     return session;
   }
   
-  if (!repoPath && !sessionId) { // If no sessionId and no repoPath to create a new one
-     logger.error("[STATE_DEBUG] getOrCreateSession: Attempted to create session without repoPath and no existing sessionId.");
-     throw new Error("Repository path is required to create a new session if sessionId is not provided or not found.");
-  }
-  if (!repoPath && sessionId) { // If sessionId was provided but not found, and no repoPath
-     logger.warn(`[STATE_DEBUG] getOrCreateSession: SessionId '${sessionId}' not found, and no repoPath provided to create a new one. This might be an issue if creation was expected.`);
-     // Depending on strictness, you might throw here or let createSession handle it if it can.
-     // For now, let createSession proceed, it will use a default repoPath or error if that's not sensible.
+  if (!repoPath) { // If no repoPath to create a new one (sessionId might be new or undefined)
+     logger.error("[STATE_DEBUG] getOrCreateSession: repoPath is required to create a new session if sessionId is not found or provided.");
+     throw new Error("repoPath is required to create a new session.");
   }
 
-
-  const newSession = createSession(repoPath!, sessionId); // repoPath should be guaranteed by now if creating
-  // createSession now initializes _debug_retrievalCount
-  logger.info(`[STATE_DEBUG] getOrCreateSession: Created NEW session '${newSession.id}' for repoPath '${repoPath}'. Queries: ${newSession.queries.length}. Retrieval count: ${newSession._debug_retrievalCount}`);
-  // sessions.set is already done in createSession
+  logger.info(`[STATE_DEBUG] getOrCreateSession: SessionId '${sessionId}' not found or not provided. Creating new session with repoPath: '${repoPath}'.`);
+  const newSession = createSession(repoPath!, sessionId); 
+  // createSession now initializes _debug_retrievalCount and logs it.
+  // We can add another log here if needed, but createSession's log might be sufficient.
   return newSession;
 }
 
