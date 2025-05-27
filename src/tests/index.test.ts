@@ -90,7 +90,7 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Uses mockStdioC
 }));
 
 vi.mock('../../src/lib/server.ts', () => { // Target .ts source file relative to this test file
-  console.log('[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts IS RUNNING');
+  console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
   return {
     // Use a getter to help with potential hoisting issues if mockStartServerHandler is defined later
     get startServerHandler() { return mockStartServer; }, // mockStartServer is the mock function
@@ -99,7 +99,7 @@ vi.mock('../../src/lib/server.ts', () => { // Target .ts source file relative to
 });
 
 vi.mock('../../src/lib/config-service.ts', () => { // Target .ts source file relative to this test file
-  console.log('[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/config-service.ts IS RUNNING');
+  console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/config-service.ts IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
   return {
     // Use a getter
     get configService() { return currentMockConfigServiceInstance; },

@@ -84,6 +84,8 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
     session.lastUpdated = Date.now();
     session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
     session._debug_lastRetrievedAt = Date.now(); // Timestamp
+    // Log queries immediately after retrieval for existing session
+    logger.info(`[STATE_DEBUG] getOrCreateSession: EXISTING session '${sessionId}' queries (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
     // Change logger.info to include new debug fields and ensure it's logger.info, and use session.repoPath
     logger.info(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.repoPath}`);
     return session;
@@ -203,11 +205,14 @@ export function getSessionHistory(sessionId: string): SessionState {
   logger.info(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
   if (!sessions.has(sessionId)) {
     // Log existing sessions for easier debugging if a specific one is not found
+    logger.info(`[STATE_DEBUG] getSessionHistory for ${sessionId}: Session not found. Queries (deep copy): N/A`); // Log before throw
     const existingSessionIds = Array.from(sessions.keys());
     logger.warn(`[STATE_DEBUG] getSessionHistory: Session not found: '${sessionId}'. Existing session IDs: [${existingSessionIds.join(', ')}]. Caller: ${callStack}`); // Keep as warn
     throw new Error(`Session not found: ${sessionId}`);
   }
   const session = sessions.get(sessionId)!;
+  // Log queries immediately after retrieval
+  logger.info(`[STATE_DEBUG] getSessionHistory for ${sessionId}: ENTRY - queries (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
   session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
   session._debug_lastRetrievedAt = Date.now(); // Timestamp
   const queryLog = session.queries.slice(-3).map(q => ({ q: q.query, ts: q.timestamp, score: q.relevanceScore })); // Match user's requested queryLog
