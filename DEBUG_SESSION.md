@@ -1063,10 +1063,10 @@ Here are the instructions for the editor engineer:
 
         if (!jsonOutputCall) {
           console.error('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Calls were:', JSON.stringify(mockConsoleLog.mock.calls));
-          // Use Vitest's expect to fail the test clearly if jsonOutputCall is undefined
+          // Fail the test explicitly if no JSON call is found, or if calls array is empty
+          expect(mockConsoleLog.mock.calls.length, 'Expected console.log to have been called.').toBeGreaterThan(0);
           expect(jsonOutputCall, 'Expected to find a console.log call with valid JSON output, but none was found.').toBeDefined(); 
         } else {
-          // If jsonOutputCall is found, proceed with parsing and checking content.
           const parsedOutput = JSON.parse(jsonOutputCall[0] as string);
           expect(parsedOutput).toEqual(expect.objectContaining(rawToolResult));
         }
