@@ -36,6 +36,8 @@ export interface SessionState {
   }[];
   createdAt: number;
   lastUpdated: number;
+  _debug_retrievalCount?: number; // Add this
+  _debug_lastRetrievedAt?: number; // Add this
 }
 
 // In-memory state storage
