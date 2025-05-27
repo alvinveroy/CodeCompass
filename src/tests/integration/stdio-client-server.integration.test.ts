@@ -225,9 +225,7 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const preloadScriptPath = path.resolve(__dirname, './mock-llm-provider-child-setup.js');
     // Check if preload script exists
-    if (!fs.existsSync(preloadScriptPath)) {
-      console.warn(`[INTEGRATION_TEST_DEBUG] Preload script not found at: ${preloadScriptPath}. LLM/DeepSeek mocks in child process might not work.`);
-    }
+    // Removed misleading log as per plan
 
     // Add this to ensure previous test's transport is fully closed if not already
     if (transport && typeof transport.close === 'function') {

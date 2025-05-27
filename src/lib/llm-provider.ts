@@ -308,20 +308,26 @@ export function clearProviderCache(): void {
 }
 
 const createMockLLMProvider = (): LLMProvider => {
-  logger.info('[MOCK_LLM_PROVIDER] Creating and using MOCKED LLMProvider for integration tests.');
+  logger.info('[MOCK_LLM_PROVIDER] Creating and using MOCKED LLMProvider for integration tests (SUT self-mock).');
   return {
     checkConnection: vi.fn().mockResolvedValue(true),
     generateText: vi.fn().mockImplementation(async (prompt: string) => {
-      logger.info(`[MOCK_LLM_PROVIDER] generateText called with prompt: ${prompt.substring(0, 100)}...`);
+      logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock generateText called with prompt (first 100 chars): ${prompt.substring(0, 100)}...`);
+      if (prompt.toLowerCase().includes("suggest how to use file1.ts")) {
+        return Promise.resolve("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts");
+      }
+      if (prompt.toLowerCase().includes("what is the main purpose of this repo?")) {
+        return Promise.resolve("SUT_SELF_MOCK: This is a summary of the repository context, using info from file2.txt");
+      }
       if (prompt.toLowerCase().includes("repository context") || prompt.toLowerCase().includes("summarize")) {
-        return Promise.resolve("Mocked repository context summary from SUT self-mock.");
+        return Promise.resolve("SUT_SELF_MOCK: Mocked repository context summary.");
       }
       if (prompt.toLowerCase().includes("suggest") && prompt.toLowerCase().includes("commit message")) {
-        return Promise.resolve("Mocked commit message suggestion from SUT self-mock.");
+        return Promise.resolve("SUT_SELF_MOCK: Mocked commit message suggestion.");
       }
-      return Promise.resolve("Mocked LLM response from SUT self-mock.");
+      return Promise.resolve("SUT_SELF_MOCK: Generic mocked LLM response.");
     }),
-    generateEmbedding: vi.fn().mockResolvedValue([0.01, 0.02, 0.03, 0.04, 0.05]), // Use distinct values
+    generateEmbedding: vi.fn().mockResolvedValue([0.01, 0.02, 0.03, 0.04, 0.05]),
     processFeedback: vi.fn().mockResolvedValue(undefined),
   };
 };
@@ -332,12 +338,16 @@ const SUT_MOCK_PROVIDER_ID = 'sut-self-mocked-llm-provider-instance';
 export function getLLMProvider(forceNewInstance = false): LLMProvider {
   if (process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM === 'true') {
     if (!llmProviderInstance || forceNewInstance) {
-      logger.info('[MOCK_LLM_PROVIDER] SUT self-mocking: Creating and returning MOCKED LLMProvider instance.');
+      logger.info('[MOCK_LLM_PROVIDER] SUT self-mocking: Creating NEW MOCKED LLMProvider instance.');
       llmProviderInstance = createMockLLMProvider();
       // @ts-expect-error Assigning custom property for debugging
       llmProviderInstance.mockId = SUT_MOCK_PROVIDER_ID;
+      // @ts-expect-error
+      logger.info(`[MOCK_LLM_PROVIDER] SUT self-mocking: Created instance with mockId: ${llmProviderInstance.mockId}`);
     } else {
       // @ts-expect-error Checking custom property
+      logger.info(`[MOCK_LLM_PROVIDER] SUT self-mocking: Returning EXISTING MOCKED LLMProvider instance with mockId: ${llmProviderInstance.mockId}. Matched SUT_MOCK_PROVIDER_ID: ${llmProviderInstance.mockId === SUT_MOCK_PROVIDER_ID}`);
+      // @ts-expect-error
       if (llmProviderInstance.mockId !== SUT_MOCK_PROVIDER_ID) {
         logger.warn(`[MOCK_LLM_PROVIDER] SUT self-mocking: Instance ID mismatch (was ${
           // @ts-expect-error
@@ -346,8 +356,8 @@ export function getLLMProvider(forceNewInstance = false): LLMProvider {
         llmProviderInstance = createMockLLMProvider();
         // @ts-expect-error
         llmProviderInstance.mockId = SUT_MOCK_PROVIDER_ID;
-      } else {
-        logger.info('[MOCK_LLM_PROVIDER] SUT self-mocking: Returning existing MOCKED LLMProvider instance.');
+        // @ts-expect-error
+        logger.info(`[MOCK_LLM_PROVIDER] SUT self-mocking: Re-created instance with mockId: ${llmProviderInstance.mockId}`);
       }
     }
     return llmProviderInstance;

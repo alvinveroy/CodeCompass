@@ -629,6 +629,7 @@ describe('CLI with yargs (index.ts)', () => {
       mockConsoleLog.mockClear(); // Clear before running the command
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
       
+      console.log('[JSON_TEST_DEBUG] mockConsoleLog calls for --json test:', JSON.stringify(mockConsoleLog.mock.calls, null, 2));
       const jsonOutputCall = mockConsoleLog.mock.calls.find(call => {
         if (call.length > 0 && typeof call[0] === 'string') {
           try {
@@ -643,13 +644,15 @@ describe('CLI with yargs (index.ts)', () => {
         return false;
       });
 
-      expect(jsonOutputCall).withContext('Expected to find a console.log call with valid JSON output').toBeDefined();
-      
-      if (jsonOutputCall) { // Proceed if we found the JSON call
+        if (!jsonOutputCall) {
+          console.error('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Calls were:', JSON.stringify(mockConsoleLog.mock.calls));
+          throw new Error('Expected to find a console.log call with valid JSON output, but none was found.');
+        }
+        
+        expect(jsonOutputCall).toBeDefined(); // Ensure the call itself was found
+        
         const parsedOutput = JSON.parse(jsonOutputCall[0] as string);
-        // Assuming rawToolResult is the expected object structure
         expect(parsedOutput).toEqual(expect.objectContaining(rawToolResult));
-      }
     });
 
     it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)', { timeout: 30000 }, async () => {

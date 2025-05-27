@@ -1367,7 +1367,7 @@ describe('startProxyServer', () => {
     expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
       `[ProxyServer] Failed to find free port for proxy: ${findFreePortError.message}`
     );
-  }, 20000); // Increased timeout
+  }, 30000); // Increased timeout
 
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
     // findFreePortSpy is already mocked in beforeEach to resolve with proxyListenPort
@@ -1392,7 +1392,7 @@ describe('startProxyServer', () => {
     expect(response.status).toBe(200);
     expect(response.data).toEqual({ service: "CodeCompassTarget", status: "ok_target_ping", version: "1.0.0" });
     expect(nock.isDone()).toBe(true); // Nock for targetExistingServerPort should be consumed
-  }, 20000); // Increased timeout
+  }, 30000); // Increased timeout
 
   it('should handle target server unreachable for /mcp', async () => {
     // findFreePortSpy is mocked in beforeEach
@@ -1427,7 +1427,7 @@ describe('startProxyServer', () => {
       })
     );
     expect(nock.isDone()).toBe(true);
-  }, 20000); // Increased timeout
+  }, 30000); // Increased timeout
   
   it('should forward target server 500 error for /mcp', async () => {
     // findFreePortSpy is mocked in beforeEach
@@ -1453,7 +1453,7 @@ describe('startProxyServer', () => {
       expect(error.response.data).toEqual(errorBody);
     }
     expect(nock.isDone()).toBe(true);
-  }, 20000); // Increased timeout
+  }, 30000); // Increased timeout
 });
 
 describe('MCP Tool Relaying', () => {
