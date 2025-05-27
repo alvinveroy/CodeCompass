@@ -34,6 +34,101 @@ This document chronicles an extensive debugging session aimed at resolving a mul
     *   Test timeouts often indicate problems with asynchronous operations not resolving/rejecting or incorrect mock implementations for async functions (e.g., server `listen` callbacks not being invoked).
 
 ---
+## Attempt 58: Fix TypeScript Redeclaration, Refine Integration Test Assertions, Continue SUT Mocking Diagnostics
+
+**Git Commit (Before Attempt 58 changes):** (User to fill with git commit SHA after applying Attempt 57 changes)
+**Git Commit (After Attempt 58 changes):** (User to fill after applying these new changes)
+
+### Issues Addressed (Intended from Attempt 57 Plan):
+1.  **TypeScript Redeclaration Error (`src/lib/server.ts`):**
+    *   Meticulously reviewed and ensured unique naming for `currentSessionStateForLog` vs. any other `currentSessionState` in the `agent_query` handler.
+2.  **`get_session_history` Discrepancy (Immutable Update in `state.ts`):**
+    *   Ensured `session.queries = [...session.queries, queryRecord];` was used in `addQuery`.
+3.  **`src/tests/integration/stdio-client-server.integration.test.ts` - LLM Mock Assertions:**
+    *   Refined assertions for `generate_suggestion` and `get_repository_context` to match markdown bolding and colon placement (e.g., `toContain("**Suggested Implementation**:")`).
+4.  **`src/tests/index.test.ts` Mocking (Diagnostics Only):**
+    *   Added `process.argv` and `process.execArgv` logging in `src/index.ts` (SUT).
+
+### Result (Based on User's `npm run build` Output after applying Attempt 57 changes):
+*   **TypeScript Compilation Errors (2 in `src/lib/server.ts` - PERSISTENT):**
+    *   `src/lib/server.ts:808:19 - error TS2451: Cannot redeclare block-scoped variable 'currentSessionState'.`
+    *   `src/lib/server.ts:816:15 - error TS2451: Cannot redeclare block-scoped variable 'currentSessionState'.`
+    *   **Analysis:** The redeclaration of `currentSessionState` in the `agent_query` handler was **STILL NOT FIXED**. This is the absolute top priority as it blocks further testing of `server.ts` and `server-tools.test.ts`.
+*   **Vitest Transform Errors (2 test files failed to transform - `server-tools.test.ts`, `server.test.ts`):**
+    *   `ERROR: The symbol "currentSessionState" has already been declared` in `src/lib/server.ts`. This is a direct result of the TypeScript redeclaration error.
+*   **Test Failures (23 total - from suites that *did* run, excluding the 2 that failed to transform):**
+    *   **`src/tests/index.test.ts` (19 failures):**
+        *   `mockStartServer` / `StdioClientTransport` not called: 12 tests.
+            *   **SUT Diagnostic Logs (from `src/index.ts`):**
+                *   `[SUT_INDEX_TS_DEBUG] Main function started. argv: ["/Users/alvin.tech/.nvm/versions/node/v20.19.1/bin/node","/Users/alvin.tech/Projects/CodeCompass/dist/index.js"]` - **VISIBLE**.
+                *   `[SUT_INDEX_TS_DEBUG] process.argv: [...]` - **VISIBLE**.
+                *   `[SUT_INDEX_TS_DEBUG] process.execArgv: []` - **VISIBLE**.
+                *   `[SUT_INDEX_TS_DEBUG] Imported startServerHandler: function Is mock: false` - **VISIBLE & CRITICAL**. SUT is getting the real `startServerHandler`.
+                *   `[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT: undefined` - **VISIBLE & CRITICAL**.
+                *   `[SUT_INDEX_TS_DEBUG] Imported configService: object configService.DEEPSEEK_API_KEY (sample prop): exists` - **VISIBLE & CRITICAL**. SUT is getting real `configService`.
+        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests.
+        *   `--json` output test: `Expected to find a console.log call with valid JSON output, but none was found.: expected undefined to be defined`.
+        *   `fs.readFileSync` for `changelog` command: Mock not called.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
+        *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy not called.
+        *   `get_session_history`: Assertion `expected '# Session History...' to contain 'Query 2: "second agent query...'` failed.
+            *   **Diagnostic Logs (Session State - from build output):**
+                *   `[STATE_DEBUG] addQuery for manual-session-...: BEFORE push. Current queries length: 0...`
+                *   `[STATE_DEBUG] addQuery for manual-session-...: REPLACED (immutable) queries array. New length: 1...`
+                *   `[STATE_DEBUG] addQuery for manual-session-...: BEFORE push. Current queries length: 1...`
+                *   `[STATE_DEBUG] addQuery for manual-session-...: REPLACED (immutable) queries array. New length: 2...`
+                *   `[SERVER_TOOL_DEBUG] agent_query (session: manual-session-...): Full session state from map AFTER addQuery: { "id": "manual-session-...", "queries": [ {"query":"first search query..."}, {"query":"second agent query..."} ], ... }`
+                *   `[SERVER_TOOL_DEBUG] agent_query (session: manual-session-...): Re-fetched session queries AFTER addQuery (deep copy): [ {"query":"first search query..."}, {"query":"second agent query..."} ]`
+                *   `[STATE_DEBUG] getSessionHistory for manual-session-...: Immediately after map get - length: 1, content (deep copy): [{"query":"first search query..."}]`
+                *   `[SERVER_TOOL_DEBUG] get_session_history (session: manual-session-...): Queries array BEFORE formatSessionHistory (deep copy): [{"query":"first search query..."}]`
+                *   **CRITICAL FINDING:** The immutable update (`session.queries = [...session.queries, queryRecord];`) in `addQuery` **was correctly applied** (as seen by the log `REPLACED (immutable) queries array`). However, the session discrepancy **persists**. This is extremely baffling. The same session object instance, when retrieved by `getSessionHistory`, has a different `queries` array content than what was last assigned by `addQuery`.
+        *   `generate_suggestion`: **FAIL**. `expected '# Code Suggestion for: "Suggest how t…' to contain '**Suggested Implementation**:'`. The actual response has `**Suggested Implementation**:`. The colon is outside the bold markdown.
+        *   `get_repository_context`: **FAIL**. `expected '# Repository Context Summary for: "Wh…' to contain 'Main Purpose'`. The actual response has `### Key Purpose:`.
+*   **DeepSeek API Connection Errors in Logs:** **RESOLVED!**
+
+### Analysis/Retrospection for Attempt 57:
+*   **TypeScript Redeclaration Error:** This is the absolute top priority. The fix from Attempt 56 was not correctly applied or was insufficient. This prevents `server.test.ts` and `server-tools.test.ts` from running.
+*   **`get_session_history` Discrepancy (CRITICAL & BAFFLING):** The immutable update to `session.queries` in `addQuery` was correctly applied, yet the discrepancy persists. This means that even when `session.queries` is completely replaced with a new array, `getSessionHistory` (when retrieving the *same session object by ID*) sees an old version of the `queries` array. This suggests something more fundamental:
+    *   Could there be *two different `sessions` Map instances* in play? One modified by `addQuery` and another (older or different scope) read by `getSessionHistory`? This seems unlikely if `_debug_retrievalCount` previously indicated the same parent session object.
+    *   Is there any caching layer for session objects *above* the `sessions` Map in `state.ts` that `getSessionHistory` might be hitting?
+    *   Is there an issue with how the `StdioClientTransport` or MCP layer handles requests sequentially, perhaps leading to race conditions or stale closures if the server processes requests in an unexpected async manner? (Less likely for simple in-memory map).
+*   **`src/tests/index.test.ts` Mocking:** The `vi.doMock` strategy for `dist` files is still not working. The SUT does not see the mocks.
+*   **Integration Test LLM Mock Assertions:** The assertions for `generate_suggestion` and `get_repository_context` still need minor adjustments for exact markdown matching (colon placement).
+*   **Persistent Failures:** `server.test.ts` timeouts, `index.test.ts` `--json` output, `trigger_repository_update` spy.
+
+### Next Step / Plan for Next Attempt (Attempt 58):
+
+1.  **Fix TypeScript Redeclaration Error in `src/lib/server.ts` (CRITICAL BUILD BLOCKER - AGAIN):**
+    *   **File:** `src/lib/server.ts`:
+        *   **Action:** Provide the *entire* `agent_query` tool handler function from `src/lib/server.ts` so I can see the full context and pinpoint the duplicate `currentSessionState` declarations. This is essential to resolve the TS2451 errors.
+2.  **`get_session_history` Discrepancy (Investigate Potential Multiple `sessions` Map Instances):**
+    *   **File:** `src/lib/state.ts`:
+        *   Add a unique identifier to the `sessions` Map instance itself when it's created.
+            ```typescript
+            // At the top of state.ts where sessions is defined:
+            export const sessions = new Map<string, SessionState>();
+            const SESSIONS_MAP_INSTANCE_ID = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+            logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized. Instance ID: ${SESSIONS_MAP_INSTANCE_ID}`);
+
+            // In getOrCreateSession, when accessing 'sessions':
+            logger.info(`[STATE_DEBUG] getOrCreateSession accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
+            // In addQuery, when accessing 'sessions':
+            logger.info(`[STATE_DEBUG] addQuery accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
+            // In getSessionHistory, when accessing 'sessions':
+            logger.info(`[STATE_DEBUG] getSessionHistory accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
+            ```
+        *   This will help determine if all operations are indeed using the exact same `Map` object.
+3.  **`src/tests/integration/stdio-client-server.integration.test.ts` - Align LLM Mock Assertions:**
+    *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`:
+        *   For `generate_suggestion`: Change `toContain("**Suggested Implementation**:")` to `toContain("**Suggested Implementation**:")` (ensure colon is outside the bolding).
+        *   For `get_repository_context`: Change `toContain("### Key Purpose:")` to `toContain("### Key Purpose:")` (ensure colon is present).
+4.  **`src/tests/index.test.ts` Mocking (19 failures):**
+    *   No changes for now. Focus on build errors and session discrepancy.
+5.  **Deferred Issues:**
+    *   `src/tests/server.test.ts` timeouts (4 tests for `startProxyServer`).
+    *   `src/tests/index.test.ts` other failures (e.g., `--json` output, `fs.readFileSync`).
+    *   Integration test `trigger_repository_update` (`qdrant` spy).
+---
 
 ## Initial Problem Statement
 
