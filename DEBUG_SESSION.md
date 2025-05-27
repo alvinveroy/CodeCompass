@@ -1064,7 +1064,8 @@ Here are the instructions for the editor engineer:
         if (!jsonOutputCall) {
           console.error('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Calls were:', JSON.stringify(mockConsoleLog.mock.calls));
           // Fail the test explicitly if no JSON call is found, or if calls array is empty
-          expect(mockConsoleLog.mock.calls.length, 'Expected console.log to have been called.').toBeGreaterThan(0);
+          expect(mockConsoleLog.mock.calls.length > 0, 'Expected console.log to have been called. If it was, jsonOutputCall should have been defined.').toBe(true);
+          // The following line will likely not be reached if the above fails, but it's good for clarity.
           expect(jsonOutputCall, 'Expected to find a console.log call with valid JSON output, but none was found.').toBeDefined(); 
         } else {
           const parsedOutput = JSON.parse(jsonOutputCall[0] as string);
