@@ -552,6 +552,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     const historyText = historyResult.content![0].text as string;
 
     expect(historyText).toContain(`# Session History (${testSessionId})`);
+    console.log(`[INTEGRATION_TEST_DEBUG] get_session_history - Full historyText received by test:\n${historyText}`); // Add this log
     expect(historyText).toContain(`Query 1: "${query1}"`);
     expect(historyText).toContain(`Query 2: "${query2}"`); // Agent query also gets logged
     expect(historyText).toContain('## Queries (2)'); // Expecting two queries
