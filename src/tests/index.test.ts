@@ -629,30 +629,30 @@ describe('CLI with yargs (index.ts)', () => {
       mockConsoleLog.mockClear(); // Clear before running the command
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
       
-      console.log('[JSON_TEST_DEBUG] mockConsoleLog calls for --json test:', JSON.stringify(mockConsoleLog.mock.calls, null, 2));
+      // console.log('[JSON_TEST_DEBUG] mockConsoleLog calls for --json test:', JSON.stringify(mockConsoleLog.mock.calls, null, 2));
       const jsonOutputCall = mockConsoleLog.mock.calls.find(call => {
         if (call.length > 0 && typeof call[0] === 'string') {
           try {
-            // Attempt to parse the first argument of the console.log call
             JSON.parse(call[0]);
-            return true; // If it parses, assume this is our JSON output
+            return true; 
           } catch (e) {
-            // Not a valid JSON string, or not the one we are looking for
+            // Not a valid JSON string
             return false;
           }
         }
         return false;
       });
 
-        if (!jsonOutputCall) {
-          console.error('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Calls were:', JSON.stringify(mockConsoleLog.mock.calls));
-          throw new Error('Expected to find a console.log call with valid JSON output, but none was found.');
-        }
-        
-        expect(jsonOutputCall).toBeDefined(); // Ensure the call itself was found
-        
+      if (!jsonOutputCall) {
+        // For debugging: log what was actually captured if JSON is not found
+        console.error('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Calls were:', JSON.stringify(mockConsoleLog.mock.calls));
+        // Use a more specific error or fail the test directly
+        expect(jsonOutputCall, 'Expected to find a console.log call with valid JSON output, but none was found.').toBeDefined();
+      } else {
+        // If jsonOutputCall is found, proceed with parsing and checking content.
         const parsedOutput = JSON.parse(jsonOutputCall[0] as string);
         expect(parsedOutput).toEqual(expect.objectContaining(rawToolResult));
+      }
     });
 
     it('should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)', { timeout: 30000 }, async () => {

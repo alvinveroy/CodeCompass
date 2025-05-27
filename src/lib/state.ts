@@ -44,6 +44,7 @@ const sessions: Map<string, SessionState> = new Map();
 // Create a new session
 export function createSession(repoPath: string, sessionIdToUse?: string): SessionState {
   const sessionId = sessionIdToUse || generateSessionId();
+  logger.info(`[STATE_DEBUG] createSession: Creating new session. ID: '${sessionId}', repoPath: '${repoPath}'. Provided sessionId was: '${sessionIdToUse}'`);
   const session: SessionState = {
     id: sessionId,
     queries: [],
@@ -60,13 +61,14 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
   
   sessions.set(sessionId, session);
   logger.info(`Created new session: ${sessionId}`);
+  logger.debug(`[STATE_DEBUG] createSession: Session '${sessionId}' created and stored. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
   return session;
 }
 
 // Get or create a session
 export function getOrCreateSession(sessionId?: string, repoPath?: string): SessionState {
   const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
-  logger.debug(`[STATE_DEBUG] getOrCreateSession: sid='${sessionId}', repo='${repoPath}'. Caller: ${callStack}`);
+  logger.debug(`[STATE_DEBUG] getOrCreateSession: sid='${sessionId}', repo='${repoPath}'. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
   if (sessionId && sessions.has(sessionId)) {
     const session = sessions.get(sessionId)!;
     session.lastUpdated = Date.now();
@@ -191,7 +193,7 @@ export function updateContext(
 // Get session history
 export function getSessionHistory(sessionId: string): SessionState {
   const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
-  logger.debug(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}`);
+  logger.debug(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
   if (!sessions.has(sessionId)) {
     // Log existing sessions for easier debugging if a specific one is not found
     const existingSessionIds = Array.from(sessions.keys());
