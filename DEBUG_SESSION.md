@@ -889,3 +889,74 @@ This guard seems correct for preventing runtime errors, but TypeScript might sti
         *   **Action:** Ensure the `vi.mock('../../lib/deepseek.js', ...)` is indeed the very first mock at the top of the file and that its factory correctly returns `vi.fn()` for *all* exported functions from `deepseek.js` that might be called (e.g., `testDeepSeekConnection`, `checkDeepSeekApiKey`, `generateWithDeepSeek`, `generateEmbeddingWithDeepSeek`).
 
 ---
+
+## Attempt 47: Revert `index.test.ts` Mocks, Refine `server.test.ts`, Implement Child Process Self-Mocking for Integration Tests
+
+**Git Commit (Before Attempt 47 changes):** (User to fill with git commit SHA after applying Attempt 45 changes)
+**Git Commit (After Attempt 47 changes):** (User to fill after applying these new changes)
+
+### Issues Addressed (Based on Plan for Attempt 47):
+1.  **`src/tests/index.test.ts` Mocking Strategy:**
+    *   Reverted from `vi.doMock` (targeting `dist` files in Attempt 45) back to top-level `vi.mock` with getters, ensuring these mocks target the **source `.ts` files** (e.g., `vi.mock('../../src/lib/server.ts', ...)`).
+    *   Refined the `--json` output test assertion to be less strict about debug logs.
+2.  **`src/tests/server.test.ts` Refinements:**
+    *   Ensured `listen` mock assertions precisely match the arguments passed by the SUT.
+    *   Refined `startProxyServer` mocks.
+    *   Added more detailed error logging in `src/lib/server.ts` for `startProxyServer` failures.
+3.  **`src/tests/integration/stdio-client-server.integration.test.ts` (Child Process Mocking & Session Debugging):**
+    *   Implemented the child process self-mocking logic directly within the SUT files (`src/lib/llm-provider.ts` and `src/lib/deepseek.ts`) based on the `CODECOMPASS_MOCK_LLM_IN_CHILD` environment variable.
+    *   Continued debugging the session history issue with more logging in `src/lib/server.ts` and `src/lib/state.ts`.
+4.  **`src/tests/integration/mock-llm-provider-child-setup.js`**: This file was intended to be deleted as part of Attempt 45's clarification, as the strategy shifted to self-mocking in the SUT. The `NODE_OPTIONS` in `stdio-client-server.integration.test.ts` still references it.
+
+### Result (Based on `npm run build` output from 2025-05-27 ~02:54 UTC, after user applied Attempt 47 changes):
+*   **TypeScript Compilation**: **CLEAN!** `tsc` completed successfully.
+*   **Vitest Transform Errors**: **NONE!** The previous transform errors are resolved.
+*   **Total Test Failures: 30** (No change from the end of Attempt 45 in terms of raw numbers, but specific failures might have shifted slightly).
+    *   **`src/tests/index.test.ts` (19 failures):**
+        *   `mockStartServer` not called / `StdioClientTransport` constructor not called: 12 tests still fail. The change back to top-level `vi.mock` (targeting source `.ts` files with getters) did not resolve these.
+        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests fail.
+        *   `--json` output test: Fails due to capturing debug logs (1 test). The refined assertion was not enough or not correctly applied.
+        *   `fs.readFileSync` for `changelog` command: Mock not called (1 test).
+        *   **IMPROVEMENT**: The `--port` option test now **PASSES**.
+    *   **`src/tests/server.test.ts` (7 failures):**
+        *   3 tests fail due to `mockHttpServerListenFn` assertions (e.g., `expected "spy" to be called with arguments: [ 3001, Any<Function> ]` but received `[ 3001, [Function anonymous], undefined, undefined ]`).
+        *   4 tests in the `startProxyServer` suite are still timing out (20000ms).
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
+        *   `should call trigger_repository_update and verify indexing starts`: **FAIL**. `qdrantModule.batchUpsertVectors` spy still not called.
+        *   `should perform some actions and then retrieve session history with get_session_history`: **FAIL**. Retrieved session history is missing "Query 2".
+        *   `should call generate_suggestion and get a mocked LLM response`: **FAIL**. Test receives actual LLM output instead of the mock.
+        *   `should call get_repository_context and get a mocked LLM summary`: **FAIL**. Test receives actual LLM output instead of the mock.
+        *   **IMPROVEMENT**: `should call switch_suggestion_model and get a success response` now **PASSES**.
+*   **DeepSeek API Connection Errors in Logs:** Still present in `stderr` during integration tests. This indicates that the self-mocking logic in `src/lib/deepseek.ts` (if implemented as planned for Attempt 47) is not preventing these calls, or the `mock-llm-provider-child-setup.js` is still interfering/not fully disabled.
+
+### Analysis/Retrospection for Attempt 47:
+*   **Build Stability:** TypeScript compilation is clean, and Vitest transform errors are resolved. This is a good foundation.
+*   **`src/tests/index.test.ts` Mocking:** The primary issue of `mockStartServer` (and related mocks like `StdioClientTransport`) not being called by the SUT (`dist/index.js`) persists despite trying both top-level `vi.mock` (targeting `.ts` source files with getters) and `vi.doMock` (targeting `.js` dist files). This suggests a fundamental problem with how Vitest's mocking interacts with the dynamic `import()` of the SUT within `runMainWithArgs` or how the SUT itself is structured regarding these imports. The debug logs (`[INDEX_TEST_DEBUG] Applying doMock...` and `[INDEX_TEST_DEBUG] mockStartServer type before SUT import...`) from previous attempts confirmed the mocks *exist* in the test's context before the SUT is imported, but the SUT doesn't seem to pick them up.
+*   **`src/tests/server.test.ts` Failures:**
+    *   The `listen` mock assertion failures (extra `undefined` arguments) are consistent and point to a mismatch between the mock's signature/implementation and the test's expectation of how `listen` is called.
+    *   The `startProxyServer` timeouts remain a critical issue, likely due to async operations within its mocks (`findFreePortSpy`, internal `http.Server.listen`) not resolving or rejecting as the test expects, or the test's timeout being too short for a complex series of mocked async events.
+*   **`src/tests/integration/stdio-client-server.integration.test.ts` Failures:**
+    *   **Child Process Mocking:** The self-mocking strategy in SUT files (`llm-provider.ts`, `deepseek.ts`) via `CODECOMPASS_MOCK_LLM_IN_CHILD` seems ineffective, as actual LLM/DeepSeek calls are still happening. The continued presence and use of `mock-llm-provider-child-setup.js` via `NODE_OPTIONS` is a direct conflict with this strategy and needs to be resolved. If the preload script is still active, it might be overriding or interfering with the SUT's self-mocking.
+    *   **Session History:** The "Query 2 missing" issue persists. Logging from previous attempts showed `addQueryToSession` *was* called. The problem likely lies in session state retrieval or consistency across different tool calls within the spawned server.
+    *   **`qdrant.batchUpsertVectors` Spy:** This mock not being called suggests issues with the qdrant mock setup or the indexing logic in the SUT not reaching the point of calling this function under test conditions.
+*   **`mock-llm-provider-child-setup.js`**: This file is still being used by `NODE_OPTIONS` in `stdio-client-server.integration.test.ts`, despite the plan to move to SUT self-mocking. This needs to be cleaned up.
+
+### Plan for Next Attempt (Attempt 48):
+1.  **`src/tests/integration/stdio-client-server.integration.test.ts` - Resolve Conflicting Mock Strategies (Highest Priority for this file):**
+    *   **Action:** Remove the `--require /Users/alvin.tech/Projects/CodeCompass/src/tests/integration/mock-llm-provider-child-setup.js` from `NODE_OPTIONS` in `currentTestSpawnEnv` within `src/tests/integration/stdio-client-server.integration.test.ts`.
+    *   **Action:** Delete the file `src/tests/integration/mock-llm-provider-child-setup.js`.
+    *   **Focus:** Ensure the SUT self-mocking logic in `src/lib/llm-provider.ts` and `src/lib/deepseek.ts` (based on `CODECOMPASS_MOCK_LLM_IN_CHILD` or `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`) is correctly implemented and effectively prevents actual API calls and provides mocked responses. This should address the DeepSeek API connection errors and the LLM mock failures for `generate_suggestion` and `get_repository_context`.
+2.  **`src/tests/index.test.ts` Mocking (19 failures):**
+    *   **Strategy:** Since direct mocking of `startServerHandler` (from `src/lib/server.ts` or `dist/lib/server.js`) is proving difficult when `src/index.ts` is the SUT, try mocking what `startServerHandler` *does* if it's simpler. However, the core issue is likely the SUT not seeing the mocks.
+    *   **Action (Diagnostics):** Add more aggressive logging *inside the SUT* (`src/index.ts` and `dist/index.js` if possible by temporarily modifying it) to inspect the actual `startServerHandler` and `StdioClientTransport` objects/functions it receives/imports. Log their source or a unique identifier if they were mocked.
+    *   **Action (`--json` output test):** Refine the assertion to be more flexible, e.g., `expect(JSON.parse(jsonOutputCall[0] as string)).toEqual(expect.objectContaining(rawToolResult));` if `jsonOutputCall[0]` is confirmed to be *only* the JSON string. If it contains other logs, parse the relevant part.
+3.  **`src/tests/server.test.ts` Failures (7):**
+    *   **`listen` mock assertions (3 tests):**
+        *   **Action:** Carefully examine the SUT code paths that call `http.Server.listen`. If `findFreePort` calls `listen(port, 'localhost', resolve)` and `startServer` calls `listen(port, callback)`, the mock needs to handle these different call signatures, or the tests need to assert based on the specific path taken. The current mock `mockHttpServerListenFn` seems to be getting `undefined` for hostname/backlog when only port and callback are passed. Adjust assertions to: `expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function));` (if only port and callback are passed by SUT) or `expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function));` (if host is passed).
+    *   **`startProxyServer` Timeouts (4 tests):**
+        *   **Action:** Add extensive, unique logging messages at the start and end of `startProxyServer` itself, and before/after calls to `findFreePort` and the internal `http.createServer().listen()` within `startProxyServer`. Also log resolutions/rejections of these async operations. This will help pinpoint where it's getting stuck.
+4.  **`src/tests/integration/stdio-client-server.integration.test.ts` Other Failures (after addressing LLM/DeepSeek mocks):**
+    *   **`get_session_history` (missing "Query 2"):** Continue with detailed logging in `src/lib/server.ts` (tool handlers for `agent_query` and `get_session_history`) and `src/lib/state.ts` (session functions) to trace the session object's state and ID across calls.
+    *   **`trigger_repository_update` (`qdrantModule.batchUpsertVectors` spy not called):** Verify the `qdrant` mock is active and that the conditions within `indexRepository` (which is real in this test) for calling `batchUpsertVectors` are met.
+
+---
