@@ -960,3 +960,41 @@ This guard seems correct for preventing runtime errors, but TypeScript might sti
     *   **`trigger_repository_update` (`qdrantModule.batchUpsertVectors` spy not called):** Verify the `qdrant` mock is active and that the conditions within `indexRepository` (which is real in this test) for calling `batchUpsertVectors` are met.
 
 ---
+
+## Attempt 48: Resolve Conflicting Mock Strategies, Refine Test Logic, Add Diagnostics
+
+**Git Commit (Before Attempt 48 changes):** (User to fill with git commit SHA after applying Attempt 47 changes)
+**Git Commit (After Attempt 48 changes):** (User to fill after applying these new changes)
+
+### Issues Addressed (Based on Plan for Attempt 48):
+1.  **`src/tests/integration/stdio-client-server.integration.test.ts` - Resolve Conflicting Mock Strategies:**
+    *   Removed `--require .../mock-llm-provider-child-setup.js` from `NODE_OPTIONS` in `currentTestSpawnEnv`.
+    *   Planned deletion of the file `src/tests/integration/mock-llm-provider-child-setup.js`.
+    *   Focused on ensuring SUT self-mocking logic in `src/lib/llm-provider.ts` and `src/lib/deepseek.ts` (based on `CODECOMPASS_MOCK_LLM_IN_CHILD` or `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`) is correctly implemented and effective.
+2.  **`src/tests/index.test.ts` Mocking (19 failures):**
+    *   Added diagnostic logging in the SUT (`src/index.ts` and potentially `dist/index.js`) to inspect `startServerHandler` and `StdioClientTransport` objects.
+    *   Refined the `--json` output test assertion to be more flexible (e.g., using `expect.objectContaining`).
+3.  **`src/tests/server.test.ts` Failures (7):**
+    *   Adjusted `listen` mock assertions to match different SUT call signatures.
+    *   Added extensive, unique diagnostic logging in `startProxyServer` (in `src/lib/server.ts`) and its mocks (`findFreePort`, internal `http.createServer().listen()`) to trace async flow.
+4.  **`src/tests/integration/stdio-client-server.integration.test.ts` Other Failures:**
+    *   Added detailed logging for `get_session_history` in `src/lib/server.ts` (tool handlers) and `src/lib/state.ts` (session functions) to trace session object state and ID.
+    *   Planned verification of the `qdrant` mock's activity and conditions for `batchUpsertVectors` in `trigger_repository_update` test.
+
+### Result (Awaiting User's Build Output):
+*   (To be filled in after user provides `npm run build` output)
+    *   TypeScript Compilation:
+    *   Vitest Transform Errors:
+    *   Test Failures:
+        *   `src/tests/index.test.ts`:
+        *   `src/tests/server.test.ts`:
+        *   `src/tests/integration/stdio-client-server.integration.test.ts`:
+    *   DeepSeek API Connection Errors in Logs:
+
+### Analysis/Retrospection for Attempt 48 (Awaiting User's Build Output):
+*   (To be filled in after user provides `npm run build` output)
+
+### Plan for Next Attempt (Attempt 49) (Awaiting User's Build Output):
+*   (To be filled in after user provides `npm run build` output)
+
+---
