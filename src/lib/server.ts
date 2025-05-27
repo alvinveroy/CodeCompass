@@ -794,6 +794,7 @@ function registerTools( // Removed async
         logger.debug(`[SERVER_TOOL_HANDLER] agent_query calling processAgentQuery. Query: "${query}", SessionId: "${sessionId}"`);
         const agentResponseText = await processAgentQuery(query, sessionId); // processAgentQuery only accepts two arguments
         logger.debug(`[SERVER_TOOL_HANDLER] agent_query processAgentQuery completed. Response: ${JSON.stringify(agentResponseText)}`);
+        console.log(`[SERVER_TOOL_CONSOLE_DEBUG] agent_query handler: session.queries after processAgentQuery: ${JSON.stringify(getOrCreateSession(sessionId, repoPath).queries.map(q => q.query))}`);
 
         // Add this log:
         if (sessionId) {
