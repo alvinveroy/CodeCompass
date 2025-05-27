@@ -629,26 +629,26 @@ describe('CLI with yargs (index.ts)', () => {
       mockConsoleLog.mockClear(); // Clear before running the command
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
       
-      // Find the specific log call that contains the JSON output
       const jsonOutputCall = mockConsoleLog.mock.calls.find(call => {
-        if (typeof call[0] === 'string') {
-          // A more robust check: try to parse and compare.
+        if (call.length > 0 && typeof call[0] === 'string') {
           try {
-            const parsedLog = JSON.parse(call[0]);
-            // Compare key parts of the object to avoid issues with order or extra fields
-            return parsedLog.id === rawToolResult.id && 
-                    parsedLog.content && 
-                    parsedLog.content[0].text === rawToolResult.content[0].text;
-          } catch (e) { 
-            // console.warn(`[INDEX_TEST_DEBUG] Failed to parse log call: ${call[0]}`, e);
-            return false; 
+            // Attempt to parse the first argument of the console.log call
+            JSON.parse(call[0]);
+            return true; // If it parses, assume this is our JSON output
+          } catch (e) {
+            // Not a valid JSON string, or not the one we are looking for
+            return false;
           }
         }
         return false;
       });
-      expect(jsonOutputCall).toBeDefined(); // Ensure a call matching the criteria was found
-      if (jsonOutputCall) { // Type guard for TypeScript
-        expect(JSON.parse(jsonOutputCall[0] as string)).toEqual(expect.objectContaining(rawToolResult));
+
+      expect(jsonOutputCall).withContext('Expected to find a console.log call with valid JSON output').toBeDefined();
+      
+      if (jsonOutputCall) { // Proceed if we found the JSON call
+        const parsedOutput = JSON.parse(jsonOutputCall[0] as string);
+        // Assuming rawToolResult is the expected object structure
+        expect(parsedOutput).toEqual(expect.objectContaining(rawToolResult));
       }
     });
 

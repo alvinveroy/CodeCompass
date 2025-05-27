@@ -2,12 +2,21 @@ import axios from "axios";
 import { configService, logger } from "./config-service";
 
 import { preprocessText } from "../utils/text-utils";
+const IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST = process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM === 'true';
+
+if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
+  logger.info('[MOCK_DEEPSEEK] DeepSeek module is MOCKED for integration tests due to CODECOMPASS_INTEGRATION_TEST_MOCK_LLM=true.');
+}
 import { withRetry } from "../utils/retry-utils";
 
 // Rate limiting state
 const requestTimestamps: number[] = [];
 
 async function waitForRateLimit(): Promise<void> {
+  if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
+    // logger.debug('[MOCK_DEEPSEEK] waitForRateLimit called - no-op for SUT mocks');
+    return; 
+  }
   const now = Date.now();
   const rpmLimit = configService.DEEPSEEK_RPM_LIMIT;
 
@@ -34,6 +43,11 @@ export function checkDeepSeekApiKey(): boolean {
   // ConfigService handles loading the API key from file and environment.
   // It also updates process.env.DEEPSEEK_API_KEY.
   // This function now primarily serves to check if the key (from any source) is valid/present.
+  if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
+    const apiKey = configService.DEEPSEEK_API_KEY;
+    logger.info(`[MOCK_DEEPSEEK] checkDeepSeekApiKey called - returning mock based on config: ${!!apiKey}`);
+    return !!apiKey; // Mock considers key "valid" if present in config for test setup purposes
+  }
   
   const apiKey = configService.DEEPSEEK_API_KEY;
   
@@ -54,6 +68,10 @@ export function checkDeepSeekApiKey(): boolean {
  * @returns Promise<boolean> - True if connection is successful, false otherwise
  */
 export async function testDeepSeekConnection(): Promise<boolean> {
+  if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
+    logger.info('[MOCK_DEEPSEEK] testDeepSeekConnection called - returning mock true');
+    return true;
+  }
   try {
     const apiKey = configService.DEEPSEEK_API_KEY;
     if (!apiKey) {
@@ -200,6 +218,10 @@ export async function testDeepSeekConnection(): Promise<boolean> {
  * @returns Promise<string> - The generated text
  */
 export async function generateWithDeepSeek(prompt: string): Promise<string> {
+  if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
+    logger.info(`[MOCK_DEEPSEEK] generateWithDeepSeek called with prompt (first 50 chars): "${prompt.substring(0,50)}..." - returning mock response`);
+    return "Mocked DeepSeek text generation response from SUT self-mock.";
+  }
   
   try {
     const apiKey = configService.DEEPSEEK_API_KEY;
@@ -285,6 +307,10 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
 }
 
 export async function generateEmbeddingWithDeepSeek(text: string): Promise<number[]> {
+  if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
+    logger.info(`[MOCK_DEEPSEEK] generateEmbeddingWithDeepSeek called with text (first 50 chars): "${text.substring(0,50)}..." - returning mock embedding`);
+    return [0.11, 0.22, 0.33, 0.44, 0.55]; // Use distinct mock values
+  }
   
   try {
     const apiKey = configService.DEEPSEEK_API_KEY;

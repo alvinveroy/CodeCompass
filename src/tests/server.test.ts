@@ -593,7 +593,7 @@ describe('Server Startup and Port Handling', () => {
     // If 'localhost' is consistently passed by SUT when no callback is given to listen:
     // expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, 'localhost', expect.any(Function));
     // If SUT only passes port and callback:
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function));
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(mcs.HTTP_PORT, expect.any(Function), undefined, undefined);
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`CodeCompass HTTP server listening on port ${mcs.HTTP_PORT} for status and notifications.`));
     expect(mockProcessExit).not.toHaveBeenCalled();
     expect(mcs.IS_UTILITY_SERVER_DISABLED).toBe(false); // Ensure not disabled
@@ -1096,8 +1096,8 @@ describe('findFreePort', () => {
 
     await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort);
     expect(mockedHttpCreateServer).toHaveBeenCalledTimes(1); // Use the direct mock
-    // The findFreePort utility calls server.listen(port, 'localhost', resolve)
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function)); // findFreePort uses 'localhost'
+    // The findFreePort utility calls server.listen(port, 'localhost')
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', undefined, undefined); 
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1);
   });
 
@@ -1128,8 +1128,8 @@ describe('findFreePort', () => {
 
     await expect(serverLibModule.findFreePort(startPort)).resolves.toBe(startPort + 1);
     expect(mockedHttpCreateServer).toHaveBeenCalledTimes(2); // Use the direct mock
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', expect.any(Function)); // findFreePort uses 'localhost'
-    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost', expect.any(Function)); // findFreePort uses 'localhost'
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort, 'localhost', undefined, undefined); 
+    expect(mockHttpServerListenFn).toHaveBeenCalledWith(startPort + 1, 'localhost', undefined, undefined); 
     expect(mockHttpServerCloseFn).toHaveBeenCalledTimes(1); // Only closed on success
   });
 

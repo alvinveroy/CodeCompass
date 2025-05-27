@@ -307,72 +307,76 @@ export function clearProviderCache(): void {
   logger.info("Provider cache cleared");
 }
 
-export async function getLLMProvider(): Promise<LLMProvider> {
-  // Integration test override
-  if (process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM === 'true') {
-    logger.info('[LLM_PROVIDER_SUT_DEBUG] Using hardcoded mock LLM provider for integration test.');
-    return Promise.resolve({
-      checkConnection: async () => true,
-      generateText: async (_prompt: string, _forceFresh?: boolean) => "Hardcoded mock response from SUT for integration test.",
-      generateEmbedding: async (_text: string, _model?: string) => [0.1, 0.2, 0.3, 0.4, 0.5], // Ensure embedding dim matches if relevant
-      processFeedback: async (_originalPrompt: string, _originalResponse: string, _feedback: string, _score: number) => "Hardcoded feedback response.",
-    } as LLMProvider); // Cast to LLMProvider
-  }
-
-  // Ensure ConfigService has the latest from files/env.
-
-  const suggestionModel = configService.SUGGESTION_MODEL;
-  const suggestionProvider = configService.SUGGESTION_PROVIDER;
-  const embeddingProvider = configService.EMBEDDING_PROVIDER;
-  
-  logger.debug(`Getting LLM provider with model: ${suggestionModel}, provider: ${suggestionProvider}, embedding: ${embeddingProvider}`);
-  
-  const _cacheMaxAge = 2000; // 2 seconds max cache age
-  const now = Date.now();
-  
-  if (providerCache && 
-      providerCache.suggestionModel === suggestionModel &&
-      providerCache.suggestionProvider === suggestionProvider &&
-      providerCache.embeddingProvider === embeddingProvider &&
-      (now - providerCache.timestamp) < _cacheMaxAge) {
-    logger.debug("Using cached LLM provider");
-    return providerCache.provider;
-  }
-  
-  providerCache = null;
-  logger.info("Creating new provider instance");
-  
-  // In test environment, skip API key check but still call the check functions for test spies
-  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    return createTestProvider(suggestionProvider);
-  }
-  
-  let provider: LLMProvider;
-  
-  if (suggestionProvider.toLowerCase() !== embeddingProvider.toLowerCase()) {
-    logger.info(`Using hybrid provider: ${suggestionProvider} for suggestions, ${embeddingProvider} for embeddings`);
-    provider = new HybridProvider(suggestionProvider, embeddingProvider);
-  } else {
-    provider = await createProvider(suggestionProvider.toLowerCase());
-  }
-  
-  // Cache the provider - ensure we're using the same reference
-  const cacheData = {
-    suggestionModel,
-    suggestionProvider,
-    embeddingProvider,
-    provider,
-    timestamp: Date.now()
+const createMockLLMProvider = (): LLMProvider => {
+  logger.info('[MOCK_LLM_PROVIDER] Creating and using MOCKED LLMProvider for integration tests.');
+  return {
+    checkConnection: vi.fn().mockResolvedValue(true),
+    generateText: vi.fn().mockImplementation(async (prompt: string) => {
+      logger.info(`[MOCK_LLM_PROVIDER] generateText called with prompt: ${prompt.substring(0, 100)}...`);
+      if (prompt.toLowerCase().includes("repository context") || prompt.toLowerCase().includes("summarize")) {
+        return Promise.resolve("Mocked repository context summary from SUT self-mock.");
+      }
+      if (prompt.toLowerCase().includes("suggest") && prompt.toLowerCase().includes("commit message")) {
+        return Promise.resolve("Mocked commit message suggestion from SUT self-mock.");
+      }
+      return Promise.resolve("Mocked LLM response from SUT self-mock.");
+    }),
+    generateEmbedding: vi.fn().mockResolvedValue([0.01, 0.02, 0.03, 0.04, 0.05]), // Use distinct values
+    processFeedback: vi.fn().mockResolvedValue(undefined),
   };
-  
-  if (providerCache === null) {
-    providerCache = cacheData;
-  } else {
-    // Update existing cache with new values but keep the same object reference
-    Object.assign(providerCache, cacheData);
+};
+
+let llmProviderInstance: LLMProvider | null = null;
+const SUT_MOCK_PROVIDER_ID = 'sut-self-mocked-llm-provider-instance';
+
+export function getLLMProvider(forceNewInstance = false): LLMProvider {
+  if (process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM === 'true') {
+    if (!llmProviderInstance || forceNewInstance) {
+      logger.info('[MOCK_LLM_PROVIDER] SUT self-mocking: Creating and returning MOCKED LLMProvider instance.');
+      llmProviderInstance = createMockLLMProvider();
+      // @ts-expect-error Assigning custom property for debugging
+      llmProviderInstance.mockId = SUT_MOCK_PROVIDER_ID;
+    } else {
+      // @ts-expect-error Checking custom property
+      if (llmProviderInstance.mockId !== SUT_MOCK_PROVIDER_ID) {
+        logger.warn(`[MOCK_LLM_PROVIDER] SUT self-mocking: Instance ID mismatch (was ${
+          // @ts-expect-error
+          llmProviderInstance.mockId
+        }). Recreating mock.`);
+        llmProviderInstance = createMockLLMProvider();
+        // @ts-expect-error
+        llmProviderInstance.mockId = SUT_MOCK_PROVIDER_ID;
+      } else {
+        logger.info('[MOCK_LLM_PROVIDER] SUT self-mocking: Returning existing MOCKED LLMProvider instance.');
+      }
+    }
+    return llmProviderInstance;
   }
-  
-  return provider;
+
+  // Original logic if not mocking
+  if (llmProviderInstance && !forceNewInstance) {
+    // @ts-expect-error If previous instance was a mock, but now we want a real one
+    if (llmProviderInstance.mockId === SUT_MOCK_PROVIDER_ID) {
+        logger.warn('[LLM_PROVIDER] Switching from SUT mock to REAL LLMProvider. Clearing mock instance.');
+        llmProviderInstance = null; // Force re-creation of a real instance
+    } else {
+        return llmProviderInstance;
+    }
+  }
+
+  const suggestionProviderName = configService.SUGGESTION_PROVIDER;
+  const embeddingProviderName = configService.EMBEDDING_PROVIDER;
+
+  logger.debug(`[LLM_PROVIDER] Instantiating LLM Provider. Suggestion: ${suggestionProviderName}, Embedding: ${embeddingProviderName}. Forcing new: ${forceNewInstance}`);
+
+  if (suggestionProviderName.toLowerCase() !== embeddingProviderName.toLowerCase() && embeddingProviderName) {
+    logger.info(`Instantiating HybridProvider with Suggestion: ${suggestionProviderName}, Embedding: ${embeddingProviderName}`);
+    llmProviderInstance = new HybridProvider(suggestionProviderName, embeddingProviderName);
+  } else {
+    logger.info(`Instantiating single LLMProvider: ${suggestionProviderName}`);
+    llmProviderInstance = instantiateProvider(suggestionProviderName);
+  }
+  return llmProviderInstance;
 }
 
 export async function switchSuggestionModel(model: string, providerName?: string): Promise<boolean> {

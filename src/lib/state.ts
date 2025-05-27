@@ -65,21 +65,30 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
 
 // Get or create a session
 export function getOrCreateSession(sessionId?: string, repoPath?: string): SessionState {
-  logger.debug(`[STATE_DEBUG] getOrCreateSession called. Requested sessionId: ${sessionId}, repoPath: ${repoPath}, Existing session IDs: ${Array.from(sessions.keys()).join(', ')}`);
+  const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
+  logger.debug(`[STATE_DEBUG] getOrCreateSession: sid='${sessionId}', repo='${repoPath}'. Caller: ${callStack}`);
   if (sessionId && sessions.has(sessionId)) {
     const session = sessions.get(sessionId)!;
     session.lastUpdated = Date.now();
+    logger.debug(`[STATE_DEBUG] getOrCreateSession: Returning existing session '${sessionId}'. Queries: ${session.queries.length}.`);
     return session;
   }
   
-  if (!repoPath) {
-    // If sessionId was provided but not found, and no repoPath to create a new one, then error.
-    // If sessionId was NOT provided, and no repoPath, then also error.
-    throw new Error("Repository path is required to create a new session if sessionId is not found or not provided.");
+  if (!repoPath && !sessionId) { // If no sessionId and no repoPath to create a new one
+     logger.error("[STATE_DEBUG] getOrCreateSession: Attempted to create session without repoPath and no existing sessionId.");
+     throw new Error("Repository path is required to create a new session if sessionId is not provided or not found.");
   }
-  // If sessionId was provided but not found, create it with that ID.
-  // If sessionId was not provided, createSession will generate one.
-  return createSession(repoPath, sessionId);
+  if (!repoPath && sessionId) { // If sessionId was provided but not found, and no repoPath
+     logger.warn(`[STATE_DEBUG] getOrCreateSession: SessionId '${sessionId}' not found, and no repoPath provided to create a new one. This might be an issue if creation was expected.`);
+     // Depending on strictness, you might throw here or let createSession handle it if it can.
+     // For now, let createSession proceed, it will use a default repoPath or error if that's not sensible.
+  }
+
+
+  const newSession = createSession(repoPath!, sessionId); // repoPath should be guaranteed by now if creating
+  logger.debug(`[STATE_DEBUG] getOrCreateSession: Created new session '${newSession.id}' for repoPath '${repoPath}'. Queries: ${newSession.queries.length}.`);
+  sessions.set(newSession.id, newSession);
+  return newSession;
 }
 
 // Add a query to session
@@ -88,24 +97,14 @@ export function addQuery(
   query: string, 
   results: unknown[] = [], 
   relevanceScore = 0,
-  repoPath?: string // Allow repoPath for session creation
+  repoPath?: string 
 ): SessionState {
-  const session = sessions.get(sessionId);
-  if (!session) {
-    logger.error(`addQuery: Session not found for ID: ${sessionId}. Cannot add query.`);
-    throw new Error(`Session not found: ${sessionId}. Cannot add query.`);
-  }
-  
-  session.queries.push({
-    timestamp: Date.now(),
-    query,
-    results,
-    relevanceScore,
-  });
-  
+  const session = getOrCreateSession(sessionId, repoPath);
+  const newQueryEntry = { timestamp: Date.now(), query, results, relevanceScore };
+  session.queries.push(newQueryEntry);
   session.lastUpdated = Date.now();
-  logger.debug(`Query added to session ${sessionId}. Total queries: ${session.queries.length}`, { sessionId, query: query }); // Corrected to use 'query'
-  logger.debug(`[STATE_DEBUG] Session ${sessionId} after addQuery. Queries: ${JSON.stringify(session.queries.map(q=>q.query))}`);
+  const queryLog = session.queries.slice(-3).map(q => q.query.substring(0,30) + '...');
+  logger.debug(`[STATE_DEBUG] addQuery: Added to session '${sessionId}'. Query: "${query.substring(0,50)}...". Total queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}`);
   return session;
 }
 
@@ -191,12 +190,18 @@ export function updateContext(
 
 // Get session history
 export function getSessionHistory(sessionId: string): SessionState {
-  logger.debug(`[STATE_DEBUG] getSessionHistory called. Requested Session ID: ${sessionId}, Found: ${sessions.has(sessionId)}`);
+  const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
+  logger.debug(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}`);
   if (!sessions.has(sessionId)) {
+    // Log existing sessions for easier debugging if a specific one is not found
+    const existingSessionIds = Array.from(sessions.keys());
+    logger.warn(`[STATE_DEBUG] getSessionHistory: Session not found: '${sessionId}'. Existing sessions: [${existingSessionIds.join(', ')}]`);
     throw new Error(`Session not found: ${sessionId}`);
   }
-  
-  return sessions.get(sessionId)!;
+  const session = sessions.get(sessionId)!;
+  const queryLog = session.queries.slice(-3).map(q => q.query.substring(0,30) + '...');
+  logger.debug(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}`);
+  return session;
 }
 
 // Clear session

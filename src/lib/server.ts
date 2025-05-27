@@ -803,6 +803,14 @@ function registerTools( // Removed async
             console.log(`[SERVER_TS_DEBUG] After agent_query for session ${sessionId}, state.queries:`, JSON.stringify(currentSession.queries));
           }
         }
+        // User requested logging:
+        if (args.sessionId) { // Check if sessionId was provided in args
+            const currentSessionState = getSessionHistory(args.sessionId); 
+            const queryLog = currentSessionState.queries.map(q => q.query.substring(0, 30) + '...');
+            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): After adding query (via processAgentQuery). Total queries now: ${currentSessionState.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
+        } else {
+            logger.warn('[SERVER_TOOL_DEBUG] agent_query: sessionId is undefined in args after processAgentQuery.');
+        }
         
         return {
           content: [{
@@ -1031,6 +1039,9 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       
       // Add this log:
       console.log(`[SERVER_TS_DEBUG] In get_session_history for session ${session.id}, session.queries BEFORE formatting:`, JSON.stringify(session.queries));
+      // User requested logging:
+      const queryLog = session.queries.map(q => q.query.substring(0, 30) + '...');
+      logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Retrieved session. Query count: ${session.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
       
       return {
         content: [{

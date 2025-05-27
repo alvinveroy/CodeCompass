@@ -252,14 +252,12 @@ describe('Stdio Client-Server Integration Tests', () => {
       EMBEDDING_PROVIDER: "ollama", // Added for Attempt 14
       // Unique worker ID for test isolation if needed by other parts of the system
       VITEST_WORKER_ID: process.env.VITEST_WORKER_ID || `integration_worker_${Math.random().toString(36).substring(7)}`,
-      // CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Removed: Rely on Vitest module mock
-      // Add NODE_OPTIONS to preload the script
-      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require ${preloadScriptPath}`.trim(),
+      // CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Will be set below
+      // NODE_OPTIONS for preload script removed
     };
     const currentTestSpawnEnv = { ...baseSpawnEnv };
-    // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is NOT set in currentTestSpawnEnv
-    // as we are relying on the Vitest module mock.
-    delete (currentTestSpawnEnv as {[key: string]: any})['CODECOMPASS_INTEGRATION_TEST_MOCK_LLM'];
+    // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is set to 'true'
+    currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM = 'true';
   
     currentTestSpawnEnv.LLM_PROVIDER = 'mocked-for-test'; // MOVED HERE
     console.log('[INTEGRATION_TEST_DEBUG] beforeEach: Set currentTestSpawnEnv.LLM_PROVIDER to "mocked-for-test" for the upcoming spawn.'); // MOVED HERE
