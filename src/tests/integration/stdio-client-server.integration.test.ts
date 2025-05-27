@@ -605,7 +605,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     // expect(suggestionText).toContain("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts");
     // REPLACE with a check for content from the actual mock response seen in Attempt 53's build output:
     expect(suggestionText).toContain("**Suggested Implementation**:"); // Colon outside bold
-    expect(suggestionText).toContain("file1.ts - Enhanced version"); 
+    expect(suggestionText).toContain("file1.ts - Enhanced version");
     // Optionally, still check that "Context Used" section exists if it's part of the format
     expect(suggestionText).toContain("Context Used");
     // And that file1.ts is mentioned somewhere in that context section if important

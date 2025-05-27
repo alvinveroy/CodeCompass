@@ -45,6 +45,8 @@ export interface SessionState {
 
 // In-memory state storage
 const sessions: Map<string, SessionState> = new Map();
+const SESSIONS_MAP_INSTANCE_ID = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized. Instance ID: ${SESSIONS_MAP_INSTANCE_ID}`);
 
 // Create a new session
 export function createSession(repoPath: string, sessionIdToUse?: string): SessionState {
@@ -79,6 +81,7 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
   const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
   // Change logger.debug to logger.info for the main entry log
   logger.info(`[STATE_DEBUG] getOrCreateSession: sid='${sessionId}', repo='${repoPath}'. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
+  logger.info(`[STATE_DEBUG] getOrCreateSession accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
   if (sessionId && sessions.has(sessionId)) {
     const session = sessions.get(sessionId)!;
     session.lastUpdated = Date.now();
@@ -111,6 +114,7 @@ export function addQuery(
   relevanceScore = 0,
   repoPath?: string 
 ): SessionState {
+  logger.info(`[STATE_DEBUG] addQuery accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
   const session = getOrCreateSession(sessionId, repoPath);
   const newQueryEntry = { timestamp: Date.now(), query, results, relevanceScore };
   logger.info(`[STATE_DEBUG] addQuery: BEFORE adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Queries count: ${session.queries.length}, Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
@@ -205,6 +209,7 @@ export function updateContext(
 // Get session history
 export function getSessionHistory(sessionId: string): SessionState {
   const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
+  logger.info(`[STATE_DEBUG] getSessionHistory accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
   logger.info(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
   if (!sessions.has(sessionId)) {
     // Log existing sessions for easier debugging if a specific one is not found
