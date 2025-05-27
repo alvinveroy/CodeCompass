@@ -1274,22 +1274,67 @@ After these changes, please run `npm run build` and provide the full output. The
     *   Removed `vi.doMock` calls from `runMainWithArgs`.
     *   Kept diagnostic logs in `src/index.ts` (SUT) to check if mocks are picked up. Diagnostic logs also added to the mock factories in `index.test.ts`.
 
-### Result (Awaiting User's `npm run build` Output after applying Attempt 54 changes):
-*   TypeScript Compilation: (To be filled)
-*   Vitest Transform Errors: (To be filled)
-*   Test Failures: (To be filled)
-    *   `src/tests/index.test.ts`: (To be filled)
-    *   `src/tests/server.test.ts`: (To be filled)
-    *   `src/tests/integration/stdio-client-server.integration.test.ts`: (To be filled, especially `get_session_history`, `generate_suggestion`, `get_repository_context`)
-*   Diagnostic Log Analysis: (To be filled based on new logs for session state and `index.test.ts` SUT mocking)
+### Result (Based on User's `npm run build` Output after applying Attempt 54 changes):
+*   **TypeScript Compilation Errors: ALL RESOLVED!** `tsc` completed successfully.
+*   **Vitest Transform Errors: NONE!**
+*   **Test Failures (27 total):**
+    *   **`src/tests/index.test.ts` (19 failures):**
+        *   `mockStartServer` / `StdioClientTransport` not called: 12 tests.
+            *   **Diagnostic Logs:** `[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts IS RUNNING` and `../../src/lib/config-service.ts IS RUNNING` **ARE visible**.
+            *   **SUT Diagnostic Logs (from `src/index.ts`):** Still not visible.
+        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests.
+        *   `--json` output test: `Expected console.log to have been called. If it was, jsonOutputCall should have been defined.: expected 0 to be true`. `mockConsoleLog.mock.calls` is `[]`. The warning `[JSON_TEST_DEBUG] mockConsoleLog captured no calls. Skipping JSON content assertion for this run.` was visible.
+        *   `fs.readFileSync` for `changelog` command: Mock not called (1 test).
+    *   **`src/tests/server.test.ts` (4 failures):**
+        *   All 4 are timeouts (30000ms) in the `startProxyServer` suite.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
+        *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy not called.
+        *   `get_session_history`: Assertion `expected '# Session History...' to contain 'Query 2: "second agent query...'` failed.
+            *   **Diagnostic Logs (Crucial):**
+                *   `[STATE_TS_CONSOLE_DEBUG] addQueryToSession: BEFORE push. Session 'manual-session-...'. Queries array length: 1. Query to add: "second agent query..."`
+                *   `[STATE_TS_CONSOLE_DEBUG] addQueryToSession: AFTER push. Session 'manual-session-...'. Queries array length: 2. Queries content: [{"query":"first search query..."},{"query":"second agent query..."}]`
+                *   `[SERVER_TOOL_DEBUG] agent_query (session: manual-session-...): After addQuery. Query count from re-fetched session: 2.`
+                *   `[SERVER_TOOL_DEBUG] agent_query (session: manual-session-...): Full session state after addQuery: {"id":"manual-session-...","queries":[{"query":"first search query..."},{"query":"second agent query..."}]...}`
+                *   `[SERVER_TOOL_DEBUG] get_session_history (session: manual-session-...): Retrieved session. Query count from session object: 1.`
+                *   `[SERVER_TOOL_DEBUG] get_session_history (session: manual-session-...): Queries array BEFORE formatSessionHistory (deep copy): [{"query":"first search query..."}]`
+                *   `[SERVER_TOOL_DEBUG] get_session_history: Discrepancy detected for session manual-session-.... Current in-memory session keys: [manual-session-..., ...]`
+                *   The `_debug_retrievalCount` and `_debug_lastRetrievedAt` logs from `src/lib/state.ts` (using `logger.info`) **ARE NOW VISIBLE** and confirm the same session object instance is being used.
+                *   The `console.log` in `addQueryToSession` confirms the push happens.
+                *   The deep copy logs confirm the state *before* `addQuery` and *after* `addQuery` (in `agent_query` handler) show 2 queries.
+                *   The deep copy log in `get_session_history` handler (before formatting) shows only 1 query.
+        *   `generate_suggestion` & `get_repository_context`: **PASSED!** (This is a significant improvement).
+*   **DeepSeek API Connection Errors in Logs:** **RESOLVED!**
 
-### Analysis/Retrospection for Attempt 54 (Awaiting User's Build Output):
-*   (To be filled)
+### Analysis/Retrospection for Attempt 54:
+*   **`get_session_history` Discrepancy (CRITICAL):** The detailed logs confirm the same session object instance is being used by `addQuery` and `getSessionHistory`. `addQuery` successfully adds the second query (session object in memory has 2 queries). `getSessionHistory` later retrieves this *same session object instance*, but it only has 1 query when logged by `getSessionHistory` and the tool handler (before formatting). This strongly points to the session object's `queries` array being modified or replaced *between* the `agent_query` tool call completing and the `get_session_history` tool call starting, or `getSessionHistory` in `state.ts` is somehow returning a modified version of the `queries` array despite the `_debug_retrievalCount` indicating it's the same parent session instance.
+*   **`src/tests/index.test.ts` Mocking (19 failures):** SUT (`dist/index.js`) is not using Vitest-mocked modules for `startServerHandler` and `StdioClientTransport`, despite top-level `vi.mock` (targeting source `.ts` files with getters) factories running. The SUT diagnostic logs are still not appearing, suggesting it might not even be running the `console.log` statements or there's an issue with capturing its stdout/stderr in the test runner for these specific logs.
+*   **`generate_suggestion` & `get_repository_context` PASSED:** This confirms the SUT self-mocking for `llm-provider.ts` and the aligned test assertions are working.
+*   **`src/tests/server.test.ts` Timeouts (4 failures - `startProxyServer` suite):** Persist.
+*   **`src/tests/index.test.ts` `--json` output (1 failure):** `mockConsoleLog` is not capturing output from the SUT.
+*   **Integration Test `trigger_repository_update` (1 failure):** `qdrantModule.batchUpsertVectors` spy not called.
 
-### Plan for Next Attempt (Attempt 55) (Awaiting User's Build Output):
-*   (To be filled)
+### Next Step / Plan for Next Attempt (Attempt 55):
+1.  **`get_session_history` Discrepancy (Highest Priority):**
+    *   **File:** `src/lib/state.ts`
+        *   In `getSessionHistory`, log the `session.queries` array (deep copy using `JSON.parse(JSON.stringify(session.queries))`) *immediately* after retrieving the session from the `sessions` map, before any other processing or logging of `queryLog`.
+        *   In `getOrCreateSession`, if an existing session is returned, log its `queries` array (deep copy using `JSON.parse(JSON.stringify(session.queries))`) *immediately* after retrieval from the map.
+    *   **File:** `src/lib/server.ts`
+        *   In the `agent_query` handler, *after* `addQueryToSession` and *before* sending the response, re-fetch the session using `getOrCreateSession(sessionId)` (from `state.ts`) and log its `queries` array (deep copy). This checks if the state is already "corrupted" or different from the perspective of a fresh retrieval before the next tool call even begins.
+2.  **`src/tests/index.test.ts` Mocking (19 failures):**
+    *   **Strategy:** Focus on why SUT (`dist/index.js`) isn't seeing mocks from top-level `vi.mock` (targeting source `.ts` files with getters). The SUT diagnostic logs are key.
+    *   **Action (Diagnostics):**
+        *   Ensure `VITEST_WORKER_ID` is logged in `src/index.ts` (SUT) at the very top.
+        *   In `src/tests/index.test.ts`, in the mock factories for `../../src/lib/server.ts` and `../../src/lib/config-service.ts`, add a log that includes `process.env.VITEST_WORKER_ID`.
+        *   In `src/index.ts` (SUT), when logging the imported `startServerHandler` and `configService`, also log `process.env.VITEST_WORKER_ID`. This helps check if the test runner and SUT are in the same Vitest worker context where mocks are applied.
+        *   If SUT logs are still not appearing, consider if `runMainWithArgs` (especially for CLI tests using `spawnSync`) is correctly capturing/forwarding `stdout/stderr` from the SUT process.
+3.  **Deferred Issues:**
+    *   `src/tests/server.test.ts` timeouts (4 tests for `startProxyServer`).
+    *   `src/tests/index.test.ts` other failures (e.g., `--json` output, `fs.readFileSync`).
+    *   Integration test `trigger_repository_update` (`qdrant` spy).
 
 ---
+
+## Attempt 55: Deep Dive into Session State & SUT Mocking Context
 
 **Summary of Attempt 52 Results:**
 
