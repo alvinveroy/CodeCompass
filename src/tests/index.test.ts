@@ -89,23 +89,6 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ // Uses mockStdioC
   get StdioClientTransport() { return mockStdioClientTransportConstructor; },
 }));
 
-vi.mock('../../src/lib/server.ts', () => { // Target .ts source file relative to this test file
-  console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
-  return {
-    // Use a getter to help with potential hoisting issues if mockStartServerHandler is defined later
-    get startServerHandler() { return mockStartServer; }, // mockStartServer is the mock function
-    get ServerStartupError() { return ServerStartupError; } // ServerStartupError is the class
-  };
-});
-
-vi.mock('../../src/lib/config-service.ts', () => { // Target .ts source file relative to this test file
-  console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/config-service.ts IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
-  return {
-    // Use a getter
-    get configService() { return currentMockConfigServiceInstance; },
-    get logger() { return currentMockLoggerInstance; }
-  };
-});
 // --- End Mocks ---
 
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
@@ -194,6 +177,25 @@ describe('CLI with yargs (index.ts)', () => {
     const indexPath = require.resolve('../../dist/index.js');
     process.argv = ['node', indexPath, ...args];
     vi.resetModules(); // Keep this to ensure fresh SUT import
+
+    const SUT_RELATIVE_SERVER_MODULE_PATH = './lib/server.js'; // Relative to dist/index.js
+    const SUT_RELATIVE_CONFIG_MODULE_PATH = './lib/config-service.js'; // Relative to dist/index.js
+
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_SERVER_MODULE_PATH: ${SUT_RELATIVE_SERVER_MODULE_PATH}`);
+    vi.doMock(SUT_RELATIVE_SERVER_MODULE_PATH, () => {
+      console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_SERVER_MODULE_PATH (${SUT_RELATIVE_SERVER_MODULE_PATH}) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
+      return {
+        startServerHandler: mockStartServer, // Ensure mockStartServer is defined
+      };
+    });
+
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_CONFIG_MODULE_PATH: ${SUT_RELATIVE_CONFIG_MODULE_PATH}`);
+    vi.doMock(SUT_RELATIVE_CONFIG_MODULE_PATH, () => {
+      console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_CONFIG_MODULE_PATH (${SUT_RELATIVE_CONFIG_MODULE_PATH}) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
+      return {
+        configService: currentMockConfigServiceInstance, // Ensure mockConfigServiceInstance is defined (it's currentMockConfigServiceInstance)
+      };
+    });
     
     // Re-apply fs mock if needed after vi.resetModules()
     // fs mock is now top-level, vi.resetModules() might clear it if not handled by Vitest's own reset logic for top-level mocks.
@@ -220,9 +222,11 @@ describe('CLI with yargs (index.ts)', () => {
     // Top-level vi.mock for the source .ts files should handle this.
     
     console.log('[INDEX_TEST_DEBUG] mockStartServer type before SUT import:', typeof mockStartServer);
-    console.log(`[INDEX_TEST_DEBUG] About to import SUT: ${indexPath}. Top-level mocks for src/lib/*.ts should be active.`);
+    // console.log(`[INDEX_TEST_DEBUG] About to import SUT: ${indexPath}. Top-level mocks for src/lib/*.ts should be active.`);
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: About to import SUT from indexPath: ${indexPath}`);
     
     const mainModule = await import(indexPath);
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT imported. main function type: ${typeof (mainModule as any)?.main}`);
     // console.log('[INDEX_TEST_DEBUG] SUT imported. Module keys:', mainModule ? Object.keys(mainModule) : 'null');
     
     // If main() is exported and needs to be called:
