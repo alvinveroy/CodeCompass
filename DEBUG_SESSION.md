@@ -1026,128 +1026,126 @@ This guard seems correct for preventing runtime errors, but TypeScript might sti
 4.  **Integration Test LLM Mocking:** The SUT self-mocking for `llm-provider.ts` is not working. The server process is not using the mocked LLM provider.
 5.  **Integration Test Session History:** The "Query 2 missing" issue is critical. The extensive logging added to `src/lib/state.ts` and `src/lib/server.ts` (tool handlers) should provide clear evidence of where the session state diverges.
 
-**Plan for Attempt 50:**
+## Attempt 50: TypeScript Regressions, LLM Mock Specificity, Session Discrepancy
+
+**Git Commit (Before Attempt 50 changes):** (User to fill with git commit SHA after applying Attempt 49 changes)
+**Git Commit (After Attempt 50 changes):** (User to fill, e.g., from ~09:44 UTC 2025-05-27)
+
+### Summary of Attempt 50 Results:
+*   **TypeScript Compilation Errors (2 in `src/lib/server.ts`):**
+    1.  `src/lib/server.ts:808:41 - error TS2304: Cannot find name 'getSessionHistory'.`
+    2.  `src/lib/server.ts:1726:34 - error TS18048: 'axiosError.response' is possibly 'undefined'.`
+*   **Vitest Transform Errors: NONE!**
+*   **Test Failures (27 total):**
+    *   **`src/tests/index.test.ts` (19 failures):**
+        *   `mockStartServer` / `StdioClientTransport` not called: 12 tests.
+            *   **Diagnostic Logs:** `[INDEX_TEST_DEBUG] Mock factory for ../../dist/lib/server.js IS RUNNING` and `../../dist/lib/config-service.js IS RUNNING` **ARE visible**.
+            *   **SUT Diagnostic Logs (from `src/index.ts`):** Still not visible.
+        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests.
+        *   `--json` output test: `Expected to find a console.log call with valid JSON output, but none was found.: expected undefined to be defined`. `mockConsoleLog.mock.calls` is `[]`.
+        *   `fs.readFileSync` for `changelog` command: Mock not called.
+    *   **`src/tests/server.test.ts` (4 failures):**
+        *   All 4 are timeouts (30000ms) in the `startProxyServer` suite.
+        *   **Diagnostic Logs (`[PROXY_DEBUG]`):** Show proxy server *believes* it's starting correctly.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
+        *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy not called.
+        *   `get_session_history`: Assertion `expected '# Session History...' to contain 'Query 2: "second agent query...'` failed.
+            *   **Diagnostic Logs:** Confirm session state discrepancy. `addQuery` and `agent_query` handler see 2 queries, but `get_session_history` handler sees only 1. The `_debug_retrievalCount` and `_debug_lastRetrievedAt` logs (if they were correctly applied in Attempt 50) would be crucial here.
+        *   `generate_suggestion` & `get_repository_context`: Tests receive actual LLM output.
+            *   **Diagnostic Logs:** SUT self-mock for `llm-provider` is active. However, the refined prompt matching logs (`[MOCK_LLM_PROVIDER] SUT self-mock: Matched 'suggest file1.ts index file1' prompt.`) **ARE NOT visible**. The log `[MOCK_LLM_PROVIDER] SUT self-mock: Prompt did NOT match specific conditions. Full prompt (lower): "suggest how to use file1.ts index file1"` **IS visible**. This means the `if (lowerPrompt.includes("suggest how to use file1.ts") && lowerPrompt.includes("index file1"))` condition is failing.
+*   **DeepSeek API Connection Errors in Logs:** **RESOLVED!**
+
+### Analysis of Key Issues:
+1.  **TypeScript Regressions in `src/lib/server.ts`:** These must be fixed first.
+2.  **`src/tests/index.test.ts` Mocking:** SUT (`dist/index.js`) is not using Vitest-mocked modules.
+3.  **Integration Test LLM Mock Specificity:** The SUT self-mock for `llm-provider.ts` is active, but the prompt matching logic needs adjustment. The `&& lowerPrompt.includes("index file1")` part of the condition is too strict or the actual prompt refinement is different.
+4.  **Integration Test `get_session_history` Discrepancy:** Critical session state bug.
+5.  **`src/tests/server.test.ts` Timeouts (`startProxyServer`):** Persist.
+6.  **`src/tests/index.test.ts` `--json` output:** `mockConsoleLog` is not capturing output.
+
+---
+## Attempt 51: Fix TypeScript, Refine LLM Mock Logging, Verify Session Debugging
+
+**Git Commit (Before Attempt 51 changes):** (User to fill with git commit SHA after applying Attempt 50 changes)
+**Git Commit (After Attempt 51 changes):** (User to fill after applying these new changes)
+
+### Plan for Attempt 51:
 
 Here are the instructions for the editor engineer:
 
 **1. Fix TypeScript Compilation Errors (Highest Priority):**
 
 *   **File:** `src/lib/server.ts`
-    *   **Ensure `getSessionHistory` is imported:**
-        Verify that the import statement at the top of the file correctly includes `getSessionHistory` from `./state`. It should look like this (preserving other existing imports):
+    *   **Fix `TS2304: Cannot find name 'getSessionHistory'.` (Line 808):**
+        Ensure the import for `getSessionHistory` from `./state` is present and correct at the top of the file.
         ```typescript
-        import { 
-          // ... other existing imports from state ...
-          getSessionHistory 
-        } from './state';
+        // Ensure this is present and correct among other imports from ./state
+        import { /* other imports */ getSessionHistory, /* other imports */ } from './state';
         ```
-        If it's missing, add it.
-
-*   **File:** `src/tests/index.test.ts`
-    *   **Correct the `--json` output test assertion:**
-        Locate the test: `'should output raw JSON when --json flag is used on successful tool call'` (around line 630).
-        Ensure the assertion block is as follows (this version removes `withContext` and relies on `toBeDefined` and a manual error if `jsonOutputCall` is not found):
+    *   **Fix `TS18048: 'axiosError.response' is possibly 'undefined'.` (Line 1726):**
+        Add a null check for `axiosError.response` and `axiosError.response.headers` before accessing `axiosError.response.headers`.
         ```typescript
-        // console.log('[JSON_TEST_DEBUG] mockConsoleLog calls for --json test:', JSON.stringify(mockConsoleLog.mock.calls, null, 2)); // Keep for debugging
-        const jsonOutputCall = mockConsoleLog.mock.calls.find(call => {
-          if (call.length > 0 && typeof call[0] === 'string') {
-            try {
-              JSON.parse(call[0]);
-              return true; 
-            } catch (e) {
-              return false;
+        // Around line 1726, inside the proxy.on('error', ...) handler
+        if (axiosError.response && axiosError.response.headers) { // Ensure this check is present
+          Object.keys(axiosError.response.headers).forEach(key => {
+            const headerValue = axiosError.response!.headers[key];
+            if (headerValue !== undefined) {
+              res.setHeader(key, headerValue as string | string[]);
             }
-          }
-          return false;
-        });
-
-        if (!jsonOutputCall) {
-          console.error('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Calls were:', JSON.stringify(mockConsoleLog.mock.calls));
-          // Fail the test explicitly if no JSON call is found, or if calls array is empty
-          expect(mockConsoleLog.mock.calls.length > 0, 'Expected console.log to have been called. If it was, jsonOutputCall should have been defined.').toBe(true);
-          // The following line will likely not be reached if the above fails, but it's good for clarity.
-          expect(jsonOutputCall, 'Expected to find a console.log call with valid JSON output, but none was found.').toBeDefined(); 
-        } else {
-          const parsedOutput = JSON.parse(jsonOutputCall[0] as string);
-          expect(parsedOutput).toEqual(expect.objectContaining(rawToolResult));
+          });
         }
         ```
 
-*   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
-    *   **Ensure `TestSpawnEnv` interface includes `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`:**
-        Locate the `interface TestSpawnEnv` definition (around line 155).
-        Verify that it includes the optional property:
+**2. Integration Test - LLM Mock Specificity:**
+
+*   **File:** `src/lib/llm-provider.ts` (inside `createMockLLMProvider`'s `generateText` mock)
+    *   **Adjust prompt matching conditions:**
+        The log `[MOCK_LLM_PROVIDER] SUT self-mock: Prompt did NOT match specific conditions. Full prompt (lower): "suggest how to use file1.ts index file1"` indicates the prompt refinement adds "index file1".
+        The condition `lowerPrompt.includes("suggest how to use file1.ts") && lowerPrompt.includes("index file1")` should have matched. Let's simplify the condition slightly to be less brittle, or log the exact prompt parts for comparison.
+        For now, let's assume the `includes` check is fine but perhaps there's a subtle difference.
+        **Action:** Add more detailed logging *before* the `if` conditions to see the exact prompt being checked against each part of the condition.
         ```typescript
-        interface TestSpawnEnv {
-          // ... other existing properties ...
-          CODECOMPASS_INTEGRATION_TEST_MOCK_LLM?: string; // Ensure this line is present
+        // ... inside generateText mock implementation
+        const lowerPrompt = prompt.toLowerCase();
+        logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock generateText called. Prompt (lower, first 100): ${lowerPrompt.substring(0, 100)}...`);
+        
+        const condition1_part1 = "suggest how to use file1.ts";
+        const condition1_part2 = "index file1";
+        logger.debug(`[MOCK_LLM_PROVIDER] Checking prompt for: C1P1="${condition1_part1}" (present: ${lowerPrompt.includes(condition1_part1)}), C1P2="${condition1_part2}" (present: ${lowerPrompt.includes(condition1_part2)})`);
+        if (lowerPrompt.includes(condition1_part1) && lowerPrompt.includes(condition1_part2)) {
+          logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock: Matched '${condition1_part1}' and '${condition1_part2}' prompt.`);
+          return Promise.resolve("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts");
         }
-        ```
-        If missing, add it.
+        
+        const condition2_part1 = "what is the main purpose of this repo?";
+        const condition2_part2 = "pendencies"; // This was from "pendencies` `package pendencies`..."
+        logger.debug(`[MOCK_LLM_PROVIDER] Checking prompt for: C2P1="${condition2_part1}" (present: ${lowerPrompt.includes(condition2_part1)}), C2P2="${condition2_part2}" (present: ${lowerPrompt.includes(condition2_part2)})`);
+        if (lowerPrompt.includes(condition2_part1) && lowerPrompt.includes(condition2_part2)) {
+          logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock: Matched '${condition2_part1}' and '${condition2_part2}' prompt.`);
+          return Promise.resolve("SUT_SELF_MOCK: This is a summary of the repository context, using info from file2.txt");
+        }
+        
+        // ... (other existing conditions for "repository context", "summarize", "commit message")
 
-**2. Address `src/tests/index.test.ts` Mocking Failures (19 tests):**
+        logger.warn(`[MOCK_LLM_PROVIDER] SUT self-mock: Prompt did NOT match specific conditions. Full prompt (lower): "${lowerPrompt}"`);
+        logger.info("[MOCK_LLM_PROVIDER] SUT self-mock: No specific prompt matched, returning generic response.");
+        return Promise.resolve("SUT_SELF_MOCK: Generic mocked LLM response.");
+        ```
+
+**3. Integration Test - `get_session_history` Discrepancy:**
+
+*   **File:** `src/lib/state.ts`
+    *   Ensure the `_debug_retrievalCount` and `_debug_lastRetrievedAt` logging added in Attempt 50 is correctly implemented in `SessionState`, `createSession`, `getOrCreateSession`, and `getSessionHistory`. The build output from Attempt 50 did not show these specific debug logs, so they might not have been applied or were overwritten. Please verify their presence.
+
+**4. `src/tests/index.test.ts` - `--json` output test:**
 
 *   **File:** `src/tests/index.test.ts`
-    *   **Focus on `mockStartServer` and `StdioClientTransport`:**
-        *   Uncomment the diagnostic log inside the `vi.mock('../../src/lib/server.ts', ...)` factory (around line 71):
-            ```typescript
-            vi.mock('../../src/lib/server.ts', () => {
-              console.log('[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts IS RUNNING'); // Uncomment this
-              return {
-                get startServerHandler() { return mockStartServerHandler; },
-                // ... other exports
-              };
-            });
-            ```
-        *   Uncomment the diagnostic log inside the `vi.mock('@modelcontextprotocol/sdk/client/stdio.js', ...)` factory (around line 87):
-            ```typescript
-            vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => { // Uses mockStdioClientTransportConstructor
-              console.log('[INDEX_TEST_DEBUG] Mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING'); // Uncomment this
-              return { 
-                get StdioClientTransport() { return mockStdioClientTransportConstructor; },
-              };
-            });
-            ```
-        *   **In `src/index.ts` (SUT - temporarily modify for diagnostics):**
-            Just before `startServerHandler` is called (or `StdioClientTransport` is instantiated), add temporary logging to inspect what was imported.
-            Example (conceptual, adapt to actual import style in `src/index.ts`):
-            ```typescript
-            // In src/index.ts, before startServerHandler is used:
-            // import { startServerHandler } from './lib/server'; // If this is how it's imported
-            // console.log('[SUT_INDEX_TS_DEBUG] Imported startServerHandler type:', typeof startServerHandler);
-            // console.log('[SUT_INDEX_TS_DEBUG] Is startServerHandler a mock?', startServerHandler === mockStartServerHandler); // This comparison won't work directly due to scope, but typeof might give clues.
-            // console.log('[SUT_INDEX_TS_DEBUG] startServerHandler.isMockFunction:', !!startServerHandler.mock); // Check if it has Vitest mock properties
+    *   The assertion `expect(mockConsoleLog.mock.calls.length > 0, ...).toBe(true);` was added in Attempt 50. If `mockConsoleLog.mock.calls` is still `[]`, this test will fail here. The issue is that `mockConsoleLog` isn't capturing anything from the SUT's `console.log` when the tool command is run. This is related to the broader SUT mocking problem. No new changes here for now, as fixing the SUT mocking is a prerequisite.
 
-            // Similarly for StdioClientTransport
-            // import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio';
-            // console.log('[SUT_INDEX_TS_DEBUG] Imported StdioClientTransport type:', typeof StdioClientTransport);
-            // console.log('[SUT_INDEX_TS_DEBUG] StdioClientTransport.isMockFunction:', !!(StdioClientTransport as any).mock);
-            ```
-            *Self-correction: The SUT is `dist/index.js`. Modifying `src/index.ts` and rebuilding is the way to get these logs into the SUT execution path for tests.*
-            **Action for Editor Engineer:** Add the above `console.log` lines in `src/index.ts` before the respective handlers/classes are used.
+**Deferred for Next Attempt:**
+*   `src/tests/index.test.ts` core mocking issues (12 tests for `mockStartServer` / `StdioClientTransport`).
+*   `src/tests/server.test.ts` timeouts (4 tests for `startProxyServer`).
+*   Integration test `trigger_repository_update` (`qdrant` spy).
 
-**3. Address `src/tests/server.test.ts` Timeouts (4 tests - `startProxyServer` suite):**
-
-*   The diagnostic logging added in Attempt 48 to `startProxyServer` in `src/lib/server.ts` should provide detailed information in the test output. Analyze this output carefully to see where the tests are hanging. No new code changes for this file in this attempt, focus on analyzing the logs from the previous changes.
-
-**4. Address `src/tests/integration/stdio-client-server.integration.test.ts` Failures (4 tests):**
-
-*   **LLM Mocking (`generate_suggestion`, `get_repository_context`):**
-    *   **File:** `src/lib/llm-provider.ts`
-        *   Ensure the `mockId` logging added in Attempt 48 within `getLLMProvider` (when `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM === 'true'`) is active and not commented out. This is crucial to see if the SUT (spawned server) is creating/using the SUT-self-mocked provider.
-    *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
-        *   In the `vi.mock('../../lib/llm-provider', ...)` factory (around line 50), ensure the `mockLLMProviderInstance.mockId` assignment and its `console.log` are uncommented:
-            ```typescript
-            const mockLLMProviderInstance = {
-              // ... other mocked methods ...
-              mockId: 'test-suite-mock-llm-provider-instance' // Ensure this is set
-            };
-            // ...
-            console.log('[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING, mockLLMProviderInstance.mockId is: ', mockLLMProviderInstance.mockId); // Ensure this is uncommented
-            ```
-*   **`get_session_history` (missing "Query 2"):**
-    *   The extensive logging added in Attempt 48 to `src/lib/state.ts` and `src/lib/server.ts` (tool handlers) should provide a clear trace. Analyze this output carefully. No new code changes for these files in this attempt, focus on analyzing the logs.
-
-After these changes, please run `npm run build` and provide the full output. We will analyze the new TypeScript errors (if any), the diagnostic logs, and the test results to plan the next steps.
-
+After these changes, please run `npm run build` and provide the full output. The immediate goal is to fix the `tsc` errors. Then, we'll analyze the new diagnostic logs for LLM prompt matching and session state.
 ---
