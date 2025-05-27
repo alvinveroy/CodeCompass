@@ -66,7 +66,7 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
       
   sessions.set(sessionId, session);
   logger.info(`Created new session: ${sessionId}`);
-  logger.debug(`[STATE_DEBUG] createSession: Session '${sessionId}' created and stored. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt!).toISOString()}`);
+  logger.info(`[STATE_DEBUG] createSession: Session '${sessionId}' created and stored. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt!).toISOString()}`);
   return session;
 }
 
@@ -79,7 +79,7 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
     session.lastUpdated = Date.now();
     session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
     session._debug_lastRetrievedAt = Date.now(); // Timestamp
-    logger.debug(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}`);
+    logger.info(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.context.repoPath}`);
     return session;
   }
   
