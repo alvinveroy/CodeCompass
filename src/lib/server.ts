@@ -814,12 +814,12 @@ function registerTools( // Removed async
             logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Queries object after addQuery: ${JSON.stringify(updatedSessionForAgentQuery.queries, null, 2)}`);
 
         // If you added getRawSessionForDebug to state.ts:
-        const currentSessionStateForLog = getRawSessionForDebug(args.sessionId); 
-        logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Full session state from map AFTER addQuery: ${currentSessionStateForLog ? JSON.stringify(currentSessionStateForLog, null, 2) : 'SESSION_NOT_FOUND_IN_MAP'}`);
+        const rawSessionStateForDebugLog = getRawSessionForDebug(args.sessionId); 
+        logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Full session state from map AFTER addQuery: ${rawSessionStateForDebugLog ? JSON.stringify(rawSessionStateForDebugLog, null, 2) : 'SESSION_NOT_FOUND_IN_MAP'}`);
         
-        const sessionAfterAddQueryReFetch = getOrCreateSession(args.sessionId, repoPath); // repoPath is from registerTools scope
-        if (sessionAfterAddQueryReFetch) {
-            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Re-fetched session queries AFTER addQuery (deep copy): ${JSON.stringify(sessionAfterAddQueryReFetch.queries, null, 2)}`);
+        const refetchedSessionStateAfterAddQuery = getOrCreateSession(args.sessionId, repoPath); // repoPath is from registerTools scope
+        if (refetchedSessionStateAfterAddQuery) {
+            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Re-fetched session queries AFTER addQuery (deep copy): ${JSON.stringify(refetchedSessionStateAfterAddQuery.queries, null, 2)}`);
         } else {
             logger.warn(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Could not re-fetch session AFTER addQuery.`);
         }
