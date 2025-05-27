@@ -1075,10 +1075,39 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 - Last Updated: ${new Date(session.lastUpdated).toISOString()}
 - Repository: ${session.context.repoPath}
 
-## Queries (${session.queries.length})
-${session.queries.map((q, i) => `
+## Queries (${session.queries.length})${(() => {
+  console.log(`[SERVER_TOOL_CONSOLE_DEBUG] formatSessionHistory: About to loop ${session.queries.length} queries.`);
+  return '';
+})()}
+${session.queries.map((q, i) => {
+  console.log(`[SERVER_TOOL_CONSOLE_DEBUG] formatSessionHistory: Formatting Query ${i + 1}: "${q.query}"`);
+  return `
 ### Query ${i+1}: "${q.query}"
 - Timestamp: ${new Date(q.timestamp).toISOString()}
+`;}).join('')}
+
+## Suggestions (${session.suggestions.length})
+${session.suggestions.map((s, i) => `
+### Suggestion ${i+1}
+- Timestamp: ${new Date(s.timestamp).toISOString()}
+- Prompt: "${s.prompt.substring(0, 100)}..."
+${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
+- Feedback Comments: ${s.feedback.comments}` : '- No feedback provided'}
+`).join('')}`,
+        }],
+      };
+    } catch (error: unknown) {
+      return {
+        content: [{
+          type: "text",
+          text: `# Error\n\n${error instanceof Error ? error.message : String(error)}`,
+        }],
+      };
+    }
+  });
+
+  // Add this new tool registration:
+  server.tool(
 - Results: ${q.results.length}
 - Relevance Score: ${q.relevanceScore.toFixed(2)}
 `).join('')}
