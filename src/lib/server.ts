@@ -1098,7 +1098,8 @@ ${session.suggestions.map((s, i) => `
 - Prompt: "${s.prompt.substring(0, 100)}..."
 ${s.feedback ? `- Feedback Score: ${s.feedback.score}/10
 - Feedback Comments: ${s.feedback.comments}` : '- No feedback provided'}
-`).join('')}`,
+`).join('')}
+`, // Ensure the closing backtick for the outer template literal is correctly placed after all mapped content.
         }],
       };
     } catch (error: unknown) {
