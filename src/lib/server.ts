@@ -1075,7 +1075,10 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
 - Last Updated: ${new Date(session.lastUpdated).toISOString()}
 - Repository: ${session.context.repoPath}
 
-## Queries (${session.queries.length})${(() => {
+${(() => { // Adding the log here, before the ## Queries header is constructed
+  console.log(`[SERVER_TOOL_CONSOLE_DEBUG] formatSessionHistory: session.queries.length for header: ${session.queries.length}`);
+  return ''; 
+})()}## Queries (${session.queries.length})${(() => {
   console.log(`[SERVER_TOOL_CONSOLE_DEBUG] formatSessionHistory: About to loop ${session.queries.length} queries.`);
   return '';
 })()}

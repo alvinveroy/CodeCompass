@@ -114,7 +114,7 @@ vi.doMock('../../src/lib/config-service.ts', () => {
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
 
 // Import the SUT path
-const indexPath = path.resolve(__dirname, '../../../dist/index.js'); // Moved up as it's used by runMainWithArgs logic
+const indexPath = path.resolve(__dirname, '../../dist/index.js'); // Moved up as it's used by runMainWithArgs logic
 
 // Near the top of src/tests/index.test.ts, after imports
 let actualStderrDataCallbackForClientTests: ((data: Buffer) => void) | null = null;
