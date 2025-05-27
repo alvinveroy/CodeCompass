@@ -203,19 +203,27 @@ describe('CLI with yargs (index.ts)', () => {
     vi.resetModules(); // Keep this to ensure fresh SUT import
 
     // Apply mocks for SUT dependencies using vi.doMock, paths relative to SUT (dist/index.js)
-    vi.doMock('./lib/config-service.js', () => { // Path relative to dist/index.js
-      console.log('[INDEX_TEST_DEBUG] Applying doMock for ./lib/config-service.js');
+    // Path from dist/index.js to dist/lib/server.js is './lib/server.js'
+    const SUT_RELATIVE_SERVER_MODULE_PATH = './lib/server.js'; 
+    // Path from dist/index.js to dist/lib/config-service.js is './lib/config-service.js'
+    const SUT_RELATIVE_CONFIG_MODULE_PATH = './lib/config-service.js';
+
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_CONFIG_MODULE_PATH: ${SUT_RELATIVE_CONFIG_MODULE_PATH}`);
+    vi.doMock(SUT_RELATIVE_CONFIG_MODULE_PATH, () => { // Path relative to dist/index.js
+      console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_CONFIG_MODULE_PATH (${SUT_RELATIVE_CONFIG_MODULE_PATH}) IS RUNNING`);
       return {
-        configService: currentMockConfigServiceInstance,
-        logger: currentMockLoggerInstance,
+        configService: currentMockConfigServiceInstance, // SUT imports configService
+        logger: currentMockLoggerInstance, // SUT imports logger
       };
     });
 
-    vi.doMock('./lib/server.js', () => { // Path relative to dist/index.js
-      console.log('[INDEX_TEST_DEBUG] Applying doMock for ./lib/server.js. mockStartServer available:', !!mockStartServer);
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_SERVER_MODULE_PATH: ${SUT_RELATIVE_SERVER_MODULE_PATH}`);
+    vi.doMock(SUT_RELATIVE_SERVER_MODULE_PATH, () => { // Path relative to dist/index.js
+      console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_SERVER_MODULE_PATH (${SUT_RELATIVE_SERVER_MODULE_PATH}) IS RUNNING`);
       return {
-        startServerHandler: mockStartServer,
-        ServerStartupError: ServerStartupError,
+        startServerHandler: mockStartServer, // SUT imports startServerHandler (mockStartServer is the mock fn)
+        ServerStartupError: ServerStartupError, // SUT imports ServerStartupError
+        // Add any other exports from server.js that src/index.ts might import directly
       };
     });
     

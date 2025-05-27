@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { logger } from "./config-service";
 
 // Session state interface
@@ -94,8 +95,9 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
 
 
   const newSession = createSession(repoPath!, sessionId); // repoPath should be guaranteed by now if creating
-  logger.debug(`[STATE_DEBUG] getOrCreateSession: Created new session '${newSession.id}' for repoPath '${repoPath}'. Queries: ${newSession.queries.length}. Retrieval count: ${newSession._debug_retrievalCount}, Last retrieved at: ${new Date(newSession._debug_lastRetrievedAt!).toISOString()}`);
-  sessions.set(newSession.id, newSession);
+  // createSession now initializes _debug_retrievalCount
+  logger.info(`[STATE_DEBUG] getOrCreateSession: Created NEW session '${newSession.id}' for repoPath '${repoPath}'. Queries: ${newSession.queries.length}. Retrieval count: ${newSession._debug_retrievalCount}`);
+  // sessions.set is already done in createSession
   return newSession;
 }
 
@@ -204,18 +206,18 @@ export function updateContext(
 // Get session history
 export function getSessionHistory(sessionId: string): SessionState {
   const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
-  logger.debug(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
+  logger.info(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
   if (!sessions.has(sessionId)) {
     // Log existing sessions for easier debugging if a specific one is not found
     const existingSessionIds = Array.from(sessions.keys());
-    logger.warn(`[STATE_DEBUG] getSessionHistory: Session not found: '${sessionId}'. Existing sessions: [${existingSessionIds.join(', ')}]`);
+    logger.info(`[STATE_DEBUG] getSessionHistory: Session not found: '${sessionId}'. Existing sessions: [${existingSessionIds.join(', ')}]`);
     throw new Error(`Session not found: ${sessionId}`);
   }
   const session = sessions.get(sessionId)!;
   session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
   session._debug_lastRetrievedAt = Date.now(); // Timestamp
   const queryLog = session.queries.slice(-3).map(q => q.query.substring(0,30) + '...');
-  logger.debug(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}`);
+  logger.info(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}`);
   return session;
 }
 
