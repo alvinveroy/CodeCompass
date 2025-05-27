@@ -37,8 +37,10 @@ export interface SessionState {
   }[];
   createdAt: number;
   lastUpdated: number;
-  _debug_retrievalCount?: number; // Add this
-  _debug_lastRetrievedAt?: number; // Add this
+  repoPath?: string; // Ensure this is present
+  // Add/Ensure these debug properties are present and optional
+  _debug_retrievalCount?: number;
+  _debug_lastRetrievedAt?: number;
 }
 
 // In-memory state storage
@@ -47,7 +49,8 @@ const sessions: Map<string, SessionState> = new Map();
 // Create a new session
 export function createSession(repoPath: string, sessionIdToUse?: string): SessionState {
   const sessionId = sessionIdToUse || generateSessionId();
-  logger.info(`[STATE_DEBUG] createSession: Creating new session. ID: '${sessionId}', repoPath: '${repoPath}'. Provided sessionId was: '${sessionIdToUse}'`);
+  // Change logger.info to include new debug fields, ensure it's logger.info
+  logger.info(`[STATE_DEBUG] createSession: Creating new session. ID: '${sessionId}', repoPath: '${repoPath}'. Provided sessionId was: '${sessionIdToUse}'. Initial retrieval count: 0.`);
   const session: SessionState = {
     id: sessionId,
     queries: [],
@@ -60,6 +63,7 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
     agentSteps: [],
     createdAt: Date.now(),
     lastUpdated: Date.now(),
+    repoPath, // Ensure repoPath is assigned here
     _debug_retrievalCount: 0, // Initialize
     _debug_lastRetrievedAt: Date.now(), // Initialize
   };
@@ -111,10 +115,11 @@ export function addQuery(
 ): SessionState {
   const session = getOrCreateSession(sessionId, repoPath);
   const newQueryEntry = { timestamp: Date.now(), query, results, relevanceScore };
+  logger.info(`[STATE_DEBUG] addQuery: BEFORE adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Queries count: ${session.queries.length}, Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
   session.queries.push(newQueryEntry);
   session.lastUpdated = Date.now();
-  const queryLog = session.queries.slice(-3).map(q => q.query.substring(0,30) + '...');
-  logger.debug(`[STATE_DEBUG] addQuery: Added to session '${sessionId}'. Query: "${query.substring(0,50)}...". Total queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}`);
+  // Add a log after pushing the query
+  logger.info(`[STATE_DEBUG] addQuery: AFTER adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Total queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
   return session;
 }
 
@@ -130,11 +135,7 @@ export function addSuggestion(
   suggestion: string,
   repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = sessions.get(sessionId);
-  if (!session) {
-    logger.error(`addSuggestion: Session not found for ID: ${sessionId}. Cannot add suggestion.`);
-    throw new Error(`Session not found: ${sessionId}. Cannot add suggestion.`);
-  }
+  const session = getOrCreateSession(sessionId, repoPath); // Use getOrCreateSession
   
   session.suggestions.push({
     timestamp: Date.now(),
@@ -153,11 +154,7 @@ export function addFeedback(
   comments: string,
   repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = sessions.get(sessionId);
-  if (!session) {
-    logger.error(`addFeedback: Session not found for ID: ${sessionId}. Cannot add feedback.`);
-    throw new Error(`Session not found: ${sessionId}. Cannot add feedback.`);
-  }
+  const session = getOrCreateSession(sessionId, repoPath); // Use getOrCreateSession
   
   if (session.suggestions.length === 0) {
     throw new Error("No suggestions found to add feedback to");
@@ -176,19 +173,14 @@ export function addFeedback(
 // Update context in session
 export function updateContext(
   sessionId: string,
-  repoPath?: string,
+  repoPathValue?: string, // Renamed to avoid conflict with SessionState.repoPath
   lastFiles?: string[],
   lastDiff?: string
 ): SessionState {
-  // Pass repoPath to getOrCreateSession for potential creation and for context update
-  const session = sessions.get(sessionId);
-  if (!session) {
-    logger.error(`updateContext: Session not found for ID: ${sessionId}. Cannot update context.`);
-    throw new Error(`Session not found: ${sessionId}. Cannot update context.`);
-  }
+  const session = getOrCreateSession(sessionId, repoPathValue); // Use getOrCreateSession, pass repoPathValue for creation
   
-  if (repoPath) {
-    session.context.repoPath = repoPath; // Update context if repoPath is provided
+  if (repoPathValue) { // Use repoPathValue for updating context
+    session.context.repoPath = repoPathValue; 
   }
   
   if (lastFiles) {
@@ -210,14 +202,15 @@ export function getSessionHistory(sessionId: string): SessionState {
   if (!sessions.has(sessionId)) {
     // Log existing sessions for easier debugging if a specific one is not found
     const existingSessionIds = Array.from(sessions.keys());
-    logger.info(`[STATE_DEBUG] getSessionHistory: Session not found: '${sessionId}'. Existing sessions: [${existingSessionIds.join(', ')}]`);
+    logger.warn(`[STATE_DEBUG] getSessionHistory: Session not found: '${sessionId}'. Existing session IDs: [${existingSessionIds.join(', ')}]. Caller: ${callStack}`); // Keep as warn
     throw new Error(`Session not found: ${sessionId}`);
   }
   const session = sessions.get(sessionId)!;
   session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
   session._debug_lastRetrievedAt = Date.now(); // Timestamp
-  const queryLog = session.queries.slice(-3).map(q => q.query.substring(0,30) + '...');
-  logger.info(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}`);
+  const queryLog = session.queries.slice(-3).map(q => ({ q: q.query, ts: q.timestamp, score: q.relevanceScore })); // Match user's requested queryLog
+  // Change logger.info to include new debug fields and ensure it's logger.info
+  logger.info(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.repoPath}`);
   return session;
 }
 
@@ -273,11 +266,7 @@ export function addAgentSteps(
   finalResponse: string,
   repoPath?: string // Allow repoPath for session creation
 ): SessionState {
-  const session = sessions.get(sessionId);
-  if (!session) {
-    logger.error(`addAgentSteps: Session not found for ID: ${sessionId}. Cannot add agent steps.`);
-    throw new Error(`Session not found: ${sessionId}. Cannot add agent steps.`);
-  }
+  const session = getOrCreateSession(sessionId, repoPath); // Use getOrCreateSession
   
   if (!session.agentSteps) {
     session.agentSteps = [];
