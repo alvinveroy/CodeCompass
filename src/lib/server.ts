@@ -1040,7 +1040,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
           }],
         };
       }
-      
+      console.log(`[SERVER_TOOL_CONSOLE_DEBUG] get_session_history handler: session.queries received by handler: ${JSON.stringify(session.queries.map(q => q.query))}`);
       // Adding logger here for [SERVER_TOOLS_DEBUG]
       const queriesForLog = session.queries.map(q => ({
         query: q.query,
