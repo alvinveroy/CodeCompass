@@ -167,7 +167,7 @@ describe('CLI with yargs (index.ts)', () => {
       info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
     };
     // Reset other top-level mocks that might be stateful
-    mockStartServer.mockReset().mockResolvedValue(undefined); // mockStartServer is defined before vi.doMock
+    mockStartServerHandler.mockReset().mockResolvedValue(undefined); // mockStartServerHandler is defined before vi.doMock
     mockStartProxyServer.mockReset().mockResolvedValue(undefined);
     
     mockMcpClientInstance.callTool.mockReset().mockResolvedValue({ content: [{ type: 'text', text: 'Tool call success' }] });

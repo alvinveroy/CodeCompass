@@ -47,8 +47,6 @@ export interface SessionState {
 const sessions: Map<string, SessionState> = new Map();
 const SESSIONS_MAP_INSTANCE_ID = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized. Instance ID: ${SESSIONS_MAP_INSTANCE_ID}`);
-const SESSIONS_MAP_INSTANCE_ID = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized. Instance ID: ${SESSIONS_MAP_INSTANCE_ID}`);
 
 // Create a new session
 export function createSession(repoPath: string, sessionIdToUse?: string): SessionState {
