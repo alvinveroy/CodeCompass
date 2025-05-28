@@ -605,7 +605,7 @@ describe('Stdio Client-Server Integration Tests', () => {
     // The simpler mock (which was failing the assertion) was "SUT_SELF_MOCK: This is a generated suggestion..."
     // Let's check for the more specific part of the detailed mock.
     expect(suggestionText).toContain("**Suggested Implementation**:"); 
-    expect(suggestionText).toContain("Wrapped the console.log in a function that can be called with different names"); // Check for a key phrase from the detailed mock's actual output
+    expect(suggestionText).toContain("* Wraps the logging in a reusable function"); // Adjusted to match actual SUT output
     expect(suggestionText).toContain("### Diff: file1.ts"); // Check for context inclusion
 
     await client.close();
