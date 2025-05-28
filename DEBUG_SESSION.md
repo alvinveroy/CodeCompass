@@ -1672,25 +1672,48 @@ After these changes, please run `npm run build` and provide the full output. The
 *   **Integration Test LLM Mock Assertions (`generate_suggestion`, `get_repository_context` - STILL MISALIGNED):** The SUT self-mock is providing detailed responses, but the test assertions are not fully aligned with this actual output. The previous attempt to fix this was insufficient.
 *   **`src/tests/server.test.ts` Timeouts (EXPOSED):** With the transform error gone, the 4 timeouts in the `startProxyServer` suite are now the primary issue in this file. The `[PROXY_DEBUG]` logs are needed to diagnose these.
 
-### Blockers:
+## Attempt 64: Align LLM Asserts (Integration), Plan SUT Mocking Diagnostics
+
+**Git Commit (Before Attempt 64 changes):** `911fa07` (fix: Fix server.test mock hoisting and update integration assertions)
+**Git Commit (After Attempt 64 changes):** `20d620e` (test: Update suggestion text assertions for detailed mock response)
+
+### Issues Addressed (Intended from Attempt 63 Plan):
+1.  **Align Integration Test LLM Mock Assertions (Again):**
+    *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
+    *   **Action:** Adjusted `expect(suggestionText).toContain(...)` and `expect(repoContextText).toContain(...)` assertions for `generate_suggestion` and `get_repository_context` tests to match key phrases from the SUT's self-mocked detailed responses (commit `20d620e`).
+2.  **`src/tests/index.test.ts` SUT Mocking & Log Visibility:** (Carried over to next attempt)
+3.  **`get_session_history` Discrepancy (Integration Test - Await Full Logs):** (Carried over)
+4.  **`src/tests/server.test.ts` Timeouts (Await Full Logs):** (Carried over)
+
+### Result (Based on User's `npm run build` Output - PENDING):
+*   (To be filled in after user provides the next `npm run build` output)
+    *   TypeScript Compilation:
+    *   Vitest Transform Errors:
+    *   Test Failures:
+        *   `src/tests/index.test.ts`:
+        *   `src/tests/server.test.ts`:
+        *   `src/tests/integration/stdio-client-server.integration.test.ts`: (Specifically, did the LLM assertion alignment pass?)
+    *   SUT Diagnostic Logs (`[SUT_INDEX_TS_DEBUG]`, `[PROXY_DEBUG]`, `[STATE_DEBUG]`, `[SERVER_TOOL_DEBUG]`):
+
+### Analysis/Retrospection for Attempt 64 (PENDING):
+*   (To be filled in after user provides the next `npm run build` output)
+
+### Blockers (Carried over from Attempt 63, pending next build output):
 1.  **CRITICAL:** `src/tests/index.test.ts` SUT (`dist/index.js`) not using mocks (19 failures). Absence of SUT diagnostic logs (`[SUT_INDEX_TS_DEBUG]`) hinders debugging.
 2.  **CRITICAL:** `get_session_history` discrepancy in integration tests (1 failure). Requires full SUT logs with detailed session state.
 3.  **CRITICAL:** `src/tests/server.test.ts` `startProxyServer` timeouts (4 failures). Requires SUT diagnostic logs (`[PROXY_DEBUG]`).
 
-### Next Step / Plan for Next Attempt (Attempt 64):
-1.  **`src/tests/index.test.ts` SUT Mocking & Log Visibility (Highest Priority for this file):**
+### Next Step / Plan for Next Attempt (Attempt 65):
+1.  **Analyze Build Output from Attempt 64:**
+    *   Specifically check if the LLM assertion alignment in `src/tests/integration/stdio-client-server.integration.test.ts` passed.
+    *   Look for any SUT diagnostic logs.
+2.  **`src/tests/index.test.ts` SUT Mocking & Log Visibility (Highest Priority for this file):**
     *   **File:** `src/tests/index.test.ts` (within `runMainWithArgs` function)
-    *   **Action:** If `runMainWithArgs` uses `spawnSync` or a similar child process execution for CLI tests, ensure `stdio: 'pipe'` is used, and explicitly log `result.stdout.toString()` and `result.stderr.toString()` after the process call. This is to make sure we capture the SUT's `console.log` statements.
-2.  **Align Integration Test LLM Mock Assertions (Again):**
-    *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
-    *   **Action:** For `generate_suggestion` and `get_repository_context` tests:
-        *   Temporarily `console.log(THE_ACTUAL_RESPONSE_TEXT_VARIABLE)` just before the failing `expect().toContain()`.
-        *   Carefully compare this logged actual output with the SUT self-mock definitions in `src/lib/llm-provider.ts` (function `createMockLLMProvider`).
-        *   Adjust the `expect(suggestionText).toContain(...)` and `expect(repoContextText).toContain(...)` assertions to *exactly* match key phrases from the *actual detailed responses* logged by the SUT self-mock.
+    *   **Action:** If `runMainWithArgs` uses `spawnSync` or a similar child process execution for CLI tests, ensure `stdio: 'pipe'` is used, and explicitly log `result.stdout.toString()` and `result.stderr.toString()` after the process call. This is to make sure we capture the SUT's `console.log` statements. (Requires `src/tests/index.test.ts` to be added to chat).
 3.  **`get_session_history` Discrepancy (Integration Test - Await Full Logs):**
-    *   **Action:** No code changes for now. The priority is to obtain the *full stdout/stderr* from the `npm run build` command, specifically looking for the `[STATE_DEBUG]` and `[SERVER_TOOL_DEBUG]` logs that show the `queries` array content at various stages for the `manual-session-...` ID. If these logs are present in the full output and confirm the discrepancy, further targeted changes to `state.ts` or `server.ts` will be needed.
+    *   **Action:** Continue to await full logs. If logs from Attempt 64 are available and confirm the discrepancy, further targeted changes to `state.ts` or `server.ts` will be needed.
 4.  **`src/tests/server.test.ts` Timeouts (Await Full Logs):**
-    *   **Action:** No code changes for now. Priority is to obtain the *full stdout/stderr* from `npm run build`. If the `[PROXY_DEBUG]` logs from `src/lib/server.ts` (within `startProxyServer`) are visible in that full output for the `server.test.ts` execution, they will guide the next steps. If not, the problem might be with test setup or SUT log capturing for this specific test file.
+    *   **Action:** Continue to await full logs. If `[PROXY_DEBUG]` logs are visible, they will guide next steps.
 5.  **Deferred Issues:**
     *   `src/tests/index.test.ts` other failures (e.g., `--json` output, `fs.readFileSync`).
     *   Integration test `trigger_repository_update` (`qdrant` spy).
