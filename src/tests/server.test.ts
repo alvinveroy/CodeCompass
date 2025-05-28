@@ -56,9 +56,9 @@ const capturedToolHandlers: Record<string, (...args: any[]) => any> = {}; // Typ
 // --- END STABLE MOCK INSTANCES DEFINITIONS ---
 
 // Variables to hold the instances controlled by tests.
-// These will be initialized by the vi.mock factory for config-service.
-let testControlLoggerInstance: MockedLogger;
-let testControlConfigServiceInstance: MockedConfigService;
+// These will be assigned in beforeEach by importing from the mocked module.
+let mcs: MockedConfigService; // mcs for mockedConfigService, type defined at top
+let ml: MockedLogger;         // ml for mockedLogger, type defined at top
 
 // Helper function to create a logger mock will be moved inside the factory
 
@@ -98,20 +98,19 @@ vi.mock('../lib/config-service', async () => {
     logger: actualLogger, 
   } as MockedConfigService;
 
-  // Assign to module-scoped variables so tests can control them
-  testControlLoggerInstance = actualLogger;
-  testControlConfigServiceInstance = actualConfig;
+  // DO NOT assign to module-scoped variables like testControlLoggerInstance here.
+  // The factory creates and returns the instances. Tests will import them.
   
-  console.log('[SERVER_TEST_DEBUG] Mock factory for ../lib/config-service: testControlLoggerInstance assigned.');
-
-  // Return the created instances directly. Tests can still manipulate
-  // testControlLoggerInstance and testControlConfigServiceInstance
-  // as they are assigned actualLogger and actualConfig respectively.
+  console.log('[SERVER_TEST_DEBUG] Mock factory for ../lib/config-service: returning instances.');
   return {
     configService: actualConfig,
     logger: actualLogger,
   };
 });
+
+// Import the mocked instances AFTER vi.mock
+// These imports will receive what the factory above returns.
+import { configService as mockedConfigServiceFromFactory, logger as mockedLoggerFromFactory } from '../lib/config-service';
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
@@ -514,8 +513,7 @@ type ConfigServiceModuleType = { // This type is still used
 
 describe('Server Startup and Port Handling', () => {
   // Use the new mock-aware types
-  let mcs: MockedConfigService; // mcs for mockedConfigService, type defined at top
-  let ml: MockedLogger; // ml for mockedLogger, type defined at top
+  // mcs and ml are now declared at the module scope and will be assigned here.
   let mockedMcpServerConnect: VitestMock<(...args: any[]) => any>; // Use VitestMock or a more specific MockInstance
   let originalNodeEnv: string | undefined;
   let mockConsoleError: MockInstance<typeof console.error>; // Declare mockConsoleError, MockInstance is suitable for spies
@@ -534,13 +532,11 @@ describe('Server Startup and Port Handling', () => {
       if (callback) callback();
       return this;
     });
-    // Get the mocked configService and logger. These will be the instances created by the mock factory.
-    // Assign to mcs and ml which are used throughout this test suite.
-    mcs = testControlConfigServiceInstance;
-    ml = testControlLoggerInstance;
+    // Assign the imported mocked instances to mcs and ml
+    mcs = mockedConfigServiceFromFactory as unknown as MockedConfigService; // Cast is necessary because TS statically sees original types
+    ml = mockedLoggerFromFactory as unknown as MockedLogger;         // Cast is necessary
 
     // Clear mocks using the typed instances
-    // No need to re-import or re-assign.
 
     // Clear mocks using the typed instances
     ml.info?.mockClear();
