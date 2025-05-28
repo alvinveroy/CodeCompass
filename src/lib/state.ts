@@ -82,8 +82,8 @@ export function createSession(repoPath: string, sessionIdToUse?: string): Sessio
 export function getOrCreateSession(sessionId?: string, repoPath?: string): SessionState {
   const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
   // Change logger.debug to logger.info for the main entry log
-  logger.info(`[STATE_DEBUG] getOrCreateSession: sid='${sessionId}', repo='${repoPath}'. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
-  logger.info(`[STATE_DEBUG] getOrCreateSession accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
+  logger.info(`[STATE_DEBUG] getOrCreateSession (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): sid='${sessionId}', repo='${repoPath}'. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
+  logger.info(`[STATE_DEBUG] getOrCreateSession accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`); // This line remains, but the one above is modified
   if (sessionId && sessions.has(sessionId)) {
     const session = sessions.get(sessionId)!;
     session.lastUpdated = Date.now();
@@ -116,18 +116,19 @@ export function addQuery(
   relevanceScore = 0,
   repoPath?: string 
 ): SessionState {
-  logger.info(`[STATE_DEBUG] addQuery accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
-  const session = getOrCreateSession(sessionId, repoPath);
+  logger.info(`[STATE_DEBUG] addQuery accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`); // This line remains
+  const session = getOrCreateSession(sessionId, repoPath); // This will log SESSIONS_MAP_INSTANCE_ID
   const newQueryEntry = { timestamp: Date.now(), query, results, relevanceScore };
-  logger.info(`[STATE_DEBUG] addQuery: BEFORE adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Queries count: ${session.queries.length}, Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
+  console.log(`[STATE_CONSOLE_DEBUG] addQuery (Map ID: ${SESSIONS_MAP_INSTANCE_ID}) for session '${session.id}': BEFORE immutable update. Current queries (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
+  logger.info(`[STATE_DEBUG] addQuery (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): BEFORE adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Queries count: ${session.queries.length}, Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
   // Immutable update:
   session.queries = [...session.queries, newQueryEntry];
-  console.log(`[STATE_TS_CONSOLE_DEBUG] addQuery for ${session.id}: Directly after immutable update - length: ${session.queries.length}, content: ${JSON.stringify(session.queries.map(q => q.query))}`);
+  console.log(`[STATE_CONSOLE_DEBUG] addQuery (Map ID: ${SESSIONS_MAP_INSTANCE_ID}) for session '${session.id}': AFTER immutable update. New queries (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
   // Log reflects the immutable update
-  logger.info(`[STATE_DEBUG] addQuery for ${session.id}: REPLACED (immutable) queries array. New length: ${session.queries.length}, content: ${JSON.stringify(session.queries.map(q => q.query))}`);
+  logger.info(`[STATE_DEBUG] addQuery (Map ID: ${SESSIONS_MAP_INSTANCE_ID}) for ${session.id}: REPLACED (immutable) queries array. New length: ${session.queries.length}, content: ${JSON.stringify(session.queries.map(q => q.query))}`);
   session.lastUpdated = Date.now();
   // Add a log after pushing the query
-  logger.info(`[STATE_DEBUG] addQuery: AFTER adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Total queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
+  logger.info(`[STATE_DEBUG] addQuery (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): AFTER adding to session '${session.id}'. Session ID: ${session.id}, Repo: ${session.repoPath}, Total queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved: ${session._debug_lastRetrievedAt ? new Date(session._debug_lastRetrievedAt).toISOString() : 'N/A'}`);
   return session;
 }
 
@@ -211,28 +212,28 @@ export function updateContext(
 // Get session history
 export function getSessionHistory(sessionId: string): SessionState {
   const callStack = new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ') || 'unknown stack';
-  logger.info(`[STATE_DEBUG] getSessionHistory accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`);
-  logger.info(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
+  logger.info(`[STATE_DEBUG] getSessionHistory accessing SESSIONS_MAP_INSTANCE_ID: ${SESSIONS_MAP_INSTANCE_ID}`); // This line remains
+  logger.info(`[STATE_DEBUG] getSessionHistory (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`);
   if (!sessions.has(sessionId)) {
     // Log existing sessions for easier debugging if a specific one is not found
-    logger.info(`[STATE_DEBUG] getSessionHistory for ${sessionId}: Session not found. Queries (deep copy): N/A`); // Log before throw
+    console.log(`[STATE_CONSOLE_DEBUG] getSessionHistory (Map ID: ${SESSIONS_MAP_INSTANCE_ID}) for ${sessionId}: Session not found. Queries (deep copy): N/A`); // Log before throw
     const existingSessionIds = Array.from(sessions.keys());
-    logger.warn(`[STATE_DEBUG] getSessionHistory: Session not found: '${sessionId}'. Existing session IDs: [${existingSessionIds.join(', ')}]. Caller: ${callStack}`); // Keep as warn
+    logger.warn(`[STATE_DEBUG] getSessionHistory (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): Session not found: '${sessionId}'. Existing session IDs: [${existingSessionIds.join(', ')}]. Caller: ${callStack}`); // Keep as warn
     throw new Error(`Session not found: ${sessionId}`);
   }
   const session = sessions.get(sessionId)!;
   // Log queries immediately after retrieval
   if (session) { // Add a check for session existence
-      logger.info(`[STATE_DEBUG] getSessionHistory for ${sessionId}: Immediately after map get - length: ${session.queries.length}, content: ${JSON.stringify(session.queries.map(q => q.query))}`);
+      console.log(`[STATE_CONSOLE_DEBUG] getSessionHistory (Map ID: ${SESSIONS_MAP_INSTANCE_ID}) for ${sessionId}: Immediately after map get - queries (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
   } else {
-      logger.warn(`[STATE_DEBUG] getSessionHistory for ${sessionId}: Session NOT FOUND in map immediately at get.`);
+      logger.warn(`[STATE_DEBUG] getSessionHistory (Map ID: ${SESSIONS_MAP_INSTANCE_ID}) for ${sessionId}: Session NOT FOUND in map immediately at get.`);
   }
-  logger.info(`[STATE_DEBUG] getSessionHistory for ${sessionId}: ENTRY - queries (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
+  logger.info(`[STATE_DEBUG] getSessionHistory (Map ID: ${SESSIONS_MAP_INSTANCE_ID}) for ${sessionId}: ENTRY - queries (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
   session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
   session._debug_lastRetrievedAt = Date.now(); // Timestamp
   const queryLog = session.queries.slice(-3).map(q => ({ q: q.query, ts: q.timestamp, score: q.relevanceScore })); // Match user's requested queryLog
   // Change logger.info to include new debug fields and ensure it's logger.info
-  logger.info(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.repoPath}`);
+  logger.info(`[STATE_DEBUG] getSessionHistory (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.repoPath}`);
   return session;
 }
 
