@@ -1,8 +1,8 @@
-# Refined Debug Session Log
+# Debug Session Log & Retrospection
 
-## Overall Summary
+## Overall Summary of Resolved Issues & Lessons Learned (Prompt for LLM)
 
-This document chronicles an extensive debugging session aimed at resolving a multitude of issues in a TypeScript project, primarily focusing on Vitest unit and integration test failures, TypeScript compilation errors, and environment-related problems in spawned server processes.
+You are an expert software developer debugging a complex TypeScript project using Vitest. Based on the following resolved issues and lessons learned from a lengthy debugging session (over 60 attempts), provide insights or suggest strategies for remaining problems.
 
 ### Key Fixed Errors:
 *   **Vitest Hoisting/Reference Errors:** Resolved issues like `ReferenceError: Cannot access '...' before initialization` by ensuring correct definition order and using getter patterns in `vi.mock` factories (Attempts 1, 5, 8).
