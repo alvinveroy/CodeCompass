@@ -45,8 +45,13 @@ export interface SessionState {
 
 // In-memory state storage
 const sessions: Map<string, SessionState> = new Map();
-const SESSIONS_MAP_INSTANCE_ID = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized. Instance ID: ${SESSIONS_MAP_INSTANCE_ID}`);
+// Use globalThis to ensure SESSIONS_MAP_INSTANCE_ID is set once per process,
+// preventing redeclaration errors if the module is somehow evaluated multiple times.
+if (!(globalThis as any).SESSIONS_MAP_INSTANCE_ID_CODECOMPASS) {
+  (globalThis as any).SESSIONS_MAP_INSTANCE_ID_CODECOMPASS = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized (via globalThis). Instance ID: ${(globalThis as any).SESSIONS_MAP_INSTANCE_ID_CODECOMPASS}`);
+}
+const SESSIONS_MAP_INSTANCE_ID = (globalThis as any).SESSIONS_MAP_INSTANCE_ID_CODECOMPASS;
 
 // Create a new session
 export function createSession(repoPath: string, sessionIdToUse?: string): SessionState {
