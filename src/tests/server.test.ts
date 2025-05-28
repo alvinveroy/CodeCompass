@@ -60,15 +60,18 @@ const capturedToolHandlers: Record<string, (...args: any[]) => any> = {}; // Typ
 let testControlLoggerInstance: MockedLogger;
 let testControlConfigServiceInstance: MockedConfigService;
 
-// Helper function to create a logger mock (can be defined here or imported if it's more complex)
-const createInternalMockLogger = (): MockedLogger => ({
-  info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
-} as unknown as MockedLogger);
+// Helper function to create a logger mock will be moved inside the factory
 
 vi.mock('../lib/config-service', async () => {
   console.log('[SERVER_TEST_DEBUG] Factory for ../lib/config-service running.');
+
+  // Define createInternalMockLogger INSIDE the factory
+  const createInternalMockLoggerInFactory = (): MockedLogger => ({
+    info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
+  } as unknown as MockedLogger);
+
   // Create the instances *inside* the factory
-  const actualLogger = createInternalMockLogger();
+  const actualLogger = createInternalMockLoggerInFactory();
   const actualConfig = {
     HTTP_PORT: 3001, // Default values
     IS_UTILITY_SERVER_DISABLED: false,

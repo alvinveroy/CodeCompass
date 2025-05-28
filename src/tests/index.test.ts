@@ -575,28 +575,22 @@ describe('CLI with yargs (index.ts)', () => {
       mockConsoleLog.mockClear(); // Clear before running the command
       await runMainWithArgs(['agent_query', '{"query":"test_json_success"}', '--json']);
       
-      // console.log('[JSON_TEST_DEBUG] mockConsoleLog calls for --json test:', JSON.stringify(mockConsoleLog.mock.calls, null, 2));
+      console.log('[JSON_TEST_DEBUG] mockConsoleLog calls for --json test:', JSON.stringify(mockConsoleLog.mock.calls, null, 2));
       const jsonOutputCall = mockConsoleLog.mock.calls.find(call => {
         if (call.length > 0 && typeof call[0] === 'string') {
           try {
-            JSON.parse(call[0]);
+            JSON.parse(call[0]); // Check if it's valid JSON
             return true; 
-          } catch (e) {
-            // Not a valid JSON string
-            return false;
-          }
+          } catch (e) { /* not JSON */ }
         }
         return false;
       });
 
       if (!jsonOutputCall) {
-        console.error('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Calls were:', JSON.stringify(mockConsoleLog.mock.calls));
-        if (mockConsoleLog.mock.calls.length === 0) {
-          console.warn('[JSON_TEST_DEBUG] mockConsoleLog captured no calls. Skipping JSON content assertion for this run.');
-        } else {
-          // Fail the test explicitly if calls were made but none were valid JSON
-          expect(jsonOutputCall, 'Expected to find a console.log call with valid JSON output, but none was found.').toBeDefined();
-        }
+        // Add a warning or a more informative failure if no JSON output was found
+        // console.warn('[JSON_TEST_DEBUG] No valid JSON output found in mockConsoleLog. Skipping JSON content assertion for this run.');
+        // Fail the test explicitly if no JSON output is a critical failure:
+        expect(jsonOutputCall, 'Expected to find a console.log call with valid JSON output, but none was found.').toBeDefined();
       } else {
         const parsedOutput = JSON.parse(jsonOutputCall[0] as string);
         expect(parsedOutput).toEqual(expect.objectContaining(rawToolResult));

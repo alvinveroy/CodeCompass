@@ -1024,7 +1024,7 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       const session = getOrCreateSession(sessionIdValue, repoPath); // Pass repoPath
     // Log immediately after retrieval from state.ts
     if (session && session.queries) { // Add null check for session.queries
-      logger.info(`[SERVER_TOOL_DEBUG] get_session_history: Queries from state.ts (deep copy for session ${session.id}): ${JSON.stringify(session.queries)}`);
+      logger.info(`[SERVER_TOOL_DEBUG] get_session_history: Queries from state.ts (deep copy for session ${session.id}): ${JSON.stringify(session.queries, null, 2)}`);
     } else if (session) {
       logger.info(`[SERVER_TOOL_DEBUG] get_session_history: Session ${session.id} found, but session.queries is undefined or null.`);
     }
