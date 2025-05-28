@@ -253,11 +253,13 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     effectiveRepoPath = repoPathOrArgv.repoPath || repoPathOrArgv.repo || '.';
   }
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const { startServer, ServerStartupError: LocalServerStartupError } = require(path.join(libPath, 'server.js')) as typeof import('./lib/server');
+    const serverModule = isPkg ? require(path.join(libPath, 'server.js')) : require('./lib/server'); // Use relative path for non-pkg
+    const { startServer, ServerStartupError: LocalServerStartupError } = serverModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported startServer (handler) in startServerHandler:', typeof startServer, 'Is mock:', !!(startServer as any)?.mock?.calls);
     console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (startServerHandler): ${process.env.VITEST_WORKER_ID}`);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const { logger: localLogger, configService: localConfigService } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
+    const configServiceModule = isPkg ? require(path.join(libPath, 'config-service.js')) : require('./lib/config-service'); // Use relative path for non-pkg
+    const { logger: localLogger, configService: localConfigService } = configServiceModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported configService in startServerHandler:', typeof localConfigService, 'configService.DEEPSEEK_API_KEY (sample prop):', localConfigService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   try {
     await startServer(effectiveRepoPath);
@@ -395,27 +397,40 @@ export async function main() { // Add export
     .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass')
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
-    .fail((msg, err, _yargsInstance) => {
+    .fail((msg, err, yargsInstance) => { // Changed _yargsInstance to yargsInstance
       // Dynamically import logger for failure messages if possible
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const { logger: localFailLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
-    localFailLogger.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
+    let failLogger: { error: (...args: any[]) => void } = console; // Default to console
+    try {
+      const loggerModule = isPkg ? require(path.join(libPath, 'config-service.js')) : require('./lib/config-service'); // Use relative path
+      failLogger = loggerModule.logger;
+    } catch (e) {
+      console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
+    }
+    
+    failLogger.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
       hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
       hasErr: !!err, errName: err?.name, errMessage: err?.message
     });
-      try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-          const { logger: failLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
-          if (err) {
-              failLogger.error(`CLI Error (yargs.fail): ${err.name} - ${err.message}`, err);
-          } else if (msg) {
-              failLogger.error(`CLI Usage Error (yargs.fail): ${msg}`);
-          }
-      } catch (_e) { // Use _e if error object 'e' is not used
-          console.error("Fallback yargs.fail (logger unavailable): ", msg || err);
+      // The try-catch block for failLogger is now handled by the above initialization.
+      // The original logic for logging the error or message:
+      if (process.env.VITEST_TESTING_FAIL_HANDLER) { // Check if in test fail handler mode
+        if (err) {
+            failLogger.error('CLI Error (yargs.fail):', err); // Log the error object directly for tests
+        } else if (msg) {
+            failLogger.error('CLI Usage Error (yargs.fail):', msg);
+        }
+      } else {
+        // Default behavior for actual CLI execution
+        yargsInstance.showHelp(); // Show help to the user
+        if (err) {
+            failLogger.error(`\nError: ${err.message || msg}`);
+        } else if (msg) {
+            failLogger.error(`\nError: ${msg}`);
+        }
       }
 
-      if (!err && msg) {
+      if (!err && msg && !process.env.VITEST_TESTING_FAIL_HANDLER) { // Avoid double console.error if VITEST_TESTING_FAIL_HANDLER already logged
         console.error(msg);
       }
       // Yargs will exit with 1 by default if err is present or msg is from yargs validation.

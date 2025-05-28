@@ -144,14 +144,28 @@ export async function batchUpsertVectors(
   points: SimplePoint[],
   batchSize = 100
 ): Promise<void> {
-  logger.info(`Batch upserting ${points.length} points to collection '${collectionName}' with batch size ${batchSize}`);
+  // Diagnostic log to check client type during tests
+  // This log helps verify if the mock Qdrant client is being used in tests.
+  // Ensure this log is the VERY FIRST operational line in this function.
+  const clientConstructorName = client?.constructor?.name || 'UnknownClient';
+  const clientIsMock = process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT === 'true' && client?.['url'] === 'mocked-qdrant-url'; // Check for mock indicator
+  const debugMsg = `[DEBUG_BATCH_UPSERT_CLIENT_TYPE] qdrant.ts::batchUpsertVectors called. Client: ${clientConstructorName}, IsMock: ${clientIsMock}, Collection: ${collectionName}, Points: ${points.length}`;
+  console.error(debugMsg); // Use console.error for high visibility in test logs.
+  logger.info(debugMsg); // Also log to regular logger.
+
+  if (points.length === 0) {
+    logger.debug("batchUpsertVectors: No points to upsert.");
+    return;
+  }
+
+  logger.info(`Starting batch upsert of ${points.length} points to collection '${collectionName}' in batches of ${batchSize}.`);
+  
   for (let i = 0; i < points.length; i += batchSize) {
     const batch = points.slice(i, i + batchSize);
     try {
       // TEMPORARY DEBUG LOG:
       logger.debug(`[DEBUG QDRANT IDs] Batch ${Math.floor(i / batchSize) + 1} IDs: ${JSON.stringify(batch.map(p => p.id))}`);
-      // ADD THIS DIAGNOSTIC LOG:
-      console.error(`[DEBUG_BATCH_UPSERT_CLIENT_TYPE] In batchUpsertVectors for collection ${collectionName}. Client upsert function type: ${typeof client.upsert}, is it the mock? ${String(client.upsert).includes('MOCK_QDRANT_UPSERT')}`);
+      // The console.error for DEBUG_BATCH_UPSERT_CLIENT_TYPE is now at the top of the function.
       
       await withRetry(async () => {
         // The js-client-rest library expects points to be an object { points: PointStruct[] }
