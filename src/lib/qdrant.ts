@@ -50,7 +50,7 @@ export async function initializeQdrant(): Promise<QdrantClient> {
       })) as unknown as QdrantClient['getCollection'],
       // Add other methods if server startup or critical paths strictly depend on them.
       // For example, if upsert or search are called immediately and unconditionally:
-      upsert: ((collectionName: string, params: { wait?: boolean, points: Schemas['PointStruct'][] }) => {
+      upsert: ((collectionName: string, params: { wait?: boolean, points: any[] }) => {
         logger.info(`[MOCK_QDRANT_UPSERT] Called for collection: ${collectionName}, points: ${params.points.length}`);
         return Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }});
       }) as unknown as QdrantClient['upsert'],
