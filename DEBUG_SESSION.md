@@ -4,34 +4,55 @@
 
 You are an expert software developer debugging a complex TypeScript project using Vitest. Based on the following resolved issues and lessons learned from a lengthy debugging session (over 60 attempts), provide insights or suggest strategies for remaining problems.
 
-### Key Fixed Errors:
-*   **Vitest Hoisting/Reference Errors:** Resolved issues like `ReferenceError: Cannot access '...' before initialization` by ensuring correct definition order and using getter patterns in `vi.mock` factories (Attempts 1, 5, 8).
-*   **TypeScript Compilation Errors:** Addressed a wide range of errors including duplicate identifiers, `Mock` type issues (TS2707, TS2304), incorrect Axios mock structures, missing file extensions (TS2835), read-only property assignments (TS2540), tuple access errors (TS2493), `never` type errors (TS2339), and `MockInstance` generic argument issues (TS2707). This involved careful type aliasing, type guarding, and correct mock type usage (Attempts 2, 4, 5, 7, 8, 14, 19, 20).
-*   **Integration Test `EADDRINUSE`:** Successfully fixed errors caused by `HTTP_PORT="0"` handling in `ConfigService` and ensured correct environment variable propagation to child processes (Resolved by Attempt 9 after efforts in Attempts 3-8).
-*   **Syntax Errors:** Corrected various syntax issues in test files (e.g., `Expected ")" but found "}"`, `TS1005: ',' expected.`) that were blocking builds (Attempts 9, 10, 11, 13).
-*   **Mocking `http.createServer`:** Improved mocks for `http.createServer` to correctly implement methods like `.once()`, which was crucial for `findFreePort` and `startProxyServer` tests (Addressed in Attempts 10, 11, 13, though some related timeouts persisted).
-*   **Integration Test Assertions:** Refined assertions for tool outputs like `search_code` and `agent_query` to match actual behavior (Attempt 9).
+**Key Fixed Errors & Lessons Learned:**
 
-### Lessons Learned:
-*   **Mocking Strategy:**
-    *   Vitest hoisting requires careful definition order. Getters in `vi.mock` factories can defer access to mocked instances, resolving initialization errors.
-    *   For modules dynamically imported within a function scope, `vi.doMock` (applied immediately before the import) is often necessary if top-level `vi.mock` is insufficient.
-    *   When mocking instances shared between tests and the SUT (especially in spawned processes), ensure the SUT uses the *exact same instance* that the test configures. Re-assigning methods on the shared mock object can be more reliable than `mockResolvedValueOnce` if instance identity is suspect.
-*   **TypeScript with Mocks:**
-    *   Vitest's `Mock` type (e.g., `VitestMock`) and `MockInstance` require precise generic arguments. Errors like TS2707, TS2493, TS2339 often indicate incorrect mock signatures or unsafe access to mock call arguments. Robust type checking (`typeof`, `instanceof`, length checks) before accessing properties of call arguments is essential.
-*   **Integration Testing (Child Processes):**
-    *   Meticulously verify environment variable propagation (e.g., `HTTP_PORT`, debug flags) to spawned server processes. Early logging in the child process is key.
-    *   `EADDRINUSE` errors often point to port configuration issues or processes not terminating correctly. Using `HTTP_PORT="0"` for dynamic port allocation is good but needs robust handling in configuration services.
-*   **Debugging Approach:**
-    *   Adopt incremental changes and frequent build/test cycles.
-    *   Utilize detailed logging (in tests and SUT, sometimes conditional on environment variables). Ensure logs are visible and not suppressed.
-    *   Systematically isolate variables when facing persistent issues: environment settings, mock scope, instance identity.
-    *   Pay close attention to TypeScript error messages for precise clues.
-    *   Use Git commits after each significant attempt to track changes and facilitate rollbacks.
-*   **Test Logic:**
-    *   Use `mockClear()` or `mockReset()` appropriately (e.g., in `beforeEach`) to prevent mock state leakage between tests.
-    *   Ensure assertions are precise. For error messages, exact string matches might be needed. For complex outputs, `expect.objectContaining` or `expect.stringContaining` are useful.
-    *   Test timeouts often indicate problems with asynchronous operations not resolving/rejecting or incorrect mock implementations for async functions (e.g., server `listen` callbacks not being invoked).
+*   **Vitest Hoisting & Mocking:**
+    *   **`ReferenceError: Cannot access '...' before initialization` (Transform Error):** This was a recurring issue, especially with variables defined outside `vi.mock` factories but used within them.
+        *   **Solution 1 (Lexical Order):** Ensuring mock variables were defined lexically before `vi.mock` calls that used them. (Attempts 1, 5, 8, 42, 44).
+        *   **Solution 2 (Getter Pattern):** Using getters within `vi.mock` factories (e.g., `get StdioClientTransport() { return mockStdioClientTransportConstructor; }`) to defer access to the mocked variable until runtime. This was effective for `src/tests/index.test.ts` (Attempt 45).
+        *   **Solution 3 (Mock Instances *Inside* Factory):** For the most persistent hoisting issues (e.g., `testControlLoggerInstance` in `src/tests/server.test.ts` with `config-service` mock), the successful strategy was to define the mock instances *inside* the `vi.mock` factory and assign them to module-scoped `let` variables. Tests then imported and used these module-scoped variables. (Attempt 63).
+    *   **SUT Not Using Mocks (Dynamic Imports):** When testing a SUT (`src/index.ts` compiled to `dist/index.js`) that was dynamically imported (`await import(indexPath)`) within a test helper (`runMainWithArgs`), top-level `vi.mock` (targeting source `.ts` files or `dist` `.js` files) often failed to apply to the SUT's own imported dependencies. `vi.doMock` targeting compiled `dist/*.js` files, placed immediately before the SUT's dynamic import, was tried (Attempt 27 for a `ReferenceError`, Attempt 53 for SUT mocks) but was generally ineffective for making the SUT see the mocks for its own dependencies. This remains an **outstanding issue** for `src/tests/index.test.ts`.
+    *   **Mocking Core Modules (e.g., `fs`):** Standard `vi.mock('fs')` and spying on methods (`vi.spyOn(fs, 'readFileSync')`) is the way. Failures usually indicated the mock wasn't active for the SUT's execution path or the SUT wasn't calling it as expected.
+
+*   **TypeScript Compilation Errors:**
+    *   A wide range of errors were fixed: duplicate identifiers, `Mock` type issues (TS2707, TS2304, TS2493 tuple access, TS2339 `never` properties), incorrect Axios mock structures, missing file extensions for imports (TS2835), read-only property assignments (TS2540), `MockInstance` generic arguments (TS2707).
+    *   **General Solutions:** Careful type aliasing (e.g., `type VitestMock = vi.Mock;`), robust type guarding for mock call arguments (e.g., `typeof arg === 'string'`, `arg && typeof arg === 'object'`, `arg instanceof Error`, checking array lengths before access), correct usage of Vitest's mock types (e.g., `MockedFunction`, `MockInstance` with appropriate generics), ensuring `tsconfig.json` settings (`moduleResolution`, `esModuleInterop`) were compatible with the test environment.
+    *   **Specific Fixes:**
+        *   `'axiosError.response' is possibly 'undefined'` (TS18048): Added null/undefined checks (`axiosError.response && axiosError.response.headers`). (Attempt 51).
+        *   `Cannot find name 'X'` (TS2304): Usually fixed by adding missing imports (e.g., `getSessionHistory` in `server.ts` - Attempt 51) or correcting type usage.
+        *   Redeclaration Errors (TS2451): Ensured unique variable names within the same block scope, especially after refactoring (e.g., `currentSessionState` in `server.ts` `agent_query` handler - Attempt 59).
+        *   `Property 'X' does not exist on type 'Y'` (TS2339): Often fixed by adding optional chaining, type guards, or ensuring properties were correctly defined on interfaces/types (e.g. `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` on `TestSpawnEnv` - Attempt 49).
+
+*   **Integration Testing & Environment (Spawned Child Processes):**
+    *   **`EADDRINUSE` Errors:** Resolved by correctly handling `HTTP_PORT="0"` in `ConfigService` (ensuring `parseInt` logic respected `0`, prioritizing `0` over fallbacks) and ensuring consistent environment variable propagation (e.g., `HTTP_PORT`, `NODE_ENV`, debug flags) to child processes. Early logging of `process.env` in child processes was key. (Attempts 3-9).
+    *   **Child Process Mocking (LLM/External API calls):**
+        *   `NODE_OPTIONS` with preload scripts (e.g., `mock-llm-provider-child-setup.js`) proved complex and was abandoned. (Attempt 47-48).
+        *   **SUT Self-Mocking (Successful Strategy):** Implemented logic directly within SUT modules (e.g., `src/lib/llm-provider.ts`, `src/lib/deepseek.ts`). These modules check for a specific environment variable (e.g., `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM=true`). If set, the modules use internal mocked implementations (e.g., `createMockLLMProvider` in `llm-provider.ts`, or mock functions in `deepseek.ts`). This strategy:
+            *   Successfully mocked DeepSeek API calls, resolving `getaddrinfo ENOTFOUND api.deepseek.com` errors. (Attempt 49).
+            *   Successfully mocked LLM provider calls, allowing tests for `generate_suggestion` and `get_repository_context` to pass after aligning assertions with the detailed SUT self-mocked responses. (Attempts 51-54, 63-65).
+        *   **Assertion Alignment:** Tests for SUT self-mocked LLM responses required careful alignment of `toContain` assertions with the actual (often more detailed) mocked output. Logging the actual SUT response in tests was crucial for this. (Attempts 52, 54, 63, 64, 65).
+
+*   **Runtime & Build Stability:**
+    *   **Runtime `SyntaxError: Identifier 'X' has already been declared`:** Resolved for `SESSIONS_MAP_INSTANCE_ID` by using `globalThis.SESSIONS_MAP_INSTANCE_ID = globalThis.SESSIONS_MAP_INSTANCE_ID || crypto.randomUUID();` to ensure a truly global singleton for the identifier, robust against module re-evaluation in tests. (Attempt 60).
+    *   **`SyntaxError` during `tsc` Transpilation:** A complex `logger.debug` call with template literals and object spreads in `src/lib/server.ts` caused `tsc` to produce invalid JavaScript when targeting `ES2020`. Commenting out this specific log call resolved the build error. (Attempt 34).
+    *   **`Cannot find module 'dist/index.js'` (Vitest Runtime):** This critical regression blocked tests that run the SUT. It was resolved around Attempt 62, likely due to ensuring `tsc` correctly produced the file and Vitest's module resolution/cache was stable. Diagnostic logging (e.g., `fs.existsSync(indexPath)` and `fs.readFileSync` in tests) helped confirm file presence and content.
+
+*   **Specific Test Logic & Mock Implementations:**
+    *   **Mocking `http.createServer`:** Mocks were improved to correctly implement methods like `.once()` and ensure `listen` callbacks were invoked asynchronously (e.g., via `process.nextTick`). This was crucial for `findFreePort` and `startProxyServer` tests. (Attempts 10, 11, 13, 19, 21, 45). (Note: `startProxyServer` timeouts remain an outstanding issue).
+    *   **DeepSeek API Connection:** Successfully mocked `testDeepSeekConnection` and other functions in `src/lib/deepseek.ts` using the SUT self-mocking strategy, eliminating `ENOTFOUND` errors. (Attempt 49).
+    *   **`--port` option test (`src/tests/index.test.ts`):** Passed after ensuring yargs correctly applied the port and `process.env.HTTP_PORT` was set as expected in the SUT's context. (Attempts 38, 47).
+    *   **`switch_suggestion_model` test (Integration):** Passed after LLM/DeepSeek SUT self-mocking stabilized. (Attempt 38).
+
+*   **Debugging Approach & General Lessons:**
+    *   **Incremental Changes:** Adopt small, incremental changes and frequent build/test cycles.
+    *   **Detailed Logging:** Utilize detailed, unique logging messages (e.g., `[MODULE_DEBUG]`, `[SUT_LOG]`) in both tests and the SUT. Conditional logging based on environment variables (e.g., `DEBUG_SPAWNED_SERVER_ENV`) is helpful. Ensure logs are visible (check `stdio` capture for child processes; Vitest might suppress some SUT logs).
+    *   **Isolate Variables:** Systematically isolate potential problem areas: environment settings, mock scope, instance identity (e.g., logging `VITEST_WORKER_ID` in both test and SUT, mock instance identifiers).
+    *   **Error Messages:** Pay close attention to TypeScript error messages (including error codes) and Vitest transform error stack traces for precise clues.
+    *   **Version Control:** Use Git commits after each significant attempt to track changes and facilitate rollbacks.
+    *   **Mock State Management:** Use `mockClear()` or `mockReset()` in `beforeEach` to prevent mock state leakage between tests.
+    *   **Async Operations:** Test timeouts often indicate problems with asynchronous operations not resolving/rejecting as expected, or incorrect mock implementations for async functions (e.g., server `listen` callbacks not being invoked).
+    *   **Dynamic SUT Imports:** When the SUT is dynamically imported (e.g., `await import(pathToDistFile)`), ensuring Vitest mocks are applied correctly is challenging. `vi.doMock` immediately before the import can sometimes work but has limitations. Top-level `vi.mock` needs to correctly target the module path that the SUT will resolve. This remains a pain point.
+    *   **Console Spying:** When spying on `console.log` (e.g., `vi.spyOn(console, 'log')`), if the SUT is a child process, its `stdout` needs to be correctly piped and captured by the test runner for the spy in the parent test process to see the calls. Direct spying might only capture logs from the test process itself.
 
 ---
 ## Attempt 58: Fix TypeScript Redeclaration, Refine Integration Test Assertions, Continue SUT Mocking Diagnostics
