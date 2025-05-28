@@ -101,10 +101,12 @@ vi.mock('../lib/config-service', async () => {
   
   console.log('[SERVER_TEST_DEBUG] Mock factory for ../lib/config-service: testControlLoggerInstance assigned.');
 
+  // Return the created instances directly. Tests can still manipulate
+  // testControlLoggerInstance and testControlConfigServiceInstance
+  // as they are assigned actualLogger and actualConfig respectively.
   return {
-    // Export getters that return the module-scoped (now factory-initialized) instances
-    get configService() { return testControlConfigServiceInstance; },
-    get logger() { return testControlLoggerInstance; },
+    configService: actualConfig,
+    logger: actualLogger,
   };
 });
 
