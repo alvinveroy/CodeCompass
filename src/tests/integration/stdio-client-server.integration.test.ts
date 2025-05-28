@@ -417,8 +417,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     // The exact content depends on the agent's internal plan and capabilities it calls.
     // For this test, we're primarily interested that it ran and the LLM mock was hit for synthesis.
     // Check for some indication of successful agent processing and context usage.
-    expect(agentResultText).toContain('file1.ts'); // Ensure it mentions the file
-    expect(agentResultText).toContain('console.log("Hello from file1")'); // Ensure it used context
+    // The refined mock in llm-provider.ts should return a specific string for this query.
+    expect(agentResultText).toContain("SUT_SELF_MOCK: Agent response: file1.ts contains console.log(\"Hello from file1\"); and const x = 10;");
+    expect(agentResultText).toContain('file1.ts'); 
+    expect(agentResultText).toContain('console.log("Hello from file1")');
     await client.close();
   }, 45000);
 
@@ -614,11 +616,10 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
     expect(suggestionText).toContain("## Suggestion");
-    // The SUT self-mock uses "**Suggested Implementation**:" (colon outside bold) - this was for a detailed mock.
-    // The simpler mock (which was failing the assertion) was "SUT_SELF_MOCK: This is a generated suggestion..."
-    // Let's check for the more specific part of the detailed mock.
-    // expect(suggestionText).toContain("**Suggested Implementation**:"); // This assertion seems flaky
-    expect(suggestionText).toContain("* Wraps the logging in a reusable function"); // Check for a key part of the SUT's mock output
+    // The SUT self-mock uses "**Suggested Implementation**:"
+    // The refined mock in llm-provider.ts for "suggest how to use file1.ts" should now match this.
+    expect(suggestionText).toContain("**Suggested Implementation**:");
+    expect(suggestionText).toContain("* Wraps the logging in a reusable function"); 
     expect(suggestionText).toContain("### Diff: file1.ts"); // Check for context inclusion
 
     await client.close();
@@ -662,8 +663,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
     expect(repoContextText).toContain("## Summary");
     // The SUT self-mock for this specific prompt returns detailed markdown
+    // The refined mock in llm-provider.ts for "what is the main purpose of this repo?" should match.
     expect(repoContextText).toContain("### Key Purpose:");
-    // Check for a key phrase from the detailed mock for repository context
     expect(repoContextText).toContain("agent orchestration and tool unification"); 
     expect(repoContextText).toContain("### File: CHANGELOG.md"); // Check for context inclusion
 

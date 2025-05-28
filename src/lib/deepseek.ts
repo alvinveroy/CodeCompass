@@ -69,8 +69,8 @@ export function checkDeepSeekApiKey(): boolean {
  */
 export async function testDeepSeekConnection(): Promise<boolean> {
   if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
-    logger.info('[MOCK_DEEPSEEK] testDeepSeekConnection called - returning mock true');
-    return true;
+    logger.info('[MOCK_DEEPSEEK] SUT self-mock testDeepSeekConnection: Returning true.');
+    return Promise.resolve(true);
   }
   try {
     const apiKey = configService.DEEPSEEK_API_KEY;
@@ -219,8 +219,8 @@ export async function testDeepSeekConnection(): Promise<boolean> {
  */
 export async function generateWithDeepSeek(prompt: string): Promise<string> {
   if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
-    logger.info(`[MOCK_DEEPSEEK] SUT self-mock generateWithDeepSeek called with prompt (first 50 chars): "${prompt.substring(0,50)}..." - returning SUT mock response`);
-    return "SUT_SELF_MOCK: Mocked DeepSeek text generation response.";
+    logger.info(`[MOCK_DEEPSEEK] SUT self-mock generateWithDeepSeek called with prompt (first 50 chars): "${prompt.substring(0,50)}..." - returning SUT mock response.`);
+    return Promise.resolve("SUT_SELF_MOCK: Mocked DeepSeek text generation response.");
   }
   
   try {
@@ -308,8 +308,8 @@ export async function generateWithDeepSeek(prompt: string): Promise<string> {
 
 export async function generateEmbeddingWithDeepSeek(text: string): Promise<number[]> {
   if (IS_DEEPSEEK_MOCKED_FOR_INTEGRATION_TEST) {
-    logger.info(`[MOCK_DEEPSEEK] SUT self-mock generateEmbeddingWithDeepSeek called with text (first 50 chars): "${text.substring(0,50)}..." - returning SUT mock embedding`);
-    return [0.111, 0.222, 0.333, 0.444, 0.555]; // Use distinct, identifiable mock values
+    logger.info(`[MOCK_DEEPSEEK] SUT self-mock generateEmbeddingWithDeepSeek called with text (first 50 chars): "${text.substring(0,50)}..." - returning SUT mock embedding.`);
+    return Promise.resolve([0.111, 0.222, 0.333, 0.444, 0.555]); // Use distinct, identifiable mock values
   }
   
   try {
