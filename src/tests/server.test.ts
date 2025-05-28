@@ -55,17 +55,21 @@ const capturedToolHandlers: Record<string, (...args: any[]) => any> = {}; // Typ
 // Mock dependencies
 // --- END STABLE MOCK INSTANCES DEFINITIONS ---
 
-// Variables to hold the instances controlled by tests, initialized by the config-service mock factory
-let testControlLoggerInstance: MockedLogger; 
+// Variables to hold the instances controlled by tests.
+// These will be initialized by the vi.mock factory for config-service.
+let testControlLoggerInstance: MockedLogger;
 let testControlConfigServiceInstance: MockedConfigService;
 
-vi.mock('../lib/config-service', () => {
-  // Create the instances inside the factory
-  const loggerInstance = {
-    info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
-  } as unknown as MockedLogger;
+// Helper function to create a logger mock (can be defined here or imported if it's more complex)
+const createInternalMockLogger = (): MockedLogger => ({
+  info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
+} as unknown as MockedLogger);
 
-  const configInstance = {
+vi.mock('../lib/config-service', async () => {
+  console.log('[SERVER_TEST_DEBUG] Factory for ../lib/config-service running.');
+  // Create the instances *inside* the factory
+  const actualLogger = createInternalMockLogger();
+  const actualConfig = {
     HTTP_PORT: 3001, // Default values
     IS_UTILITY_SERVER_DISABLED: false,
     RELAY_TARGET_UTILITY_PORT: undefined,
@@ -86,15 +90,21 @@ vi.mock('../lib/config-service', () => {
     REFINEMENT_MODEL: 'test-refinement-model',
     MAX_SNIPPET_LENGTH: 500,
     AGENT_QUERY_TIMEOUT: 180000,
+    // IMPORTANT: The mocked config service must use the logger instance created *within this factory scope*
+    // if other parts of the config service itself log. For external access by tests, we assign to module-scope vars.
+    logger: actualLogger, 
   } as MockedConfigService;
 
-  // Expose them for test control via module-scoped variables
-  testControlLoggerInstance = loggerInstance;
-  testControlConfigServiceInstance = configInstance;
+  // Assign to module-scoped variables so tests can control them
+  testControlLoggerInstance = actualLogger;
+  testControlConfigServiceInstance = actualConfig;
+  
+  console.log('[SERVER_TEST_DEBUG] Mock factory for ../lib/config-service: testControlLoggerInstance assigned.');
 
   return {
-    get configService() { return configInstance; },
-    get logger() { return loggerInstance; },
+    // Export getters that return the module-scoped (now factory-initialized) instances
+    get configService() { return testControlConfigServiceInstance; },
+    get logger() { return testControlLoggerInstance; },
   };
 });
 
