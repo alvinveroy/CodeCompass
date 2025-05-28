@@ -274,10 +274,12 @@ export async function indexRepository(qdrantClient: QdrantClient, repoPath: stri
         }
 
         if (pointsToUpsert.length > 0) {
-          logger.info(`[REPO_TS_DEBUG] indexRepository (file chunks): About to call batchUpsertVectors with ${pointsToUpsert.length} points for file ${filepath}.`); // Add this log
+          const fileChunksMessage = `[DIAGNOSTIC_REPOSITORY_TS] indexRepository (file chunks): About to call batchUpsertVectors with ${pointsToUpsert.length} points for file ${filepath}.`;
+          logger.info(fileChunksMessage);
+          console.error(fileChunksMessage); // Force to stderr for visibility
           const simplePointsFileChunks = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
           await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsFileChunks, configService.QDRANT_BATCH_UPSERT_SIZE);
-          logger.info(`[REPO_TS_DEBUG] indexRepository (file chunks): batchUpsertVectors call complete for file ${filepath}.`); // Add this log
+          logger.info(`[REPO_TS_DEBUG] indexRepository (file chunks): batchUpsertVectors call complete for file ${filepath}.`);
           logger.info(`Successfully indexed ${pointsToUpsert.length} chunks for ${filepath}`);
           if (currentIndexingStatus.filesIndexed !== undefined && currentIndexingStatus.totalFilesToIndex && currentIndexingStatus.totalFilesToIndex > 0) {
             currentIndexingStatus.filesIndexed++;
@@ -768,11 +770,13 @@ async function indexCommitsAndDiffs(
 
     // Batch upsert periodically
     if (pointsToUpsert.length >= configService.QDRANT_BATCH_UPSERT_SIZE) {
-        logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (periodic): About to call batchUpsertVectors with ${pointsToUpsert.length} points.`); // Add this log
+        const periodicCommitMessage = `[DIAGNOSTIC_REPOSITORY_TS] indexCommitsAndDiffs (periodic): About to call batchUpsertVectors with ${pointsToUpsert.length} points.`;
+        logger.info(periodicCommitMessage);
+        console.error(periodicCommitMessage); // Force to stderr for visibility
         logger.info(`Upserting batch of ${pointsToUpsert.length} commit/diff points...`);
         const simplePointsBatch1 = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
         await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsBatch1, configService.QDRANT_BATCH_UPSERT_SIZE);
-        logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (periodic): batchUpsertVectors call complete.`); // Add this log
+        logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (periodic): batchUpsertVectors call complete.`);
         pointsToUpsert.length = 0; // Clear the array
     }
   } // This is the end of the for (const commit of commits) loop
@@ -786,13 +790,15 @@ async function indexCommitsAndDiffs(
 
   // Upsert any remaining points
   if (pointsToUpsert.length > 0) {
-    logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (final): About to call batchUpsertVectors with ${pointsToUpsert.length} points.`); // Add this log
+    const finalCommitMessage = `[DIAGNOSTIC_REPOSITORY_TS] indexCommitsAndDiffs (final): About to call batchUpsertVectors with ${pointsToUpsert.length} points.`;
+    logger.info(finalCommitMessage);
+    console.error(finalCommitMessage); // Force to stderr for visibility
     logger.info(`Upserting final batch of ${pointsToUpsert.length} commit/diff points...`);
     const simplePointsFinalBatch = pointsToUpsert.map(p => ({ ...p, payload: p.payload as unknown as Record<string, unknown> }));
     await batchUpsertVectors(qdrantClient, configService.COLLECTION_NAME, simplePointsFinalBatch, configService.QDRANT_BATCH_UPSERT_SIZE);
-    logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (final): batchUpsertVectors call complete.`); // Add this log
+    logger.info(`[REPO_TS_DEBUG] indexCommitsAndDiffs (final): batchUpsertVectors call complete.`);
   } else {
-    logger.info("[REPO_TS_DEBUG] indexCommitsAndDiffs (final): No remaining points to upsert."); // Add this log
+    logger.info("[REPO_TS_DEBUG] indexCommitsAndDiffs (final): No remaining points to upsert.");
   }
 
   currentIndexingStatus.message = `Commit and diff indexing phase complete. Finalizing...`;
