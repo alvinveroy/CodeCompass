@@ -1022,6 +1022,12 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
     try {
       // repoPath is available in the scope of registerTools
       const session = getOrCreateSession(sessionIdValue, repoPath); // Pass repoPath
+    // Log immediately after retrieval from state.ts
+    if (session && session.queries) { // Add null check for session.queries
+      logger.info(`[SERVER_TOOL_DEBUG] get_session_history: Queries from state.ts (deep copy for session ${session.id}): ${JSON.stringify(session.queries)}`);
+    } else if (session) {
+      logger.info(`[SERVER_TOOL_DEBUG] get_session_history: Session ${session.id} found, but session.queries is undefined or null.`);
+    }
 
       if (!session) {
         // If session is null, it means it wasn't found and couldn't be created (or repoPath was missing for creation)
