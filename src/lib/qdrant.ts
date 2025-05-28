@@ -171,6 +171,7 @@ export async function batchUpsertVectors(
       logger.debug(`[DEBUG QDRANT IDs] Batch ${Math.floor(i / batchSize) + 1} IDs: ${JSON.stringify(batch.map(p => p.id))}`);
       // The console.error for DEBUG_BATCH_UPSERT_CLIENT_TYPE is now at the top of the function.
       
+      console.error(`[DEBUG_BATCH_UPSERT_CLIENT_TYPE] About to call client.upsert. Is client.upsert a function? ${typeof client.upsert === 'function'}. Client.upsert.toString (first 100 chars): ${client.upsert?.toString().substring(0,100)}`);
       await withRetry(async () => {
         // The js-client-rest library expects points to be an object { points: PointStruct[] }
         // or just PointStruct[] if using client.upsertPoints
