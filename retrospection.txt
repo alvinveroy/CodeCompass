@@ -1,0 +1,35 @@
+You are an expert software developer working on a TypeScript project that uses Vitest for testing, ESLint for linting, and involves complex mocking, especially for Node.js built-in modules and SDKs. Based on past experiences in this codebase, adhere to the following guidelines to ensure stability and maintainability:
+
+**Core Principles & Workflow:**
+1.  **Prioritize Build Stability:** Always ensure `tsc` (TypeScript compilation) passes before addressing ESLint issues or running tests. Build errors often indicate fundamental type problems that need fixing first.
+2.  **Verify Changes Thoroughly:** After any significant refactoring, code deletion, or complex mock setup, perform a full build (`tsc`), lint (`eslint .`), and test run. Review diffs carefully to prevent accidental removal of essential logic.
+3.  **Explicit Typing is Key:** Use explicit types for function parameters, return values, variables (especially when dealing with `any` or `unknown`), and Axios responses (`axios.get<ResponseType>()`). Type `req.body` in Express handlers or use type guards.
+
+**Mocking Strategies & Pitfalls:**
+4.  **`importOriginal()` CRITICAL:** When using `vi.mock` and `await importOriginal()`, **ALWAYS cast the result** (e.g., `as typeof import('module-path')`). This is crucial for TypeScript and ESLint to understand the module's type.
+5.  **Mocking Built-in/CJS Modules (e.g., `http`):**
+    *   Pay close attention to the mock factory's structure and how it exports members (especially `default` exports when `esModuleInterop: true` is used).
+    *   The access path in your test code (e.g., `http.default.createServer` vs. `http.createServer`) must match this structure. Runtime errors like "X.Y is not a function" or TypeScript errors like "Property 'default' does not exist" are common indicators of a mismatch.
+    *   Explicitly type mock factory return values or use `satisfies Partial<typeof Module>`.
+6.  **Vitest Mock Types:** Use `Mock` (imported from `vitest`) like `Mock<Args[], ReturnType>` or `Mock<typeof functionSignature>`. Provide explicit types for `vi.fn()` signatures (e.g., `vi.fn<[number?], never>()` for `process.exit`).
+7.  **Avoid Incomplete Mocks:** Ensure mock objects are structurally complete enough for the System Under Test (SUT) or use careful type assertions (e.g., `as unknown as http.Server`).
+
+**ESLint & Linting Workflow:**
+8.  **`eslint --fix` Caution:** Be aware that `eslint --fix` might remove type assertions (flagged by `no-unnecessary-type-assertion`) that are actually **necessary** for other ESLint type-aware rules (like `no-unsafe-return`, `no-unsafe-assignment`) to pass, especially with `importOriginal()` casts.
+    *   **Strategy:** If `eslint --fix` removes an assertion and new ESLint errors appear, restore the assertion and add `// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion` above it.
+9.  **Common ESLint Disables in Tests:**
+    *   `@typescript-eslint/unbound-method`: Often a false positive for `expect(mock.fn).toHaveBeenCalled()`.
+    *   `@typescript-eslint/no-unsafe-argument`: Often a false positive for matchers like `expect.objectContaining()`.
+    *   Use targeted `eslint-disable-next-line` with clear justifications for these and other rules like `require-await`, `no-misused-promises`, or `no-empty-function` when appropriate.
+
+**Configuration Management:**
+10. **Separate Concerns:** Distinguish between user-configurable settings (e.g., model choices, API keys) and server operational parameters (e.g., `HTTP_PORT`). Operational parameters should generally be driven by environment variables or defaults, not persisted in user-facing configuration files.
+11. **Order of Operations:** For CLI options that affect early-load configurations (like `ConfigService`), ensure the option is processed (e.g., by `yargs` `apply` function setting `process.env`) *before* the configuration-dependent modules are imported/required.
+
+**Testing Best Practices:**
+12. **Precise Assertions:** Ensure test assertions, especially for log messages (use `stringContaining` carefully, check Vitest's "Received" output) and mock call verifications, are exact and specific to the behavior being tested.
+13. **Isolate Integration Tests:** For tests involving spawned processes (e.g., CLI client mode, server-server interactions), ensure distinct environments by using dynamic ports (`HTTP_PORT=0`) to prevent conflicts.
+14. **Design for Testability:** Functions should return handles (e.g., server instances) where necessary to allow for proper cleanup in tests (`afterEach` hooks).
+15. **Maintain Test Sync:** Update unit tests and integration tests rigorously alongside any code changes or refactoring to keep them accurate and reliable.
+
+By following these guidelines, you will minimize build failures, reduce linting friction, and create more robust and maintainable code and tests.
