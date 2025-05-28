@@ -44,7 +44,24 @@ type MockedConfigService = Pick<
   RELAY_TARGET_UTILITY_PORT?: number;
 };
 
-// --- STABLE MOCK INSTANCES DEFINITIONS ---
+// serverLibModule import removed from here, will be re-added later
+import { normalizeToolParams, ServerStartupError } from '../lib/server.js'; // Keep specific imports if needed elsewhere
+import { IndexingStatusReport, getGlobalIndexingStatus } from '../lib/repository'; // For mock status
+
+// Define stable mock for McpServer.connect
+const mcpConnectStableMock = vi.fn();
+const capturedToolHandlers: Record<string, (...args: any[]) => any> = {}; // Type for value is VitestMock<(...args: any[]) => any> or specific
+
+// Mock dependencies
+// --- END STABLE MOCK INSTANCES DEFINITIONS ---
+
+// Define stableMockLoggerInstance and stableMockConfigServiceInstance
+// immediately before the vi.mock call that uses them to ensure they are initialized
+// when the mock factory is hoisted and executed.
+const stableMockLoggerInstance: MockedLogger = {
+  info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
+} as unknown as MockedLogger;
+
 const stableMockConfigServiceInstance: MockedConfigService = {
   HTTP_PORT: 3001,
   IS_UTILITY_SERVER_DISABLED: false,
@@ -67,22 +84,6 @@ const stableMockConfigServiceInstance: MockedConfigService = {
   MAX_SNIPPET_LENGTH: 500,
   AGENT_QUERY_TIMEOUT: 180000,
 };
-
-const stableMockLoggerInstance: MockedLogger = {
-  info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
-} as unknown as MockedLogger;
-// --- END STABLE MOCK INSTANCES DEFINITIONS ---
-
-// serverLibModule import removed from here, will be re-added later
-import { normalizeToolParams, ServerStartupError } from '../lib/server.js'; // Keep specific imports if needed elsewhere
-import { IndexingStatusReport, getGlobalIndexingStatus } from '../lib/repository'; // For mock status
-
-// Define stable mock for McpServer.connect
-const mcpConnectStableMock = vi.fn();
-const capturedToolHandlers: Record<string, (...args: any[]) => any> = {}; // Type for value is VitestMock<(...args: any[]) => any> or specific
-
-// Mock dependencies
-// --- END STABLE MOCK INSTANCES DEFINITIONS ---
 
 vi.mock('../lib/config-service', () => ({
   get configService() { return stableMockConfigServiceInstance; },
