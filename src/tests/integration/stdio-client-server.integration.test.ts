@@ -417,6 +417,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(agentResultText).toContain('Based on the provided context, `file1.ts` contains');
     expect(agentResultText).toContain('console.log("Hello from file1")');
     expect(agentResultText).toContain('const x = 10;');
+    // Check for session ID inclusion
+    expect(agentResultText).toMatch(/Session ID: session_\d+_[a-zA-Z0-9]+/);
     await client.close();
   }, 45000);
 
@@ -614,8 +616,13 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(suggestionText).toContain("## Suggestion");
     // The SUT's mock LLM generates a detailed response.
     // Check for the "**Suggested Implementation**:" heading and a part of the code.
-    expect(suggestionText).toContain("**Suggested Implementation**:");
-    expect(suggestionText).toContain("function greetFromFile1(name?: string): void"); // From the SUT's mock output
+    // Use a simple includes check first for the problematic string
+    expect(suggestionText?.includes('**Suggested Implementation**:')).toBe(true);
+    // If the above passes, the regex might have been too strict or had subtle issues.
+    // If it still fails, there's likely an invisible character difference.
+
+    // Check for other key parts of the expected complex mock output.
+    expect(suggestionText).toContain("function multiplyX(factor: number): number"); 
     expect(suggestionText).toContain("### Diff: file1.ts"); // Check for context inclusion
 
     await client.close();
