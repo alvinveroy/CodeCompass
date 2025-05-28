@@ -31,7 +31,7 @@ let currentMockLoggerInstance: {
 };
 
 // Define mock functions and ServerStartupError class first
-const mockStartServer = vi.fn().mockResolvedValue({ close: vi.fn() }); 
+const mockStartServerHandler = vi.fn().mockResolvedValue({ close: vi.fn() }); // Renamed from mockStartServer for clarity
 const mockStartProxyServer = vi.fn(); 
 const ServerStartupError = class ServerStartupError extends Error { 
   exitCode: number;
@@ -89,22 +89,22 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => {
   };
 });
 
-// Top-level vi.doMock for local SUT dependencies, targeting source files
-// These must be BEFORE any imports from these modules in this test file or by the SUT.
-console.log('[INDEX_TEST_DEBUG] Setting up top-level vi.doMock for ../../src/lib/server.ts');
-vi.doMock('../../src/lib/server.ts', () => {
-  console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts (top-level doMock) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
+// Revert to standard top-level vi.mock for SUT's direct dependencies (source files)
+vi.mock('../../src/lib/server.ts', () => {
+  console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/server.ts (top-level vi.mock) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
   return {
-    startServerHandler: mockStartServer,
+    // Use getter to ensure mockStartServerHandler (defined above) is accessed after initialization
+    get startServerHandler() { return mockStartServerHandler; },
   };
 });
 
-console.log('[INDEX_TEST_DEBUG] Setting up top-level vi.doMock for ../../src/lib/config-service.ts');
-vi.doMock('../../src/lib/config-service.ts', () => {
-  console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/config-service.ts (top-level doMock) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
+vi.mock('../../src/lib/config-service.ts', () => {
+  console.log(`[INDEX_TEST_DEBUG] Mock factory for ../../src/lib/config-service.ts (top-level vi.mock) IS RUNNING. VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
   return {
-    configService: currentMockConfigServiceInstance,
-    logger: currentMockLoggerInstance,
+    // Use getters for currentMockConfigServiceInstance and currentMockLoggerInstance
+    // as they are reassigned in beforeEach
+    get configService() { return currentMockConfigServiceInstance; },
+    get logger() { return currentMockLoggerInstance; },
   };
 });
 
@@ -191,24 +191,19 @@ describe('CLI with yargs (index.ts)', () => {
     // indexPath is now defined at a higher scope
     process.argv = ['node', indexPath, ...args];
     
-    // vi.resetModules() is crucial when using vi.doMock for modules that the SUT will import.
-    // It ensures that when the SUT (indexPath) is imported, it gets the freshly mocked versions.
+    // vi.resetModules() is crucial when using vi.mock for modules that the SUT will import,
+    // especially when mock implementations (like for configService and logger) change per test.
     vi.resetModules(); 
 
-    // The top-level vi.doMock calls for '../../src/lib/server.ts' and '../../src/lib/config-service.ts'
-    // should apply here because vi.resetModules() clears the module cache, and on next import (by SUT),
-    // Vitest will use the vi.doMock factories.
-
-    // Re-apply fs mock if needed after vi.resetModules()
-    // The top-level vi.mock('fs', ...) should ideally be reapplied by Vitest's mechanisms.
-    // If fs calls fail, explicitly re-mocking fs here with vi.doMock might be necessary.
-    // For now, assume top-level fs mock persists or is correctly reset by Vitest.
+    // The top-level vi.mock calls for '../../src/lib/server.ts' and '../../src/lib/config-service.ts'
+    // will apply here because vi.resetModules() clears the module cache. On next import (by SUT),
+    // Vitest will use the vi.mock factories with the latest currentMock... instances.
     
-    console.log('[INDEX_TEST_DEBUG] mockStartServer type before SUT import:', typeof mockStartServer);
+    console.log('[INDEX_TEST_DEBUG] mockStartServerHandler type before SUT import:', typeof mockStartServerHandler);
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: About to import SUT from indexPath: ${indexPath}`);
     
     // The import of the SUT (dist/index.js) will trigger its execution.
-    // It should pick up the mocks established by top-level vi.doMock calls due to vi.resetModules().
+    // It should pick up the mocks established by top-level vi.mock calls due to vi.resetModules().
     const mainModule = await import(indexPath);
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT imported. main function type: ${typeof (mainModule as any)?.main}`);
     
@@ -226,33 +221,33 @@ describe('CLI with yargs (index.ts)', () => {
   describe('Server Start Command (default and "start")', () => {
     it('should call startServerHandler with default repoPath when no args', async () => {
       await runMainWithArgs([]);
-      expect(mockStartServer).toHaveBeenCalledWith('.');
+      expect(mockStartServerHandler).toHaveBeenCalledWith('.');
       // Successful promise resolution from handler implies yargs exits 0
     });
 
     it('should call startServerHandler with specified repoPath for default command', async () => {
       await runMainWithArgs(['/my/repo']);
-      expect(mockStartServer).toHaveBeenCalledWith('/my/repo');
+      expect(mockStartServerHandler).toHaveBeenCalledWith('/my/repo');
     });
 
     it('should call startServerHandler with specified repoPath from --repo global option for default command if no positional', async () => {
       await runMainWithArgs(['--repo', '/global/repo']);
-      expect(mockStartServer).toHaveBeenCalledWith('/global/repo');
+      expect(mockStartServerHandler).toHaveBeenCalledWith('/global/repo');
     });
     
     it('should call startServerHandler with specified repoPath for "start" command (positional)', async () => {
       await runMainWithArgs(['start', '/my/repo/path']);
-      expect(mockStartServer).toHaveBeenCalledWith('/my/repo/path');
+      expect(mockStartServerHandler).toHaveBeenCalledWith('/my/repo/path');
     });
 
     it('should call startServerHandler with repoPath from --repo for "start" command if no positional', async () => {
       await runMainWithArgs(['start', '--repo', '/global/start/repo']);
-      expect(mockStartServer).toHaveBeenCalledWith('/global/start/repo');
+      expect(mockStartServerHandler).toHaveBeenCalledWith('/global/start/repo');
     });
 
     it('should handle startServer failure (fatal error, exitCode 1) and log via yargs .fail()', async () => {
       const startupError = new ServerStartupError("Server failed to boot with fatal error", 1, {}); // Add empty options object
-      mockStartServer.mockRejectedValue(startupError);
+      mockStartServerHandler.mockRejectedValue(startupError);
       process.env.VITEST_TESTING_FAIL_HANDLER = "true"; 
       await runMainWithArgs(['start']);
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: "Server failed to boot with fatal error" }));
@@ -441,21 +436,21 @@ describe('CLI with yargs (index.ts)', () => {
 
       // Temporarily spy on configService.HTTP_PORT getter or a method that uses it
       // This is tricky because configService is also in the SUT.
-      // Let's assume mockStartServer will be called, and it implicitly uses configService.
+      // Let's assume mockStartServerHandler will be called, and it implicitly uses configService.
       // The SUT's yargs apply function should log the change.
 
       await runMainWithArgs(['start', '--port', String(customPort)]);
-      
+    
       // The SUT log "[INDEX_SUT_PORT_APPLY_DEBUG] HTTP_PORT set to 1234 by yargs apply" confirms yargs worked.
       // The problem is asserting this in the test's process.env.
-      // If mockStartServer is called, and it uses configService, configService should have the updated port.
+      // If mockStartServerHandler is called, and it uses configService, configService should have the updated port.
       // This test might need to be refocused on what configService *inside the SUT's context* sees.
       // For now, let's assume the SUT log is enough to confirm yargs's action.
       // The failure of `expect(process.env.HTTP_PORT).toBe(String(customPort));` in the test process is likely due to env sandboxing.
 
       // If we can't directly assert process.env in the test, we rely on the SUT's behavior.
       // The test "should call startServerHandler with default repoPath" implicitly tests if the server starts.
-      // If the port was wrong, startServerHandler might fail differently.
+      // If the port was wrong, mockStartServerHandler might fail differently.
 
       // Restore original
       if (originalHttpPort === undefined) delete process.env.HTTP_PORT;
@@ -468,7 +463,7 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('--repo option should be used by startServerHandler', async () => {
       await runMainWithArgs(['start', '--repo', '/custom/repo/for/start']);
-      expect(mockStartServer).toHaveBeenCalledWith('/custom/repo/for/start');
+      expect(mockStartServerHandler).toHaveBeenCalledWith('/custom/repo/for/start');
     });
     
     it('--repo option should be used by client stdio command for spawned server', { timeout: 30000 }, async () => {

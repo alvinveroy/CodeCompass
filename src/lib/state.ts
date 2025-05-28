@@ -47,12 +47,14 @@ export interface SessionState {
 const sessions: Map<string, SessionState> = new Map();
 const SESSIONS_MAP_INSTANCE_ID = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized. Instance ID: ${SESSIONS_MAP_INSTANCE_ID}`);
+const SESSIONS_MAP_INSTANCE_ID = `sessions-map-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+logger.info(`[STATE_INIT_DEBUG] Sessions Map initialized. Instance ID: ${SESSIONS_MAP_INSTANCE_ID}`);
 
 // Create a new session
 export function createSession(repoPath: string, sessionIdToUse?: string): SessionState {
   const sessionId = sessionIdToUse || generateSessionId();
   // Change logger.info to include new debug fields, ensure it's logger.info
-  logger.info(`[STATE_DEBUG] createSession: Creating new session. ID: '${sessionId}', repoPath: '${repoPath}'. Provided sessionId was: '${sessionIdToUse}'. Initial retrieval count: 0.`);
+  logger.info(`[STATE_DEBUG] createSession (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): Creating new session. ID: '${sessionId}', repoPath: '${repoPath}'. Provided sessionId was: '${sessionIdToUse}'. Initial retrieval count: 0.`);
   const session: SessionState = {
     id: sessionId,
     queries: [],
@@ -88,21 +90,21 @@ export function getOrCreateSession(sessionId?: string, repoPath?: string): Sessi
     session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1; // Increment
     session._debug_lastRetrievedAt = Date.now(); // Timestamp
     // Log queries immediately after retrieval for existing session
-    logger.info(`[STATE_DEBUG] getOrCreateSession: EXISTING session '${sessionId}' queries (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
+    console.log(`[STATE_CONSOLE_DEBUG] getOrCreateSession (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): EXISTING session '${sessionId}' queries BEFORE return (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
     // Change logger.info to include new debug fields and ensure it's logger.info, and use session.repoPath
-    logger.info(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.repoPath}`);
+    logger.info(`[STATE_DEBUG] getOrCreateSession (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.repoPath}`);
     return session;
   }
   
   if (!repoPath) { // If no repoPath to create a new one (sessionId might be new or undefined)
-     logger.error("[STATE_DEBUG] getOrCreateSession: repoPath is required to create a new session if sessionId is not found or provided.");
+     logger.error(`[STATE_DEBUG] getOrCreateSession (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): repoPath is required to create a new session if sessionId is not found or provided.`);
      throw new Error("repoPath is required to create a new session.");
   }
 
-  logger.info(`[STATE_DEBUG] getOrCreateSession: SessionId '${sessionId}' not found or not provided. Creating new session with repoPath: '${repoPath}'.`);
+  logger.info(`[STATE_DEBUG] getOrCreateSession (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): SessionId '${sessionId}' not found or not provided. Creating new session with repoPath: '${repoPath}'.`);
   const newSession = createSession(repoPath!, sessionId); 
   // createSession now initializes _debug_retrievalCount and logs it.
-  // We can add another log here if needed, but createSession's log might be sufficient.
+  console.log(`[STATE_CONSOLE_DEBUG] getOrCreateSession (Map ID: ${SESSIONS_MAP_INSTANCE_ID}): CREATED NEW session '${newSession.id}' queries (deep copy): ${JSON.stringify(newSession.queries, null, 2)}`);
   return newSession;
 }
 

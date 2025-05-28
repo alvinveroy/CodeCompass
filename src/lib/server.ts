@@ -804,23 +804,18 @@ function registerTools( // Removed async
         }
         // User requested logging:
         if (args.sessionId) { // Check if sessionId was provided in args
-            const agentQueryLogicSession = getSessionHistory(args.sessionId); 
+            const agentQueryLogicSession = getSessionHistory(args.sessionId); // This will log map ID
             const queryLog = agentQueryLogicSession.queries.map(q => q.query.substring(0, 30) + '...');
-            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): After adding query (via processAgentQuery). Total queries now: ${agentQueryLogicSession.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
-            const updatedSessionForAgentQuery = getSessionHistory(args.sessionId); // Re-fetch to ensure we see what getSessionHistory would see
-            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): After addQuery. Query count from re-fetched session: ${updatedSessionForAgentQuery.queries.length}.`);
-            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Queries object after addQuery: ${JSON.stringify(updatedSessionForAgentQuery.queries, null, 2)}`);
-
-        // If you added getRawSessionForDebug to state.ts:
-        const rawSessionStateForDebugLog = getRawSessionForDebug(args.sessionId); 
-        logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Full session state from map AFTER addQuery: ${rawSessionStateForDebugLog ? JSON.stringify(rawSessionStateForDebugLog, null, 2) : 'SESSION_NOT_FOUND_IN_MAP'}`);
-        
-        const refetchedSessionStateAfterAddQuery = getOrCreateSession(args.sessionId, repoPath); // repoPath is from registerTools scope
-        if (refetchedSessionStateAfterAddQuery) {
-            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Re-fetched session queries AFTER addQuery (deep copy): ${JSON.stringify(refetchedSessionStateAfterAddQuery.queries, null, 2)}`);
-        } else {
-            logger.warn(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Could not re-fetch session AFTER addQuery.`);
-        }
+            logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): After processAgentQuery (which calls addQuery). Total queries now: ${agentQueryLogicSession.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
+            
+            // Re-fetch session using getOrCreateSession to see its state immediately after addQuery's effects
+            const sessionAfterAddQuery = getOrCreateSession(args.sessionId, repoPath); // repoPath is from registerTools scope
+            if (sessionAfterAddQuery) {
+                console.log(`[SERVER_CONSOLE_DEBUG] agent_query (session: ${args.sessionId}): State from getOrCreateSession IMMEDIATELY AFTER addQuery in processAgentQuery. Queries (deep copy): ${JSON.stringify(sessionAfterAddQuery.queries, null, 2)}`);
+                logger.info(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Full session state from getOrCreateSession AFTER addQuery: ${JSON.stringify(sessionAfterAddQuery, null, 2)}`);
+            } else {
+                logger.warn(`[SERVER_TOOL_DEBUG] agent_query (session: ${args.sessionId}): Could not re-fetch session using getOrCreateSession AFTER addQuery.`);
+            }
         } else {
             logger.warn('[SERVER_TOOL_DEBUG] agent_query: sessionId is undefined in args after processAgentQuery.');
         }
@@ -1051,13 +1046,13 @@ Session ID: ${session.id} (Use this ID in future requests to maintain context)`;
       );
       
       // Add this log:
-      logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Queries array BEFORE formatSessionHistory: ${JSON.stringify(session.queries, null, 2)}`);
+      console.log(`[SERVER_CONSOLE_DEBUG] get_session_history (session: ${session.id}): Queries array BEFORE formatSessionHistory (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
       logger.debug(`[SERVER_TS_DEBUG] In get_session_history for session ${session.id}, session.queries BEFORE formatting: ${JSON.stringify(session.queries)}`);
       // User requested logging:
       const queryLog = session.queries.map(q => q.query.substring(0, 30) + '...');
       logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Retrieved session. Query count: ${session.queries.length}. Recent queries: ${JSON.stringify(queryLog)}`);
       logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Retrieved session. Query count from session object: ${session.queries.length}.`);
-      logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Queries object: ${JSON.stringify(session.queries, null, 2)}`);
+      logger.info(`[SERVER_TOOL_DEBUG] get_session_history (session: ${session.id}): Queries object from session (deep copy): ${JSON.stringify(session.queries, null, 2)}`);
       // Add this:
       if (session.queries.length < 2 && sessionIdValue.startsWith("manual-session-")) { // Or some other condition indicating the problematic test case
            logger.warn(`[SERVER_TOOL_DEBUG] get_session_history: Discrepancy detected for session ${sessionIdValue}. Current in-memory session keys: [${getInMemorySessionKeys().join(', ')}]`);
