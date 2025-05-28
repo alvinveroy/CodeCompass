@@ -147,14 +147,15 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       logger.error((e as Error).message);
       console.error(`Error: Invalid JSON parameters for tool '${toolName}'. Please provide a valid JSON string.`);
       console.error(`Details: ${(e as Error).message}`);
-      // Let yargs handle exit by re-throwing or yargs.fail will catch it if this function is a handler
-      throw new Error(`Invalid JSON parameters: ${(e as Error).message}`); 
+  // Let yargs handle exit by re-throwing or yargs.fail will catch it if this function is a handler
+        throw new Error(`Invalid JSON parameters: ${(e as Error).message}`); 
+      }
+    } else {
+      logger.info('With no parameters.');
     }
-  } else {
-    logger.info('With no parameters.');
-  }
-
-  const mainScriptPath = path.resolve(__dirname, 'index.js'); // Path to the compiled index.js
+  
+    const isPkg = typeof (process as any).pkg !== 'undefined';
+    const mainScriptPath = path.resolve(__dirname, 'index.js'); // Path to the compiled index.js
 
   // Parameters for StdioClientTransport to spawn the server
   const serverProcessParams: StdioServerParameters = {
@@ -245,16 +246,23 @@ async function handleClientCommand(argv: ClientCommandArgs) {
 }
 
 async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }) {
-  console.log('[INDEX_TS_DEBUG] startServerHandler ENTERED');
   let effectiveRepoPath: string;
   if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath
     effectiveRepoPath = repoPathOrArgv;
   } else { // Called from yargs with argv object
     effectiveRepoPath = repoPathOrArgv.repoPath || repoPathOrArgv.repo || '.';
   }
+    
+  const isPkg = typeof (process as any).pkg !== 'undefined';
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     const serverModule = isPkg ? require(path.join(libPath, 'server.js')) : require('./lib/server'); // Use relative path for non-pkg
     const { startServer, ServerStartupError: LocalServerStartupError } = serverModule;
+    
+    // Define the type for ServerStartupError for TypeScript
+    type ServerStartupErrorType = {
+      message: string;
+      exitCode: number;
+    };
     console.log('[SUT_INDEX_TS_DEBUG] Imported startServer (handler) in startServerHandler:', typeof startServer, 'Is mock:', !!(startServer as any)?.mock?.calls);
     console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (startServerHandler): ${process.env.VITEST_WORKER_ID}`);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
@@ -270,7 +278,8 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     // This block will only be hit if startServer throws an error.
     // For Option C, ServerStartupError should only be thrown for fatal issues (exitCode=1).
     if (error instanceof LocalServerStartupError) {
-      localLogger.error(`CodeCompass server failed to start. Error: ${error.message}. Exiting with code ${error.exitCode}.`);
+      const typedError = error as { message: string; exitCode: number };
+      localLogger.error(`CodeCompass server failed to start. Error: ${typedError.message}. Exiting with code ${typedError.exitCode}.`);
     } else {
       localLogger.error('An unexpected error occurred during server startup:', error);
     }
@@ -398,10 +407,11 @@ export async function main() { // Add export
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
     .fail((msg, err, yargsInstance) => { // Changed _yargsInstance to yargsInstance
-      // Dynamically import logger for failure messages if possible
+    // Dynamically import logger for failure messages if possible
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     let failLogger: { error: (...args: any[]) => void } = console; // Default to console
     try {
+      const isPkg = typeof (process as any).pkg !== 'undefined';
       const loggerModule = isPkg ? require(path.join(libPath, 'config-service.js')) : require('./lib/config-service'); // Use relative path
       failLogger = loggerModule.logger;
     } catch (e) {
