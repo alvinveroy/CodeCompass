@@ -250,7 +250,6 @@ describe('Stdio Client-Server Integration Tests', () => {
       EMBEDDING_PROVIDER: "ollama", // Added for Attempt 14
       // Unique worker ID for test isolation if needed by other parts of the system
       VITEST_WORKER_ID: process.env.VITEST_WORKER_ID || `integration_worker_${Math.random().toString(36).substring(7)}`,
-      // CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Will be set below
       CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true', // Activate Qdrant SUT mock
       // NODE_OPTIONS for preload script removed
     };
