@@ -12,26 +12,26 @@ const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
 // Using a static string literal relative to this test file for the path to be mocked.
 // srcLibPath resolves to projectRoot/src/lib. This test is in projectRoot/src/tests.
 // So, the relative path from src/tests to src/lib is '../lib'.
-const serverJsPathToMock = '../../src/lib/server.js'; // Relative path from this test file to the SUT's target
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.js path (using static literal): ${serverJsPathToMock}`);
-vi.mock(serverJsPathToMock, async () => {
-  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${serverJsPathToMock} (server.js) is RUNNING. Redirecting to server.ts`);
+// const serverJsPathToMock = '../../src/lib/server.js'; // REMOVE: Path variable for vi.mock
+console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.js path (using static literal): ../../src/lib/server.js");
+vi.mock('../../src/lib/server.js', async () => {
+  console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../../src/lib/server.js (server.js) is RUNNING. Redirecting to server.ts");
   return vi.importActual('../../src/lib/server.ts'); // Relative path to the .ts file
 });
 
 // Mock the SUT's attempt to require '.../src/lib/config-service.js' to point to '.../src/lib/config-service.ts'
-const configServiceJsPathToMock = '../../src/lib/config-service.js';
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.js path (using static literal): ${configServiceJsPathToMock}`);
-vi.mock(configServiceJsPathToMock, async () => {
-  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${configServiceJsPathToMock} (config-service.js) is RUNNING. Redirecting to config-service.ts`);
+// const configServiceJsPathToMock = '../../src/lib/config-service.js'; // REMOVE: Path variable for vi.mock
+console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.js path (using static literal): ../../src/lib/config-service.js");
+vi.mock('../../src/lib/config-service.js', async () => {
+  console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../../src/lib/config-service.js (config-service.js) is RUNNING. Redirecting to config-service.ts");
   return vi.importActual('../../src/lib/config-service.ts');
 });
 
 // Mock the SUT's attempt to require '.../src/lib/logger.js' (if it were dynamic)
-const loggerJsPathToMock = '../../src/lib/logger.js';
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's logger.js path (using static literal): ${loggerJsPathToMock}`);
-vi.mock(loggerJsPathToMock, async () => {
-  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${loggerJsPathToMock} (logger.js) is RUNNING. Redirecting to logger.ts`);
+// const loggerJsPathToMock = '../../src/lib/logger.js'; // REMOVE: Path variable for vi.mock
+console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's logger.js path (using static literal): ../../src/lib/logger.js");
+vi.mock('../../src/lib/logger.js', async () => {
+  console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../../src/lib/logger.js (logger.js) is RUNNING. Redirecting to logger.ts");
   return vi.importActual('../../src/lib/logger.ts');
 });
 // --- End Explicit Mocks for SUT's dynamic requires ---

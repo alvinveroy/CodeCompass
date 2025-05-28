@@ -313,6 +313,10 @@ const createMockLLMProvider = (): LLMProvider => {
     checkConnection: vi.fn().mockResolvedValue(true), // Ensures mock provider is always "connected"
     generateText: vi.fn().mockImplementation(async (prompt: string) => {
       // SUT self-mocking logic
+      const diagnosticMsg = `[LLM_PROVIDER_SUT_MOCK_GENERATE_TEXT_ENTERED] Prompt (first 150 chars): "${prompt.substring(0,150)}..."`;
+      console.error(diagnosticMsg); // Force to stderr
+      logger.info(diagnosticMsg);
+
       const lowerPrompt = prompt.toLowerCase();
       logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock generateText. Prompt (first 100 chars, lower): "${lowerPrompt.substring(0,100)}..."`);
       
@@ -352,6 +356,12 @@ let llmProviderInstance: LLMProvider | null = null;
 const SUT_MOCK_PROVIDER_ID = 'sut-self-mocked-llm-provider-instance';
 
 export function getLLMProvider(forceNewInstance = false): LLMProvider {
+  // Diagnostic log for SUT environment
+  const mockLlmEnv = process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM;
+  const envDiagMsg = `[LLM_PROVIDER_SUT_ENV_DIAGNOSTIC] getLLMProvider: CODECOMPASS_INTEGRATION_TEST_MOCK_LLM='${mockLlmEnv}' (type: ${typeof mockLlmEnv})`;
+  console.error(envDiagMsg); // Force to stderr
+  logger.info(envDiagMsg);
+
   if (process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM === 'true') {
     // Always return a fresh mock instance if forced, or the cached one if it exists and is the mock one.
     // This simplifies logic and avoids issues with stale mock instances.
