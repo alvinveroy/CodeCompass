@@ -15,8 +15,8 @@ export type SimplePoint = {
 
 // Initialize Qdrant
 export async function initializeQdrant(): Promise<QdrantClient> {
-  if (process.env.CI === 'true' || process.env.SKIP_QDRANT_INIT === 'true') {
-    logger.info("CI environment detected or SKIP_QDRANT_INIT is true, returning mock Qdrant client.");
+  if (process.env.CI === 'true' || process.env.SKIP_QDRANT_INIT === 'true' || process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT === 'true') {
+    logger.info("CI, SKIP_QDRANT_INIT, or CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT is true, returning mock Qdrant client.");
     // Return a minimal mock client that satisfies the QdrantClient interface
     // for methods called during server startup or basic operations.
     return {
@@ -50,7 +50,10 @@ export async function initializeQdrant(): Promise<QdrantClient> {
       })) as unknown as QdrantClient['getCollection'],
       // Add other methods if server startup or critical paths strictly depend on them.
       // For example, if upsert or search are called immediately and unconditionally:
-      upsert: (() => Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }})) as unknown as QdrantClient['upsert'],
+      upsert: ((collectionName: string, params: { wait?: boolean, points: Schemas['PointStruct'][] }) => {
+        logger.info(`[MOCK_QDRANT_UPSERT] Called for collection: ${collectionName}, points: ${params.points.length}`);
+        return Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }});
+      }) as unknown as QdrantClient['upsert'],
       search: (() => Promise.resolve([])) as unknown as QdrantClient['search'],
       scroll: (() => Promise.resolve({ points: [], next_page_offset: null })) as unknown as QdrantClient['scroll'],
       delete: (() => Promise.resolve({ status: 'ok', result: { operation_id: 0, status: 'completed' }})) as unknown as QdrantClient['delete'],
