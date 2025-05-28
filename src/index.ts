@@ -255,7 +255,7 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     
   const isPkg = typeof (process as any).pkg !== 'undefined';
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const serverModule = isPkg ? require(path.join(libPath, 'server.js')) : require('./lib/server'); // Use relative path for non-pkg
+    const serverModule = require(path.join(libPath, 'server.js')); // Consistent path for testing
     const { startServer, ServerStartupError: LocalServerStartupError } = serverModule;
     
     // Define the type for ServerStartupError for TypeScript
@@ -266,7 +266,7 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     console.log('[SUT_INDEX_TS_DEBUG] Imported startServer (handler) in startServerHandler:', typeof startServer, 'Is mock:', !!(startServer as any)?.mock?.calls);
     console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (startServerHandler): ${process.env.VITEST_WORKER_ID}`);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const configServiceModule = isPkg ? require(path.join(libPath, 'config-service.js')) : require('./lib/config-service'); // Use relative path for non-pkg
+    const configServiceModule = require(path.join(libPath, 'config-service.js')); // Consistent path for testing
     const { logger: localLogger, configService: localConfigService } = configServiceModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported configService in startServerHandler:', typeof localConfigService, 'configService.DEEPSEEK_API_KEY (sample prop):', localConfigService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   try {
@@ -411,8 +411,8 @@ export async function main() { // Add export
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     let failLogger: { error: (...args: any[]) => void } = console; // Default to console
     try {
-      const isPkg = typeof (process as any).pkg !== 'undefined';
-      const loggerModule = isPkg ? require(path.join(libPath, 'config-service.js')) : require('./lib/config-service'); // Use relative path
+      // const isPkg = typeof (process as any).pkg !== 'undefined'; // isPkg not strictly needed here if libPath is always absolute src/lib for tests
+      const loggerModule = require(path.join(libPath, 'config-service.js')); // Consistent path for testing
       failLogger = loggerModule.logger;
     } catch (e) {
       console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
