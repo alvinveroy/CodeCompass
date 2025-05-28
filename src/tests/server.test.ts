@@ -750,7 +750,7 @@ describe('Server Startup and Port Handling', () => {
     const expectedNonCodeCompassMessage = `Port ${mcs.HTTP_PORT} is in use by non-CodeCompass server`;
     // Assert the structure of mock calls to help TypeScript for TS2493
     // Use unknown as intermediary to safely cast between incompatible types
-    const errorCalls = stableMockLoggerInstance.error.mock.calls as unknown as [(string | Record<string, unknown>), (Record<string, unknown> | Error)?][];
+    const errorCalls = ml.error.mock.calls as unknown as [(string | Record<string, unknown>), (Record<string, unknown> | Error)?][];
     const relevantNonCodeCompassCall = errorCalls.find(
       // The predicate ensures that we only deal with calls where the first arg is a string.
       // The 'as unknown as' cast above helps bypass type incompatibility safely
@@ -788,7 +788,7 @@ describe('Server Startup and Port Handling', () => {
       // else: metaArg is not present, which might be valid depending on the specific log call being asserted
     } else {
       // Fail test explicitly if log not found
-      const allErrorMessages = stableMockLoggerInstance.error.mock.calls.map(c => String(c[0])).join('\n');
+      const allErrorMessages = testControlLoggerInstance.error.mock.calls.map(c => String(c[0])).join('\n');
       throw new Error(`Expected non-CodeCompass server error log not found. Logged errors:\n${allErrorMessages}`);
     }
     expect(mockedMcpServerConnect).not.toHaveBeenCalled();
@@ -833,7 +833,7 @@ describe('Server Startup and Port Handling', () => {
       await expect(serverLibModule.startServer('/fake/repo')).rejects.toThrow(
         expect.objectContaining({
           name: "ServerStartupError",
-          message: expect.stringContaining(`Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: connect ECONNREFUSED`),
+          message: expect.stringContaining(`Port ${mcs.HTTP_PORT} is in use by an unknown service or the existing CodeCompass server is unresponsive to pings. Ping error: connect ECONNREFUSED`),
           // ... other properties of ServerStartupError
         })
       );
@@ -871,10 +871,10 @@ describe('Server Startup and Port Handling', () => {
     //     `Expected a log message indicating ping failure or connection refused for port ${stableMockConfigServiceInstance.HTTP_PORT}. Logged errors: ${JSON.stringify(stableMockLoggerInstance.error.mock.calls)}`
     // ).toBe(true);
     
-    const expectedPingRefusedMessagePart1 = `Port ${stableMockConfigServiceInstance.HTTP_PORT} is in use by an unknown service`;
-    const expectedPingRefusedMessagePart2 = `Connection refused on port ${stableMockConfigServiceInstance.HTTP_PORT}`;
+    const expectedPingRefusedMessagePart1 = `Port ${mcs.HTTP_PORT} is in use by an unknown service`;
+    const expectedPingRefusedMessagePart2 = `Connection refused on port ${mcs.HTTP_PORT}`;
 
-    const relevantPingRefusedCall = stableMockLoggerInstance.error.mock.calls.find((callArgs: readonly any[]) => {
+    const relevantPingRefusedCall = ml.error.mock.calls.find((callArgs: readonly any[]) => {
       if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string') {
         const logMsg = callArgs[0];
         return logMsg.includes(expectedPingRefusedMessagePart1) || logMsg.includes(expectedPingRefusedMessagePart2);
@@ -885,14 +885,14 @@ describe('Server Startup and Port Handling', () => {
     expect(relevantPingRefusedCall).toBeDefined();
     if (!relevantPingRefusedCall) {
       // Provide more context in the error message if the log is not found
-      const allErrorMessages = stableMockLoggerInstance.error.mock.calls.map(c => String(c[0])).join('\n');
+      const allErrorMessages = testControlLoggerInstance.error.mock.calls.map(c => String(c[0])).join('\n');
       throw new Error(`Expected ping refused error log not found. Logged errors:\n${allErrorMessages}`);
     }
 
     // Check first argument of the found log call
     if (relevantPingRefusedCall && typeof relevantPingRefusedCall[0] === 'string') {
       const firstArgOfRelevantCall = relevantPingRefusedCall[0];
-      expect(firstArgOfRelevantCall).toEqual(expect.stringContaining(`port ${stableMockConfigServiceInstance.HTTP_PORT}`));
+      expect(firstArgOfRelevantCall).toEqual(expect.stringContaining(`port ${mcs.HTTP_PORT}`));
     } else {
       throw new Error("First argument of ping refused error log was not a string or log call was not found.");
     }
@@ -957,7 +957,7 @@ describe('Server Startup and Port Handling', () => {
     const expectedFailedToStartMessage = `Port ${mcs.HTTP_PORT} in use by existing CodeCompass server, but status fetch error occurred.`;
     const expectedStatusFetchErrorMessage = `Error fetching status from existing CodeCompass server (port ${mcs.HTTP_PORT}): Error: Failed to fetch status`;
     
-    const relevantStatusFetchCall = stableMockLoggerInstance.error.mock.calls.find((callArgs: readonly any[]) => {
+    const relevantStatusFetchCall = testControlLoggerInstance.error.mock.calls.find((callArgs: readonly any[]) => {
       if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string') {
         return callArgs[0].includes(expectedStatusFetchErrorMessage);
       }
@@ -967,7 +967,7 @@ describe('Server Startup and Port Handling', () => {
     expect(relevantStatusFetchCall).toBeDefined(); 
 
     if (!relevantStatusFetchCall) {
-      const allErrorMessages = stableMockLoggerInstance.error.mock.calls.map(c => String(c[0])).join('\n');
+      const allErrorMessages = testControlLoggerInstance.error.mock.calls.map(c => String(c[0])).join('\n');
       throw new Error(`Expected status fetch error log not found. Logged errors:\n${allErrorMessages}`);
     }
     
@@ -980,7 +980,7 @@ describe('Server Startup and Port Handling', () => {
     }
 
     // Check for the "Failed to start CodeCompass" log which contains the ServerStartupError message
-    const failedToStartLog = stableMockLoggerInstance.error.mock.calls.find((callArgs: readonly any[]) => {
+    const failedToStartLog = testControlLoggerInstance.error.mock.calls.find((callArgs: readonly any[]) => {
         if (callArgs && callArgs.length > 0 && typeof callArgs[0] === 'string' && callArgs[0] === "Failed to start CodeCompass") {
             if (callArgs.length > 1 && typeof callArgs[1] === 'object' && callArgs[1] !== null) {
                 const meta = callArgs[1] as { message?: string }; // Type assertion
@@ -1240,9 +1240,9 @@ describe('startProxyServer', () => {
     // stableMockConfigServiceInstance and stableMockLoggerInstance are already defined globally
     // and used by the vi.mock for '../lib/config-service'.
     // Reset any properties if necessary for this suite's specific context.
-    stableMockConfigServiceInstance.AGENT_QUERY_TIMEOUT = 180000; 
-    stableMockLoggerInstance.error.mockClear();
-    stableMockLoggerInstance.info.mockClear();
+    testControlConfigServiceInstance.AGENT_QUERY_TIMEOUT = 180000; 
+    testControlLoggerInstance.error.mockClear();
+    testControlLoggerInstance.info.mockClear();
 
 
     nock.cleanAll(); // Clean nock before each test
@@ -1370,7 +1370,7 @@ describe('startProxyServer', () => {
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     expect(proxyServerHttpInstance).toBeNull();
     // Adjust assertion to match current SUT logging (single string message)
-    expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
+    expect(testControlLoggerInstance.error).toHaveBeenCalledWith(
       `[ProxyServer] Failed to find free port for proxy: ${findFreePortError.message}`
     );
   }, 30000); // Increased timeout
@@ -1390,8 +1390,8 @@ describe('startProxyServer', () => {
     const actualProxyListenPort = addressInfo.port;
     expect(actualProxyListenPort).toBe(proxyListenPort); 
 
-    expect(stableMockLoggerInstance.info).toHaveBeenCalledWith(expect.stringContaining(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetExistingServerPort}.`));
-    expect(stableMockLoggerInstance.info).toHaveBeenCalledWith(expect.stringContaining(`This instance (CodeCompass Proxy) is running on port ${actualProxyListenPort}.`));
+    expect(testControlLoggerInstance.info).toHaveBeenCalledWith(expect.stringContaining(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetExistingServerPort}.`));
+    expect(testControlLoggerInstance.info).toHaveBeenCalledWith(expect.stringContaining(`This instance (CodeCompass Proxy) is running on port ${actualProxyListenPort}.`));
 
     // Use realAxiosInstance for the call TO the proxy
     const response = await realAxiosInstance.get(`http://localhost:${actualProxyListenPort}/api/ping`);
@@ -1425,7 +1425,7 @@ describe('startProxyServer', () => {
       }));
     }
     
-    expect(stableMockLoggerInstance.error).toHaveBeenCalledWith(
+    expect(testControlLoggerInstance.error).toHaveBeenCalledWith(
       'Proxy: Error proxying MCP request to target server.', 
       expect.objectContaining({
         message: expect.stringContaining('Connection refused by target'), // Error from nock/target
@@ -1470,8 +1470,8 @@ describe('MCP Tool Relaying', () => {
     vi.clearAllMocks(); // Clears call history of all mocks, including stable ones
 
     // Reset properties of the stable mock config for each test in this suite
-    stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = false; // Default for this suite
-    stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = undefined;
+    testControlConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = false; // Default for this suite
+    testControlConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = undefined;
     
     // Reset call history for axios mocks (which are from the global vi.mock('axios'))
     const mockedAxios = vi.mocked(axios, true);
@@ -1505,8 +1505,8 @@ describe('MCP Tool Relaying', () => {
 
   // Test for get_indexing_status (which does not relay)
   it('get_indexing_status tool should return local status and not relay', async () => {
-    stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = true; // Set to true to test "no relay" part
-    stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = 3005;   // Set a relay port
+    testControlConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = true; // Set to true to test "no relay" part
+    testControlConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = 3005;   // Set a relay port
 
     const mockStatus: IndexingStatusReport = {
       status: 'idle', message: 'Test local idle status', overallProgress: 0, lastUpdatedAt: new Date().toISOString(),
@@ -1526,8 +1526,8 @@ describe('MCP Tool Relaying', () => {
 
 
   it('trigger_repository_update should relay if IS_UTILITY_SERVER_DISABLED is true', async () => {
-    stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = true;
-    stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = 3005;
+    testControlConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = true;
+    testControlConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = 3005;
     vi.mocked(axios.post).mockResolvedValueOnce({ status: 202, data: { message: "Relayed update accepted" }, headers: {}, config: {} as any });
     
     const { indexRepository } = await import('../lib/repository.js'); // Get the mocked version
@@ -1544,8 +1544,8 @@ describe('MCP Tool Relaying', () => {
   });
 
   it('trigger_repository_update should trigger local indexing if relaying is disabled', async () => {
-    stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = false; // Relaying disabled
-    stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = undefined;
+    testControlConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = false; // Relaying disabled
+    testControlConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = undefined;
 
     const { indexRepository: mockedIndexRepositoryFromImport } = await import('../lib/repository.js'); // Get the mocked version
     const { getLLMProvider } = await import('../lib/llm-provider.js'); // Get the mocked version
@@ -1563,8 +1563,8 @@ describe('MCP Tool Relaying', () => {
   });
 
    it('trigger_repository_update should not trigger local indexing if already in progress and relaying is disabled', async () => {
-    stableMockConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = false; // Relaying disabled
-    stableMockConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = undefined;
+    testControlConfigServiceInstance.IS_UTILITY_SERVER_DISABLED = false; // Relaying disabled
+    testControlConfigServiceInstance.RELAY_TARGET_UTILITY_PORT = undefined;
 
     vi.mocked(getGlobalIndexingStatus).mockReturnValue({
       status: 'indexing_file_content', // In-progress status
