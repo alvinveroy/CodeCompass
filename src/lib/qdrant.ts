@@ -15,7 +15,15 @@ export type SimplePoint = {
 
 // Initialize Qdrant
 export async function initializeQdrant(): Promise<QdrantClient> {
-  // Diagnostic log for integration tests
+  // Diagnostic log for integration tests - VERY PROMINENT
+  const ciEnv = process.env.CI;
+  const skipInitEnv = process.env.SKIP_QDRANT_INIT;
+  const mockQdrantEnv = process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT;
+
+  const envDebugMsg = `[QDRANT_SUT_ENV_DIAGNOSTIC] initializeQdrant: CI='${ciEnv}' (type: ${typeof ciEnv}), SKIP_QDRANT_INIT='${skipInitEnv}' (type: ${typeof skipInitEnv}), CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT='${mockQdrantEnv}' (type: ${typeof mockQdrantEnv})`;
+  console.error(envDebugMsg); // Force to stderr for visibility
+  logger.info(envDebugMsg);
+  // The following two console.error/logger.info lines are redundant with envDebugMsg but kept for historical consistency if needed.
   console.error(`[QDRANT_INIT_DEBUG] initializeQdrant called. CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: ${process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}`);
   logger.info(`[QDRANT_INIT_DEBUG] initializeQdrant called. CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: ${process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}`);
 
