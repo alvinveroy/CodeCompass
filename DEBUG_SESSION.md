@@ -625,3 +625,62 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 *   **Metadata:**
     *   Git Commit SHA (User Provided): `d91f6e7` (files reflect this state).
+
+---
+
+**Attempt 80: Analysis of `npm run build` (after commit `871ebe9`)**
+
+*   **Intended Fixes (from Attempt 79 Plan, leading to `08a67cb` and `871ebe9`):**
+    1.  `src/index.ts` (Diagnostic Logging): Add `console.error` logs before dynamic `require` calls to print resolved paths. (Applied in `08a67cb`)
+    2.  `src/tests/index.test.ts` (Diagnostic Logging): Add `console.error` logs inside `vi.mock` factories to print paths targeted by mocks. (Applied in `08a67cb`)
+    3.  `src/tests/index.test.ts` (`runMainWithArgs` Logging): Add `console.error` logs for tracing. (Applied in `08a67cb`)
+    4.  The `handleClientCommand` dynamic require path fix was applied in `871ebe9`.
+
+*   **Applied Changes (commits `08a67cb` and `871ebe9`):**
+    *   All planned diagnostic logging and the `handleClientCommand` path fix were applied.
+
+*   **Result (Based on User's `npm run build` Output for commit `871ebe9`):**
+    *   TypeScript compilation (`tsc`) passed.
+    *   `vitest run` executed, reporting **7 failures**.
+        *   **`src/tests/index.test.ts` (1 Suite Failure):**
+            *   The entire suite failed with `ReferenceError: Cannot access '__vi_import_0__' before initialization` at `src/tests/index.test.ts:10:9`. This is the line: `vi.mock(serverJsMockPath, async () => { ... });`.
+            *   This is a **regression**. The `ReferenceError` was previously fixed in `ff407e4` by moving `srcLibPath` (and thus `serverJsMockPath`) to the top level. The current `src/tests/index.test.ts` (provided by user) *does* have these path definitions at the top level. This error's reappearance is unexpected if the file structure is correct.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   All four `startProxyServer` tests still timed out (at 30000ms).
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (2 Failures):**
+            1.  `should call trigger_repository_update and verify indexing starts`: Fails with `expected '{"result":{"content":[{"type":"text",…' to contain '[MOCK_QDRANT_UPSERT]'`.
+                *   The SUT output now includes:
+                    *   `[QDRANT_INIT_DEBUG] initializeQdrant called. CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: true`
+                    *   `[DEBUG_BATCH_UPSERT_CLIENT_TYPE] qdrant.ts::batchUpsertVectors called. Client: Object, IsMock: true, Collection: codecompass_collection, Points: X`
+                    *   `[DEBUG_BATCH_UPSERT_CLIENT_TYPE] About to call client.upsert. Is client.upsert a function? true. Client.upsert.toString (first 100 chars): function upsertPoints(collectionName, params) { ... [MOCK_QDRANT_UPSERT] ... }`
+                *   This is **excellent progress!** It confirms:
+                    *   The SUT's `initializeQdrant` sees `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: true`.
+                    *   `batchUpsertVectors` is called with a client that `IsMock: true`.
+                    *   The `client.upsert` method *is* the mocked function containing the `[MOCK_QDRANT_UPSERT]` log string.
+                *   The failure now strongly suggests that the `console.error("[MOCK_QDRANT_UPSERT] ...")` call within the mock `upsert` in `src/lib/qdrant.ts` is not being captured by the test's `sutOutputCaptured` mechanism when the SUT (child process) runs.
+            2.  `should call generate_suggestion and get a mocked LLM response`: Fails with `expected '# Code Suggestion for: "Suggest how t…' to contain '**Suggested Implementation**:'`. The actual SUT output logged in the test *does* contain this exact string. This remains a perplexing assertion failure, possibly due to invisible characters or a Vitest `toContain` nuance with complex strings.
+
+*   **Analysis/Retrospection:**
+    *   **`src/tests/index.test.ts` (`ReferenceError` Regression):** This is the most critical issue. The error `Cannot access '__vi_import_0__' before initialization` typically occurs when a variable used within a `vi.mock` factory (especially in the path argument to `vi.mock` itself or `vi.importActual`) is not defined at the time Vitest hoists and processes the mocks. Given that `serverJsMockPath` *is* defined at the top level, this might indicate a more subtle issue with how Vitest's CJS/ESM interop or module transformation is interacting with the path resolution or the dynamic `importActual` within the mock factory under certain conditions.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (`trigger_repository_update`):** The Qdrant mock is confirmed to be in place and the correct `upsert` method is present. The issue is log capture from the SUT's `console.error`.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (`generate_suggestion`):** The persistent assertion failure despite visual string match is highly suspicious.
+
+*   **Next Steps/Plan (Attempt 81):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (completed).
+    2.  **`src/tests/index.test.ts` (`ReferenceError` Fix Attempt):**
+        *   The `vi.mock` calls for `server.js`, `config-service.js`, and `logger.js` use `path.join(srcLibPath, 'moduleName.js')`. While `srcLibPath` is top-level, the `path.join` itself might be the issue during hoisting.
+        *   **Change:** Replace `path.join(srcLibPath, 'moduleName.js')` with direct string literals for the paths being mocked. Since `srcLibPath` resolves to `projectRoot/src/lib`, the string literals would be like `'../../src/lib/server.js'` (relative to `src/tests/index.test.ts`). This makes the path argument to `vi.mock` a static string literal, which is often more robust for Vitest's hoisting.
+    3.  **`src/tests/integration/stdio-client-server.integration.test.ts` (`trigger_repository_update` Log Capture):**
+        *   In the `StdioClientTransport` constructor options within the test, explicitly set `options: { stdio: ['pipe', 'pipe', 'pipe'], ... }` for the spawned SUT process. While `'pipe'` is often the default, being explicit can sometimes help ensure `stderr` is correctly piped and capturable.
+    4.  **`src/tests/integration/stdio-client-server.integration.test.ts` (`generate_suggestion` Assertion):**
+        *   To work around the `toContain` issue, try a different assertion strategy for `**Suggested Implementation**:`. For example, split the `suggestionText` by newlines and check if any line *equals* `**Suggested Implementation**:`. This can be more robust against subtle whitespace or invisible character issues that `toContain` might be sensitive to with multi-line strings.
+    5.  **Defer `server.test.ts` timeouts.**
+
+*   **Blockers:**
+    *   `src/tests/index.test.ts` `ReferenceError` (highest priority).
+    *   Log capture for `[MOCK_QDRANT_UPSERT]` in integration test.
+    *   Perplexing `generate_suggestion` assertion failure.
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `871ebe9`.

@@ -266,7 +266,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
-      options: { env: currentTestSpawnEnv } // Spawn environment
+      options: { 
+        env: currentTestSpawnEnv,
+        stdio: ['pipe', 'pipe', 'pipe'] // Explicitly pipe stdio
+      } 
     } as StdioTransportParams);
     client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
   });
@@ -613,8 +616,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(suggestionText).toContain("## Suggestion");
     // The SUT's mock LLM generates a detailed response.
     // Check for the "**Suggested Implementation**:" heading and a part of the code.
-    // Use a simple includes check first for the problematic string
-    expect(suggestionText?.includes('**Suggested Implementation**:')).toBe(true);
+    const linesInSuggestion = suggestionText?.split('\n') || [];
+    expect(linesInSuggestion.some(line => line.trim() === '**Suggested Implementation**:'), 
+      `Expected to find line "**Suggested Implementation**:" in suggestion output. Actual lines: ${JSON.stringify(linesInSuggestion, null, 2)}`
+    ).toBe(true);
     
     // Check for other key parts of the SUT self-mocked output.
     // The SUT self-mock for "suggest how to use file1.ts" is:
