@@ -596,6 +596,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     // const suggestionText = result.content![0].text as string;
     const suggestionText = (result.content as Array<{text?: string}>)[0]?.text;
 
+    // Log the actual response for debugging
+    console.log('ACTUAL RESPONSE TEXT (generate_suggestion):', suggestionText);
 
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
     expect(suggestionText).toContain("## Suggestion");
@@ -640,6 +642,9 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(repoContextResult).toBeDefined();
     expect(repoContextResult.content).toBeInstanceOf(Array);
     const repoContextText = repoContextResult.content![0].text as string;
+
+    // Log the actual response for debugging
+    console.log('ACTUAL RESPONSE TEXT (get_repository_context):', repoContextText);
 
     expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
     expect(repoContextText).toContain("## Summary");

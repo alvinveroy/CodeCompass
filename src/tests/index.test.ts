@@ -141,6 +141,7 @@ let mockSpawnedProcessErrorCallbackForClientTests: ((err: Error) => void) | null
 import type { ChildProcess } from 'child_process'; // Ensure this is imported if not already
 
 let mockProcessExit: MockInstance<typeof process.exit>;
+let originalConsoleLog: (...args: any[]) => void; // Store original console.log
 let mockConsoleLog: MockInstance<typeof console.log>;
 let mockConsoleError: MockInstance<typeof console.error>;
 let originalProcessEnv: NodeJS.ProcessEnv;
@@ -158,7 +159,15 @@ describe('CLI with yargs (index.ts)', () => {
 
     // Initialize console and process spies
     mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as unknown as typeof process.exit);
-    mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(vi.fn());
+    
+    // Spy on console.log but also call the original implementation
+    originalConsoleLog = console.log.bind(console);
+    mockConsoleLog = vi.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+      // originalConsoleLog(...args); // Optionally call original to see logs during test run
+      // For now, let's keep it as a pure spy to not clutter test output unless needed for specific debugging.
+      // If SUT logs are still not appearing, we can uncomment the line above.
+      return undefined; // Mock implementation should return void or undefined if original console.log does
+    });
     mockConsoleError = vi.spyOn(console, 'error').mockImplementation(vi.fn());
         
     // Reset the mutable mockConfigServiceInstance to its original state by creating fresh copies
