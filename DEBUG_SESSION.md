@@ -1505,14 +1505,55 @@ After these changes, please run `npm run build` and provide the full output. The
 *   The fix for `SESSIONS_MAP_INSTANCE_ID` is expected to resolve the critical runtime `SyntaxError`, which should allow `src/tests/index.test.ts` and `src/tests/integration/stdio-client-server.integration.test.ts` to run further, potentially revealing other underlying issues or passing more tests.
 *   The fix for `stableMockLoggerInstance` hoisting in `src/tests/server.test.ts` is expected to resolve the Vitest transform error for that file, allowing its tests to run.
 
+### Result (Based on User's `npm run build` Output from 09:43:57 / 09:44:26 UTC):
+*   **TypeScript Compilation:** `tsc` completed successfully.
+*   **Vitest Transform Errors (1 - CRITICAL):**
+    *   **`src/tests/server.test.ts`**: `ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization` (Line 90:18). This error **PERSISTS** despite Attempt 60's changes. The `vi.mock('../lib/config-service', ...)` factory is still unable to access `stableMockLoggerInstance` during transform time.
+*   **Test Failures (Vitest Runtime):**
+    *   **`src/tests/index.test.ts` (22 failures - CRITICAL REGRESSION):**
+        *   All 22 tests fail with `Error: Cannot find module '/Users/alvin.tech/Projects/CodeCompass/dist/index.js' imported from '/Users/alvin.tech/Projects/CodeCompass/src/tests/index.test.ts'`. This is a **NEW CRITICAL BLOCKER**. The SUT path `indexPath` (which resolves to `dist/index.js`) cannot be found or loaded by Vitest.
+        *   The diagnostic log `[INDEX_TEST_DEBUG] Mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING` is visible, indicating some top-level mocks in `index.test.ts` are processed.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (9 failures - CRITICAL REGRESSION):**
+        *   All 9 tests fail with `MCP error -32000: Connection closed`.
+        *   The `stdout` for this suite shows multiple `Error: Cannot find module '/Users/alvin.tech/Projects/CodeCompass/dist/index.js'` errors occurring before the MCP errors. This indicates the spawned server process (`dist/index.js`) is crashing or failing to start due to this module loading issue, leading to the "Connection closed" errors.
+        *   The diagnostic log `[INTEGRATION_TEST_DEBUG] Mocked getLLMProvider FACTORY RUNNING...` is visible.
+    *   **`src/tests/server.test.ts`:** Did not run due to the transform error.
+    *   **Other test suites (`lib/*`, `utils.test.ts`, `agent.test.ts`, `config.test.ts`, `server-tools.test.ts`) PASSED.**
+*   **SUT Diagnostic Logs:** Most SUT-side logs (e.g., from `src/index.ts`) are not visible, likely because `dist/index.js` is not loading/executing correctly.
+
+### Analysis/Retrospection for Attempt 60:
+*   The `SESSIONS_MAP_INSTANCE_ID` fix using `globalThis` in `src/lib/state.ts` seems to have resolved the previous runtime `SyntaxError` for that identifier, as it's no longer the primary error.
+*   The `stableMockLoggerInstance` hoisting issue in `src/tests/server.test.ts` **remains unresolved**. The reordering strategy was insufficient.
+*   The **new critical regression** is the `Cannot find module '/Users/alvin.tech/Projects/CodeCompass/dist/index.js'` error. This prevents `src/tests/index.test.ts` and the spawned server in `src/tests/integration/stdio-client-server.integration.test.ts` from running. This could be due to:
+    1.  `dist/index.js` not being created by `tsc` (though `tsc` itself reports no errors).
+    2.  An issue with how `indexPath` is resolved or how `await import(indexPath)` is handled by Vitest in these specific test environments.
+    3.  A very early runtime error within `dist/index.js` (or its initial static imports) that Node.js/Vitest misinterprets as a module loading failure. The fact that `node dist/index.js --help` might work (as per user's previous attempts) suggests it might be specific to the Vitest execution context or how it handles dynamic imports of built files.
+
+### Blockers:
+1.  **CRITICAL:** `Cannot find module '/Users/alvin.tech/Projects/CodeCompass/dist/index.js'` - Prevents `src/tests/index.test.ts` and `src/tests/integration/stdio-client-server.integration.test.ts` from running.
+2.  **CRITICAL:** `src/tests/server.test.ts` transform error: `ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization`.
+
 ### Next Step / Plan for Next Attempt (Attempt 61):
-1.  **User Action:** Run `npm run build` and provide the full output.
-2.  **Analyze new build output:**
-    *   Confirm `SESSIONS_MAP_INSTANCE_ID` SyntaxError is gone.
-    *   Confirm `stableMockLoggerInstance` ReferenceError in `server.test.ts` is gone.
-    *   Assess remaining test failures in all suites.
-    *   Prioritize any new critical errors or regressions.
-    *   Resume debugging `get_session_history` discrepancy, `index.test.ts` SUT mocking, and `server.test.ts` timeouts.
+
+1.  **Fix `src/tests/server.test.ts` Transform Error (Hoisting - CRITICAL):**
+    *   **Strategy:** Refactor the mock setup for `../lib/config-service` in `src/tests/server.test.ts`. Instead of defining `stableMockLoggerInstance` and `stableMockConfigServiceInstance` as top-level constants and referencing them with getters, the mock instances for logger and configService will be created *inside* the `vi.mock` factory. These instances will then be exposed to the test scope via module-level variables, which tests can use to control and assert against the mocks. This pattern is more robust against hoisting issues with complex initializers.
+2.  **Add Diagnostics for `Cannot find module dist/index.js` (CRITICAL):**
+    *   **File:** `src/tests/index.test.ts`
+    *   **Action (Diagnostics):** In the `runMainWithArgs` helper function, add more robust error handling and logging around the `await import(indexPath)` call. This includes logging the resolved `indexPath`, checking if the file exists using `fs.existsSync`, and logging the beginning of the file content if it does exist but still fails to import. This will help determine if it's a path issue, a file content issue, or an import mechanism issue within Vitest.
+    *   **File:** `src/index.ts`
+    *   **Action (Review):** Double-check all relative import paths in `src/index.ts` to ensure they use the `.js` extension, as required by `moduleResolution: "NodeNext"` in `tsconfig.json`. (Self-correction: This was checked in thought process for Attempt 61 and seemed okay, but worth a quick re-glance).
+3.  **User Action (Manual Verification - Important):**
+    *   After `npm run build` completes (even if tests fail), manually check:
+        1.  Does the file `dist/index.js` actually exist?
+        2.  If yes, is it non-empty and does it look like valid JavaScript? (e.g., `cat dist/index.js | head -n 5`)
+        3.  Can `node dist/index.js --help` be run from the project root without an immediate "Cannot find module" error related to `dist/index.js` itself?
+4.  **Deferred Issues (until critical blockers are resolved):**
+    *   `get_session_history` discrepancy.
+    *   `src/tests/index.test.ts` remaining spy/mock assertion failures (once it can load the SUT).
+    *   `src/tests/integration/stdio-client-server.integration.test.ts` remaining specific test logic failures (once the server can start).
+    *   `src/tests/server.test.ts` timeouts (once it can transform).
+
+The absolute top priorities are the `server.test.ts` transform error and the `Cannot find module dist/index.js` error.
 ---
 ## Attempt 51: Fix TypeScript, Refine LLM Mock Logging, Verify Session Debugging
 

@@ -55,40 +55,48 @@ const capturedToolHandlers: Record<string, (...args: any[]) => any> = {}; // Typ
 // Mock dependencies
 // --- END STABLE MOCK INSTANCES DEFINITIONS ---
 
-// Define stableMockLoggerInstance and stableMockConfigServiceInstance
-// immediately before the vi.mock call that uses them to ensure they are initialized
-// when the mock factory is hoisted and executed.
-const stableMockLoggerInstance: MockedLogger = {
-  info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
-} as unknown as MockedLogger;
+// Variables to hold the instances controlled by tests, initialized by the config-service mock factory
+let testControlLoggerInstance: MockedLogger; 
+let testControlConfigServiceInstance: MockedConfigService;
 
-const stableMockConfigServiceInstance: MockedConfigService = {
-  HTTP_PORT: 3001,
-  IS_UTILITY_SERVER_DISABLED: false,
-  RELAY_TARGET_UTILITY_PORT: undefined,
-  OLLAMA_HOST: 'http://127.0.0.1:11434',
-  QDRANT_HOST: 'http://127.0.0.1:6333',
-  COLLECTION_NAME: 'test-collection',
-  SUGGESTION_MODEL: 'test-model',
-  SUGGESTION_PROVIDER: 'ollama',
-  EMBEDDING_MODEL: 'nomic-embed-text:v1.5',
-  EMBEDDING_PROVIDER: 'ollama',
-  DEEPSEEK_API_KEY: '',
-  OPENAI_API_KEY: '',
-  GEMINI_API_KEY: '',
-  CLAUDE_API_KEY: '',
-  VERSION: 'test-version-stable-mock',
-  reloadConfigsFromFile: vi.fn(),
-  SUMMARIZATION_MODEL: 'test-summary-model',
-  REFINEMENT_MODEL: 'test-refinement-model',
-  MAX_SNIPPET_LENGTH: 500,
-  AGENT_QUERY_TIMEOUT: 180000,
-};
+vi.mock('../lib/config-service', () => {
+  // Create the instances inside the factory
+  const loggerInstance = {
+    info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), add: vi.fn(),
+  } as unknown as MockedLogger;
 
-vi.mock('../lib/config-service', () => ({
-  get configService() { return stableMockConfigServiceInstance; },
-  get logger() { return stableMockLoggerInstance; },
-}));
+  const configInstance = {
+    HTTP_PORT: 3001, // Default values
+    IS_UTILITY_SERVER_DISABLED: false,
+    RELAY_TARGET_UTILITY_PORT: undefined,
+    OLLAMA_HOST: 'http://127.0.0.1:11434',
+    QDRANT_HOST: 'http://127.0.0.1:6333',
+    COLLECTION_NAME: 'test-collection',
+    SUGGESTION_MODEL: 'test-model',
+    SUGGESTION_PROVIDER: 'ollama',
+    EMBEDDING_MODEL: 'nomic-embed-text:v1.5',
+    EMBEDDING_PROVIDER: 'ollama',
+    DEEPSEEK_API_KEY: '',
+    OPENAI_API_KEY: '',
+    GEMINI_API_KEY: '',
+    CLAUDE_API_KEY: '',
+    VERSION: 'test-version-factory-mock',
+    reloadConfigsFromFile: vi.fn(),
+    SUMMARIZATION_MODEL: 'test-summary-model',
+    REFINEMENT_MODEL: 'test-refinement-model',
+    MAX_SNIPPET_LENGTH: 500,
+    AGENT_QUERY_TIMEOUT: 180000,
+  } as MockedConfigService;
+
+  // Expose them for test control via module-scoped variables
+  testControlLoggerInstance = loggerInstance;
+  testControlConfigServiceInstance = configInstance;
+
+  return {
+    get configService() { return configInstance; },
+    get logger() { return loggerInstance; },
+  };
+});
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
@@ -511,15 +519,12 @@ describe('Server Startup and Port Handling', () => {
       if (callback) callback();
       return this;
     });
-    // Get the mocked configService and logger from the vi.mock factory
-    // This ensures we are interacting with the same mocked objects that the SUT uses.
-    const mockedConfigModule = await import('../lib/config-service.js') as unknown as ConfigServiceModuleType;
-    // Cast to 'unknown' first, then to the mock type
-    mcs = mockedConfigModule.configService as unknown as MockedConfigService; // Keep as unknown for complex mock/real hybrid
-    ml = mockedConfigModule.logger as unknown as MockedLogger; // Keep as unknown for complex mock/real hybrid
+    // Get the mocked configService and logger. These will be the instances created by the mock factory.
+    // Assign to mcs and ml which are used throughout this test suite.
+    mcs = testControlConfigServiceInstance;
+    ml = testControlLoggerInstance;
 
     // Clear mocks using the typed instances
-    // mcs and ml are already assigned from the first import.
     // No need to re-import or re-assign.
 
     // Clear mocks using the typed instances
