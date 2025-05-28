@@ -1476,66 +1476,43 @@ After these changes, please run `npm run build` and provide the full output. The
 ## Attempt 60: Address Runtime SyntaxError, Regressed Hoisting Error, and Integration Test Failures
 
 **Git Commit (After Attempt 59 changes):** `f729d75` (fix: Fix test hoisting, add session state logs, refine mocks & asserts)
-**Git Commit (After Attempt 60 changes):** `38ecffa` (fix: Fix runtime state redeclaration and test hoisting error)
+**Git Commit (After Attempt 60 changes):** `d0c107a` (fix: Fix runtime state redeclaration and test hoisting error)
 
-### Issues Addressed (Intended from Plan for Attempt 59):
-1.  **Vitest Transform Error (`src/tests/server.test.ts`):**
-    *   Attempted to ensure the getter pattern in `vi.mock('../lib/config-service', ...)` was correct for `stableMockLoggerInstance`. (Note: User's file reportedly already had this fix, but the error regressed based on the new build output).
-2.  **`get_session_history` Discrepancy (Critical Logging):**
-    *   Added detailed diagnostic logging to `src/lib/state.ts` (including `SESSIONS_MAP_INSTANCE_ID`, deep-copied `queries` arrays) and `src/lib/server.ts` (tool handlers) to trace session state.
-3.  **`src/tests/integration/stdio-client-server.integration.test.ts` - Align LLM Mock Assertions:**
-    *   Modified assertions for `generate_suggestion` and `get_repository_context`.
-4.  **`src/tests/index.test.ts` Mocking Strategy & Diagnostics:**
-    *   Reverted to top-level `vi.mock` (targeting source `.ts` files) with getters.
-
-### Changes Applied (Based on commit `f729d75` from Attempt 59):
-*   Logging changes in `src/lib/state.ts` and `src/lib/server.ts` for session state were applied.
-*   LLM assertion changes in `src/tests/integration/stdio-client-server.integration.test.ts` were applied.
-*   Mocking strategy changes in `src/tests/index.test.ts` were applied.
-
-### Result (Based on User's `npm run build` Output from 2025-05-28 09:30 UTC):
-*   **Vitest Transform Error (REGRESSION/PERSISTENT):**
-    *   `src/tests/server.test.ts`: `ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization` at `src/tests/server.test.ts:89:18` (inside the `vi.mock('../lib/config-service', ...)` factory's getter for `logger`). This prevents `server.test.ts` from running.
-*   **Unhandled Rejections (CRITICAL RUNTIME SyntaxError):**
-    *   **11 unhandled rejections** during the Vitest run, all pointing to: `SyntaxError: Identifier 'SESSIONS_MAP_INSTANCE_ID' has already been declared` in `dist/lib/state.js:23`.
-    *   This runtime error in the *compiled JavaScript* is the most critical issue, as it crashes the server process used by `src/index.ts` (for CLI tests) and `src/tests/integration/stdio-client-server.integration.test.ts`.
-*   **Test Failures (28 total):**
-    *   **`src/tests/index.test.ts` (19 failures):**
-        *   `mockStartServerHandler` and `StdioClientTransportConstructor` mocks still not called by SUT (12 tests).
-        *   `fs.readFileSync` mock not called (1 test).
-        *   `--json` output test fails (`Expected to find a console.log call...`) (1 test).
-        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called (5 tests).
-        *   The `stderr` from `dist/index.js` (when run by `runMainWithArgs`) shows: `YARGS_FAIL_HANDLER_INVOKED --- Details: {"errMessage":"Identifier 'SESSIONS_MAP_INSTANCE_ID' has already been declared"...}`. This confirms the CLI execution is crashing due to the runtime `SyntaxError` in `dist/lib/state.js`.
-    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (9 failures - REGRESSION):**
-        *   All 9 tests in this suite now fail with `MCP error -32000: Connection closed`. This is a direct consequence of the `SESSIONS_MAP_INSTANCE_ID` SyntaxError in `dist/lib/state.js`, which `dist/lib/server.js` (the spawned server) imports, preventing the server from starting or functioning correctly.
-    *   **`src/tests/server.test.ts`**: Did not run due to the transform error. (Previously 4 timeouts).
-*   **TypeScript Compilation (`tsc`):**
-    *   The `tsc` command (which runs *after* Vitest in the `npm run build` script) completes successfully. This means the `SESSIONS_MAP_INSTANCE_ID` issue is a runtime JavaScript error, not a TypeScript compile-time error.
-*   **Diagnostic Logs:**
-    *   `[INDEX_TEST_DEBUG] Mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING` - Visible.
-    *   Integration test `currentTestSpawnEnv` logs are visible.
-    *   The `SESSIONS_MAP_INSTANCE_ID` related logging from `src/lib/state.ts` (added in Attempt 59) is not visible in the main test logs because the server crashes before these logs can be generated effectively. The error occurs during module loading.
-
-### Analysis/Retrospection for Attempt 59:
-*   **`SESSIONS_MAP_INSTANCE_ID` Redeclaration (CRITICAL RUNTIME BLOCKER):** The `SyntaxError: Identifier 'SESSIONS_MAP_INSTANCE_ID' has already been declared` in `dist/lib/state.js` is the most pressing issue. This indicates that the `const SESSIONS_MAP_INSTANCE_ID` declaration at the top level of `src/lib/state.ts` is being executed multiple times in the same Node.js runtime environment when the compiled `dist/lib/state.js` module is loaded. This can happen if the module is imported/required multiple times in a way that bypasses Node's module cache, or if there's an issue with how Vitest or the test setup loads/reloads modules.
-*   **`stableMockLoggerInstance` Hoisting Error (REGRESSION):** The `ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization` in `src/tests/server.test.ts` has regressed. The getter pattern for `logger` within the `vi.mock('../lib/config-service', ...)` factory is correct, but the lexical order of `stableMockLoggerInstance` definition relative to this `vi.mock` call needs to be re-verified and strictly enforced.
-*   **Integration Test Failures:** The "Connection closed" errors are a direct symptom of the server crashing due to the `SESSIONS_MAP_INSTANCE_ID` SyntaxError.
-*   **`index.test.ts` Failures:** Many of these failures (especially those involving yargs `.fail()` handler) are now also likely due to the SUT (`dist/index.js`) crashing because of the `SyntaxError` it encounters when importing `dist/lib/server.js`, which in turn imports `dist/lib/state.js`.
-
-### Next Step / Plan for Next Attempt (Attempt 60):
-
-1.  **Fix `SyntaxError: Identifier 'SESSIONS_MAP_INSTANCE_ID' has already been declared` (CRITICAL RUNTIME BLOCKER):**
+### Issues Addressed (Based on Plan for Attempt 60):
+1.  **`SyntaxError: Identifier 'SESSIONS_MAP_INSTANCE_ID' has already been declared` (CRITICAL RUNTIME BLOCKER):**
     *   **File:** `src/lib/state.ts`
-    *   **Strategy:** Ensure `SESSIONS_MAP_INSTANCE_ID` is initialized only once per process.
-    *   **Action:** Modify the declaration to use `globalThis` to ensure it's set once.
-2.  **Fix `ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization` in `src/tests/server.test.ts` (Vitest Transform Error):**
+    *   **Action:** Modified the declaration of `SESSIONS_MAP_INSTANCE_ID` to use `globalThis` to ensure it's set only once per process.
+2.  **`ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization` in `src/tests/server.test.ts` (Vitest Transform Error):**
     *   **File:** `src/tests/server.test.ts`
-    *   **Action:** Ensure `stableMockLoggerInstance` and `stableMockConfigServiceInstance` are defined *lexically immediately before* the `vi.mock('../lib/config-service', ...)` call that uses them in its factory's getters.
-3.  **Deferred Issues (until runtime/transform blockers are resolved):**
-    *   `get_session_history` discrepancy (the detailed logging for this won't be effective until the server can run without the SyntaxError).
-    *   `index.test.ts` SUT mocking issues.
-    *   `server.test.ts` timeouts.
-    *   Specific content of integration test LLM mock assertions.
+    *   **Action:** Moved the definitions of `stableMockLoggerInstance` and `stableMockConfigServiceInstance` to be *lexically immediately before* the `vi.mock('../lib/config-service', ...)` call that uses them in its factory's getters.
+    *   Also added back some missing properties to `stableMockConfigServiceInstance` for consistency.
+
+### Changes Applied (Based on commit `d0c107a`):
+*   The `SESSIONS_MAP_INSTANCE_ID` fix in `src/lib/state.ts` was applied.
+*   The reordering and update of `stableMockLoggerInstance` and `stableMockConfigServiceInstance` in `src/tests/server.test.ts` were applied.
+
+### Result (Awaiting User's `npm run build` Output):
+*   (To be filled in after user provides `npm run build` output)
+    *   TypeScript Compilation:
+    *   Vitest Transform Errors:
+    *   Test Failures:
+        *   `src/tests/index.test.ts`:
+        *   `src/tests/server.test.ts`:
+        *   `src/tests/integration/stdio-client-server.integration.test.ts`:
+    *   DeepSeek API Connection Errors in Logs:
+
+### Analysis/Retrospection for Attempt 60 (Awaiting User's Build Output):
+*   The fix for `SESSIONS_MAP_INSTANCE_ID` is expected to resolve the critical runtime `SyntaxError`, which should allow `src/tests/index.test.ts` and `src/tests/integration/stdio-client-server.integration.test.ts` to run further, potentially revealing other underlying issues or passing more tests.
+*   The fix for `stableMockLoggerInstance` hoisting in `src/tests/server.test.ts` is expected to resolve the Vitest transform error for that file, allowing its tests to run.
+
+### Next Step / Plan for Next Attempt (Attempt 61):
+1.  **User Action:** Run `npm run build` and provide the full output.
+2.  **Analyze new build output:**
+    *   Confirm `SESSIONS_MAP_INSTANCE_ID` SyntaxError is gone.
+    *   Confirm `stableMockLoggerInstance` ReferenceError in `server.test.ts` is gone.
+    *   Assess remaining test failures in all suites.
+    *   Prioritize any new critical errors or regressions.
+    *   Resume debugging `get_session_history` discrepancy, `index.test.ts` SUT mocking, and `server.test.ts` timeouts.
 ---
 ## Attempt 51: Fix TypeScript, Refine LLM Mock Logging, Verify Session Debugging
 
