@@ -1577,19 +1577,66 @@ After these changes, please run `npm run build` and provide the full output. The
 *   The refactoring of mocks in `src/tests/server.test.ts` combined with the user's manual fixes is expected to resolve the `ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization` transform error for that file. This should allow the tests in `server.test.ts` to run.
 *   The primary remaining critical issue is the `Cannot find module '/Users/alvin.tech/Projects/CodeCompass/dist/index.js'` error affecting `src/tests/index.test.ts` and the integration tests. The new diagnostics in `src/tests/index.test.ts` should help determine if `dist/index.js` is missing, empty, or unreadable, or if the import mechanism itself is failing in a specific way.
 
-### Next Step / Plan for Next Attempt (Attempt 62):
-1.  **User Action:** Run `npm run build` and provide the full output.
-2.  **Analyze new build output:**
-    *   Confirm `src/tests/server.test.ts` transform error is resolved and its tests run.
-    *   Analyze the diagnostic output from `src/tests/index.test.ts` regarding the `Cannot find module dist/index.js` error.
-    *   Assess any new failures or changes in `src/tests/server.test.ts`.
-3.  **Based on the analysis, formulate a plan to address the `Cannot find module dist/index.js` error.** This might involve:
-    *   Checking the `tsc` build process if `dist/index.js` is not being created correctly.
-    *   Investigating Vitest's behavior with dynamic imports of compiled files if `dist/index.js` exists but cannot be imported.
-    *   Further refining mocks in `src/tests/index.test.ts` if the SUT is loading but not using them.
-4.  Address other persistent test failures once the critical module loading issue is resolved.
+## Attempt 62: Address `server.test.ts` Hoisting and `dist/index.js` Load Issues
 
-The absolute top priorities are the `server.test.ts` transform error and the `Cannot find module dist/index.js` error.
+**Git Commit (Before Attempt 62 changes):** `3503f17` (fix: Refactor server.test mocks, add index.test SUT load diagnostics)
+**Git Commit (After Attempt 62 changes):** `911fa07` (fix: Fix server.test mock hoisting and update integration assertions)
+
+### Issues Addressed (Intended from Attempt 61 Plan & Analysis):
+1.  **`src/tests/server.test.ts` Transform Error (Hoisting):** Re-attempted mock refactoring.
+2.  **`Cannot find module dist/index.js`:** User was to manually verify `dist/index.js`. (Implicitly confirmed as resolved by tests running further).
+3.  **Integration Test LLM Mock Assertions:** Plan to align assertions.
+4.  **`get_session_history` Discrepancy:** Plan to add more logging.
+
+### Result (Based on User's `npm run build` Output from 10:08:08 UTC on 2025-05-28):
+*   **TypeScript Compilation:** `tsc` completed successfully.
+*   **Vitest Transform Errors (1 - CRITICAL - PERSISTS):**
+    *   **`src/tests/server.test.ts`**: `Error: [vitest] There was an error when mocking a module... Caused by: ReferenceError: Cannot access 'testControlLoggerInstance' before initialization` (Line 92:3 in `server.test.ts`, originating from `src/lib/server.ts:19:1` which is `import { configService, logger } from "./config-service";`). This error **still persists** despite previous refactoring attempts.
+*   **Test Failures (Vitest Runtime - 23 failed):**
+    *   **`src/tests/index.test.ts` (19 failures - REGRESSION from 22 "Cannot find module" to 19 specific mock/spy failures):**
+        *   The `Cannot find module '/Users/alvin.tech/Projects/CodeCompass/dist/index.js'` error that plagued all 22 tests in the previous run is **GONE**. The SUT (`dist/index.js`) is now being loaded by `runMainWithArgs`.
+        *   19 tests still fail, mostly due to `mockStartServerHandler` or other spies not being called (e.g., `expected "spy" to be called with arguments: [ '.' ] Number of calls: 0`). This indicates the SUT is running but **not using the mocked versions** of `startServerHandler`, `StdioClientTransportConstructor`, `currentMockLoggerInstance.error`, or `fs.readFileSync`.
+        *   The diagnostic log `[INDEX_TEST_DEBUG] Mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING` is visible. SUT-side diagnostic logs (e.g., `[SUT_INDEX_TS_DEBUG]`) are **not visible** in this output.
+        *   The `--port` option test **PASSED**.
+        *   The `--json` output test failed: `Expected to find a console.log call with valid JSON output, but none was found.: expected undefined to be defined`. `mockConsoleLog.mock.calls` was likely empty or did not contain the expected JSON.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures - REGRESSION from 9 "Connection closed" to 4 specific logic failures):**
+        *   The `Cannot find module '/Users/alvin.tech/Projects/CodeCompass/dist/index.js'` error in the spawned server's `stderr` is **GONE**. The server process is now starting and running.
+        *   The tests now run further and fail on specific assertions:
+            *   `should call trigger_repository_update and verify indexing starts`: **FAIL**. `expected "spy" to be called at least once` (for `qdrantModule.batchUpsertVectors`).
+            *   `should perform some actions and then retrieve session history with get_session_history`: **FAIL**. `expected '# Session History...' to contain 'Query 2: "second agent query...'`. The log `[INTEGRATION_TEST_DEBUG] get_session_history - Full historyText received by test:` shows only Query 1.
+            *   `should call generate_suggestion and get a mocked LLM response`: **FAIL**. `expected '# Code Suggestion for: "Suggest how t…' to contain '### Suggested Implementation'`. The received output is the detailed SUT self-mocked response, but the assertion is for a specific part.
+            *   `should call get_repository_context and get a mocked LLM summary`: **FAIL**. `expected '# Repository Context Summary for: "Wh…' to contain 'primary user-facing tool called \`agen…'`. Similar to above, assertion mismatch with detailed SUT self-mocked response.
+    *   **`src/tests/server.test.ts`:** Did not run due to the transform error.
+    *   **Other test suites (`lib/*`, `utils.test.ts`, `agent.test.ts`, `config.test.ts`, `server-tools.test.ts`) PASSED.**
+*   **DeepSeek API Connection Errors in Logs:** Still resolved (gone).
+
+### Analysis/Retrospection for Attempt 62:
+*   **`dist/index.js` Loading Resolved:** The `Cannot find module dist/index.js` error is resolved for both `src/tests/index.test.ts` and the spawned server in integration tests. This is a major step forward.
+*   **`src/tests/server.test.ts` Transform Error (Hoisting - PERSISTS):** This remains the top critical blocker. The `vi.mock` factory for `../lib/config-service` in `server.test.ts` cannot access `testControlLoggerInstance` at transform time. The strategy of defining mock instances *outside* the factory and referencing them via getters inside is still problematic for Vitest's hoisting mechanism in this specific case.
+*   **`src/tests/index.test.ts` Mocking (SUT not using mocks - PERSISTS):** Even though `dist/index.js` now loads, it's still not using the mocks provided by `src/tests/index.test.ts`. The top-level `vi.mock` calls (targeting source `.ts` files with getters) are not affecting the dynamically imported `dist/index.js`. SUT-side diagnostic logs to inspect `VITEST_WORKER_ID` and the nature of imported modules are crucial.
+*   **`get_session_history` Discrepancy (Integration Test - PERSISTS):** The session state inconsistency remains. The full history text showing only Query 1 confirms the issue is in the data provided to `formatSessionHistory`. The detailed logging from `state.ts` (if correctly applied and visible from Attempt 54/55) would be key to understanding if the `queries` array is modified before `getSessionHistory` retrieves it, or if `getSessionHistory` itself is returning a stale/incorrect version.
+*   **Integration Test LLM Mock Assertions (`generate_suggestion`, `get_repository_context` - Needs Alignment):** These tests fail because the SUT self-mock *is* working correctly and providing detailed responses. The test assertions need to be updated to match the actual (correctly) mocked output. This is a "good" failure.
+*   **Integration Test `trigger_repository_update` (`qdrant` spy - PERSISTS):** The `qdrantModule.batchUpsertVectors` spy is still not called.
+
+### Blockers:
+1.  **CRITICAL:** `src/tests/server.test.ts` transform error: `ReferenceError: Cannot access 'testControlLoggerInstance' before initialization`.
+2.  **CRITICAL:** `src/tests/index.test.ts` SUT (`dist/index.js`) not using mocks for `startServerHandler`, `StdioClientTransport`, etc.
+
+### Next Step / Plan for Next Attempt (Attempt 63):
+1.  **Fix `src/tests/server.test.ts` Transform Error (Hoisting - HIGHEST PRIORITY):**
+    *   **Strategy:** The core problem is that the `vi.mock` factory for `config-service` in `server.test.ts` needs access to `testControlLoggerInstance` and `testControlConfigServiceInstance`. The most robust Vitest pattern for this is to define the mock instances *inside* the factory and then assign them to module-scoped `let` variables so the tests can still control them.
+    *   **File:** `src/tests/server.test.ts`
+2.  **Align Integration Test LLM Mock Assertions:**
+    *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
+    *   Update assertions for `generate_suggestion` and `get_repository_context` tests to match the detailed content now provided by the working SUT self-mocks.
+3.  **`get_session_history` Discrepancy (Integration Test - Diagnostics):**
+    *   **File:** `src/lib/server.ts`
+    *   In the `get_session_history` tool handler, *immediately after* the line `const session = getSessionHistory(sessionIdFromParams, repoPath);`, add a log to dump a deep copy of `session.queries` (e.g., `logger.info('[SERVER_TOOL_DEBUG] get_session_history: Queries from state.ts (deep copy):', JSON.parse(JSON.stringify(session.queries)));`). This will show exactly what `state.ts` returned before any further processing in the handler.
+4.  **Deferred (until critical blockers resolved):**
+    *   `src/tests/index.test.ts` SUT mocking issues. (Need SUT-side logs: `VITEST_WORKER_ID`, type of imported modules).
+    *   `src/tests/index.test.ts` other failures (e.g., `--json` output, `fs.readFileSync`).
+    *   `src/tests/server.test.ts` timeouts (once it can transform and run).
+    *   Integration test `trigger_repository_update` (`qdrant` spy).
 ---
 ## Attempt 51: Fix TypeScript, Refine LLM Mock Logging, Verify Session Debugging
 
