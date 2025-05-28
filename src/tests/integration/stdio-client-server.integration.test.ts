@@ -641,8 +641,11 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     expect(repoContextText).toContain(`# Repository Context Summary for: "${repoContextQuery}"`);
     expect(repoContextText).toContain("## Summary");
-    // The SUT self-mock for this specific prompt returns a simpler string.
-    expect(repoContextText).toContain("SUT_SELF_MOCK: This is a summary of the repository context, using info from file2.txt");
+    // The SUT self-mock for this specific prompt returns detailed markdown
+    expect(repoContextText).toContain("### Key Purpose:");
+    // Check for a key phrase from the detailed mock for repository context
+    expect(repoContextText).toContain("agent orchestration and tool unification"); 
+    expect(repoContextText).toContain("### File: CHANGELOG.md"); // Check for context inclusion
 
     await client.close();
   }, 60000);

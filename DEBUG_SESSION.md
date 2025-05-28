@@ -1622,20 +1622,77 @@ After these changes, please run `npm run build` and provide the full output. The
 1.  **CRITICAL:** `src/tests/server.test.ts` transform error: `ReferenceError: Cannot access 'testControlLoggerInstance' before initialization`.
 2.  **CRITICAL:** `src/tests/index.test.ts` SUT (`dist/index.js`) not using mocks for `startServerHandler`, `StdioClientTransport`, etc.
 
-### Next Step / Plan for Next Attempt (Attempt 63):
-1.  **Fix `src/tests/server.test.ts` Transform Error (Hoisting - HIGHEST PRIORITY):**
-    *   **Strategy:** The core problem is that the `vi.mock` factory for `config-service` in `server.test.ts` needs access to `testControlLoggerInstance` and `testControlConfigServiceInstance`. The most robust Vitest pattern for this is to define the mock instances *inside* the factory and then assign them to module-scoped `let` variables so the tests can still control them.
+## Attempt 63: Fix `server.test.ts` Hoisting, Align LLM Asserts, Add Session & SUT Mocking Diagnostics
+
+**Git Commit (Before Attempt 63 changes):** `911fa07` (fix: Fix server.test mock hoisting and update integration assertions)
+**Git Commit (After Attempt 63 changes):** (User to fill after applying these new changes)
+
+### Issues Addressed (Intended from Attempt 62 Plan):
+1.  **`src/tests/server.test.ts` Transform Error (Hoisting):**
     *   **File:** `src/tests/server.test.ts`
+    *   **Action:** Refactored `vi.mock('../lib/config-service', ...)` to define `testControlLoggerInstance` and `testControlConfigServiceInstance` *inside* the factory and assign them to module-scoped `let` variables. Tests now use these module-scoped variables.
 2.  **Align Integration Test LLM Mock Assertions:**
     *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
-    *   Update assertions for `generate_suggestion` and `get_repository_context` tests to match the detailed content now provided by the working SUT self-mocks.
+    *   **Action:** Updated assertions for `generate_suggestion` and `get_repository_context` tests to match the detailed content from SUT self-mocks.
 3.  **`get_session_history` Discrepancy (Integration Test - Diagnostics):**
-    *   **File:** `src/lib/server.ts`
-    *   In the `get_session_history` tool handler, *immediately after* the line `const session = getSessionHistory(sessionIdFromParams, repoPath);`, add a log to dump a deep copy of `session.queries` (e.g., `logger.info('[SERVER_TOOL_DEBUG] get_session_history: Queries from state.ts (deep copy):', JSON.parse(JSON.stringify(session.queries)));`). This will show exactly what `state.ts` returned before any further processing in the handler.
-4.  **Deferred (until critical blockers resolved):**
-    *   `src/tests/index.test.ts` SUT mocking issues. (Need SUT-side logs: `VITEST_WORKER_ID`, type of imported modules).
+    *   **Files:** `src/lib/state.ts`, `src/lib/server.ts`
+    *   **Action:** Added detailed logging of `session.queries` (deep copies) in `getOrCreateSession`, `getSessionHistory` (in `state.ts`), and in `agent_query` / `get_session_history` handlers (in `server.ts`).
+4.  **`src/tests/index.test.ts` SUT Mocking (Diagnostics):**
+    *   **Files:** `src/index.ts` (SUT), `src/tests/index.test.ts` (mock factories)
+    *   **Action:** Added `VITEST_WORKER_ID` logging to SUT and mock factories. Added SUT logging to inspect `typeof` and `isMock` for `startServerHandler` and `configService`.
+5.  **`src/tests/server.test.ts` Timeouts (Diagnostics):**
+    *   **File:** `src/lib/server.ts` (within `startProxyServer` function)
+    *   **Action:** Added detailed `[PROXY_DEBUG]` log messages.
+
+### Result (Based on User's `npm run build` Output from 11:25:55 UTC on 2025-05-28):
+*   **TypeScript Compilation:** `tsc` completed successfully.
+*   **Vitest Transform Errors: NONE!**
+    *   The critical transform error in `src/tests/server.test.ts` (related to `testControlLoggerInstance` hoisting) is **RESOLVED**. This is a major success.
+*   **Test Failures (27 total):**
+    *   **`src/tests/index.test.ts` (19 failures - No change in failure count, still SUT mocking issues):**
+        *   Failures remain consistent: `mockStartServerHandler` or other spies not being called (e.g., `expected "spy" to be called with arguments: [ '.' ] Number of calls: 0`).
+        *   The diagnostic log `[INDEX_TEST_DEBUG] Mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING` is visible.
+        *   **SUT-side diagnostic logs (`[SUT_INDEX_TS_DEBUG]` from `src/index.ts`) are STILL NOT VISIBLE in the provided build output.** This is a critical missing piece for diagnosing the SUT mocking issue.
+        *   The `--port` option test **PASSED**.
+        *   The `--json` output test failed: `Expected to find a console.log call with valid JSON output, but none was found.: expected undefined to be defined`. `mockConsoleLog.mock.calls` was likely empty.
+    *   **`src/tests/server.test.ts` (4 failures - REGRESSION from 0 failures when it couldn't run, to 4 timeouts now that it runs):**
+        *   All 4 failures are timeouts (30000ms) in the `startProxyServer` suite. Now that the transform error is fixed, these underlying timeouts are exposed.
+        *   The `[PROXY_DEBUG]` logs from `src/lib/server.ts` (within `startProxyServer`) are not visible in the provided build output for this test suite, making it hard to diagnose the timeouts.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures - No change in failed tests, but 5 now pass):**
+        *   `should call trigger_repository_update and verify indexing starts`: **FAIL**. `expected "spy" to be called at least once` (for `qdrantModule.batchUpsertVectors`).
+        *   `should perform some actions and then retrieve session history with get_session_history`: **FAIL**. `expected '# Session History...' to contain 'Query 2: "second agent query...'`. The log `[INTEGRATION_TEST_DEBUG] get_session_history - Full historyText received by test:` shows only Query 1. The detailed session state logs (`[STATE_DEBUG]`, `[SERVER_TOOL_DEBUG]`) from `state.ts` and `server.ts` regarding `session.queries` content (deep copies) are expected to be in the SUT's `stdout` for this test but are not fully visible in the snippet provided (only the final `historyText` is shown).
+        *   `should call generate_suggestion and get a mocked LLM response`: **FAIL**. `expected '# Code Suggestion for: "Suggest how t…' to contain 'SUT_SELF_MOCK: This is a generated su…'`. The SUT self-mock provides a more detailed response. The assertion update from Attempt 63 to match this detailed response (e.g., `toContain("**Suggested Implementation**:")` and `toContain("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts")`) seems to have been only partially effective or the actual SUT mock output is slightly different.
+        *   `should call get_repository_context and get a mocked LLM summary`: **FAIL**. `expected '# Repository Context Summary for: "Wh…' to contain 'SUT_SELF_MOCK: This is a summary of t…'`. Similar to `generate_suggestion`, the assertion needs to precisely match the SUT self-mock's detailed output.
+*   **DeepSeek API Connection Errors in Logs:** Still resolved (gone).
+
+### Analysis/Retrospection for Attempt 63:
+*   **`src/tests/server.test.ts` Transform Error RESOLVED:** The refactoring of `config-service` mocks in `server.test.ts` (defining mock instances inside the factory and assigning to module-scoped `let` variables) successfully fixed the hoisting issue. This allows tests in this file to run.
+*   **`src/tests/index.test.ts` SUT Mocking (PERSISTS):** The SUT (`dist/index.js`) is still not using the mocks from `src/tests/index.test.ts`. The absence of `[SUT_INDEX_TS_DEBUG]` logs is a major concern, suggesting issues with either the SUT's execution environment when run by `runMainWithArgs` or with `stdout/stderr` capture from that child process.
+*   **`get_session_history` Discrepancy (Integration Test - PERSISTS):** The core issue remains. The diagnostic logs for session state (deep copies of `queries` array) are critical. If they are present in the full SUT output and confirm the discrepancy (2 queries after `addQuery`, 1 query when `getSessionHistory` is called, despite same session object), this points to a very subtle bug in state management or retrieval logic.
+*   **Integration Test LLM Mock Assertions (`generate_suggestion`, `get_repository_context` - STILL MISALIGNED):** The SUT self-mock is providing detailed responses, but the test assertions are not fully aligned with this actual output. The previous attempt to fix this was insufficient.
+*   **`src/tests/server.test.ts` Timeouts (EXPOSED):** With the transform error gone, the 4 timeouts in the `startProxyServer` suite are now the primary issue in this file. The `[PROXY_DEBUG]` logs are needed to diagnose these.
+
+### Blockers:
+1.  **CRITICAL:** `src/tests/index.test.ts` SUT (`dist/index.js`) not using mocks (19 failures). Absence of SUT diagnostic logs (`[SUT_INDEX_TS_DEBUG]`) hinders debugging.
+2.  **CRITICAL:** `get_session_history` discrepancy in integration tests (1 failure). Requires full SUT logs with detailed session state.
+3.  **CRITICAL:** `src/tests/server.test.ts` `startProxyServer` timeouts (4 failures). Requires SUT diagnostic logs (`[PROXY_DEBUG]`).
+
+### Next Step / Plan for Next Attempt (Attempt 64):
+1.  **`src/tests/index.test.ts` SUT Mocking & Log Visibility (Highest Priority for this file):**
+    *   **File:** `src/tests/index.test.ts` (within `runMainWithArgs` function)
+    *   **Action:** If `runMainWithArgs` uses `spawnSync` or a similar child process execution for CLI tests, ensure `stdio: 'pipe'` is used, and explicitly log `result.stdout.toString()` and `result.stderr.toString()` after the process call. This is to make sure we capture the SUT's `console.log` statements.
+2.  **Align Integration Test LLM Mock Assertions (Again):**
+    *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`
+    *   **Action:** For `generate_suggestion` and `get_repository_context` tests:
+        *   Temporarily `console.log(THE_ACTUAL_RESPONSE_TEXT_VARIABLE)` just before the failing `expect().toContain()`.
+        *   Carefully compare this logged actual output with the SUT self-mock definitions in `src/lib/llm-provider.ts` (function `createMockLLMProvider`).
+        *   Adjust the `expect(suggestionText).toContain(...)` and `expect(repoContextText).toContain(...)` assertions to *exactly* match key phrases from the *actual detailed responses* logged by the SUT self-mock.
+3.  **`get_session_history` Discrepancy (Integration Test - Await Full Logs):**
+    *   **Action:** No code changes for now. The priority is to obtain the *full stdout/stderr* from the `npm run build` command, specifically looking for the `[STATE_DEBUG]` and `[SERVER_TOOL_DEBUG]` logs that show the `queries` array content at various stages for the `manual-session-...` ID. If these logs are present in the full output and confirm the discrepancy, further targeted changes to `state.ts` or `server.ts` will be needed.
+4.  **`src/tests/server.test.ts` Timeouts (Await Full Logs):**
+    *   **Action:** No code changes for now. Priority is to obtain the *full stdout/stderr* from `npm run build`. If the `[PROXY_DEBUG]` logs from `src/lib/server.ts` (within `startProxyServer`) are visible in that full output for the `server.test.ts` execution, they will guide the next steps. If not, the problem might be with test setup or SUT log capturing for this specific test file.
+5.  **Deferred Issues:**
     *   `src/tests/index.test.ts` other failures (e.g., `--json` output, `fs.readFileSync`).
-    *   `src/tests/server.test.ts` timeouts (once it can transform and run).
     *   Integration test `trigger_repository_update` (`qdrant` spy).
 ---
 ## Attempt 51: Fix TypeScript, Refine LLM Mock Logging, Verify Session Debugging
