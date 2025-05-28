@@ -1536,22 +1536,58 @@ After these changes, please run `npm run build` and provide the full output. The
 ### Next Step / Plan for Next Attempt (Attempt 61):
 
 1.  **Fix `src/tests/server.test.ts` Transform Error (Hoisting - CRITICAL):**
-    *   **Strategy:** Refactor the mock setup for `../lib/config-service` in `src/tests/server.test.ts`. Instead of defining `stableMockLoggerInstance` and `stableMockConfigServiceInstance` as top-level constants and referencing them with getters, the mock instances for logger and configService will be created *inside* the `vi.mock` factory. These instances will then be exposed to the test scope via module-level variables, which tests can use to control and assert against the mocks. This pattern is more robust against hoisting issues with complex initializers.
+    *   **Strategy (Applied in Attempt 61, Part 1):** Refactored the mock setup for `../lib/config-service` in `src/tests/server.test.ts`. Mock instances for logger and configService are now created *inside* the `vi.mock` factory and exposed via module-level variables (`testControlLoggerInstance`, `testControlConfigServiceInstance`).
+    *   **User Action (Manual Fixes):** User manually fixed naming inconsistencies and other VSCode-highlighted errors in `src/tests/server.test.ts` after the above automated change was applied.
 2.  **Add Diagnostics for `Cannot find module dist/index.js` (CRITICAL):**
     *   **File:** `src/tests/index.test.ts`
-    *   **Action (Diagnostics):** In the `runMainWithArgs` helper function, add more robust error handling and logging around the `await import(indexPath)` call. This includes logging the resolved `indexPath`, checking if the file exists using `fs.existsSync`, and logging the beginning of the file content if it does exist but still fails to import. This will help determine if it's a path issue, a file content issue, or an import mechanism issue within Vitest.
+    *   **Action (Applied in Attempt 61, Part 1):** Added robust error handling and logging around `await import(indexPath)` in `runMainWithArgs`.
     *   **File:** `src/index.ts`
-    *   **Action (Review):** Double-check all relative import paths in `src/index.ts` to ensure they use the `.js` extension, as required by `moduleResolution: "NodeNext"` in `tsconfig.json`. (Self-correction: This was checked in thought process for Attempt 61 and seemed okay, but worth a quick re-glance).
-3.  **User Action (Manual Verification - Important):**
-    *   After `npm run build` completes (even if tests fail), manually check:
-        1.  Does the file `dist/index.js` actually exist?
-        2.  If yes, is it non-empty and does it look like valid JavaScript? (e.g., `cat dist/index.js | head -n 5`)
-        3.  Can `node dist/index.js --help` be run from the project root without an immediate "Cannot find module" error related to `dist/index.js` itself?
+    *   **Action (Review - Done):** Relative import paths in `src/index.ts` were reviewed and appear correct.
+3.  **User Action (Manual Verification - Important - Pending Next Build):**
+    *   After the next `npm run build` completes:
+        1.  Verify if `dist/index.js` exists.
+        2.  Check its content (non-empty, valid JS).
+        3.  Attempt `node dist/index.js --help`.
 4.  **Deferred Issues (until critical blockers are resolved):**
     *   `get_session_history` discrepancy.
     *   `src/tests/index.test.ts` remaining spy/mock assertion failures (once it can load the SUT).
     *   `src/tests/integration/stdio-client-server.integration.test.ts` remaining specific test logic failures (once the server can start).
-    *   `src/tests/server.test.ts` timeouts (once it can transform).
+    *   `src/tests/server.test.ts` timeouts (once it can transform and run).
+
+### Changes Applied (Attempt 61 - Commit `3503f17` and subsequent manual user fixes):
+*   **`src/tests/server.test.ts`**:
+    *   Refactored `vi.mock('../lib/config-service', ...)` to create mock instances (`testControlLoggerInstance`, `testControlConfigServiceInstance`) within the factory and expose them via module-level variables. Tests now use these variables (e.g., `mcs = testControlConfigServiceInstance;`).
+    *   User manually fixed naming inconsistencies and other VSCode-highlighted errors.
+*   **`src/tests/index.test.ts`**:
+    *   Added detailed diagnostic logging (including `fs.existsSync` and `fs.readFileSync` for `indexPath`) within a try-catch block around the `await import(indexPath)` call in `runMainWithArgs`.
+*   **`DEBUG_SESSION.md`**: Updated to reflect the current state.
+
+### Result (Awaiting User's `npm run build` Output):
+*   (To be filled in after user provides the next `npm run build` output)
+    *   TypeScript Compilation:
+    *   Vitest Transform Errors:
+        *   Expected: `src/tests/server.test.ts` transform error should be resolved due to the refactoring and manual fixes.
+    *   Test Failures:
+        *   `src/tests/index.test.ts`: Expected to still fail with `Cannot find module dist/index.js`, but new diagnostics should provide more info.
+        *   `src/tests/server.test.ts`: Expected to run now. Previous timeouts or new failures might appear.
+        *   `src/tests/integration/stdio-client-server.integration.test.ts`: Expected to still fail due to `Cannot find module dist/index.js` in the spawned server.
+    *   DeepSeek API Connection Errors in Logs:
+
+### Analysis/Retrospection for Attempt 61 (Anticipated):
+*   The refactoring of mocks in `src/tests/server.test.ts` combined with the user's manual fixes is expected to resolve the `ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization` transform error for that file. This should allow the tests in `server.test.ts` to run.
+*   The primary remaining critical issue is the `Cannot find module '/Users/alvin.tech/Projects/CodeCompass/dist/index.js'` error affecting `src/tests/index.test.ts` and the integration tests. The new diagnostics in `src/tests/index.test.ts` should help determine if `dist/index.js` is missing, empty, or unreadable, or if the import mechanism itself is failing in a specific way.
+
+### Next Step / Plan for Next Attempt (Attempt 62):
+1.  **User Action:** Run `npm run build` and provide the full output.
+2.  **Analyze new build output:**
+    *   Confirm `src/tests/server.test.ts` transform error is resolved and its tests run.
+    *   Analyze the diagnostic output from `src/tests/index.test.ts` regarding the `Cannot find module dist/index.js` error.
+    *   Assess any new failures or changes in `src/tests/server.test.ts`.
+3.  **Based on the analysis, formulate a plan to address the `Cannot find module dist/index.js` error.** This might involve:
+    *   Checking the `tsc` build process if `dist/index.js` is not being created correctly.
+    *   Investigating Vitest's behavior with dynamic imports of compiled files if `dist/index.js` exists but cannot be imported.
+    *   Further refining mocks in `src/tests/index.test.ts` if the SUT is loading but not using them.
+4.  Address other persistent test failures once the critical module loading issue is resolved.
 
 The absolute top priorities are the `server.test.ts` transform error and the `Cannot find module dist/index.js` error.
 ---
