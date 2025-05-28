@@ -255,7 +255,9 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     
   const isPkg = typeof (process as any).pkg !== 'undefined';
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const serverModule = require(path.join(libPath, 'server.js')); // Consistent path for testing
+    const serverModulePath = path.join(libPath, 'server.js');
+    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require serverModule from: ${serverModulePath}`);
+    const serverModule = require(serverModulePath); // Consistent path for testing
     const { startServer, ServerStartupError: LocalServerStartupError } = serverModule;
     
     // Define the type for ServerStartupError for TypeScript
@@ -266,7 +268,9 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     console.log('[SUT_INDEX_TS_DEBUG] Imported startServer (handler) in startServerHandler:', typeof startServer, 'Is mock:', !!(startServer as any)?.mock?.calls);
     console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (startServerHandler): ${process.env.VITEST_WORKER_ID}`);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const configServiceModule = require(path.join(libPath, 'config-service.js')); // Consistent path for testing
+    const configServiceModulePath = path.join(libPath, 'config-service.js');
+    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require configServiceModule (in startServerHandler) from: ${configServiceModulePath}`);
+    const configServiceModule = require(configServiceModulePath); // Consistent path for testing
     const { logger: localLogger, configService: localConfigService } = configServiceModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported configService in startServerHandler:', typeof localConfigService, 'configService.DEEPSEEK_API_KEY (sample prop):', localConfigService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   try {
@@ -412,7 +416,9 @@ export async function main() { // Add export
     let failLogger: { error: (...args: any[]) => void } = console; // Default to console
     try {
       // const isPkg = typeof (process as any).pkg !== 'undefined'; // isPkg not strictly needed here if libPath is always absolute src/lib for tests
-      const loggerModule = require(path.join(libPath, 'config-service.js')); // Consistent path for testing
+      const loggerModulePathForFail = path.join(libPath, 'config-service.js'); // Or 'logger.js' if separate
+      console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require loggerModule (in .fail()) from: ${loggerModulePathForFail}`);
+      const loggerModule = require(loggerModulePathForFail); // Consistent path for testing
       failLogger = loggerModule.logger;
     } catch (e) {
       console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);

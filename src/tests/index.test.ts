@@ -9,21 +9,27 @@ const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
 // during testing, pointing them to the .ts source files (which Vitest will then use our top-level mocks for).
 
 // Mock the SUT's attempt to require '.../src/lib/server.js' to point to '.../src/lib/server.ts'
-vi.mock(path.join(srcLibPath, 'server.js'), async () => {
-  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock for server.js is redirecting to server.ts`);
+const serverJsMockPath = path.join(srcLibPath, 'server.js');
+console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.js path: ${serverJsMockPath}`);
+vi.mock(serverJsMockPath, async () => {
+  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${serverJsMockPath} (server.js) is RUNNING. Redirecting to server.ts`);
   return vi.importActual(path.join(srcLibPath, 'server.ts'));
 });
 
 // Mock the SUT's attempt to require '.../src/lib/config-service.js' to point to '.../src/lib/config-service.ts'
-vi.mock(path.join(srcLibPath, 'config-service.js'), async () => {
-  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock for config-service.js is redirecting to config-service.ts`);
+const configServiceJsMockPath = path.join(srcLibPath, 'config-service.js');
+console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.js path: ${configServiceJsMockPath}`);
+vi.mock(configServiceJsMockPath, async () => {
+  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${configServiceJsMockPath} (config-service.js) is RUNNING. Redirecting to config-service.ts`);
   return vi.importActual(path.join(srcLibPath, 'config-service.ts'));
 });
 
 // Mock the SUT's attempt to require '.../src/lib/logger.js' (if it were dynamic)
 // For now, logger is imported statically in index.ts, so this might not be strictly needed unless .fail() handler's dynamic require is an issue.
-vi.mock(path.join(srcLibPath, 'logger.js'), async () => {
-  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock for logger.js is redirecting to logger.ts`);
+const loggerJsMockPath = path.join(srcLibPath, 'logger.js');
+console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's logger.js path: ${loggerJsMockPath}`);
+vi.mock(loggerJsMockPath, async () => {
+  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${loggerJsMockPath} (logger.js) is RUNNING. Redirecting to logger.ts`);
   return vi.importActual(path.join(srcLibPath, 'logger.ts'));
 });
 // --- End Explicit Mocks for SUT's dynamic requires ---
@@ -230,9 +236,11 @@ describe('CLI with yargs (index.ts)', () => {
     // The second arg to process.argv should be the path of the script being "executed"
     process.argv = ['node', indexPath, ...args]; // indexPath is now src/index.ts
     
+    console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Before vi.resetModules(). Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
     // vi.resetModules() is crucial when using vi.mock for modules that the SUT will import,
     // especially when mock implementations (like for configService and logger) change per test.
     vi.resetModules(); 
+    console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] After vi.resetModules().`);
 
     // The top-level vi.mock calls for '../../src/lib/server.ts' and '../../src/lib/config-service.ts'
     // will apply here because vi.resetModules() clears the module cache. On next import (by SUT),
@@ -244,11 +252,13 @@ describe('CLI with yargs (index.ts)', () => {
     // The import of the SUT (src/index.ts) will trigger its execution
     // because src/index.ts ends with `void main();`.
     // Mocks should be applied due to vi.resetModules() and importing from src.
-    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: About to import SUT from (src) indexPath: ${indexPath}`);
+    console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] About to dynamically import SUT from (src) indexPath: ${indexPath}. Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
     try {
       await import(indexPath); // This will execute the SUT's main() via its own void main() call
                                // and yargs will use the process.argv we set.
+      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Dynamic import of SUT from ${indexPath} completed.`);
     } catch (e) {
+      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${indexPath}:`, e);
       // This catch is primarily for errors thrown by yargs' .fail() or handlers
       // that might not be caught by the SUT's own try/catch around cli.parseAsync().
       // Or if the module import itself fails catastrophically.
