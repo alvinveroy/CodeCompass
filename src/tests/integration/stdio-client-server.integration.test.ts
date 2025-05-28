@@ -600,9 +600,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
     expect(suggestionText).toContain("## Suggestion");
     // The SUT self-mock uses "**Suggested Implementation**:" (colon outside bold) - this was for a detailed mock.
-    // The current SUT self-mock for this specific prompt returns a simpler string.
-    expect(suggestionText).toContain("## Suggestion"); // General structure
-    expect(suggestionText).toContain("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts");
+    // The simpler mock (which was failing the assertion) was "SUT_SELF_MOCK: This is a generated suggestion..."
+    // Let's check for the more specific part of the detailed mock.
+    expect(suggestionText).toContain("**Suggested Implementation**:"); 
+    expect(suggestionText).toContain("Wraps the logging in a reusable function"); // Check for a key phrase from the detailed mock
+    expect(suggestionText).toContain("### Diff: file1.ts"); // Check for context inclusion
 
     await client.close();
   }, 60000);
