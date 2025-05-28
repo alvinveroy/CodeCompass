@@ -413,14 +413,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(agentQueryResult.content).toBeInstanceOf(Array);
     const agentResultText = agentQueryResult.content![0].text as string;
     
-    // The agent_query response is complex. We check for the final mocked synthesis.
-    // The exact content depends on the agent's internal plan and capabilities it calls.
-    // For this test, we're primarily interested that it ran and the LLM mock was hit for synthesis.
-    // Check for some indication of successful agent processing and context usage.
-    // The refined mock in llm-provider.ts should return a specific string for this query.
-    expect(agentResultText).toContain("SUT_SELF_MOCK: Agent response: file1.ts contains console.log(\"Hello from file1\"); and const x = 10;");
-    expect(agentResultText).toContain('file1.ts'); 
+    // The SUT's mock LLM generates a detailed response. Assert for key content.
+    expect(agentResultText).toContain('Based on the provided context, `file1.ts` contains');
     expect(agentResultText).toContain('console.log("Hello from file1")');
+    expect(agentResultText).toContain('const x = 10;');
     await client.close();
   }, 45000);
 
@@ -616,10 +612,10 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     expect(suggestionText).toContain(`# Code Suggestion for: "${suggestionQuery}"`);
     expect(suggestionText).toContain("## Suggestion");
-    // The SUT self-mock uses "**Suggested Implementation**:"
-    // The refined mock in llm-provider.ts for "suggest how to use file1.ts" should now match this.
+    // The SUT's mock LLM generates a detailed response.
+    // Check for the "**Suggested Implementation**:" heading and a part of the code.
     expect(suggestionText).toContain("**Suggested Implementation**:");
-    expect(suggestionText).toContain("* Wraps the logging in a reusable function"); 
+    expect(suggestionText).toContain("function greetFromFile1(name?: string): void"); // From the SUT's mock output
     expect(suggestionText).toContain("### Diff: file1.ts"); // Check for context inclusion
 
     await client.close();

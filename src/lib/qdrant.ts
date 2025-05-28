@@ -150,6 +150,8 @@ export async function batchUpsertVectors(
     try {
       // TEMPORARY DEBUG LOG:
       logger.debug(`[DEBUG QDRANT IDs] Batch ${Math.floor(i / batchSize) + 1} IDs: ${JSON.stringify(batch.map(p => p.id))}`);
+      // ADD THIS DIAGNOSTIC LOG:
+      console.error(`[DEBUG_BATCH_UPSERT_CLIENT_TYPE] In batchUpsertVectors for collection ${collectionName}. Client upsert function type: ${typeof client.upsert}, is it the mock? ${String(client.upsert).includes('MOCK_QDRANT_UPSERT')}`);
       
       await withRetry(async () => {
         // The js-client-rest library expects points to be an object { points: PointStruct[] }

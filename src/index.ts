@@ -278,7 +278,7 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
 }
 
 // Main CLI execution logic using yargs
-async function main() {
+export async function main() { // Add export
   const cli = yargs(hideBin(process.argv))
     .option('port', {
       alias: 'p',

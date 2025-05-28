@@ -114,7 +114,7 @@ vi.mock('../../src/lib/config-service.ts', () => {
 // yargs is not directly imported here as we are testing its invocation via index.ts's main
 
 // Import the SUT path
-const indexPath = path.resolve(__dirname, '../../dist/index.js'); // Moved up as it's used by runMainWithArgs logic
+const indexPath = path.resolve(__dirname, '../../src/index.ts'); // Changed to src
 
 // Near the top of src/tests/index.test.ts, after imports
 let actualStderrDataCallbackForClientTests: ((data: Buffer) => void) | null = null;
@@ -198,7 +198,8 @@ describe('CLI with yargs (index.ts)', () => {
     
   async function runMainWithArgs(args: string[]) {
     // indexPath is now defined at a higher scope
-    process.argv = ['node', indexPath, ...args];
+    // The second arg to process.argv should be the path of the script being "executed"
+    process.argv = ['node', indexPath, ...args]; // indexPath is now src/index.ts
     
     // vi.resetModules() is crucial when using vi.mock for modules that the SUT will import,
     // especially when mock implementations (like for configService and logger) change per test.
@@ -211,20 +212,21 @@ describe('CLI with yargs (index.ts)', () => {
     console.log('[INDEX_TEST_DEBUG] mockStartServerHandler type before SUT import:', typeof mockStartServerHandler);
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: About to import SUT from indexPath: ${indexPath}`);
     
-    // The import of the SUT (dist/index.js) will trigger its execution.
-    // It should pick up the mocks established by top-level vi.mock calls due to vi.resetModules().
-    const mainModule = await import(indexPath);
-    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT imported. main function type: ${typeof (mainModule as any)?.main}`);
-    
-    // Yargs fail handler might call process.exit. We catch errors from parseAsync
-    // to allow assertions on console.error or logger.error before process.exit is checked.
+    // The import of the SUT (src/index.ts) will trigger its execution
+    // because src/index.ts ends with `void main();`.
+    // Mocks should be applied due to vi.resetModules() and importing from src.
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: About to import SUT from (src) indexPath: ${indexPath}`);
     try {
-      // await main(); // main() is not exported and is self-executing on import. This call is incorrect.
+      await import(indexPath); // This will execute the SUT's main() via its own void main() call
+                               // and yargs will use the process.argv we set.
     } catch (e) {
-      // Suppress errors thrown by handlers if yargs .fail() is expected to catch them
-      // This allows tests to assert on console/logger output from .fail()
-      // console.warn("Error caught during runMainWithArgs:", e);
+      // This catch is primarily for errors thrown by yargs' .fail() or handlers
+      // that might not be caught by the SUT's own try/catch around cli.parseAsync().
+      // Or if the module import itself fails catastrophically.
+      // We let the test assertions on mockProcessExit or logger.error handle verification of yargs .fail().
+      // console.warn("[INDEX_TEST_DEBUG] Error during SUT import/execution in runMainWithArgs:", e);
     }
+    console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT import/execution finished or threw.`);
   }
 
   describe('Server Start Command (default and "start")', () => {
