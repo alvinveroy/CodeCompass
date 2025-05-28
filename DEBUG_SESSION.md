@@ -1473,140 +1473,43 @@ After these changes, please run `npm run build` and provide the full output. The
 *   **Integration Test LLM Mock Assertions:** The assertions for `generate_suggestion` and `get_repository_context` still need minor adjustments for exact markdown matching (colon placement).
 *   **Persistent Failures:** `server.test.ts` timeouts, `index.test.ts` `--json` output, `trigger_repository_update` spy.
 
-### Next Step / Plan for Next Attempt (Attempt 58):
+## Attempt 59: Fix `server.test.ts` Hoisting, Add Session State Logs, Refine Mocks & Asserts
 
-1.  **Fix TypeScript Redeclaration Error in `src/lib/server.ts` (CRITICAL BUILD BLOCKER - AGAIN):**
-    *   **File:** `src/lib/server.ts`:
-        *   **Action:** Provide specific instructions to fix the `agent_query` handler based on the assumption that the user has provided the file content or can locate the conflicting declarations using the line numbers.
-2.  **`get_session_history` Discrepancy (Investigate Potential Multiple `sessions` Map Instances):**
-    *   **File:** `src/lib/state.ts`:
-        *   Add a unique identifier to the `sessions` Map instance itself when it's created and log this ID whenever the map is accessed in `getOrCreateSession`, `addQuery`, and `getSessionHistory`.
+**Git Commit (After Attempt 59 changes):** `f729d75` (fix: Fix test hoisting, add session state logs, refine mocks & asserts)
+
+### Issues Addressed (Intended from Plan for Attempt 59):
+1.  **Vitest Transform Error (`src/tests/server.test.ts`):**
+    *   Fix `ReferenceError: Cannot access 'stableMockLoggerInstance' before initialization` by applying the getter pattern to the `vi.mock('../lib/config-service', ...)` factory for the `logger` property.
+2.  **`get_session_history` Discrepancy (Critical Logging):**
+    *   Add detailed diagnostic logging to `src/lib/state.ts` (including `SESSIONS_MAP_INSTANCE_ID`, deep-copied `queries` arrays) and `src/lib/server.ts` (tool handlers) to trace session state.
 3.  **`src/tests/integration/stdio-client-server.integration.test.ts` - Align LLM Mock Assertions:**
-    *   **File:** `src/tests/integration/stdio-client-server.integration.test.ts`:
-        *   For `generate_suggestion`: Change `toContain("**Suggested Implementation**:")` to `toContain("**Suggested Implementation**:")` (ensure colon is outside the bolding).
-        *   For `get_repository_context`: Change `toContain("### Key Purpose:")` to `toContain("### Key Purpose:")` (ensure colon is present).
-4.  **`src/index.ts` ESM Imports:**
-    *   Ensure imports from `./lib/*` in `src/index.ts` use the `.js` extension (e.g., `./lib/server.js`, `./lib/config-service.js`) as per ESM conventions for NodeNext.
-5.  **`src/tests/index.test.ts` Mocking (19 failures):**
-    *   No changes for now. Focus on build errors and session discrepancy.
-6.  **Deferred Issues:**
-    *   `src/tests/server.test.ts` timeouts (4 tests for `startProxyServer`).
-    *   `src/tests/index.test.ts` other failures (e.g., `--json` output, `fs.readFileSync`).
-    *   Integration test `trigger_repository_update` (`qdrant` spy).
----
+    *   Modify assertions for `generate_suggestion` and `get_repository_context` to precisely match the actual content being returned by the SUT's self-mocking mechanism.
+4.  **`src/tests/index.test.ts` Mocking Strategy & Diagnostics:**
+    *   Revert the top-level `vi.doMock` for `../../src/lib/server.ts` and `../../src/lib/config-service.ts` back to the standard top-level `vi.mock` (targeting source `.ts` files) with getters in the mock factories.
+    *   Reminded user to add diagnostic logging to `src/index.ts` (SUT).
 
-*   TypeScript Compilation Errors: ALL RESOLVED! `tsc` completed successfully. This is excellent and consistent.
-*   Vitest Transform Errors: NONE!
-*   Test Failures (27 total):
-    *   **`src/tests/index.test.ts` (19 failures):**
-        *   `mockStartServer` / `StdioClientTransport` not called: 12 tests.
-        *   yargs `.fail()` handler / `currentMockLoggerInstance.error` not called: 5 tests.
-        *   `--json` output test: `Expected console.log to have been called. If it was, jsonOutputCall should have been defined.: expected 0 to be true`. `mockConsoleLog.mock.calls` is `[]`. The warning `[JSON_TEST_DEBUG] mockConsoleLog captured no calls. Skipping JSON content assertion for this run.` was visible.
-        *   `fs.readFileSync` for `changelog` command: Mock not called.
-    *   **`src/tests/server.test.ts` (4 failures):**
-        *   All 4 are timeouts (30000ms) in the `startProxyServer` suite.
-    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 failures):**
-        *   `trigger_repository_update`: `qdrantModule.batchUpsertVectors` spy not called.
-        *   `get_session_history`: Assertion `expected '# Session History...' to contain 'Query 2: "second agent query...'` failed.
-            *   **Diagnostic Logs (Crucial - from Attempt 52 build output):**
-                *   `[SERVER_TOOL_DEBUG] agent_query (session: manual-session-...): After addQuery. Query count from re-fetched session: 2.`
-                *   `[SERVER_TOOL_DEBUG] agent_query (session: manual-session-...): Queries object after addQuery: [{"timestamp":...,"query":"first search query...","results":[...],"relevanceScore":0.6,"_debug_lastRetrievedAt":...,"_debug_retrievalCount":...},{"timestamp":...,"query":"second agent query...","results":[...],"relevanceScore":0.8,"_debug_lastRetrievedAt":...,"_debug_retrievalCount":...}]`
-                *   `[SERVER_TOOL_DEBUG] get_session_history (session: manual-session-...): Retrieved session. Query count from session object: 1.`
-                *   `[SERVER_TOOL_DEBUG] get_session_history (session: manual-session-...): Queries object: [{"timestamp":...,"query":"first search query...","results":[...],"relevanceScore":0.6,"_debug_lastRetrievedAt":...,"_debug_retrievalCount":...}]`
-                *   The `_debug_retrievalCount` and `_debug_lastRetrievedAt` logs from `src/lib/state.ts` **were still NOT visible** in the provided build output for Attempt 52. This is a critical missing piece for diagnosing the session state issue.
-        *   `generate_suggestion` & `get_repository_context`: **PASSED!** The SUT self-mock for `llm-provider.ts` and the adjusted assertions in the tests (from Attempt 52 plan) are now working correctly. This is a significant step forward.
-*   DeepSeek API Connection Errors in Logs: **RESOLVED!**
+### Changes Applied:
+*   User applied the SEARCH/REPLACE blocks as per the plan for Attempt 59, reflected in commit `f729d75`.
+    *   The fix for `src/tests/server.test.ts` hoisting was already present in the user's file, so no change was made there by the last set of blocks.
+    *   Logging changes in `src/lib/state.ts` were applied.
+    *   LLM assertion changes in `src/tests/integration/stdio-client-server.integration.test.ts` were applied.
+    *   Mocking strategy changes in `src/tests/index.test.ts` were applied.
+    *   Logging changes in `src/lib/server.ts` for session state debugging were applied.
 
-**Analysis of Key Issues:**
+### Result:
+*   Awaiting new `npm run build` output from the user after these changes.
+*   The `TS2451` redeclaration errors in `src/lib/server.ts` (identified in Attempt 58's build output) are still expected to be present as they were not targeted by Attempt 59's changes.
 
-1.  Integration Test `get_session_history` Discrepancy (CRITICAL): The server-side logs confirm the issue. The absence of the `_debug_...` logs from `state.ts` in the output means we are missing crucial information to determine if it's the same session object instance being mutated/retrieved.
-2.  `src/tests/index.test.ts` Mocking (19 failures): SUT (`dist/index.js`) is not using Vitest-mocked modules for `startServerHandler` and `StdioClientTransport`.
-3.  `src/tests/server.test.ts` Timeouts (4 failures - `startProxyServer` suite): Persist.
-4.  `src/tests/index.test.ts` `--json` output (1 failure): `mockConsoleLog` is not capturing output from the SUT.
-5.  Integration Test `trigger_repository_update` (1 failure): `qdrantModule.batchUpsertVectors` spy not called.
+### Analysis/Retrospection for Attempt 59:
+*   The primary goal of this attempt was to resolve the `server.test.ts` transform error (which was already fixed by the user) and to significantly enhance logging for the `get_session_history` discrepancy.
+*   The changes to mocking strategies and LLM assertions aim to reduce test failures once build issues are resolved.
+*   The key remaining build blocker from the *previous* build output was the `TS2451` error in `src/lib/server.ts`.
 
-**Plan for Attempt 53:**
-
-Here are the instructions for the editor engineer:
-
-**1. Integration Test - `get_session_history` Discrepancy (Highest Priority - Ensure Debug Logs from `state.ts` Appear):**
-
-*   **File:** `src/lib/state.ts`
-    *   **Re-verify and ensure `_debug_retrievalCount` and `_debug_lastRetrievedAt` logging is active and uses `logger.info` for higher visibility.**
-        The changes from Attempt 51's plan (using `logger.info` for these debug logs) might not have been correctly applied or saved, as they were not visible in the Attempt 52 build output.
-        *   **Action:** Please meticulously re-apply the changes to `SessionState` interface, `createSession`, `getOrCreateSession`, and `getSessionHistory` from Attempt 51's plan, specifically ensuring that all `logger.debug` calls related to `_debug_retrievalCount` and `_debug_lastRetrievedAt` are changed to `logger.info`.
-        *Example for `getOrCreateSession` (ensure this level of detail and `logger.info` is present):*
-        ```typescript
-        // ... inside if (sessionId && sessions.has(sessionId))
-        const session = sessions.get(sessionId)!;
-        session.lastUpdated = Date.now();
-        session._debug_retrievalCount = (session._debug_retrievalCount || 0) + 1;
-        session._debug_lastRetrievedAt = Date.now();
-        logger.info(`[STATE_DEBUG] getOrCreateSession: Returning EXISTING session '${sessionId}'. Queries: ${session.queries.length}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}. RepoPath: ${session.repoPath}`); // Changed to logger.info
-        return session;
-        ```
-        *Example for `getSessionHistory` (ensure `logger.info`):*
-        ```typescript
-        // ...
-        logger.info(`[STATE_DEBUG] getSessionHistory: Requested for sid='${sessionId}'. Found: ${sessions.has(sessionId)}. Caller: ${callStack}. Current session keys: [${Array.from(sessions.keys()).join(', ')}]`); // Changed to logger.info
-        // ...
-        logger.info(`[STATE_DEBUG] getSessionHistory: Returning for session '${sessionId}'. Queries: ${session.queries.length}. Recent: ${JSON.stringify(queryLog)}. Retrieval count: ${session._debug_retrievalCount}, Last retrieved at: ${new Date(session._debug_lastRetrievedAt).toISOString()}`); // Changed to logger.info
-        return session;
-        ```
-        *Ensure similar changes to `logger.info` are made in `createSession` for the debug logs related to `_debug_retrievalCount`.*
-    *   **File:** `src/lib/server.ts`
-        *   The logging added in Attempt 52 to `agent_query` and `get_session_history` handlers (using `logger.info` and `logger.warn`) should already be sufficient if the `state.ts` logs become visible. The `getInMemorySessionKeys` debug function and its usage are also correctly planned.
-
-**2. `src/tests/index.test.ts` Mocking (19 failures):**
-
-*   **File:** `src/tests/index.test.ts`
-    *   **Re-instate `vi.doMock` within `runMainWithArgs` for `server.js` and `config-service.js`, ensuring paths are relative to the SUT (`dist/index.js`).**
-        The top-level `vi.mock` targeting `dist` files (from Attempt 50) did not work. The `vi.doMock` strategy *inside* `runMainWithArgs` is the next most promising approach for dynamically imported SUT code.
-        ```typescript
-        // Inside runMainWithArgs, before const { main } = await import(indexPath);
-        
-        const SUT_RELATIVE_SERVER_MODULE_PATH = './lib/server.js'; 
-        const SUT_RELATIVE_CONFIG_MODULE_PATH = './lib/config-service.js';
-
-        console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_SERVER_MODULE_PATH: ${SUT_RELATIVE_SERVER_MODULE_PATH}`);
-        vi.doMock(SUT_RELATIVE_SERVER_MODULE_PATH, () => {
-          console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_SERVER_MODULE_PATH (${SUT_RELATIVE_SERVER_MODULE_PATH}) IS RUNNING`);
-          return {
-            startServerHandler: mockStartServerHandler, 
-          };
-        });
-
-        console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: Attempting vi.doMock for SUT_RELATIVE_CONFIG_MODULE_PATH: ${SUT_RELATIVE_CONFIG_MODULE_PATH}`);
-        vi.doMock(SUT_RELATIVE_CONFIG_MODULE_PATH, () => {
-          console.log(`[INDEX_TEST_DEBUG] Mock factory for SUT_RELATIVE_CONFIG_MODULE_PATH (${SUT_RELATIVE_CONFIG_MODULE_PATH}) IS RUNNING`);
-          return {
-            configService: mockConfigServiceInstance, 
-          };
-        });
-
-        // The import of the SUT (indexPath is dist/index.js)
-        const { main } = await import(indexPath); 
-        ```
-    *   Remove the top-level `vi.mock` calls for `MOCKED_DIST_SERVER_MODULE_PATH` and `MOCKED_DIST_CONFIG_MODULE_PATH` (from Attempt 50's plan) as they conflict with `vi.doMock`. Keep the top-level `vi.mock('@modelcontextprotocol/sdk/client/stdio.js', ...)` as that targets an external module.
-    *   **Add diagnostic logging *inside `src/index.ts` (SUT)* again**, immediately where `startServerHandler` and `configService` are imported, to log the imported objects/functions themselves. This will show if the SUT is getting the mock or the real implementation.
-        ```typescript
-        // In src/index.ts, at the point of import:
-        // For example, if it's: import { startServerHandler } from './lib/server';
-        // Add:
-        // console.log('[SUT_INDEX_TS_DEBUG] Imported startServerHandler:', startServerHandler);
-        // console.log('[SUT_INDEX_TS_DEBUG] startServerHandler.isMockFunction:', !!(startServerHandler as any)?.mock);
-
-        // Similarly for configService:
-        // import { configService } from './lib/config-service';
-        // console.log('[SUT_INDEX_TS_DEBUG] Imported configService:', configService);
-        ```
-
-**Deferred for Next Attempt:**
-*   `src/tests/server.test.ts` timeouts (4 tests for `startProxyServer`).
-*   `src/tests/index.test.ts` remaining failures if the SUT mocking is fixed (e.g., `--json` output, `fs.readFileSync`).
-*   Integration test `trigger_repository_update` (`qdrant` spy).
-
-After these changes, please run `npm run build` and provide the full output. The absolute priority is to get detailed logs from `src/lib/state.ts` for the session discrepancy. Then, any clues from the `src/index.ts` SUT logging.
+### Next Step / Plan for Next Attempt (Attempt 60):
+1.  **Fix TypeScript Redeclaration Error in `src/lib/server.ts` (CRITICAL BUILD BLOCKER):**
+    *   Address the `TS2451: Cannot redeclare block-scoped variable 'currentSessionState'.` errors if they persist in the new build output.
+2.  **User Action:** Run `npm run build` and provide the full output.
+3.  **Analyze new build output:** Focus on session discrepancy logs and any remaining test failures.
 ---
 ## Attempt 51: Fix TypeScript, Refine LLM Mock Logging, Verify Session Debugging
 
