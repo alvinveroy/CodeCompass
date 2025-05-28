@@ -684,3 +684,57 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 *   **Metadata:**
     *   Git Commit SHA (User Provided): `871ebe9`.
+
+---
+
+**Attempt 81: Analysis of `npm run build` (after commit `a57a437`) - HYPOTHETICAL**
+
+*   **Intended Fixes (from Attempt 80 Plan, leading to commit `a57a437`):**
+    1.  `src/tests/index.test.ts` (`ReferenceError` Fix Attempt): Changed `vi.mock` paths for SUT's dynamic requires to use static string literals (e.g., `'../../src/lib/server.js'`).
+    2.  `src/tests/integration/stdio-client-server.integration.test.ts` (`trigger_repository_update` Log Capture): Explicitly set `stdio: ['pipe', 'pipe', 'pipe']` for the spawned SUT process.
+    3.  `src/tests/integration/stdio-client-server.integration.test.ts` (`generate_suggestion` Assertion): Changed assertion to split `suggestionText` by newlines and check for an exact line match for `**Suggested Implementation**:`.
+
+*   **Applied Changes (commit `a57a437`):**
+    *   All planned changes from Attempt 80 were applied.
+
+*   **Hypothetical Result (Awaiting actual `npm run build` output for commit `a57a437`):**
+    *   TypeScript compilation (`tsc`) passes.
+    *   `vitest run` executes.
+        *   **`src/tests/index.test.ts`:**
+            *   **Expected:** The `ReferenceError: Cannot access '__vi_import_0__'` (that was seen with commit `871ebe9`) should be resolved by using static string literals in `vi.mock` paths.
+            *   **Next Likely Failure:** If the `ReferenceError` is fixed, the 19-20 tests in this suite will likely still fail because the SUT's dynamic `require` calls (e.g., `require(path.join(libPath, 'server.js'))`) are not being intercepted by the `vi.mock('../../src/lib/server.js', ...)` declarations. The diagnostic logs added in `08a67cb` (SUT printing the absolute path it's requiring, and the test printing the relative path it's mocking) will be crucial. If the absolute path resolved by the SUT doesn't exactly match what Vitest resolves from the test's relative mock path, the mocks won't apply.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   **Expected:** All four `startProxyServer` tests likely still time out. No changes were made to this suite.
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts`:**
+            *   `should call trigger_repository_update and verify indexing starts` (Qdrant Log Capture):
+                *   **Expected:** Explicitly setting `stdio: ['pipe', 'pipe', 'pipe']` might help capture the `[MOCK_QDRANT_UPSERT]` log from the SUT's `stderr` (since it's logged via `console.error` in the mock `upsert` in `src/lib/qdrant.ts`).
+                *   **If Log Captured:** The test should pass.
+                *   **If Log Still Not Captured:** This would indicate a persistent issue with capturing `console.error` from the SUT's child process, or that the mock `upsert` is still not being called as expected despite previous positive diagnostic logs.
+            *   `should call generate_suggestion and get a mocked LLM response` (Assertion):
+                *   **Expected:** The more robust assertion (splitting by newline and checking for exact line match for `**Suggested Implementation**:`) should make this test pass if the string is present as expected.
+            *   The other integration test failures (e.g., `agent_query` if it was failing) would depend on whether their underlying issues (like LLM mock conditions) were inadvertently affected or if they remain.
+
+*   **Analysis/Retrospection (Hypothetical):**
+    *   **`src/tests/index.test.ts`:** The core challenge remains ensuring `vi.mock` correctly intercepts dynamic `require` calls made by the SUT (`src/index.ts`). The paths used in `vi.mock` (relative from the test file) must resolve to the same absolute path that the SUT's `require(absolutePath)` call uses.
+    *   **Integration Tests:** Log capture and precise assertion matching are key.
+
+*   **Next Steps/Plan (Attempt 82 - pending actual output from `a57a437`):**
+    1.  **Await `npm run build` output for commit `a57a437`.**
+    2.  **Analyze the output:**
+        *   **`src/tests/index.test.ts`:**
+            *   Did the `ReferenceError` disappear?
+            *   Examine the `[SUT_INDEX_TS_REQUIRE_DEBUG]` logs (SUT's required path) and `[INDEX_TEST_VI_MOCK_DEBUG]` logs (test's mocked path). Do these paths (when fully resolved) match *exactly*? If not, adjust the `vi.mock` paths in `src/tests/index.test.ts` to use absolute paths derived from `projectRootForDynamicMock` and `srcLibPath` to ensure they match what the SUT requires.
+            *   If paths match but spies are still not called, it's a deeper mocking issue.
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts`:**
+            *   Did the `[MOCK_QDRANT_UPSERT]` log appear in the `trigger_repository_update` test? If not, consider changing the SUT's mock Qdrant `upsert` log from `console.error` to `logger.info` or `logger.debug` (which might be more reliably captured if the SUT's logger is configured for stdout).
+            *   Did the `generate_suggestion` test pass with the new assertion? If not, log `JSON.stringify(suggestionText)` and the split lines again for meticulous comparison.
+    3.  Propose targeted fixes based on the actual failures observed.
+
+*   **Blockers (Potentially):**
+    *   `src/tests/index.test.ts` SUT mocking (dynamic require path matching).
+    *   Log capture for `[MOCK_QDRANT_UPSERT]` in integration test.
+    *   Perplexing `generate_suggestion` assertion failure.
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `a57a437` (analysis is hypothetical for this commit's output).
