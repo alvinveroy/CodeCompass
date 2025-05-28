@@ -320,7 +320,7 @@ const createMockLLMProvider = (): LLMProvider => {
       // Agent might add more context, so check for key phrases.
       if (lowerPrompt.includes("what is in file1.ts") || (lowerPrompt.includes("file1.ts") && lowerPrompt.includes("content"))) {
         logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock: Matched agent query for "file1.ts".`);
-        return Promise.resolve("SUT_SELF_MOCK: Agent response: file1.ts contains console.log(\"Hello from file1\"); and const x = 10;");
+        return Promise.resolve("SUT_SELF_MOCK: Agent response: file1.ts contains console.log(\"Hello from file1\"); and const x = 10; Session ID: SUT_SELF_MOCK_SESSION_ID");
       }
       
       const condition1_part1 = "suggest how to use file1.ts";

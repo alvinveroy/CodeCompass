@@ -15,6 +15,10 @@ export type SimplePoint = {
 
 // Initialize Qdrant
 export async function initializeQdrant(): Promise<QdrantClient> {
+  // Diagnostic log for integration tests
+  console.error(`[QDRANT_INIT_DEBUG] initializeQdrant called. CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: ${process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}`);
+  logger.info(`[QDRANT_INIT_DEBUG] initializeQdrant called. CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: ${process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}`);
+
   if (process.env.CI === 'true' || process.env.SKIP_QDRANT_INIT === 'true' || process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT === 'true') {
     logger.info("CI, SKIP_QDRANT_INIT, or CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT is true, returning mock Qdrant client.");
     // Return a minimal mock client that satisfies the QdrantClient interface

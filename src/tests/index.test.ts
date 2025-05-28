@@ -1,10 +1,12 @@
 import path from 'path';
 
+// Define projectRootForDynamicMock and srcLibPath at the top level
+const projectRootForDynamicMock = path.resolve(__dirname, '../../'); // Path from src/tests/index.test.ts to project root
+const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
+
 // --- Explicit Mocks for SUT's dynamic requires ---
 // This is where we tell Vitest how to resolve the SUT's dynamic, absolute-path requires
 // during testing, pointing them to the .ts source files (which Vitest will then use our top-level mocks for).
-const projectRootForDynamicMock = path.resolve(__dirname, '../../'); // Path from src/tests/index.test.ts to project root
-const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
 
 // Mock the SUT's attempt to require '.../src/lib/server.js' to point to '.../src/lib/server.ts'
 vi.mock(path.join(srcLibPath, 'server.js'), async () => {
