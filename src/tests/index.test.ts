@@ -1,4 +1,31 @@
 import path from 'path';
+
+// --- Explicit Mocks for SUT's dynamic requires ---
+// This is where we tell Vitest how to resolve the SUT's dynamic, absolute-path requires
+// during testing, pointing them to the .ts source files (which Vitest will then use our top-level mocks for).
+const projectRootForDynamicMock = path.resolve(__dirname, '../../'); // Path from src/tests/index.test.ts to project root
+const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
+
+// Mock the SUT's attempt to require '.../src/lib/server.js' to point to '.../src/lib/server.ts'
+vi.mock(path.join(srcLibPath, 'server.js'), async () => {
+  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock for server.js is redirecting to server.ts`);
+  return vi.importActual(path.join(srcLibPath, 'server.ts'));
+});
+
+// Mock the SUT's attempt to require '.../src/lib/config-service.js' to point to '.../src/lib/config-service.ts'
+vi.mock(path.join(srcLibPath, 'config-service.js'), async () => {
+  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock for config-service.js is redirecting to config-service.ts`);
+  return vi.importActual(path.join(srcLibPath, 'config-service.ts'));
+});
+
+// Mock the SUT's attempt to require '.../src/lib/logger.js' (if it were dynamic)
+// For now, logger is imported statically in index.ts, so this might not be strictly needed unless .fail() handler's dynamic require is an issue.
+vi.mock(path.join(srcLibPath, 'logger.js'), async () => {
+  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock for logger.js is redirecting to logger.ts`);
+  return vi.importActual(path.join(srcLibPath, 'logger.ts'));
+});
+// --- End Explicit Mocks for SUT's dynamic requires ---
+
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Client as ActualMcpClient } from '@modelcontextprotocol/sdk/client/index.js';

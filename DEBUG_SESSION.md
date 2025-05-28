@@ -438,3 +438,91 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 *   **Metadata:**
     *   Git Commit SHA (User Provided): `0d4f5cb` (This entry analyzes the build output from this commit).
+
+---
+
+**Attempt 75: Analysis of `npm run build` (commit `0ada430`)**
+
+*   **Intended Fixes (from Attempt 74 Plan, leading to commit `0ada430`):**
+    1.  `src/index.ts`: Modify dynamic `require` calls to use relative paths (e.g., `require('./lib/server')`) when not in `pkg` mode.
+    2.  `src/lib/qdrant.ts`: Make the `[DEBUG_BATCH_UPSERT_CLIENT_TYPE]` diagnostic log more robust and ensure it's the first line in `batchUpsertVectors`.
+    3.  `src/tests/integration/stdio-client-server.integration.test.ts`: Refine `generate_suggestion` assertion to use a regex `toMatch(/^[ \t]*\*\*Suggested Implementation:\*\*/m)`.
+
+*   **Applied Changes (commit `0ada430`):**
+    *   Changes to `src/index.ts`, `src/lib/qdrant.ts`, and `src/tests/integration/stdio-client-server.integration.test.ts` were applied by the user as per the previous plan.
+
+*   **Result (Based on User's `npm run build` Output for commit `0ada430`):**
+    *   TypeScript compilation (`tsc`) passed.
+    *   `vitest run` executed, reporting **26 failures** and **21 unhandled errors**.
+        *   **`src/tests/index.test.ts` (20 Failures):**
+            *   Most tests still fail because spies (e.g., `mockStartServerHandler`, `mockStdioClientTransportConstructor`) are not called.
+            *   The unhandled rejections show `MODULE_NOT_FOUND` for `./lib/server` and `./lib/config-service` from within `src/index.ts`. This indicates the change to relative paths in dynamic `require` calls (e.g., `require('./lib/server')`) is not resolving correctly when `src/index.ts` is dynamically imported by `src/tests/index.test.ts`. The resolution is likely happening relative to the test file's directory (`src/tests/`) instead of `src/index.ts`'s directory (`src/`).
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   All four `startProxyServer` tests still timed out (at 30000ms).
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (2 Failures):**
+            1.  `should call trigger_repository_update and verify indexing starts`: Fails with `expected '{"result":{"content":[{"type":"text",…' to contain '[MOCK_QDRANT_UPSERT]'`.
+                *   The SUT output *does* now include the diagnostic log: `[DEBUG_BATCH_UPSERT_CLIENT_TYPE] qdrant.ts::batchUpsertVectors called. Client: QdrantClient, IsMock: true, ...`. This is significant progress: `batchUpsertVectors` in `qdrant.ts` is being called, and it correctly identifies the client instance as the SUT's mock Qdrant client (because `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT=true` is set for the spawned SUT process).
+                *   The `[MOCK_QDRANT_UPSERT]` log (which should come from the mock Qdrant client's `upsertPoints` or `upsert` method itself) is still missing. This points to an issue within the mock Qdrant client's implementation in `src/lib/qdrant.ts` – specifically, the method that `batchUpsertVectors` calls on the client instance (`client.upsert(...)`) is not logging as expected or is not the correct mocked method.
+            2.  `should call generate_suggestion and get a mocked LLM response`: Fails with `expected '# Code Suggestion for: "Suggest how t…' to contain '**Suggested Implementation**:'`. The actual output logged in the test *does* contain this exact string. The assertion `expect(suggestionText).toMatch(/^[ \t]*\*\*Suggested Implementation:\*\*/m);` should have caught this. This suggests a very subtle issue with the string matching or the test environment, possibly related to invisible characters or line endings.
+
+*   **Analysis/Retrospection:**
+    *   **`src/tests/index.test.ts` (Module Resolution):** The attempt to use relative paths for dynamic `require` in `src/index.ts` (e.g., `require('./lib/server')`) was not successful because the resolution context is incorrect when `src/index.ts` is dynamically imported by the test file. The `libPath` variable (calculating an absolute path to `src/lib` or `dist/lib`) was a more robust approach for path construction, but the core issue is ensuring Node/Vitest resolves these dynamic `require(absolutePathToModule)` calls to the `.ts` files in `src/lib` during testing, and uses the top-level mocks.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`:**
+        *   `trigger_repository_update`: Excellent progress with the `[DEBUG_BATCH_UPSERT_CLIENT_TYPE]` log appearing and confirming the SUT uses the mock Qdrant client. The remaining issue is that the mock client's `upsert` method (or `upsertPoints` if that's what `batchUpsertVectors` calls) isn't logging `[MOCK_QDRANT_UPSERT]`. A quick check of `src/lib/qdrant.ts` shows the mock client has `upsertPoints: vi.fn().mockImplementation(...)`. The actual Qdrant client method is `upsert`. This mismatch is likely the cause.
+        *   `generate_suggestion`: The assertion failure is perplexing if the strings appear identical.
+
+*   **Next Steps/Plan (Attempt 76 - based on analysis of `0ada430`):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (completed).
+    2.  **`src/index.ts` (Module Resolution for Tests):**
+        *   Revert the dynamic `require` paths in `startServerHandler` and the yargs `.fail()` handler back to using `path.join(libPath, 'moduleName.js')`.
+        *   In `src/tests/index.test.ts`, within the `runMainWithArgs` helper, *before* dynamically importing `src/index.ts`, use `vi.mock` to explicitly redirect these specific `require('absolute/path/to/moduleName.js')` calls to their `.ts` counterparts in `src/lib/`. This gives Vitest a clear directive for these dynamic, absolute-path requires.
+    3.  **`src/lib/qdrant.ts` (Qdrant Mock Fix):**
+        *   In the mock Qdrant client definition within `initializeQdrant` (the one activated by `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT`), change the mocked method from `upsertPoints: vi.fn()...` to `upsert: vi.fn()...` to match the actual Qdrant client API. Ensure the `[MOCK_QDRANT_UPSERT]` log is inside this mock `upsert` method.
+    4.  **`src/tests/integration/stdio-client-server.integration.test.ts` (`generate_suggestion` Assertion):**
+        *   Simplify the assertion for `**Suggested Implementation**:` to a direct string `includes` check: `expect(suggestionText?.includes('**Suggested Implementation**:'))`. If this still fails despite visual match, it points to a deeper, possibly environment-related issue with string comparison for this specific output.
+    5.  **Defer `server.test.ts` timeouts** until the critical module resolution and other integration test issues are clearer.
+
+*   **Blockers:**
+    *   `src/tests/index.test.ts` SUT mocking and dynamic `require` resolution (primary focus of this attempt).
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+    *   `get_session_history` state bug (root cause).
+    *   `generate_suggestion` assertion (if still failing after simplification).
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `0ada430`.
+
+---
+
+**Attempt 76: Plan based on Analysis of `0ada430` (Awaiting new build output after applying changes from Attempt 75 plan)**
+
+*   **Intended Fixes (from Attempt 75 Plan):**
+    1.  `src/index.ts`: Revert dynamic `require` paths in `startServerHandler` and `.fail()` handler to use `path.join(libPath, 'moduleName.js')`.
+    2.  `src/tests/index.test.ts`: In `runMainWithArgs`, use `vi.mock` to redirect the SUT's dynamic `require` calls for `server.js`, `config-service.js`, and `logger.js` (from the absolute `libPath`) to their `.ts` counterparts in `src/lib/`.
+    3.  `src/lib/qdrant.ts`: In the SUT's mock Qdrant client (activated by `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT`), change the mocked method from `upsertPoints` to `upsert` and ensure the `[MOCK_QDRANT_UPSERT]` diagnostic log is present within this mock `upsert` method.
+    4.  `src/tests/integration/stdio-client-server.integration.test.ts`: Simplify the `generate_suggestion` assertion for `**Suggested Implementation**:` to a direct `includes` check.
+
+*   **Applied Changes (User to apply changes based on Attempt 75 plan and run `npm run build`):**
+    *   Pending user action.
+
+*   **Result (Based on User's upcoming `npm run build` Output):**
+    *   Pending.
+
+*   **Analysis/Retrospection:**
+    *   Pending.
+
+*   **Next Steps/Plan (Attempt 77):**
+    *   Await new `npm run build` output after the user applies the changes proposed in Attempt 75.
+    *   Analyze the output, focusing on:
+        *   Whether `MODULE_NOT_FOUND` errors in `src/tests/index.test.ts` are resolved by the `vi.mock` redirection strategy.
+        *   Whether the `[MOCK_QDRANT_UPSERT]` log now appears in the `trigger_repository_update` integration test output.
+        *   The outcome of the simplified `generate_suggestion` assertion.
+    *   Address remaining failures based on the new output.
+
+*   **Blockers:**
+    *   `src/tests/index.test.ts` SUT mocking and dynamic `require` resolution (primary focus of this attempt).
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+    *   `get_session_history` state bug (root cause).
+    *   `generate_suggestion` assertion (if still failing after simplification).
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `0ada430` (analysis leading to this plan). New commit SHA pending for the next build.
