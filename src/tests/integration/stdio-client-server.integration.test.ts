@@ -460,13 +460,14 @@ describe('Stdio Client-Server Integration Tests', () => {
     // vi.mocked(qdrantModule.batchUpsertVectors).mockClear(); // No longer spying on this
 
     const sutOutputCaptured: string[] = [];
-    if (transport.process && transport.process.stdout) {
-      transport.process.stdout.on('data', (data) => {
+    // Access the underlying process directly to capture output
+    // We need to cast transport to access private members
+    const transportProcess = (transport as any)._process as ChildProcess;
+    if (transportProcess) {
+      transportProcess.stdout?.on('data', (data) => {
         sutOutputCaptured.push(data.toString());
       });
-    }
-    if (transport.process && transport.process.stderr) {
-      transport.process.stderr.on('data', (data) => { // Also capture stderr for debugging
+      transportProcess.stderr?.on('data', (data) => {
         sutOutputCaptured.push(data.toString());
       });
     }
