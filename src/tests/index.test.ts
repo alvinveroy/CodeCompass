@@ -16,6 +16,7 @@ vi.mock('../../src/lib/server.ts', () => {
   return {
     // This is the mock implementation for src/lib/server.ts
     // It should export what the SUT (src/index.ts) expects from it.
+    SERVER_MODULE_TOKEN: { type: "mocked_server_module" }, // Diagnostic token for mock
     startServer: mockStartServerHandler, // mockStartServerHandler is defined below
     ServerStartupError: ServerStartupError, // ServerStartupError class is defined below
   };

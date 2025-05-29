@@ -311,6 +311,7 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     const serverModulePath = path.join(libPath, serverModuleFilename);
     console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import serverModule from: ${serverModulePath} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImportSsh})`);
     const serverModule = await import(serverModulePath);
+    console.error('[SUT_INDEX_TS_SERVER_MODULE_TOKEN_CHECK]', (serverModule as any).SERVER_MODULE_TOKEN); // Log the token
     const { startServer, ServerStartupError: LocalServerStartupError } = serverModule;
     
     // Define the type for ServerStartupError for TypeScript

@@ -28,6 +28,8 @@ import { IndexingStatusReport } from './repository'; // Correct import for Index
 import { z } from "zod";
 import { checkOllama, checkOllamaModel } from "./ollama";
 import { initializeQdrant } from "./qdrant";
+
+export const SERVER_MODULE_TOKEN = { type: "original_server_module" }; // Diagnostic token
 import { searchWithRefinement } from "./query-refinement"; // Keep this
 import { validateGitRepository, indexRepository, getRepositoryDiff, getGlobalIndexingStatus } from "./repository";
 import { getLLMProvider, switchSuggestionModel, LLMProvider } from "./llm-provider";
