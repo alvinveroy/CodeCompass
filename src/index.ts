@@ -28,49 +28,34 @@ console.error(`[SUT_INDEX_TS_ENV_CHECK_TOP] NODE_ENV: ${process.env.NODE_ENV}, V
 
 // Determine the correct path to the 'lib' directory based on execution context
 const isPackaged = !!(process as unknown as { pkg?: unknown }).pkg;
-let libPath: string;
+let libPathBase: string; // Base directory for 'lib'
 let moduleFileExtensionForDynamicImports: string;
 
-// IMPORTANT: __dirname behavior:
-// - When running src/index.ts with ts-node/Vitest: __dirname is /path/to/project/src
-// - When running dist/index.js with node: __dirname is /path/to/project/dist
-// - When running packaged app: __dirname is /snapshot/project (or similar, relative to executable)
+// Prominent logging for initial state
+console.error(
+  `[SUT_INDEX_TS_PATH_INIT_DEBUG] __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`
+);
 
 if (process.env.VITEST_WORKER_ID) {
-  // Running in Vitest worker (typically src/index.ts)
-  libPath = path.resolve(__dirname, 'lib'); // Should resolve to /path/to/project/src/lib
+  // Running in Vitest worker, source files are in 'src' relative to project root (process.cwd())
+  libPathBase = path.resolve(process.cwd(), 'src');
   moduleFileExtensionForDynamicImports = '.ts';
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID is set. libPath: ${libPath}, ext: ${moduleFileExtensionForDynamicImports}`);
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID is set. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
 } else if (isPackaged) {
-  // Running as a packaged executable
-  libPath = path.resolve(path.dirname(process.execPath), 'lib'); // Relative to executable
+  // Running as a packaged executable, 'lib' is relative to the executable's directory
+  libPathBase = path.dirname(process.execPath);
   moduleFileExtensionForDynamicImports = '.js';
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPath: ${libPath}, ext: ${moduleFileExtensionForDynamicImports}`);
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
 } else {
-  // Running as a .js file from dist (e.g., node dist/index.js) or potentially src/index.js if ts-node isn't used by Vitest
-  // If __dirname is /path/to/project/dist (common for `node dist/index.js`)
-  // or /path/to/project/src (if somehow `node src/index.js` is run without ts-node/Vitest worker)
-  // We need to ensure we point to the correct lib and use .js
-  // Assuming that if not VITEST_WORKER_ID and not isPackaged, we are running a .js file.
-  // If current script is in 'dist', lib is './lib'. If current script is in 'src' (but not Vitest), this case is less common.
-  if (path.basename(__dirname) === 'dist') {
-    libPath = path.resolve(__dirname, 'lib'); // dist/lib
-  } else {
-    // Fallback or if running src/index.js directly (less common for this project structure)
-    // This might need adjustment if there's a scenario of running src/index.js without Vitest.
-    // For safety, assume if not in Vitest worker and not packaged, it's a JS context.
-    // If __dirname is src, but it's a .js file, it's an unusual setup.
-    // Defaulting to dist/lib if __dirname is not 'dist' but also not Vitest worker.
-    // This path needs to be robust. A common case is `node dist/index.js`.
-    libPath = path.resolve(__dirname, '../dist/lib'); // If __dirname is src, go up and to dist/lib
-    if (!fs.existsSync(libPath)) { // If that doesn't exist, assume __dirname is already dist
-        libPath = path.resolve(__dirname, 'lib');
-    }
-  }
+  // Default: running compiled .js from 'dist' (e.g., node dist/index.js)
+  // In this case, __dirname is /path/to/project/dist
+  libPathBase = __dirname;
   moduleFileExtensionForDynamicImports = '.js';
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Fallback (likely node dist/index.js or similar). libPath: ${libPath}, ext: ${moduleFileExtensionForDynamicImports}`);
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Fallback (likely node dist/index.js). libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
 }
-console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}, Final ext: ${moduleFileExtensionForDynamicImports}`);
+libPath = path.join(libPathBase, 'lib'); // libPath will be project/src/lib or project/dist/lib or <executable_dir>/lib
+
+console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}, Final ext: ${moduleFileExtensionForDynamicImports}, __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
 
 import { hideBin } from 'yargs/helpers'; // Import hideBin
 

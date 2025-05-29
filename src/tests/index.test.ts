@@ -18,10 +18,10 @@ const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib'); // Absolu
 
 // --- Top-level vi.mock for SUT's dependencies, using absolute paths ---
 // These mocks target the .ts files in src/lib, which the SUT should import when VITEST_WORKER_ID is set.
-const serverTsAbsolutePath = path.resolve(srcLibPath, 'server.ts');
-console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock server.ts at absolute path: ${serverTsAbsolutePath}`);
-vi.mock(serverTsAbsolutePath, () => {
-  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ${serverTsAbsolutePath} (server.ts) IS RUNNING.`);
+// const serverTsAbsolutePath = path.resolve(srcLibPath, 'server.ts'); // Using static relative path now
+console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock server.ts using relative path: ../../src/lib/server.ts`);
+vi.mock('../../src/lib/server.ts', () => {
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ../../src/lib/server.ts (server.ts) IS RUNNING.`);
   return {
     SERVER_MODULE_TOKEN: { type: "mocked_server_module_top_level_abs_path" },
     get startServer() { return mockStartServerHandler; },
@@ -29,10 +29,10 @@ vi.mock(serverTsAbsolutePath, () => {
   };
 });
 
-const configServiceTsAbsolutePath = path.resolve(srcLibPath, 'config-service.ts');
-console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock config-service.ts at absolute path: ${configServiceTsAbsolutePath}`);
-vi.mock(configServiceTsAbsolutePath, () => {
-  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ${configServiceTsAbsolutePath} (config-service.ts) IS RUNNING.`);
+// const configServiceTsAbsolutePath = path.resolve(srcLibPath, 'config-service.ts'); // Using static relative path now
+console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock config-service.ts using relative path: ../../src/lib/config-service.ts`);
+vi.mock('../../src/lib/config-service.ts', () => {
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ../../src/lib/config-service.ts (config-service.ts) IS RUNNING.`);
   return {
     get configService() { return currentMockConfigServiceInstance; },
     get logger() { return currentMockLoggerInstance; },
