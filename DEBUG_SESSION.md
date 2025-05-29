@@ -953,6 +953,54 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 ---
 
+**Attempt 88: Analysis of `npm run build` (commit `b8f8e12`)**
+
+*   **Intended Fixes (from Attempt 87 Plan, leading to commit `b8f8e12`):**
+    1.  `src/tests/index.test.ts`: Change `vi.mock` paths to use static string literals relative to the test file (e.g., `../../src/lib/server.ts`).
+    2.  Investigate SDK structure for `StdioClientTransport` to debug environment variable propagation.
+
+*   **Applied Changes (commit `b8f8e12`):**
+    *   `src/tests/index.test.ts`: `vi.mock` paths updated to use static relative string literals. The potentially redundant mocks for `dist/lib/*.js` files were commented out.
+
+*   **Result (Based on User's `npm run build` Output for commit `b8f8e12`):**
+    *   **`tsc` Compilation:** Passed.
+    *   **Vitest Run (8 failures total):**
+        *   **`src/tests/index.test.ts` (1 Suite Failure -> 21 test failures):**
+            *   The entire suite still failed with `ReferenceError: Cannot access '__vi_import_0__' before initialization` at `src/tests/index.test.ts:15:9`. The line is `vi.mock(path.join(srcLibPath, 'server.ts'), () => { ... });`.
+            *   **Crucial Misunderstanding/Misapplication:** The change in `b8f8e12` *still* used `path.join(srcLibPath, 'server.ts')` inside `vi.mock()`. The plan was to use *static string literals* like `vi.mock('../../src/lib/server.ts', ...)`. The `ReferenceError` persists because `srcLibPath` (a variable defined using `path.join`) is not available at the time Vitest hoists mocks. The path argument to `vi.mock` must be a string literal itself, or if constructed, the construction must not rely on variables that are not yet initialized during hoisting.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   All four `startProxyServer` tests still timed out.
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 Failures):**
+            *   Failures for `agent_query`, `trigger_repository_update`, `generate_suggestion`, `get_repository_context` persist.
+            *   **SUT Environment Variable Issues (Still Critical):** The SUT logs (`[LLM_PROVIDER_SUT_ENV_DIAGNOSTIC]`, `[QDRANT_SUT_ENV_DIAGNOSTIC]`) consistently show `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM='undefined'` and `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT='undefined'`. This remains the root cause for the SUT not using its internal mocks.
+            *   The user provided the content of `node_modules/@modelcontextprotocol/sdk/dist/cjs/client/stdio.js`. This file shows that `cross-spawn` is called with `env: this._serverParams.env ?? getDefaultEnvironment()`. If `this._serverParams.env` is undefined, it defaults to `getDefaultEnvironment()`, which filters out custom environment variables.
+
+*   **Analysis/Retrospection:**
+    *   **`src/tests/index.test.ts` (`ReferenceError`):** The fix was misapplied. The `vi.mock` path must be a static string literal (e.g., `'../../src/lib/server.ts'`) relative to the test file.
+    *   **Integration Tests (Environment Variable Propagation):** The SDK's `StdioClientTransport` expects the `env` property directly on its constructor argument (`this._serverParams.env`). The test code currently passes `options: { env: currentTestSpawnEnv }`. This nesting means `this._serverParams.env` is undefined, causing the SDK to use `getDefaultEnvironment()`, which strips the necessary mock flags.
+
+*   **Next Steps/Plan (Attempt 89):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
+    2.  **`src/tests/index.test.ts` (`ReferenceError` Fix - CRITICAL REATTEMPT):**
+        *   Modify the `vi.mock` calls for `server.ts` and `config-service.ts` to use **static string literals relative to `src/tests/index.test.ts`**. For example, `vi.mock('../../src/lib/server.ts', ...)` and `vi.mock('../../src/lib/config-service.ts', ...)`.
+    3.  **`src/tests/integration/stdio-client-server.integration.test.ts` (Fix Env Var Propagation - CRITICAL):**
+        *   Change the instantiation of `StdioClientTransport`. Instead of passing `options: { env: currentTestSpawnEnv, stdio: 'pipe' }`, pass the `env` and `stdio` properties directly at the top level of the constructor argument object.
+            *   From: `new StdioClientTransport({ command: ..., args: ..., options: { env: currentTestSpawnEnv, stdio: 'pipe' }})`
+            *   To: `new StdioClientTransport({ command: ..., args: ..., env: currentTestSpawnEnv, stdio: 'pipe' })`
+    4.  **Defer `server.test.ts` Timeouts.**
+    5.  **Defer Integration Test Assertion Adjustments** until environment variable propagation and SUT mocking are confirmed fixed.
+
+*   **Blockers:**
+    *   `src/tests/index.test.ts` `ReferenceError` due to `vi.mock` path hoisting (previous fix attempt was incorrect).
+    *   Incorrect `StdioClientTransport` instantiation in integration tests preventing environment variable propagation.
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `b8f8e12`.
+    *   SDK `stdio.js` content provided.
+
+---
+
 **Attempt 84: Analysis of `npm run build` (commit `e107328`)**
 
 *   **Intended Fixes (from Attempt 83 Plan, leading to commit `e107328`):**
