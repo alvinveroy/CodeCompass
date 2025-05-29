@@ -270,8 +270,8 @@ describe('Stdio Client-Server Integration Tests', () => {
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
       // Pass env and stdio directly as top-level properties
-      env: currentTestSpawnEnv, 
       options: { // child_process.spawn options, stdio is usually here
+        env: currentTestSpawnEnv, 
         stdio: 'pipe',
         // Pass currentTestSpawnEnv to options.env as well if SDK expects it there for some reason,
         // but primary fix is top-level env. SDK's stdio.js uses this._serverParams.env.

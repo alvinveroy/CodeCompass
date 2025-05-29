@@ -243,10 +243,10 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       ...process.env, // Inherit parent env
       HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
       // Propagate VITEST_WORKER_ID to ensure child SUT also knows it's in a test context if parent is
-      VITEST_WORKER_ID: process.env.VITEST_WORKER_ID,
+      VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '',
       // Propagate mock flags if set by the parent test environment
-      CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM,
-      CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT,
+      CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
+      CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
       DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false', // Propagate debug flag
     },
     stdio: 'pipe', // Explicitly set stdio for clarity, though often default
