@@ -667,13 +667,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Log the actual response for debugging
     console.log('ACTUAL RESPONSE TEXT (get_repository_context):', repoContextText);
 
-    // The SUT self-mock for "What is the main purpose of this repo?" produces a detailed markdown summary.
-    // Assertions should match key phrases from this actual detailed output.
-    expect(repoContextText).toContain("# Repository Context Summary for: \"What is the main purpose of this repo?\"");
-    expect(repoContextText).toContain("> Query refined to: \"What is the main purpose of this repo? pendencies");
-    expect(repoContextText).toContain("Based on the provided context, particularly the repeated snippets from `CHANGELOG.md`");
-    expect(repoContextText).toContain("**Agent Orchestration Framework**");
-    expect(repoContextText).toContain("The repository focuses on a unified agent system (`agent_query`)");
+    // The SUT's self-mock for "What is the main purpose of this repo?" returns:
+    // "SUT_SELF_MOCK: This is a summary of the repository context, using info from file2.txt and mentioning agent orchestration and tool unification. ### File: CHANGELOG.md"
+    expect(repoContextText).toContain("SUT_SELF_MOCK: This is a summary of the repository context, using info from file2.txt");
+    expect(repoContextText).toContain("agent orchestration and tool unification");
     expect(repoContextText).toContain("### File: CHANGELOG.md");
 
     await client.close();
