@@ -33,7 +33,6 @@ vi.mock('../../src/lib/config-service.ts', () => { // Path relative to project r
 });
 
 // No need to mock logger.ts separately if it's part of config-service.ts and handled above.
-});
 // --- End Explicit Mocks for SUT's dynamic requires ---
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
