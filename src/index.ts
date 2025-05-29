@@ -151,19 +151,13 @@ interface ClientCommandArgs {
 async function handleClientCommand(argv: ClientCommandArgs) {
   const { toolName, params: toolParamsString, outputJson } = argv;
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-  const configServiceModuleFilenameForClient = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js'; // Target .ts in src/lib for tests
-  // libPath is already correctly set to src/lib when VITEST_WORKER_ID is true
-  const configServiceModulePathForClient = path.join(libPath, configServiceModuleFilenameForClient);
-  console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require configService (in handleClientCommand) from: ${configServiceModulePathForClient}`);
-  const { configService } = require(configServiceModulePathForClient) as typeof import('./lib/config-service');
+  const configServiceModuleFilenameForClient = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js';
+  const configServiceModulePathForClient = path.join(libPath, configServiceModuleFilenameForClient); // libPath is src/lib in tests
+  console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import configService (in handleClientCommand) from: ${configServiceModulePathForClient}`);
+  const configServiceModule = process.env.VITEST_WORKER_ID ? await import(configServiceModulePathForClient) : require(configServiceModulePathForClient);
+  const { configService, logger } = configServiceModule as typeof import('./lib/config-service');
   console.log('[SUT_INDEX_TS_DEBUG] Imported configService in handleClientCommand:', typeof configService, 'configService.DEEPSEEK_API_KEY (sample prop):', configService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (handleClientCommand): ${process.env.VITEST_WORKER_ID}`);
-  
-  const loggerModuleFilenameForClient = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js'; // Target .ts in src/lib for tests
-  // libPath is already correctly set to src/lib when VITEST_WORKER_ID is true
-  const loggerModulePathForClient = path.join(libPath, loggerModuleFilenameForClient); 
-  console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require logger (in handleClientCommand) from: ${loggerModulePathForClient}`);
-  const { logger } = require(loggerModulePathForClient) as typeof import('./lib/config-service');
 
 
   logger.info(`CLI Client Mode: Tool '${toolName}'`);
