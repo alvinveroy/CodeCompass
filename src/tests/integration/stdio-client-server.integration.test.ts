@@ -256,12 +256,15 @@ describe('Stdio Client-Server Integration Tests', () => {
     const currentTestSpawnEnv: Record<string, string | undefined> = { ...baseSpawnEnv };
     // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is set to 'true'
     currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM = 'true';
+    currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT = 'true'; // Ensure this is set
   
-    currentTestSpawnEnv.LLM_PROVIDER = 'mocked-for-test'; // MOVED HERE
-    console.log('[INTEGRATION_TEST_DEBUG] beforeEach: Set currentTestSpawnEnv.LLM_PROVIDER to "mocked-for-test" for the upcoming spawn.'); // MOVED HERE
+    currentTestSpawnEnv.LLM_PROVIDER = 'mocked-for-test';
+    console.log('[INTEGRATION_TEST_DEBUG] beforeEach: Set currentTestSpawnEnv.LLM_PROVIDER to "mocked-for-test" for the upcoming spawn.');
 
     // eslint-disable-next-line no-console
     console.log(`[INTEGRATION_BEFORE_EACH_SPAWN_ENV] For test "${expect.getState().currentTestName}": ${JSON.stringify(currentTestSpawnEnv)}`);
+    // Specifically log the QDRANT mock env var that will be part of the spawned SUT's environment
+    console.log(`[INTEGRATION_TEST_ENV_PRE_SPAWN_CHECK] MOCK_QDRANT: ${currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}`);
 
     transport = new StdioClientTransport({
       command: process.execPath,
