@@ -289,11 +289,10 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     
   const isPkg = typeof (process as any).pkg !== 'undefined';
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const serverModuleFilename = process.env.VITEST_WORKER_ID ? 'server.ts' : 'server.js'; // Target .ts in src/lib for tests
-    // libPath is already correctly set to src/lib when VITEST_WORKER_ID is true
-    const serverModulePath = path.join(libPath, serverModuleFilename); 
-    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require serverModule from: ${serverModulePath}`);
-    const serverModule = require(serverModulePath);
+    const serverModuleFilename = process.env.VITEST_WORKER_ID ? 'server.ts' : 'server.js';
+    const serverModulePath = path.join(libPath, serverModuleFilename); // libPath is already src/lib in tests
+    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import serverModule from: ${serverModulePath}`);
+    const serverModule = process.env.VITEST_WORKER_ID ? await import(serverModulePath) : require(serverModulePath);
     const { startServer, ServerStartupError: LocalServerStartupError } = serverModule;
     
     // Define the type for ServerStartupError for TypeScript
@@ -304,11 +303,10 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     console.log('[SUT_INDEX_TS_DEBUG] Imported startServer (handler) in startServerHandler:', typeof startServer, 'Is mock:', !!(startServer as any)?.mock?.calls);
     console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (startServerHandler): ${process.env.VITEST_WORKER_ID}`);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const configServiceModuleFilename = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js'; // Target .ts in src/lib for tests
-    // libPath is already correctly set to src/lib when VITEST_WORKER_ID is true
-    const configServiceModulePath = path.join(libPath, configServiceModuleFilename);
-    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require configServiceModule (in startServerHandler) from: ${configServiceModulePath}`);
-    const configServiceModule = require(configServiceModulePath);
+    const configServiceModuleFilename = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js';
+    const configServiceModulePath = path.join(libPath, configServiceModuleFilename); // libPath is already src/lib in tests
+    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import configServiceModule (in startServerHandler) from: ${configServiceModulePath}`);
+    const configServiceModule = process.env.VITEST_WORKER_ID ? await import(configServiceModulePath) : require(configServiceModulePath);
     const { logger: localLogger, configService: localConfigService } = configServiceModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported configService in startServerHandler:', typeof localConfigService, 'configService.DEEPSEEK_API_KEY (sample prop):', localConfigService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   try {
@@ -453,11 +451,10 @@ export async function main() { // Add export
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     let failLogger: { error: (...args: any[]) => void } = console; // Default to console
     try {
-      const loggerModuleFilenameForFail = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js'; // Target .ts in src/lib for tests
-      // libPath is already correctly set to src/lib when VITEST_WORKER_ID is true
-      const loggerModulePathForFail = path.join(libPath, loggerModuleFilenameForFail);
-      console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require loggerModule (in .fail()) from: ${loggerModulePathForFail}`);
-      const loggerModule = require(loggerModulePathForFail);
+      const loggerModuleFilenameForFail = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js';
+      const loggerModulePathForFail = path.join(libPath, loggerModuleFilenameForFail); // libPath is src/lib in tests
+      console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import loggerModule (in .fail()) from: ${loggerModulePathForFail}`);
+      const loggerModule = process.env.VITEST_WORKER_ID ? await import(loggerModulePathForFail) : require(loggerModulePathForFail);
       failLogger = loggerModule.logger;
     } catch (e) {
       console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
@@ -501,10 +498,10 @@ export async function main() { // Add export
     // This catch block is for errors thrown from command handlers
     // that yargs' .fail() might not have caught or for truly unexpected issues.
     try {
-        const critLoggerModuleFilename = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js'; // Target .ts in src/lib for tests
-        // libPath is already correctly set to src/lib when VITEST_WORKER_ID is true
+        const critLoggerModuleFilename = process.env.VITEST_WORKER_ID ? 'config-service.ts' : 'config-service.js';
+        const critLoggerModulePath = path.join(libPath, critLoggerModuleFilename); // libPath is src/lib in tests
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-        const { logger: critLogger } = require(path.join(libPath, critLoggerModuleFilename)) as typeof import('./lib/config-service');
+        const { logger: critLogger } = process.env.VITEST_WORKER_ID ? await import(critLoggerModulePath) : require(critLoggerModulePath) as typeof import('./lib/config-service');
         critLogger.error('Critical unhandled error in CLI execution:', error);
     } catch (_e) { // Use _e if error object 'e' is not used
         console.error('Fallback critical error logger (logger unavailable): Critical error in CLI execution:', error);

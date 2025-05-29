@@ -5,34 +5,34 @@ const projectRootForDynamicMock = path.resolve(__dirname, '../../'); // Path fro
 const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
 
 // --- Explicit Mocks for SUT's dynamic requires ---
-// This is where we tell Vitest how to resolve the SUT's dynamic, absolute-path requires
-// during testing, pointing them to the .ts source files (which Vitest will then use our top-level mocks for).
+// This is where we tell Vitest how to resolve the SUT's dynamic imports of .ts files
+// during testing, pointing them to the actual mock implementations.
 
-// Mock the SUT's attempt to require '.../src/lib/server.ts' (when VITEST_WORKER_ID is set)
-console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.ts path (using static literal): ../lib/server.ts");
-vi.mock('../lib/server.ts', async () => { // Path relative to this test file
-  console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../lib/server.ts is RUNNING.");
-  // This will be intercepted by the top-level vi.mock('../../src/lib/server.ts', ...) further down
-  return vi.importActual('../lib/server.ts'); 
+// Mock the SUT's attempt to import '.../src/lib/server.ts' (when VITEST_WORKER_ID is set)
+// The path for vi.mock should be relative to this test file.
+console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.ts path: ../../src/lib/server.ts");
+vi.mock('../../src/lib/server.ts', () => { // Path relative to project root, or adjust if test file moves
+  console.log("[INDEX_TEST_SUT_IMPORT_INTERCEPT] vi.mock factory for ../../src/lib/server.ts is RUNNING.");
+  return {
+    // This is the mock implementation for src/lib/server.ts
+    // It should export what the SUT (src/index.ts) expects from it.
+    startServer: mockStartServerHandler, // mockStartServerHandler is defined below
+    ServerStartupError: ServerStartupError, // ServerStartupError class is defined below
+  };
 });
 
-// Mock the SUT's attempt to require '.../src/lib/config-service.ts' (when VITEST_WORKER_ID is set)
-console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.ts path (using static literal): ../lib/config-service.ts");
-vi.mock('../lib/config-service.ts', async () => { // Path relative to this test file
-  console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../lib/config-service.ts is RUNNING.");
-  // This will be intercepted by the top-level vi.mock('../../src/lib/config-service.ts', ...) further down
-  return vi.importActual('../lib/config-service.ts');
+// Mock the SUT's attempt to import '.../src/lib/config-service.ts' (when VITEST_WORKER_ID is set)
+console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.ts path: ../../src/lib/config-service.ts");
+vi.mock('../../src/lib/config-service.ts', () => { // Path relative to project root
+  console.log("[INDEX_TEST_SUT_IMPORT_INTERCEPT] vi.mock factory for ../../src/lib/config-service.ts is RUNNING.");
+  return {
+    // This is the mock implementation for src/lib/config-service.ts
+    get configService() { return currentMockConfigServiceInstance; }, // Use getter for dynamic instance
+    get logger() { return currentMockLoggerInstance; }, // Use getter for dynamic instance
+  };
 });
 
-// Mock the SUT's attempt to require '.../src/lib/logger.ts' (if it were dynamic and VITEST_WORKER_ID is set)
-// Assuming logger is part of config-service.ts for dynamic require, so no separate mock needed here
-// if the SUT requires config-service.ts for logger.
-// If SUT dynamically requires a separate logger.ts:
-// console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's logger.ts path (using static literal): ../lib/logger.ts");
-// vi.mock('../lib/logger.ts', async () => { // Path relative to this test file
-//   console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../lib/logger.ts is RUNNING.");
-//   return vi.importActual('../lib/logger.ts');
-// });
+// No need to mock logger.ts separately if it's part of config-service.ts and handled above.
 });
 // --- End Explicit Mocks for SUT's dynamic requires ---
 
