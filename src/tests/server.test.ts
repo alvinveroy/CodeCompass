@@ -1291,9 +1291,21 @@ describe('startProxyServer', () => {
     // Default mock for http.createServer and its listen method for this suite
     // This ensures that the server instance created by startProxyServer has an async listen.
     const mockProxyHttpServerInstance = {
-      listen: vi.fn((_port: any, listeningListener?: () => void) => {
-        if (listeningListener) {
-          process.nextTick(listeningListener);
+      listen: vi.fn((portOrPathOrOptions: any, arg2: any, arg3: any, arg4: any) => {
+        let actualCallback: (() => void) | undefined;
+        // Determine which argument is the callback based on common http.Server.listen signatures
+        if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { // listen(options, callback)
+          actualCallback = arg2 as (() => void);
+        } else if (typeof arg2 === 'function') { // listen(port, callback)
+          actualCallback = arg2;
+        } else if (typeof arg3 === 'function') { // listen(port, host, callback)
+          actualCallback = arg3;
+        } else if (typeof arg4 === 'function') { // listen(port, host, backlog, callback)
+          actualCallback = arg4;
+        }
+
+        if (actualCallback) {
+          process.nextTick(actualCallback);
         }
         return mockProxyHttpServerInstance; // Return itself
       }),
