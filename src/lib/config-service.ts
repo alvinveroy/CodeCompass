@@ -124,7 +124,7 @@ class ConfigService {
     });
 
     // ADD THIS LOG LINE IMMEDIATELY AFTER LOGGER INITIALIZATION:
-    this.logger.debug(`[ConfigService constructor EARLY DEBUG] Initial process.env.HTTP_PORT: "${process.env.HTTP_PORT}", process.env.NODE_ENV: "${process.env.NODE_ENV}"`);
+    this.logger.debug(`[ConfigService constructor EARLY DEBUG] Initial process.env.HTTP_PORT: "${process.env.HTTP_PORT}", process.env.NODE_ENV: "${process.env.NODE_ENV}", MOCK_LLM: "${process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM}", MOCK_QDRANT: "${process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}"`);
 
     // Initialize _httpPortFallback before it's used
     this._httpPortFallback = process.env.NODE_ENV === 'test' ? 0 : 3001;
