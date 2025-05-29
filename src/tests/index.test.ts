@@ -383,7 +383,7 @@ describe('CLI with yargs (index.ts)', () => {
         expect.objectContaining({
           command: process.execPath,
           args: [
-            expect.stringContaining('index.js'), // Path to dist/index.js
+            indexPath, // SUT script (src/index.ts or dist/index.js)
             'start',
             '.', // Default repoPath
             '--port', '0', // Client-spawned servers use dynamic utility port
