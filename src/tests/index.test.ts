@@ -147,16 +147,16 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => {
 
 // The following mocks might be redundant if the absolute path mocks for .ts files are sufficient
 // for the test environment. If they cause issues or are not hit, they can be removed.
-const serverJsPathToMockForDist = path.join(libPath.replace('/src/', '/dist/'), 'server.js'); // Example for dist
+const serverJsPathToMockForDist = path.join(srcLibPath.replace('/src/', '/dist/'), 'server.js'); // Example for dist
 console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering (potentially redundant) vi.mock for SUT's server.js (dist) path: ${serverJsPathToMockForDist}`);
-vi.mock(serverJsPathToMockForDist, () => {
+vi.mock(serverJsPathToMockForDist, async () => {
   console.log(`[INDEX_TEST_DEBUG] Mock factory for ${serverJsPathToMockForDist} (dist .js) IS RUNNING.`);
   return {
     get startServerHandler() { return mockStartServerHandler; },
   };
-}, { virtual: true }); // Virtual if it might not exist but SUT tries to load it
+});
 
-const configServiceJsPathToMockForDist = path.join(libPath.replace('/src/', '/dist/'), 'config-service.js'); // Example for dist
+const configServiceJsPathToMockForDist = path.join(srcLibPath.replace('/src/', '/dist/'), 'config-service.js'); // Example for dist
 console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering (potentially redundant) vi.mock for SUT's config-service.js (dist) path: ${configServiceJsPathToMockForDist}`);
 vi.mock(configServiceJsPathToMockForDist, () => {
   console.log(`[INDEX_TEST_DEBUG] Mock factory for ${configServiceJsPathToMockForDist} (dist .js) IS RUNNING.`);
