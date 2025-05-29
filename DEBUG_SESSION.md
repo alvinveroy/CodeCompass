@@ -853,6 +853,55 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 ---
 
+**Attempt 85: Analysis of `npm run build` (commit `2ab1f03`)**
+
+*   **Intended Fixes (from Attempt 84 Plan, leading to commit `2ab1f03`):**
+    1.  `src/tests/index.test.ts`: Change `vi.mock` paths for SUT's dynamic requires to use absolute paths constructed with `path.join(srcLibPath, 'moduleName.ts')`.
+    2.  Investigate integration test environment variable propagation (deferred pending `stdio.ts` review).
+
+*   **Applied Changes (commit `2ab1f03`):**
+    *   `src/tests/index.test.ts`: Attempted to use absolute paths for `vi.mock` by defining `serverTsPathToMock = path.join(srcLibPath, 'server.ts')` and then using `vi.mock(serverTsPathToMock, ...)`.
+
+*   **Result (Based on User's `npm run build` Output for commit `2ab1f03`):**
+    *   **`tsc` Compilation:** Passed.
+    *   **Vitest Run (8 failures total):**
+        *   **`src/tests/index.test.ts` (1 Suite Failure -> 21 test failures):**
+            *   The entire suite failed with `ReferenceError: Cannot access 'serverTsPathToMock' before initialization` at `src/tests/index.test.ts:15:9`.
+            *   This indicates the variable `serverTsPathToMock` (and presumably `configServiceTsPathToMock`) is not available when Vitest hoists the `vi.mock` calls. The path argument to `vi.mock` needs to be a string literal or a variable that is truly defined and accessible at the time of hoisting. Using `path.join()` to define the variable still makes its value determined at runtime, which conflicts with `vi.mock` hoisting.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   All four `startProxyServer` tests still timed out (at 30000ms). No changes were targeted here.
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 Failures, down from 5):**
+            *   `should execute agent_query...`: Fails with `expected 'Based on the provided context, \`file1…' to contain 'SUT_SELF_MOCK: Agent response: file1.…'`. The SUT is returning a detailed markdown response, not the simple "SUT_SELF_MOCK:..." string. This means the SUT's `createMockLLMProvider` is active but its specific `if` condition for this prompt isn't met, or `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` is not effective.
+            *   `should call trigger_repository_update...`: Fails with `expected '{"result":{"content":[{"type":"text",…' to contain '[MOCK_QDRANT_UPSERT]'`. SUT logs show `[DEBUG_BATCH_UPSERT_CLIENT_TYPE] qdrant.ts::batchUpsertVectors called. Client: QdrantClient, IsMock: false, ...`. This means `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` is not being effectively propagated to or used by the SUT.
+            *   `should call generate_suggestion...`: Fails with `expected '# Code Suggestion for: "Suggest how t…' to contain 'SUT_SELF_MOCK: This is a generated su…'`. Similar to `agent_query`, the SUT returns detailed markdown.
+            *   `should call get_repository_context...`: Fails with `expected '# Repository Context Summary for: "Wh…' to contain 'SUT_SELF_MOCK: This is a summary of t…'`. Similar to `agent_query`, the SUT returns detailed markdown.
+            *   **SUT Environment Variable Issues (Still Critical):** The SUT logs from integration tests (`[LLM_PROVIDER_SUT_ENV_DIAGNOSTIC]` and `[QDRANT_SUT_ENV_DIAGNOSTIC]`) consistently show `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM='undefined'` and `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT='undefined'`. This is the root cause for the SUT not using its internal mocks for LLM and Qdrant, leading to real network attempts or unexpected mock behavior.
+
+*   **Analysis/Retrospection:**
+    *   **`src/tests/index.test.ts` (`ReferenceError`):** The `vi.mock` path must be resolvable at hoist time. Using `path.join()` to define a variable for the path, and then using that variable in `vi.mock()`, still causes a hoisting issue. The `path.join()` needs to be *directly* inside the `vi.mock()` call if the path isn't a pure string literal.
+    *   **Integration Tests (Environment Variable Propagation):** This is the most critical blocker for integration tests. The `StdioClientTransport` from `@modelcontextprotocol/sdk` is not passing the `env` options from `currentTestSpawnEnv` correctly to the spawned child process. The user indicated the `stdio.ts` file from the SDK was empty or missing, which needs to be resolved.
+    *   **Integration Tests (LLM Mock Behavior):** Because `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` is not reaching the SUT, the SUT's `getLLMProvider` is not returning the `createMockLLMProvider` instance. Instead, it's likely instantiating a real provider (e.g., OllamaProvider by default), which then generates the detailed markdown responses instead of the simple "SUT_SELF_MOCK:..." strings.
+
+*   **Next Steps/Plan (Attempt 86):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
+    2.  **`src/tests/index.test.ts` (`ReferenceError` Fix - CRITICAL):**
+        *   Modify the `vi.mock` calls for `server.ts` and `config-service.ts`. Instead of using variables like `serverTsPathToMock`, use `path.join(srcLibPath, 'moduleName.ts')` *directly* as the first argument to `vi.mock()`.
+    3.  **Investigate Integration Test Environment Variable Propagation (HIGHEST PRIORITY for integration tests):**
+        *   **Reiterate the need for the user to provide the content of `node_modules/@modelcontextprotocol/sdk/src/client/stdio.ts`.** The previous `cat` command yielded no output. This file is essential to diagnose why `currentTestSpawnEnv` variables are not reaching the SUT.
+        *   Once the file content is available, inspect its constructor and how it uses `options.env` when calling `child_process.spawn`.
+    4.  **Defer `server.test.ts` Timeouts.**
+    5.  **Defer Integration Test Assertion Adjustments:** These are secondary to fixing the environment variable propagation and SUT mocking.
+
+*   **Blockers:**
+    *   `src/tests/index.test.ts` `ReferenceError` due to `vi.mock` path hoisting.
+    *   Environment variables (`CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`, `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT`) not being propagated to the SUT in integration tests (requires inspection of SDK's `stdio.ts`).
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `2ab1f03`.
+
+---
+
 **Attempt 84: Analysis of `npm run build` (commit `e107328`)**
 
 *   **Intended Fixes (from Attempt 83 Plan, leading to commit `e107328`):**
