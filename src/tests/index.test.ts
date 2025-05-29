@@ -1,5 +1,17 @@
 import path from 'path';
 
+const KNOWN_TOOLS = [
+  'agent_query',
+  'search_code',
+  'get_changelog',
+  'get_indexing_status',
+  'switch_suggestion_model',
+  'get_session_history',
+  'generate_suggestion',
+  'get_repository_context',
+  'trigger_repository_update',
+];
+
 // Define projectRootForDynamicMock and srcLibPath at the top level
 const projectRootForDynamicMock = path.resolve(__dirname, '../../'); // Path from src/tests/index.test.ts to project root
 const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib'); // Absolute path to src/lib

@@ -205,28 +205,54 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       logger.info('With no parameters.');
     }
   
-    const isPkg = typeof (process as any).pkg !== 'undefined';
-    const mainScriptPath = path.resolve(__dirname, 'index.js'); // Path to the compiled index.js
+  // const isPkg = typeof (process as any).pkg !== 'undefined'; // isPackaged is already defined globally
+  // Determine the SUT script path for StdioClientTransport's args
+  // When tests run src/index.ts, the client should also spawn src/index.ts (via ts-node or Vitest's mechanisms)
+  // When running dist/index.js, it should spawn dist/index.js
+  let sutScriptPathForClientSpawn: string;
+  if (process.env.VITEST_WORKER_ID) {
+    // In Vitest, assume we want to spawn the .ts version of the SUT for consistency
+    sutScriptPathForClientSpawn = path.resolve(__dirname, 'index.ts');
+  } else if (isPackaged) {
+    // When packaged, process.execPath is the executable itself.
+    // The 'start' command and other args are passed directly to it.
+    // However, if the pkg setup involves Node, this might need adjustment.
+    // For now, assuming process.execPath is the primary command.
+    // If node is bundled, args might need to include the script path within the package.
+    // This logic aligns with typical Node.js script execution.
+    sutScriptPathForClientSpawn = path.resolve(path.dirname(process.execPath), 'index.js'); // Path to the bundled index.js
+    // This might be incorrect if __dirname inside pkg is different.
+    // A more robust way for pkg might be needed if this fails.
+    // For now, this aligns with non-pkg `dist` execution.
+  } else {
+    sutScriptPathForClientSpawn = path.resolve(__dirname, 'index.js'); // Path to the compiled index.js in dist
+  }
+  console.error(`[SUT_INDEX_TS_CLIENT_SPAWN_DEBUG] sutScriptPathForClientSpawn: ${sutScriptPathForClientSpawn}`);
 
   // Parameters for StdioClientTransport to spawn the server
   const serverProcessParams: StdioServerParameters = {
     command: process.execPath, // Path to node executable
     args: [
-      mainScriptPath,    // Path to this script (dist/index.js)
+      sutScriptPathForClientSpawn, // Path to SUT script (src/index.ts for tests, dist/index.js otherwise)
       'start',           // Command for the server to start
       clientRepoPath,    // Repository path for the server
       '--port', '0',     // Instruct server to find a dynamic utility port
     ],
     // Environment variables for the spawned server process
-    env: {
+    env: { // Ensure this 'env' is at the top level of StdioServerParameters
       ...process.env, // Inherit parent env
       HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
-      // Any other specific env vars the child server needs
+      // Propagate VITEST_WORKER_ID to ensure child SUT also knows it's in a test context if parent is
+      VITEST_WORKER_ID: process.env.VITEST_WORKER_ID,
+      // Propagate mock flags if set by the parent test environment
+      CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM,
+      CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT,
       DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false', // Propagate debug flag
     },
+    stdio: 'pipe', // Explicitly set stdio for clarity, though often default
   };
 
-  console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport); // Or the specific import used here
+  console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport);
   const transport = new StdioClientTransport(serverProcessParams);
   const client = new MCPClientSdk({ name: "codecompass-cli-client", version: getPackageVersion() });
 
