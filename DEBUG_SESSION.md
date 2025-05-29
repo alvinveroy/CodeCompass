@@ -1066,6 +1066,61 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
     *   Git Commit (Build Output Analyzed): `e107328`.
     *   Files in Chat: Reflect state of `e107328`.
 
+---
+
+**Attempt 91: Analysis of `npm run build` (commit `691bb8f`)**
+
+*   **Intended Fixes (from Attempt 90 Plan, leading to commit `691bb8f`):**
+    1.  `src/index.ts`: Correct `libPath` and `moduleFileExtensionForDynamicImports` logic.
+    2.  `src/tests/index.test.ts`: Use absolute paths for `vi.mock` targets. Align SUT path for client commands. Modify `mockProcessExit` for `exitCode === 0`. Adjust error assertions. Handle promise rejections for `callTool`.
+    3.  `src/tests/integration/stdio-client-server.integration.test.ts`: Correct `StdioClientTransport` instantiation for `env` and `stdio` properties.
+
+*   **Applied Changes (commit `691bb8f`):**
+    *   `src/index.ts`: `libPath` and `moduleFileExtensionForDynamicImports` logic updated. `sutScriptPathForClientSpawn` logic updated. `serverProcessParams.env` in `handleClientCommand` updated to include `VITEST_WORKER_ID`, `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`, `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT`.
+    *   `src/tests/index.test.ts`: `KNOWN_TOOLS` defined. `vi.mock` paths changed to use `path.resolve(srcLibPath, 'moduleName.ts')`. `mockProcessExit` updated. `runMainWithArgs` updated to use `currentSutIndexPath`. Error assertions and promise rejection handling updated.
+    *   `src/tests/integration/stdio-client-server.integration.test.ts`: `StdioClientTransport` instantiation updated to pass `env` and `options: { stdio: 'pipe' }` at the top level of `transportParams`.
+
+*   **Result (Based on User's `npm run build` Output for commit `691bb8f`):**
+    *   **`tsc` Compilation (4 Errors):**
+        1.  `src/index.ts:246:7 - error TS2322: Type 'string | undefined' is not assignable to type 'string'.` (for `VITEST_WORKER_ID` in `serverProcessParams.env`)
+        2.  `src/index.ts:248:7 - error TS2322: Type 'string | undefined' is not assignable to type 'string'.` (for `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` in `serverProcessParams.env`)
+        3.  `src/index.ts:249:7 - error TS2322: Type 'string | undefined' is not assignable to type 'string'.` (for `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` in `serverProcessParams.env`)
+        4.  `src/tests/integration/stdio-client-server.integration.test.ts:273:7 - error TS2353: Object literal may only specify known properties, and 'env' does not exist in type 'StdioTransportParams'.` (The `env` property was added directly to `transportParams` which is typed as `StdioTransportParams`. The SDK type likely expects `env` under an `options` property or not at all if it only inherits from `process.env`).
+    *   **Vitest Run (13 failures total, due to `tsc` errors build likely didn't proceed to full test execution or tests ran against older build):**
+        *   **`src/tests/index.test.ts` (1 Suite Failure -> 21 test failures in previous runs, now 1 suite failure reported):**
+            *   The suite failed with `ReferenceError: Cannot access 'serverTsAbsolutePath' before initialization` at `src/tests/index.test.ts:23:9`. The line is `vi.mock(serverTsAbsolutePath, () => { ... });`. This indicates that using a variable (even if defined with `path.resolve` at the top level) as the path argument to `vi.mock` is still causing hoisting issues.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   All four `startProxyServer` tests still timed out.
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (9 Failures):**
+            *   All 9 tests in this suite failed with `MCP error -32000: Connection closed`. This is likely a direct consequence of the SUT (`src/index.ts`) failing to compile or run correctly due to the `tsc` errors related to environment variable propagation in `serverProcessParams.env` and the incorrect `StdioTransportParams` structure. The SUT child process is likely crashing immediately.
+            *   SUT diagnostic logs (`[LLM_PROVIDER_SUT_ENV_DIAGNOSTIC]`, `[QDRANT_SUT_ENV_DIAGNOSTIC]`) show that the mock-related environment variables are still `undefined` in the SUT, confirming the propagation issue.
+
+*   **Analysis/Retrospection:**
+    *   **`tsc` Errors (Primary Blocker):**
+        *   The `TS2322` errors in `src/index.ts` occur because `process.env.VAR_NAME` can be `string | undefined`, but the `env` object in `child_process.spawn` (which `StdioClientTransport` likely uses) expects `string` values. These need a nullish coalescing operator (e.g., `VAR_NAME: process.env.VAR_NAME ?? ''`).
+        *   The `TS2353` error in `src/tests/integration/stdio-client-server.integration.test.ts` confirms that `StdioTransportParams` (from the SDK) does not directly accept an `env` property. The `env` variables must be passed within the `options: { env: ... }` structure, which `StdioClientTransport` then uses for `cross-spawn`.
+    *   **`src/tests/index.test.ts` (`ReferenceError`):** The `vi.mock` path argument must be a string literal. Using `path.resolve` to define a variable and then using that variable in `vi.mock` is still problematic for Vitest's hoisting mechanism.
+    *   **Integration Test Failures:** The "Connection closed" errors are almost certainly due to the SUT crashing on startup because of the `tsc` errors related to `env` variable handling or the `StdioClientTransport` instantiation. The SUT logs confirm that the critical mock-related environment variables are not being received.
+
+*   **Next Steps/Plan (Attempt 92):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
+    2.  **Fix `tsc` Errors (Highest Priority):**
+        *   **`src/index.ts`:** In `handleClientCommand`, when constructing `serverProcessParams.env`, provide default empty string values for `VITEST_WORKER_ID`, `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`, and `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` if their `process.env` counterparts are undefined (e.g., `VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? ''`).
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts`:** Correct the `StdioClientTransport` instantiation in `beforeEach`. The `env: currentTestSpawnEnv` property must be nested inside the `options` property: `options: { env: currentTestSpawnEnv, stdio: 'pipe' }`.
+    3.  **`src/tests/index.test.ts` (`ReferenceError` Fix - CRITICAL REATTEMPT):**
+        *   Modify the `vi.mock` calls for `server.ts` and `config-service.ts` to use **static string literals relative to `src/tests/index.test.ts`**. For example, `vi.mock('../../src/lib/server.ts', ...)` and `vi.mock('../../src/lib/config-service.ts', ...)`. Remove the `serverTsAbsolutePath` and `configServiceTsAbsolutePath` variable definitions.
+    4.  **Defer `server.test.ts` Timeouts.**
+    5.  **Defer other Integration Test Assertion Adjustments** until `tsc` errors and environment variable propagation are fixed.
+
+*   **Blockers:**
+    *   `tsc` errors preventing clean build and reliable test execution.
+    *   `src/tests/index.test.ts` `ReferenceError` due to `vi.mock` path hoisting.
+    *   Environment variables not propagating to SUT in integration tests.
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `691bb8f`.
+
 *   **Intended Fixes (from Attempt 83 Plan, leading to commit `e107328`):**
     1.  `src/index.ts`: Make yargs `.fail()` handler `async` to fix `tsc` error. (This was the primary fix in `e107328`).
     2.  Investigate integration test environment variable propagation (deferred pending `stdio.ts` review).
