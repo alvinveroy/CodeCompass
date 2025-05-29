@@ -271,7 +271,7 @@ describe('Stdio Client-Server Integration Tests', () => {
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
       options: { 
         env: currentTestSpawnEnv,
-        stdio: ['pipe', 'pipe', 'pipe'] // Explicitly pipe stdio
+        stdio: 'pipe' // Explicitly pipe stdio
       } 
     } as StdioTransportParams);
     client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });

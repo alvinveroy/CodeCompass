@@ -327,11 +327,9 @@ const createMockLLMProvider = (): LLMProvider => {
         return Promise.resolve("SUT_SELF_MOCK: Agent response: file1.ts contains console.log(\"Hello from file1\"); and const x = 10; Session ID: SUT_SELF_MOCK_SESSION_ID");
       }
       
-      const condition1_part1 = "suggest how to use file1.ts";
-      const condition1_part2 = "index file1"; // This part might be too specific if refinement changes
-      if (lowerPrompt.includes(condition1_part1) && lowerPrompt.includes("file1.ts")) { // Simplified condition
-        logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock: Matched '${condition1_part1}' prompt.`);
-        // This is the response that the generate_suggestion test expects to find specific content in.
+      // Condition for "suggest how to use file1.ts"
+      if (lowerPrompt.includes("suggest how to use") && lowerPrompt.includes("file1.ts")) {
+        logger.info(`[MOCK_LLM_PROVIDER] SUT self-mock: Matched "suggest how to use file1.ts" prompt.`);
         return Promise.resolve("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts. * Wraps the logging in a reusable function. **Suggested Implementation**: `func() {}`");
       }
       

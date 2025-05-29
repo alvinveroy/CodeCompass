@@ -8,28 +8,29 @@ const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
 // This is where we tell Vitest how to resolve the SUT's dynamic, absolute-path requires
 // during testing, pointing them to the .ts source files (which Vitest will then use our top-level mocks for).
 
-// Construct absolute paths to the SUT's dynamically required .js files in dist/lib
-const serverJsDistPath = path.join(projectRootForDynamicMock, 'dist', 'lib', 'server.js');
-const configServiceJsDistPath = path.join(projectRootForDynamicMock, 'dist', 'lib', 'config-service.js');
-// Assuming logger is part of config-service.js for dynamic require, or add loggerJsDistPath if separate
-
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.js (dist) path: ${serverJsDistPath}`);
-vi.mock(serverJsDistPath, async () => {
-  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${serverJsDistPath} (server.js) is RUNNING. Redirecting to src/lib/server.ts`);
-  return vi.importActual('../lib/server.ts'); // Relative path from this test file to src/lib/server.ts
+// Mock the SUT's attempt to require '.../src/lib/server.ts' (when VITEST_WORKER_ID is set)
+console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.ts path (using static literal): ../lib/server.ts");
+vi.mock('../lib/server.ts', async () => { // Path relative to this test file
+  console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../lib/server.ts is RUNNING.");
+  // This will be intercepted by the top-level vi.mock('../../src/lib/server.ts', ...) further down
+  return vi.importActual('../lib/server.ts'); 
 });
 
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.js (dist) path: ${configServiceJsDistPath}`);
-vi.mock(configServiceJsDistPath, async () => {
-  console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${configServiceJsDistPath} (config-service.js) is RUNNING. Redirecting to src/lib/config-service.ts`);
-  return vi.importActual('../lib/config-service.ts'); // Relative path to src/lib/config-service.ts
+// Mock the SUT's attempt to require '.../src/lib/config-service.ts' (when VITEST_WORKER_ID is set)
+console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.ts path (using static literal): ../lib/config-service.ts");
+vi.mock('../lib/config-service.ts', async () => { // Path relative to this test file
+  console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../lib/config-service.ts is RUNNING.");
+  // This will be intercepted by the top-level vi.mock('../../src/lib/config-service.ts', ...) further down
+  return vi.importActual('../lib/config-service.ts');
 });
 
-// If logger were dynamically required from a separate logger.js in dist/lib:
-// const loggerJsDistPath = path.join(projectRootForDynamicMock, 'dist', 'lib', 'logger.js');
-// console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's logger.js (dist) path: ${loggerJsDistPath}`);
-// vi.mock(loggerJsDistPath, async () => {
-//   console.log(`[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ${loggerJsDistPath} (logger.js) is RUNNING. Redirecting to src/lib/logger.ts`);
+// Mock the SUT's attempt to require '.../src/lib/logger.ts' (if it were dynamic and VITEST_WORKER_ID is set)
+// Assuming logger is part of config-service.ts for dynamic require, so no separate mock needed here
+// if the SUT requires config-service.ts for logger.
+// If SUT dynamically requires a separate logger.ts:
+// console.error("[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's logger.ts path (using static literal): ../lib/logger.ts");
+// vi.mock('../lib/logger.ts', async () => { // Path relative to this test file
+//   console.log("[INDEX_TEST_SUT_REQUIRE_INTERCEPT] vi.mock factory for ../lib/logger.ts is RUNNING.");
 //   return vi.importActual('../lib/logger.ts');
 // });
 });
