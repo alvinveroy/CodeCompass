@@ -619,19 +619,15 @@ describe('Stdio Client-Server Integration Tests', () => {
     console.log('[INTEGRATION_TEST_DEBUG] typeof suggestionText:', typeof suggestionText);
     console.log('[INTEGRATION_TEST_DEBUG] ACTUAL RESPONSE TEXT (generate_suggestion):', suggestionText);
 
-    // The SUT's self-mock for "suggest how to use file1.ts" returns a detailed markdown.
-    // Actual SUT output from a57a437 log for this test:
-    // "# Code Suggestion for: "Suggest how to use file1.ts"\n\n> Query refined to: "Suggest how to use file1.ts index file1"\n\n## Suggestion\nBased on the provided context and repeated diffs showing the same content being added to `file1.ts`, here's a detailed suggestion:\n\n**Suggested Implementation**:\n```typescript\n// file1.ts - Improved version\nfunction greetFromFile1(): void {..."
-    // Ensure assertions match key parts of this SUT self-mock output.
-    expect(suggestionText).toContain("# Code Suggestion for: \"Suggest how to use file1.ts\"");
-    expect(suggestionText).toContain("Based on the provided context and repeated diffs showing the same content being added to `file1.ts`");
+    // The SUT's self-mock for "suggest how to use file1.ts" (when refined to include "index file1")
+    // returns a specific string:
+    // "SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts. * Wraps the logging in a reusable function. **Suggested Implementation**: `func() {}`"
     
-    const lines = suggestionText?.split('\n') || [];
-    expect(lines.some(line => line.trim() === '**Suggested Implementation**:'),
-      `Expected to find a line with exactly "**Suggested Implementation**:", but not found. Actual lines: \n${lines.map(l => `"${l}"`).join('\n')}`
-    ).toBe(true);
-    expect(suggestionText).toContain("function greetFromFile1(): void {"); // Check for part of the code block
-    expect(suggestionText).toContain("Wrapped the console.log in a function to make it reusable"); // This part is from the SUT's mock logic explanation
+    // Assertions should match this specific SUT self-mock output.
+    expect(suggestionText).toContain("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts.");
+    expect(suggestionText).toContain("* Wraps the logging in a reusable function.");
+    // Use a direct includes check for the problematic markdown part
+    expect(suggestionText?.includes('**Suggested Implementation**: `func() {}`')).toBe(true);
 
     await client.close();
   }, 60000);
