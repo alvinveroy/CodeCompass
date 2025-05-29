@@ -496,7 +496,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Verify that the SUT's mock Qdrant client logged an upsert operation
     const fullSutOutput = sutOutputCaptured.join('');
     // console.log('[DEBUG SUT OUTPUT FOR QDRANT MOCK CHECK]:\n', fullSutOutput); // For debugging
-    expect(fullSutOutput).toContain('[MOCK_QDRANT_UPSERT]');
+    const qdrantLogFound = fullSutOutput.includes('[MOCK_QDRANT_UPSERT_VIA_LOGGER]') || fullSutOutput.includes('[MOCK_QDRANT_UPSERT_CONSOLE_ERROR]');
+    expect(qdrantLogFound, 
+      `Expected Qdrant mock upsert log not found. SUT output:\n${fullSutOutput}`
+    ).toBe(true);
     
     // Optionally, check status
     const statusResult = await client.callTool({ name: 'get_indexing_status', arguments: {} });

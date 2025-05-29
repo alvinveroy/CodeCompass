@@ -151,15 +151,17 @@ interface ClientCommandArgs {
 async function handleClientCommand(argv: ClientCommandArgs) {
   const { toolName, params: toolParamsString, outputJson } = argv;
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-  const configServiceModulePathForClient = path.join(libPath, 'config-service.js');
+  const configServiceModuleFilenameForClient = process.env.VITEST_WORKER_ID ? 'config-service.js' : 'config-service.js'; // Target .js in dist
+  const resolvedLibPathForClientConfig = process.env.VITEST_WORKER_ID ? path.resolve(__dirname, '..', 'dist', 'lib') : libPath; // Ensure dist for VITEST
+  const configServiceModulePathForClient = path.join(resolvedLibPathForClientConfig, configServiceModuleFilenameForClient);
   console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require configService (in handleClientCommand) from: ${configServiceModulePathForClient}`);
   const { configService } = require(configServiceModulePathForClient) as typeof import('./lib/config-service');
   console.log('[SUT_INDEX_TS_DEBUG] Imported configService in handleClientCommand:', typeof configService, 'configService.DEEPSEEK_API_KEY (sample prop):', configService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (handleClientCommand): ${process.env.VITEST_WORKER_ID}`);
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-  // Assuming logger comes from the same module, no need to re-require if configService was already obtained.
-  // If it's a separate require for logger specifically:
-  const loggerModulePathForClient = path.join(libPath, 'config-service.js'); // Or 'logger.js' if separate
+  
+  const loggerModuleFilenameForClient = process.env.VITEST_WORKER_ID ? 'config-service.js' : 'config-service.js'; // Target .js in dist
+  const resolvedLibPathForClientLogger = process.env.VITEST_WORKER_ID ? path.resolve(__dirname, '..', 'dist', 'lib') : libPath; // Ensure dist for VITEST
+  const loggerModulePathForClient = path.join(resolvedLibPathForClientLogger, loggerModuleFilenameForClient); 
   console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require logger (in handleClientCommand) from: ${loggerModulePathForClient}`);
   const { logger } = require(loggerModulePathForClient) as typeof import('./lib/config-service');
 
@@ -287,9 +289,11 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     
   const isPkg = typeof (process as any).pkg !== 'undefined';
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const serverModulePath = path.join(libPath, 'server.js');
+    const serverModuleFilename = process.env.VITEST_WORKER_ID ? 'server.js' : 'server.js'; // Target .js in dist for tests now
+    const resolvedLibPath = process.env.VITEST_WORKER_ID ? path.resolve(__dirname, '..', 'dist', 'lib') : libPath; // Ensure dist for VITEST
+    const serverModulePath = path.join(resolvedLibPath, serverModuleFilename);
     console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require serverModule from: ${serverModulePath}`);
-    const serverModule = require(serverModulePath); // Consistent path for testing
+    const serverModule = require(serverModulePath);
     const { startServer, ServerStartupError: LocalServerStartupError } = serverModule;
     
     // Define the type for ServerStartupError for TypeScript
@@ -300,9 +304,11 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     console.log('[SUT_INDEX_TS_DEBUG] Imported startServer (handler) in startServerHandler:', typeof startServer, 'Is mock:', !!(startServer as any)?.mock?.calls);
     console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (startServerHandler): ${process.env.VITEST_WORKER_ID}`);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const configServiceModulePath = path.join(libPath, 'config-service.js');
+    const configServiceModuleFilename = process.env.VITEST_WORKER_ID ? 'config-service.js' : 'config-service.js'; // Target .js in dist for tests
+    const resolvedLibPathForConfig = process.env.VITEST_WORKER_ID ? path.resolve(__dirname, '..', 'dist', 'lib') : libPath; // Ensure dist for VITEST
+    const configServiceModulePath = path.join(resolvedLibPathForConfig, configServiceModuleFilename);
     console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require configServiceModule (in startServerHandler) from: ${configServiceModulePath}`);
-    const configServiceModule = require(configServiceModulePath); // Consistent path for testing
+    const configServiceModule = require(configServiceModulePath);
     const { logger: localLogger, configService: localConfigService } = configServiceModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported configService in startServerHandler:', typeof localConfigService, 'configService.DEEPSEEK_API_KEY (sample prop):', localConfigService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   try {
@@ -447,10 +453,11 @@ export async function main() { // Add export
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     let failLogger: { error: (...args: any[]) => void } = console; // Default to console
     try {
-      // const isPkg = typeof (process as any).pkg !== 'undefined'; // isPkg not strictly needed here if libPath is always absolute src/lib for tests
-      const loggerModulePathForFail = path.join(libPath, 'config-service.js'); // Or 'logger.js' if separate
+      const loggerModuleFilenameForFail = process.env.VITEST_WORKER_ID ? 'config-service.js' : 'config-service.js'; // Target .js in dist
+      const resolvedLibPathForFailLogger = process.env.VITEST_WORKER_ID ? path.resolve(__dirname, '..', 'dist', 'lib') : libPath; // Ensure dist for VITEST
+      const loggerModulePathForFail = path.join(resolvedLibPathForFailLogger, loggerModuleFilenameForFail);
       console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to require loggerModule (in .fail()) from: ${loggerModulePathForFail}`);
-      const loggerModule = require(loggerModulePathForFail); // Consistent path for testing
+      const loggerModule = require(loggerModulePathForFail);
       failLogger = loggerModule.logger;
     } catch (e) {
       console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
@@ -494,8 +501,10 @@ export async function main() { // Add export
     // This catch block is for errors thrown from command handlers
     // that yargs' .fail() might not have caught or for truly unexpected issues.
     try {
+        const critLoggerModuleFilename = process.env.VITEST_WORKER_ID ? 'config-service.js' : 'config-service.js'; // Target .js in dist
+        const resolvedLibPathForCritLogger = process.env.VITEST_WORKER_ID ? path.resolve(__dirname, '..', 'dist', 'lib') : libPath; // Ensure dist for VITEST
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-        const { logger: critLogger } = require(path.join(libPath, 'config-service.js')) as typeof import('./lib/config-service');
+        const { logger: critLogger } = require(path.join(resolvedLibPathForCritLogger, critLoggerModuleFilename)) as typeof import('./lib/config-service');
         critLogger.error('Critical unhandled error in CLI execution:', error);
     } catch (_e) { // Use _e if error object 'e' is not used
         console.error('Fallback critical error logger (logger unavailable): Critical error in CLI execution:', error);
