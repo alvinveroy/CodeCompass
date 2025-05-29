@@ -269,14 +269,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     transport = new StdioClientTransport({
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
-      // Pass env directly, not nested under options, to match StdioServerParameters
-      env: currentTestSpawnEnv, 
-      stdio: 'pipe' // Explicitly pipe stdio
-      // The 'options' field itself is for child_process.spawn, but StdioClientTransport
-      // seems to expect 'env' at its top-level constructor argument based on the SDK code.
-      // We are casting to StdioTransportParams which might be a local type.
-      // The SDK's StdioServerParameters expects 'env' at the top level.
-    } as StdioTransportParams); // Keep cast if StdioTransportParams is a local helper type
+      env: currentTestSpawnEnv, // env is a top-level property
+      stdio: 'pipe' // stdio is a top-level property
+      // The options property for child_process.spawn is handled internally by StdioClientTransport if needed.
+      // Based on SDK's stdio.js, 'env' and 'stdio' are expected at the top level of StdioServerParameters.
+    } as StdioTransportParams); // Keep cast if StdioTransportParams is a local helper type for clarity
     client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
   });
 
