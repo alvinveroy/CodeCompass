@@ -12,6 +12,28 @@ const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
 // Top-level vi.mock calls moved into runMainWithArgs as vi.doMock
 // --- End Explicit Mocks for SUT's dynamic requires ---
 
+// NEW: Top-level vi.mock for SUT's dependencies
+vi.mock('../../src/lib/server.ts', () => {
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ../../src/lib/server.ts IS RUNNING.`);
+  return {
+    // SERVER_MODULE_TOKEN is used to verify if the mock is loaded by the SUT
+    SERVER_MODULE_TOKEN: { type: "mocked_server_module_top_level" },
+    // Use getters to access test-scoped variables that might be reassigned or defined later
+    get startServer() { return mockStartServerHandler; },
+    get ServerStartupError() { return ServerStartupError; },
+  };
+});
+
+vi.mock('../../src/lib/config-service.ts', () => {
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ../../src/lib/config-service.ts IS RUNNING.`);
+  return {
+    // Use getters to access test-scoped variables that are reassigned in beforeEach
+    get configService() { return currentMockConfigServiceInstance; },
+    get logger() { return currentMockLoggerInstance; },
+  };
+});
+// END NEW
+
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Client as ActualMcpClient } from '@modelcontextprotocol/sdk/client/index.js';
@@ -246,25 +268,7 @@ describe('CLI with yargs (index.ts)', () => {
     vi.resetModules(); 
     console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] After vi.resetModules().`);
 
-    // Using vi.doMock here to ensure mocks are applied for the SUT's dynamic imports
-    console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.doMock for SUT's server.ts path: ../../src/lib/server.ts`);
-    vi.doMock('../../src/lib/server.ts', () => {
-      console.log(`[INDEX_TEST_SUT_IMPORT_INTERCEPT] vi.doMock factory for ../../src/lib/server.ts is RUNNING.`);
-      return {
-        SERVER_MODULE_TOKEN: { type: "mocked_server_module" },
-        startServer: mockStartServerHandler,
-        ServerStartupError: ServerStartupError,
-      };
-    });
-
-    console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.doMock for SUT's config-service.ts path: ../../src/lib/config-service.ts`);
-    vi.doMock('../../src/lib/config-service.ts', () => {
-      console.log(`[INDEX_TEST_SUT_IMPORT_INTERCEPT] vi.doMock factory for ../../src/lib/config-service.ts is RUNNING.`);
-      return {
-        get configService() { return currentMockConfigServiceInstance; },
-        get logger() { return currentMockLoggerInstance; },
-      };
-    });
+    // vi.doMock calls removed, will be replaced by top-level vi.mock
 
     // The top-level vi.mock calls for '../../src/lib/server.ts' and '../../src/lib/config-service.ts'
     // will apply here because vi.resetModules() clears the module cache. On next import (by SUT),
