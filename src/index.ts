@@ -23,8 +23,34 @@ import type { ChildProcess } from 'child_process';
 import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Client as MCPClientSdk } from '@modelcontextprotocol/sdk/client/index.js';
 
-// Use path.resolve for dynamic requires to make them more robust, especially in test environments.
-const libPath = path.resolve(__dirname, './lib');
+// Prominent logging for NODE_ENV, VITEST_WORKER_ID, and __dirname
+console.error(`[SUT_INDEX_TS_ENV_CHECK_TOP] NODE_ENV: ${process.env.NODE_ENV}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, __dirname: ${__dirname}, isPackaged: ${!!(process as unknown as { pkg?: unknown }).pkg}`);
+
+// Determine the correct path to the 'lib' directory based on execution context
+const isPackaged = !!(process as unknown as { pkg?: unknown }).pkg;
+let libPath: string;
+
+if (process.env.VITEST_WORKER_ID) { // Vitest sets VITEST_WORKER_ID, a reliable indicator of test environment
+  libPath = path.join(__dirname, 'lib'); // Resolve to src/lib when testing with Vitest
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID is set. libPath set to: ${libPath}`);
+} else if (process.env.NODE_ENV === 'test') { // Fallback for other test environments if VITEST_WORKER_ID is not set
+  libPath = path.join(__dirname, 'lib');
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: NODE_ENV === 'test'. libPath set to: ${libPath}`);
+} else if (isPackaged) { // Check for packaged application next
+  libPath = path.join(__dirname, '..', 'dist', 'lib');
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPath set to: ${libPath}`);
+} else if (process.env.NODE_ENV === 'development') { // Then check for development mode
+  libPath = path.join(__dirname, '..', 'dist', 'lib'); // Development usually runs against dist for closer-to-prod behavior
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: NODE_ENV === 'development'. libPath set to: ${libPath}`);
+} else {
+  // Fallback for other environments (e.g., 'production' but not packaged, or NODE_ENV undefined)
+  // This case might need refinement based on deployment strategy.
+  // Defaulting to 'src/lib' if not packaged and not explicitly development.
+  libPath = path.join(__dirname, 'lib');
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Fallback (e.g., production from source). libPath set to: ${libPath}`);
+}
+console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}`);
+
 import { hideBin } from 'yargs/helpers'; // Import hideBin
 
 // SDK imports will be done dynamically within handleClientCommand
