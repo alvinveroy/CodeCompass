@@ -164,12 +164,12 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => {
 // console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering (potentially redundant) vi.mock for SUT's config-service.js (dist) path: ${configServiceJsPathForDistMock}`);
 // vi.mock(configServiceJsPathForDistMock, () => {
 //   console.log(`[INDEX_TEST_DEBUG] Mock factory for ${configServiceJsPathForDistMock} (dist .js) IS RUNNING.`);
-  return {
-    // as they are reassigned in beforeEach
-    get configService() { return currentMockConfigServiceInstance; },
-    get logger() { return currentMockLoggerInstance; },
-  };
-});
+//   return {
+//     // as they are reassigned in beforeEach
+//     get configService() { return currentMockConfigServiceInstance; },
+//     get logger() { return currentMockLoggerInstance; },
+//   };
+// });
 
 
 // --- End Mocks ---
