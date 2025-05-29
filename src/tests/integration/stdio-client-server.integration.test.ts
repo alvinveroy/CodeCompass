@@ -419,14 +419,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     expect(agentQueryResult.content).toBeInstanceOf(Array);
     const agentResultText = agentQueryResult.content![0].text as string;
     
-    // The SUT's mock LLM generates a detailed response. Assert for key parts.
-    // Actual SUT output for "what is in file1.ts" (from a57a437 log):
-    // "Based on the provided context, `file1.ts` contains the following two lines of code:\n\n```\nconsole.log(\"Hello from file1\");\nconst x = 10;\n```\n\nThis information is consistent across all the diff chunks shown in the context, which were added in commits `e437e273bde23c42e5f9a21b3f36f03b2380f3b9` and `a566ea58e2465ab0728e70dce450401c0e9b9349`."
-    expect(agentResultText).toContain('Based on the provided context, `file1.ts` contains the following two lines of code:');
-    expect(agentResultText).toContain('console.log("Hello from file1");');
-    expect(agentResultText).toContain('const x = 10;');
-    expect(agentResultText).toContain('This information is consistent across all the diff chunks shown in the context, which were added in commits');
-    // expect(agentResultText).toContain("Session ID: SUT_SELF_MOCK_SESSION_ID");
+    // The SUT's mock LLM for agent_query with "What is in file1.ts?" returns:
+    // "SUT_SELF_MOCK: Agent response: file1.ts contains console.log(\"Hello from file1\"); and const x = 10; Session ID: SUT_SELF_MOCK_SESSION_ID"
+    expect(agentResultText).toContain("SUT_SELF_MOCK: Agent response: file1.ts contains console.log(\"Hello from file1\"); and const x = 10;");
+    expect(agentResultText).toContain("Session ID: SUT_SELF_MOCK_SESSION_ID");
     await client.close();
   }, 45000);
 
