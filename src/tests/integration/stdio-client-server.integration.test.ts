@@ -266,14 +266,22 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Specifically log the QDRANT mock env var that will be part of the spawned SUT's environment
     console.log(`[INTEGRATION_TEST_ENV_PRE_SPAWN_CHECK] MOCK_QDRANT: ${currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}`);
 
-    transport = new StdioClientTransport({
+    const transportParams: StdioTransportParams = {
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
-      env: currentTestSpawnEnv, // env is a top-level property
-      stdio: 'pipe' // stdio is a top-level property
-      // The options property for child_process.spawn is handled internally by StdioClientTransport if needed.
-      // Based on SDK's stdio.js, 'env' and 'stdio' are expected at the top level of StdioServerParameters.
-    } as StdioTransportParams); // Keep cast if StdioTransportParams is a local helper type for clarity
+      // Pass env and stdio directly as top-level properties
+      env: currentTestSpawnEnv, 
+      options: { // child_process.spawn options, stdio is usually here
+        stdio: 'pipe',
+        // Pass currentTestSpawnEnv to options.env as well if SDK expects it there for some reason,
+        // but primary fix is top-level env. SDK's stdio.js uses this._serverParams.env.
+        // The SDK's cross-spawn call is: spawn(this._serverParams.command, this._serverParams.args ?? [], { env: this._serverParams.env ?? getDefaultEnvironment(), stdio: this._serverParams.stdio ?? 'pipe', ...this._serverParams.options })
+        // So, options.env is NOT used by the SDK's spawn call if top-level env is present.
+        // However, if top-level env is NOT present, it falls back to options.env.
+        // To be safe and explicit, we ensure top-level `env` is set.
+      }
+    };
+    transport = new StdioClientTransport(transportParams);
     client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
   });
 

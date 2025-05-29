@@ -2,37 +2,30 @@ import path from 'path';
 
 // Define projectRootForDynamicMock and srcLibPath at the top level
 const projectRootForDynamicMock = path.resolve(__dirname, '../../'); // Path from src/tests/index.test.ts to project root
-const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
+const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib'); // Absolute path to src/lib
 
-// --- Explicit Mocks for SUT's dynamic requires ---
-// This is where we tell Vitest how to resolve the SUT's dynamic imports of .ts files
-// during testing, pointing them to the actual mock implementations.
-
-// No need to mock logger.ts separately if it's part of config-service.ts and handled above.
-// Top-level vi.mock calls moved into runMainWithArgs as vi.doMock
-// --- End Explicit Mocks for SUT's dynamic requires ---
-
-// NEW: Top-level vi.mock for SUT's dependencies
-vi.mock('../../src/lib/server.ts', () => {
-  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ../../src/lib/server.ts IS RUNNING.`);
+// --- Top-level vi.mock for SUT's dependencies, using absolute paths ---
+// These mocks target the .ts files in src/lib, which the SUT should import when VITEST_WORKER_ID is set.
+const serverTsAbsolutePath = path.resolve(srcLibPath, 'server.ts');
+console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock server.ts at absolute path: ${serverTsAbsolutePath}`);
+vi.mock(serverTsAbsolutePath, () => {
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ${serverTsAbsolutePath} (server.ts) IS RUNNING.`);
   return {
-    // SERVER_MODULE_TOKEN is used to verify if the mock is loaded by the SUT
-    SERVER_MODULE_TOKEN: { type: "mocked_server_module_top_level" },
-    // Use getters to access test-scoped variables that might be reassigned or defined later
+    SERVER_MODULE_TOKEN: { type: "mocked_server_module_top_level_abs_path" },
     get startServer() { return mockStartServerHandler; },
-    get ServerStartupError() { return ServerStartupError; },
+    get ServerStartupError() { return ServerStartupError; }, // Ensure ServerStartupError is defined before this mock factory
   };
 });
 
-vi.mock('../../src/lib/config-service.ts', () => {
-  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ../../src/lib/config-service.ts IS RUNNING.`);
+const configServiceTsAbsolutePath = path.resolve(srcLibPath, 'config-service.ts');
+console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock config-service.ts at absolute path: ${configServiceTsAbsolutePath}`);
+vi.mock(configServiceTsAbsolutePath, () => {
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ${configServiceTsAbsolutePath} (config-service.ts) IS RUNNING.`);
   return {
-    // Use getters to access test-scoped variables that are reassigned in beforeEach
     get configService() { return currentMockConfigServiceInstance; },
     get logger() { return currentMockLoggerInstance; },
   };
 });
-// END NEW
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
 import { StdioClientTransport as ActualStdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -219,7 +212,15 @@ describe('CLI with yargs (index.ts)', () => {
     originalArgv = [...process.argv];
 
     // Initialize console and process spies
-    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(vi.fn() as unknown as typeof process.exit);
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code) => {
+      // Do not throw if exit code is 0, as yargs uses this for --help/--version
+      if (code !== 0) {
+        throw new Error(`process.exit unexpectedly called with "${code ?? 'undefined'}"`);
+      }
+      // For exit code 0, we just record the call but don't throw, allowing test to proceed.
+      // The spy itself will record the call.
+      return undefined as never; // Match signature
+    });
     
     // Spy on console.log but also call the original implementation
     originalConsoleLog = console.log.bind(console);
@@ -280,18 +281,23 @@ describe('CLI with yargs (index.ts)', () => {
     // The import of the SUT (src/index.ts) will trigger its execution
     // because src/index.ts ends with `void main();`.
     // Mocks should be applied due to vi.resetModules() and importing from src.
-    console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] About to dynamically import SUT from (src) indexPath: ${indexPath}. Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
+    const isClientCommandTest = args.some(arg => KNOWN_TOOLS.includes(arg));
+    const currentSutIndexPath = isClientCommandTest ? path.resolve(__dirname, '../../src/index.ts') : indexPath; // Ensure client commands also use .ts
+
+    console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] About to dynamically import SUT from (src) currentSutIndexPath: ${currentSutIndexPath}. Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
     try {
-      await import(indexPath); // This will execute the SUT's main() via its own void main() call
+      await import(currentSutIndexPath); // This will execute the SUT's main() via its own void main() call
                                // and yargs will use the process.argv we set.
-      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Dynamic import of SUT from ${indexPath} completed.`);
+      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Dynamic import of SUT from ${currentSutIndexPath} completed.`);
     } catch (e) {
-      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${indexPath}:`, e);
+      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${currentSutIndexPath}:`, e);
       // This catch is primarily for errors thrown by yargs' .fail() or handlers
       // that might not be caught by the SUT's own try/catch around cli.parseAsync().
       // Or if the module import itself fails catastrophically.
       // We let the test assertions on mockProcessExit or logger.error handle verification of yargs .fail().
-      // console.warn("[INDEX_TEST_DEBUG] Error during SUT import/execution in runMainWithArgs:", e);
+      if (process.env.VITEST_TESTING_FAIL_HANDLER !== "true" && !(e instanceof Error && e.message.includes("process.exit unexpectedly called"))) {
+         throw e; // Re-throw if not a test-induced exit or fail handler test
+      }
     }
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT import/execution finished or threw.`);
   }
@@ -432,9 +438,14 @@ describe('CLI with yargs (index.ts)', () => {
       const spawnError = new Error("Failed to spawn");
       // To simulate spawn error, we need to make the StdioClientTransport constructor or its connect method throw.
       // A more direct way: mock StdioClientTransport's connect to reject.
-      vi.mocked(ActualStdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(spawnError) } as any));
+      // vi.mocked(ActualStdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(spawnError) } as any));
+      // Better: mock the constructor to throw or the instance's connect to reject
+      mockStdioClientTransportConstructor.mockImplementation(() => {
+        throw spawnError; // Simulate constructor failure or connect failure
+        // return { connect: vi.fn().mockRejectedValue(spawnError), close: vi.fn() };
+      });
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}']);
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}'])).rejects.toThrow(spawnError);
       
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', spawnError);
       expect(mockProcessExit).toHaveBeenCalledWith(1);
@@ -443,12 +454,13 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should handle client command failure (server process premature exit) and log via yargs .fail()', async () => {
       // Simulate premature exit by having client.connect() reject with a specific error.
-      // StdioClientTransport might internally handle this and surface it as a connection error.
       const prematureExitError = new Error("Server process exited prematurely");
-      vi.mocked(ActualStdioClientTransport).mockImplementation(() => ({ connect: vi.fn().mockRejectedValue(prematureExitError) } as any));
+      mockStdioClientTransportConstructor.mockImplementation(() => ({
+        connect: vi.fn().mockRejectedValue(prematureExitError),
+        close: vi.fn(),
+      }));
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      // No need to wait for simulateServerReady if server exits prematurely
-      await runMainWithArgs(['agent_query', '{"query":"test_server_exit"}']); 
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_server_exit"}'])).rejects.toThrow(prematureExitError);
       
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', 
         expect.objectContaining({ message: expect.stringContaining("Server process exited prematurely") })
@@ -460,10 +472,21 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should handle invalid JSON parameters for client command (stdio) and log via yargs .fail()', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await runMainWithArgs(['agent_query', '{"query": "test"']); // Invalid JSON
-      // StdioClientTransport might still be constructed, but connect or callTool should fail.
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Invalid JSON parameters for tool 'agent_query'"));
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: expect.stringContaining('Invalid JSON parameters') }));
+      // Expect runMainWithArgs to throw because handleClientCommand re-throws the JSON parsing error
+      await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrow(
+        expect.objectContaining({ message: expect.stringContaining('Invalid JSON parameters') })
+      );
+      
+      // The SUT's yargs .fail() handler should have been called.
+      // It logs to console.error first, then to logger.error if VITEST_TESTING_FAIL_HANDLER is set.
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Error: Invalid JSON parameters for tool 'agent_query'."));
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Details: Expected ',' or '}' after property value in JSON at position 16"));
+      
+      // Check logger.error call from .fail()
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+        'CLI Error (yargs.fail):',
+        expect.objectContaining({ message: expect.stringContaining("Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16") })
+      );
       expect(mockProcessExit).toHaveBeenCalledWith(1);
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
@@ -598,18 +621,24 @@ describe('CLI with yargs (index.ts)', () => {
   describe('Error Handling and Strict Mode by yargs', () => {
     it('should show error and help for unknown command', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await runMainWithArgs(['unknowncommand']);
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument: unknowncommand"));
+      await runMainWithArgs(['unknowncommand']); // No need to expect.rejects if yargs handles exit
+      
+      // yargs .fail() logs to console.error when not in test fail handler mode,
+      // but to logger.error when VITEST_TESTING_FAIL_HANDLER is true.
+      // The SUT's .fail() handler logs the raw message from yargs.
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error (yargs.fail):', expect.stringContaining("Unknown argument: unknowncommand"));
+      // yargs also calls console.error with its own formatting
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument: unknowncommand"));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should show error and help for unknown option', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await runMainWithArgs(['--unknown-option']);
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument"));
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error (yargs.fail):', expect.stringContaining("Unknown argument"));
+      await runMainWithArgs(['--unknown-option']); // No need to expect.rejects
+      
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error (yargs.fail):', expect.stringContaining("Unknown argument: unknown-option"));
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument: unknown-option"));
       expect(mockProcessExit).toHaveBeenCalledWith(1);
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
@@ -680,9 +709,13 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockRejectedValue(rpcError);
       
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json']);
+      // Expect runMainWithArgs to throw because handleClientCommand re-throws the error
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json'])).rejects.toEqual(rpcError);
 
+      // The SUT's handleClientCommand catches the error and logs it in JSON format to console.error
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
+      // The SUT's yargs .fail() handler then catches the re-thrown error
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', rpcError);
       expect(mockProcessExit).toHaveBeenCalledWith(1);
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
@@ -692,9 +725,10 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockRejectedValue(genericError);
 
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await runMainWithArgs(['agent_query', '{"query":"test_json_generic_error"}', '--json']);
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_json_generic_error"}', '--json'])).rejects.toThrow(genericError);
       
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name } }, null, 2));
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', genericError);
       expect(mockProcessExit).toHaveBeenCalledWith(1);
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });

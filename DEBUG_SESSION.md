@@ -1001,7 +1001,70 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 ---
 
-**Attempt 84: Analysis of `npm run build` (commit `e107328`)**
+**Attempt 90: Analysis of `npm run build` (commit after `b8f8e12` - build output from user reflects this state)**
+
+*   **Intended Fixes (from Attempt 89 Plan):**
+    1.  `src/tests/index.test.ts` (`ReferenceError` Fix): Modify `vi.mock` calls to use static string literals relative to `src/tests/index.test.ts`.
+    2.  `src/tests/integration/stdio-client-server.integration.test.ts` (Fix Env Var Propagation): Correct `StdioClientTransport` instantiation to pass `env` and `stdio` as top-level properties.
+
+*   **Applied Changes (User ran `npm run build` on commit `e107328` - the output reflects the state *before* the fixes planned in Attempt 89 were applied. The user has now added files reflecting the state of `e107328` to the chat for modification based on the plan derived from analyzing that output):**
+    *   The build output analyzed is from commit `e107328`. The changes proposed now are based on the plan formulated in "Attempt 89" of the `DEBUG_SESSION.MD` (which itself was an analysis of `e107328`'s output).
+
+*   **Result (Based on User's `npm run build` Output for commit `e107328`):**
+    *   **`tsc` Compilation:** Passed.
+    *   **Vitest Run (32 failures total, 5 unhandled errors):**
+        *   **`src/tests/index.test.ts` (19 Failures):**
+            *   All 19 tests in the "CLI with yargs (index.ts)" suite are still failing.
+            *   Common failure: `expected "spy" to be called`.
+            *   SUT logs (`[SUT_INDEX_TS_ENV_CHECK_TOP]`, `[SUT_INDEX_TS_LIBPATH_DEBUG]`, `[SUT_INDEX_TS_REQUIRE_DEBUG]`) show `libPath` correctly resolving to `src/lib` when `VITEST_WORKER_ID` is set. The SUT attempts to dynamically import modules like `/Users/alvin.tech/Projects/CodeCompass/src/lib/server.ts`.
+            *   The `vi.mock` calls in `src/tests/index.test.ts` (as of `e107328`) were still using `path.join(srcLibPath, 'server.ts')` which caused `ReferenceError` in previous iterations and was likely misapplied again, or the test file provided does not reflect the static string literal fix yet. The current output shows `ERR_MODULE_NOT_FOUND` for `dist/lib/server.ts` when the SUT is run, indicating `libPath` is resolving to `dist/lib` and `ext` is `.ts` due to `VITEST_WORKER_ID`. This combination is incorrect.
+            *   **Key Issue:** The SUT's `libPath` and `moduleFileExtensionForDynamicImport...` logic needs to be robust. When `VITEST_WORKER_ID` is set, `libPath` must point to `src/lib` and the extension must be `.ts`. The `vi.mock` calls in the test must target these exact `src/lib/...ts` paths.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   All four `startProxyServer` tests still timed out.
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (9 Failures):**
+            *   All 9 tests fail with `MCP error -32000: Connection closed`.
+            *   SUT logs (`[SUT_INDEX_TS_ENV_CHECK_TOP]`, etc.) show `libPath` resolving to `/Users/alvin.tech/Projects/CodeCompass/dist/lib` and then trying to import `.ts` files (e.g., `/Users/alvin.tech/Projects/CodeCompass/dist/lib/server.ts`). This is incorrect; `dist/lib` should contain `.js` files. This happens because `moduleFileExtensionForDynamicImport...` is set to `.ts` due to `VITEST_WORKER_ID`, but `libPath` is incorrectly determined as `dist/lib`.
+            *   Environment variables (`CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`, `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT`) are still not propagating to the SUT due to the `StdioClientTransport` instantiation issue.
+        *   **Unhandled Errors (5):** Related to `process.exit(0)` calls by yargs and unhandled promise rejections from mocked `callTool`.
+
+*   **Analysis/Retrospection:**
+    *   **`src/index.ts` (`libPath` and `ext` Resolution):** This is the primary cause of `ERR_MODULE_NOT_FOUND` in both `src/tests/index.test.ts` (when SUT is run via `runMainWithArgs`) and `src/tests/integration/stdio-client-server.integration.test.ts` (when SUT is spawned).
+        *   If `VITEST_WORKER_ID` is set, `libPath` must be `src/lib` and `ext` must be `.ts`.
+        *   If `isPackaged`, `libPath` should be `dist/lib` (relative to `__dirname` which is `dist`) and `ext` should be `.js`.
+        *   Otherwise (e.g., `node dist/index.js`), `libPath` should be `dist/lib` (relative to `__dirname` which is `dist`) and `ext` should be `.js`.
+    *   **`src/tests/index.test.ts` (SUT Mocking):**
+        *   `vi.mock` paths need to use absolute paths targeting `src/lib/...ts` files.
+        *   The `indexPath` used in `runMainWithArgs` and for `StdioClientTransport`'s `args[0]` needs to be consistently `src/index.ts` for tests that run the SUT from source.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts` (Env Var Propagation):** The `StdioClientTransport` instantiation needs the `env` property at the top level of its constructor options.
+    *   **Unhandled Errors:** Need to be addressed by refining test mock setups and assertions.
+
+*   **Next Steps/Plan (Attempt 90):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
+    2.  **`src/index.ts` (CRITICAL `libPath` and `ext` Fixes):**
+        *   Correct the logic for determining `libPath` and `moduleFileExtensionForDynamicImport...`.
+            *   If `VITEST_WORKER_ID` is set: `libPath` should be `path.join(__dirname, 'lib')` (assuming `__dirname` is `src/...` when Vitest runs `.ts` files) and `ext` should be `.ts`.
+            *   Else if `isPackaged`: `libPath` should be `path.join(path.dirname(process.execPath), 'lib')` (more robust for pkg) or `path.join(__dirname, '..', 'dist', 'lib')` if `__dirname` is reliable inside pkg, and `ext` should be `.js`.
+            *   Else (running `node dist/index.js`): `libPath` should be `path.join(__dirname, 'lib')` (as `__dirname` will be `dist`) and `ext` should be `.js`.
+    3.  **`src/tests/index.test.ts` (SUT Mocking & Path Alignment):**
+        *   **`vi.mock` paths:** Ensure `vi.mock` calls use absolute paths targeting `src/lib/moduleName.ts`, constructed using `path.resolve(projectRootForDynamicMock, 'src', 'lib', 'moduleName.ts')`.
+        *   **`runMainWithArgs` & `StdioClientTransport` SUT path:** Ensure `indexPath` (for `runMainWithArgs`) and `args[0]` for `StdioClientTransport` (in `handleClientCommand` within `src/index.ts` when called by tests) consistently point to `src/index.ts` when tests are running the SUT from source.
+    4.  **`src/tests/integration/stdio-client-server.integration.test.ts` (Fix Env Var Propagation):**
+        *   Correct the `StdioClientTransport` instantiation: pass `env: currentTestSpawnEnv` and `stdio: 'pipe'` directly as top-level properties in the constructor options object.
+    5.  **Unhandled Errors Fixes in `src/tests/index.test.ts`:**
+        *   Modify `mockProcessExit` to not throw an error if `code === 0`.
+        *   Adjust assertions for invalid JSON parameter tests and unknown command/option tests to match the actual error messages logged by the SUT's yargs `.fail()` handler (which might be just the message string, not an Error object).
+        *   For tests involving `mockMcpClientInstance.callTool.mockRejectedValue...`, ensure `runMainWithArgs` is expected to throw (as `handleClientCommand` re-throws) and the test uses `await expect(...).rejects.toThrow(...)`.
+    6.  **Defer `server.test.ts` Timeouts.**
+
+*   **Blockers:**
+    *   Incorrect `libPath` and module extension resolution in `src/index.ts` is the primary blocker for almost all test failures.
+    *   Environment variables not propagating to SUT in integration tests via `StdioClientTransport`.
+    *   `vi.mock` paths in `src/tests/index.test.ts` potentially not aligning with SUT's dynamic import paths.
+    *   Unhandled promise rejections and error assertion mismatches in `src/tests/index.test.ts`.
+
+*   **Metadata:**
+    *   Git Commit (Build Output Analyzed): `e107328`.
+    *   Files in Chat: Reflect state of `e107328`.
 
 *   **Intended Fixes (from Attempt 83 Plan, leading to commit `e107328`):**
     1.  `src/index.ts`: Make yargs `.fail()` handler `async` to fix `tsc` error. (This was the primary fix in `e107328`).

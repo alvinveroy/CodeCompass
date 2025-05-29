@@ -29,27 +29,48 @@ console.error(`[SUT_INDEX_TS_ENV_CHECK_TOP] NODE_ENV: ${process.env.NODE_ENV}, V
 // Determine the correct path to the 'lib' directory based on execution context
 const isPackaged = !!(process as unknown as { pkg?: unknown }).pkg;
 let libPath: string;
+let moduleFileExtensionForDynamicImports: string;
 
-if (process.env.VITEST_WORKER_ID) { // Vitest sets VITEST_WORKER_ID, a reliable indicator of test environment
-  libPath = path.join(__dirname, 'lib'); // Resolve to src/lib when testing with Vitest
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID is set. libPath set to: ${libPath}`);
-} else if (process.env.NODE_ENV === 'test') { // Fallback for other test environments if VITEST_WORKER_ID is not set
-  libPath = path.join(__dirname, 'lib');
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: NODE_ENV === 'test'. libPath set to: ${libPath}`);
-} else if (isPackaged) { // Check for packaged application next
-  libPath = path.join(__dirname, '..', 'dist', 'lib');
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPath set to: ${libPath}`);
-} else if (process.env.NODE_ENV === 'development') { // Then check for development mode
-  libPath = path.join(__dirname, '..', 'dist', 'lib'); // Development usually runs against dist for closer-to-prod behavior
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: NODE_ENV === 'development'. libPath set to: ${libPath}`);
+// IMPORTANT: __dirname behavior:
+// - When running src/index.ts with ts-node/Vitest: __dirname is /path/to/project/src
+// - When running dist/index.js with node: __dirname is /path/to/project/dist
+// - When running packaged app: __dirname is /snapshot/project (or similar, relative to executable)
+
+if (process.env.VITEST_WORKER_ID) {
+  // Running in Vitest worker (typically src/index.ts)
+  libPath = path.resolve(__dirname, 'lib'); // Should resolve to /path/to/project/src/lib
+  moduleFileExtensionForDynamicImports = '.ts';
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID is set. libPath: ${libPath}, ext: ${moduleFileExtensionForDynamicImports}`);
+} else if (isPackaged) {
+  // Running as a packaged executable
+  libPath = path.resolve(path.dirname(process.execPath), 'lib'); // Relative to executable
+  moduleFileExtensionForDynamicImports = '.js';
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPath: ${libPath}, ext: ${moduleFileExtensionForDynamicImports}`);
 } else {
-  // Fallback for other environments (e.g., 'production' but not packaged, or NODE_ENV undefined)
-  // This case might need refinement based on deployment strategy.
-  // Defaulting to 'src/lib' if not packaged and not explicitly development.
-  libPath = path.join(__dirname, 'lib');
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Fallback (e.g., production from source). libPath set to: ${libPath}`);
+  // Running as a .js file from dist (e.g., node dist/index.js) or potentially src/index.js if ts-node isn't used by Vitest
+  // If __dirname is /path/to/project/dist (common for `node dist/index.js`)
+  // or /path/to/project/src (if somehow `node src/index.js` is run without ts-node/Vitest worker)
+  // We need to ensure we point to the correct lib and use .js
+  // Assuming that if not VITEST_WORKER_ID and not isPackaged, we are running a .js file.
+  // If current script is in 'dist', lib is './lib'. If current script is in 'src' (but not Vitest), this case is less common.
+  if (path.basename(__dirname) === 'dist') {
+    libPath = path.resolve(__dirname, 'lib'); // dist/lib
+  } else {
+    // Fallback or if running src/index.js directly (less common for this project structure)
+    // This might need adjustment if there's a scenario of running src/index.js without Vitest.
+    // For safety, assume if not in Vitest worker and not packaged, it's a JS context.
+    // If __dirname is src, but it's a .js file, it's an unusual setup.
+    // Defaulting to dist/lib if __dirname is not 'dist' but also not Vitest worker.
+    // This path needs to be robust. A common case is `node dist/index.js`.
+    libPath = path.resolve(__dirname, '../dist/lib'); // If __dirname is src, go up and to dist/lib
+    if (!fs.existsSync(libPath)) { // If that doesn't exist, assume __dirname is already dist
+        libPath = path.resolve(__dirname, 'lib');
+    }
+  }
+  moduleFileExtensionForDynamicImports = '.js';
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Fallback (likely node dist/index.js or similar). libPath: ${libPath}, ext: ${moduleFileExtensionForDynamicImports}`);
 }
-console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}`);
+console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}, Final ext: ${moduleFileExtensionForDynamicImports}`);
 
 import { hideBin } from 'yargs/helpers'; // Import hideBin
 
@@ -151,21 +172,11 @@ interface ClientCommandArgs {
 async function handleClientCommand(argv: ClientCommandArgs) {
   const { toolName, params: toolParamsString, outputJson } = argv;
 
-  let moduleFileExtensionForDynamicImportHcc: string;
-  if (process.env.VITEST_WORKER_ID) {
-    if (path.basename(__dirname) === 'dist') { // Integration test running dist/index.js
-      moduleFileExtensionForDynamicImportHcc = '.js';
-    } else { // Unit test running src/index.ts
-      moduleFileExtensionForDynamicImportHcc = '.ts';
-    }
-  } else { // Production or development from dist, or packaged
-    moduleFileExtensionForDynamicImportHcc = '.js';
-  }
-
+  // Use the globally determined moduleFileExtensionForDynamicImports
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-  const configServiceModuleFilenameForClient = `config-service${moduleFileExtensionForDynamicImportHcc}`;
+  const configServiceModuleFilenameForClient = `config-service${moduleFileExtensionForDynamicImports}`;
   const configServiceModulePathForClient = path.join(libPath, configServiceModuleFilenameForClient);
-  console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import configService (in handleClientCommand) from: ${configServiceModulePathForClient} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImportHcc})`);
+  console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import configService (in handleClientCommand) from: ${configServiceModulePathForClient} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImports})`);
   const configServiceModule = await import(configServiceModulePathForClient);
   const { configService, logger } = configServiceModule as typeof import('./lib/config-service');
   console.log('[SUT_INDEX_TS_DEBUG] Imported configService in handleClientCommand:', typeof configService, 'configService.DEEPSEEK_API_KEY (sample prop):', configService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
@@ -293,23 +304,11 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     effectiveRepoPath = repoPathOrArgv.repoPath || repoPathOrArgv.repo || '.';
   }
     
-  const isPkg = typeof (process as any).pkg !== 'undefined';
-
-  let moduleFileExtensionForDynamicImportSsh: string;
-  if (process.env.VITEST_WORKER_ID) {
-    if (path.basename(__dirname) === 'dist') { // Integration test running dist/index.js
-      moduleFileExtensionForDynamicImportSsh = '.js';
-    } else { // Unit test running src/index.ts
-      moduleFileExtensionForDynamicImportSsh = '.ts';
-    }
-  } else { // Production or development from dist, or packaged
-    moduleFileExtensionForDynamicImportSsh = '.js';
-  }
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const serverModuleFilename = `server${moduleFileExtensionForDynamicImportSsh}`;
+  // Use the globally determined moduleFileExtensionForDynamicImports
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
+    const serverModuleFilename = `server${moduleFileExtensionForDynamicImports}`;
     const serverModulePath = path.join(libPath, serverModuleFilename);
-    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import serverModule from: ${serverModulePath} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImportSsh})`);
+    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import serverModule from: ${serverModulePath} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImports})`);
     const serverModule = await import(serverModulePath);
     console.error('[SUT_INDEX_TS_SERVER_MODULE_TOKEN_CHECK]', (serverModule as any).SERVER_MODULE_TOKEN); // Log the token
     const { startServer, ServerStartupError: LocalServerStartupError } = serverModule;
@@ -322,9 +321,9 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     console.log('[SUT_INDEX_TS_DEBUG] Imported startServer (handler) in startServerHandler:', typeof startServer, 'Is mock:', !!(startServer as any)?.mock?.calls);
     console.log(`[SUT_INDEX_TS_DEBUG] VITEST_WORKER_ID in SUT (startServerHandler): ${process.env.VITEST_WORKER_ID}`);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    const configServiceModuleFilename = `config-service${moduleFileExtensionForDynamicImportSsh}`; // Use the same extension logic
+    const configServiceModuleFilename = `config-service${moduleFileExtensionForDynamicImports}`; // Use the same extension logic
     const configServiceModulePath = path.join(libPath, configServiceModuleFilename);
-    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import configServiceModule (in startServerHandler) from: ${configServiceModulePath} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImportSsh})`);
+    console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import configServiceModule (in startServerHandler) from: ${configServiceModulePath} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImports})`);
     const configServiceModule = await import(configServiceModulePath);
     const { logger: localLogger, configService: localConfigService } = configServiceModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported configService in startServerHandler:', typeof localConfigService, 'configService.DEEPSEEK_API_KEY (sample prop):', localConfigService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
@@ -470,20 +469,10 @@ export async function main() { // Add export
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     let failLogger: { error: (...args: any[]) => void } = console; // Default to console
     try {
-      let moduleFileExtensionForDynamicImportFail: string;
-      if (process.env.VITEST_WORKER_ID) {
-        if (path.basename(__dirname) === 'dist') { // Integration test running dist/index.js
-          moduleFileExtensionForDynamicImportFail = '.js';
-        } else { // Unit test running src/index.ts
-          moduleFileExtensionForDynamicImportFail = '.ts';
-        }
-      } else { // Production or development from dist, or packaged
-        moduleFileExtensionForDynamicImportFail = '.js';
-      }
-
-      const loggerModuleFilenameForFail = `config-service${moduleFileExtensionForDynamicImportFail}`;
+      // Use the globally determined moduleFileExtensionForDynamicImports
+      const loggerModuleFilenameForFail = `config-service${moduleFileExtensionForDynamicImports}`;
       const loggerModulePathForFail = path.join(libPath, loggerModuleFilenameForFail);
-      console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import loggerModule (in .fail()) from: ${loggerModulePathForFail} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImportFail})`);
+      console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import loggerModule (in .fail()) from: ${loggerModulePathForFail} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImports})`);
       const loggerModule = await import(loggerModulePathForFail);
       failLogger = loggerModule.logger;
     } catch (e) {
@@ -528,20 +517,10 @@ export async function main() { // Add export
     // This catch block is for errors thrown from command handlers
     // that yargs' .fail() might not have caught or for truly unexpected issues.
     try {
-        let moduleFileExtensionForDynamicImportCrit: string;
-        if (process.env.VITEST_WORKER_ID) {
-          if (path.basename(__dirname) === 'dist') { // Integration test running dist/index.js
-            moduleFileExtensionForDynamicImportCrit = '.js';
-          } else { // Unit test running src/index.ts
-            moduleFileExtensionForDynamicImportCrit = '.ts';
-          }
-        } else { // Production or development from dist, or packaged
-          moduleFileExtensionForDynamicImportCrit = '.js';
-        }
-
-        const critLoggerModuleFilename = `config-service${moduleFileExtensionForDynamicImportCrit}`;
+        // Use the globally determined moduleFileExtensionForDynamicImports
+        const critLoggerModuleFilename = `config-service${moduleFileExtensionForDynamicImports}`;
         const critLoggerModulePath = path.join(libPath, critLoggerModuleFilename);
-        console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import critLoggerModule (in main catch) from: ${critLoggerModulePath} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImportCrit})`);
+        console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import critLoggerModule (in main catch) from: ${critLoggerModulePath} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImports})`);
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
         const { logger: critLogger } = await import(critLoggerModulePath) as typeof import('./lib/config-service');
         critLogger.error('Critical unhandled error in CLI execution:', error);
