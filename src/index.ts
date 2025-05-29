@@ -440,7 +440,7 @@ export async function main() { // Add export
     .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass')
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
-    .fail((msg, err, yargsInstance) => { // Changed _yargsInstance to yargsInstance
+    .fail(async (msg, err, yargsInstance) => { // Changed _yargsInstance to yargsInstance
     // Dynamically import logger for failure messages if possible
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
     let failLogger: { error: (...args: any[]) => void } = console; // Default to console
