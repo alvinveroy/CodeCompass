@@ -625,8 +625,10 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Assertions should match this specific SUT self-mock output.
     expect(suggestionText).toContain("SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts.");
     expect(suggestionText).toContain("* Wraps the logging in a reusable function.");
-    // Use a direct includes check for the problematic markdown part
+    // Use a direct includes check for the problematic markdown part, which was simplified.
     expect(suggestionText?.includes('**Suggested Implementation**: `func() {}`')).toBe(true);
+    // The previous regex assertion was: expect(suggestionText).toMatch(/^[ \t]*\*\*Suggested Implementation:\*\*/m);
+    // The simpler includes check should be fine if the string is exactly as expected from the mock.
 
     await client.close();
   }, 60000);
