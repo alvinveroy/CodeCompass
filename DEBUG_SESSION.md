@@ -793,3 +793,64 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 *   **Metadata:**
     *   Git Commit SHA (User Provided): `a57a437`.
+
+---
+
+**Attempt 84: Analysis of `npm run build` (commit `e107328`)**
+
+*   **Intended Fixes (from Attempt 83 Plan, leading to commit `e107328`):**
+    1.  `src/index.ts`: Make yargs `.fail()` handler `async` to fix `tsc` error. (This was the primary fix in `e107328`).
+    2.  Investigate integration test environment variable propagation (deferred pending `stdio.ts` review).
+    3.  Other items from Attempt 83 plan were deferred or dependent on the `tsc` fix.
+
+*   **Applied Changes (commit `e107328`):**
+    *   `src/index.ts`: The yargs `.fail()` handler was made `async`.
+
+*   **Result (Based on User's `npm run build` Output for commit `e107328`):**
+    *   **`tsc` Error:** The `tsc` error related to `await` in the non-async `.fail()` handler in `src/index.ts` is now **RESOLVED**. The build output no longer shows this TypeScript compilation error.
+    *   **Vitest Run (30 failures):**
+        *   **`src/tests/index.test.ts` (21 Failures):**
+            *   All 21 tests in the "CLI with yargs (index.ts)" suite are still failing.
+            *   The common theme remains `expected "spy" to be called` (e.g., for `mockStartServerHandler`, `mockStdioClientTransportConstructor`, `mockConsoleLog`, `mockConsoleError`, `mockedFsSpies.readFileSync`).
+            *   The `Received` section for tests expecting `mockConsoleError` or `currentMockLoggerInstance.error` (e.g., "should handle invalid JSON parameters", "should show error and help for unknown command/option") no longer shows the `Transform failed... "await" can only be used inside an "async" function` error. Instead, it shows the `[INDEX_TEST_RUN_MAIN_DEBUG]` logs, but the expected error logs from the SUT's `.fail()` handler (which should be triggered by invalid commands/params) are not appearing. This indicates that while the SUT (`src/index.ts`) now loads without a transform error, its internal logic (or yargs' parsing/error handling) is not triggering the `.fail()` handler as expected by these tests, or the spies for `console.error`/`logger.error` within the test context are not capturing calls made by the SUT's `.fail()` handler.
+            *   The `[INDEX_TEST_VI_MOCK_DEBUG]` logs for `server.ts` and `config-service.ts` are present, showing the test *attempts* to set up mocks with relative paths like `../../src/lib/server.ts`.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   The four `startProxyServer` tests are still timing out.
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (5 Failures):**
+            *   Failures related to DeepSeek (`agent_query`, `switch_suggestion_model`) and Qdrant (`trigger_repository_update`) persist.
+            *   "Tool not found" errors for `generate_suggestion` and `get_repository_context` also persist.
+            *   **SUT Environment Variable Issues (Still Critical):** The SUT logs from integration tests still show:
+                *   `[LLM_PROVIDER_SUT_ENV_DIAGNOSTIC] getLLMProvider: CODECOMPASS_INTEGRATION_TEST_MOCK_LLM='undefined' (type: undefined)`
+                *   `[QDRANT_SUT_ENV_DIAGNOSTIC] initializeQdrant: CI='undefined' (type: undefined), SKIP_QDRANT_INIT='undefined' (type: undefined), CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT='undefined' (type: undefined)`
+                *   This confirms that the environment variables `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` and `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` are **still not being propagated to the SUT child process** in integration tests. This remains the root cause for many integration test failures.
+
+*   **Analysis/Retrospection:**
+    *   **`tsc` Error Fixed:** Successfully fixed the `await` issue in `src/index.ts`.
+    *   **`src/tests/index.test.ts` Failures:** With the `tsc` error gone, the failures in this suite now clearly point to the SUT not using the mocks. The `vi.mock` calls using relative paths like `../../src/lib/server.ts` might not be correctly resolving to the same module identity that the SUT (`src/index.ts`) resolves when it dynamically requires `path.join(libPath, 'server.ts')`. The `libPath` in the SUT resolves to an absolute path. We need to ensure the `vi.mock` paths in the test also resolve to these exact same absolute paths for the mocks to take effect.
+    *   **Integration Test Environment Variable Propagation Failure:** This is the most critical blocker for integration tests. The `StdioClientTransport` from `@modelcontextprotocol/sdk` is not passing the `env` options correctly to the spawned child process.
+    *   **`server.test.ts` Timeouts:** These remain a lower priority until the more fundamental mocking and environment issues are resolved.
+
+*   **Next Steps/Plan (Attempt 85):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
+    2.  **Investigate Integration Test Environment Variable Propagation (HIGHEST PRIORITY for integration tests):**
+        *   The user has been asked to provide `node_modules/@modelcontextprotocol/sdk/src/client/stdio.ts`. Once available, inspect its constructor and how it uses `options.env` when calling `child_process.spawn`.
+        *   If the SDK's `StdioClientTransport` does not pass through `options.env` correctly, we may need to:
+            *   Modify the SDK (if permissible and the user can patch it locally).
+            *   Find a workaround, such as prefixing the `command` in `StdioServerParameters` with the environment variable assignments (e.g., `command: 'CODECOMPASS_INTEGRATION_TEST_MOCK_LLM=true CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT=true node'`). This is OS-dependent and less clean.
+            *   Consider if there's another way to configure the SUT for testing if direct env var propagation via the transport options fails.
+    3.  **`src/tests/index.test.ts` (SUT Mocking - HIGH PRIORITY for unit tests):**
+        *   **Change `vi.mock` paths to use absolute paths:**
+            *   In `src/tests/index.test.ts`, modify the `vi.mock` calls for `../../src/lib/server.ts` and `../../src/lib/config-service.ts`.
+            *   Instead of relative paths, construct absolute paths using `path.join(srcLibPath, 'server.ts')` and `path.join(srcLibPath, 'config-service.ts')`. The `srcLibPath` variable (already defined as `path.join(projectRootForDynamicMock, 'src', 'lib')`) correctly points to the `src/lib` directory.
+            *   This ensures that the paths Vitest tries to mock are the exact absolute paths that the SUT (`src/index.ts`) will attempt to `require` (or `import` for `.ts` files if `VITEST_WORKER_ID` is set) via `path.join(libPath, 'moduleName.ts')`.
+        *   The diagnostic logs `[SUT_INDEX_TS_REQUIRE_DEBUG]` (from `src/index.ts`) and `[INDEX_TEST_VI_MOCK_DEBUG]` (from `src/tests/index.test.ts` mock factories) should then show matching absolute paths if this is correct.
+    4.  **Defer `server.test.ts` Timeouts.**
+    5.  **Defer Integration Test Assertion Adjustments.**
+
+*   **Blockers:**
+    *   Environment variables (`CODECOMPASS_INTEGRATION_TEST_MOCK_LLM`, `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT`) not being propagated to the SUT in integration tests (needs `stdio.ts` from SDK).
+    *   `src/tests/index.test.ts` SUT not using mocks (due to `vi.mock` path resolution).
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `e107328`.
