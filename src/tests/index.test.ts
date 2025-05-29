@@ -9,11 +9,10 @@ const srcLibPath = path.join(projectRootForDynamicMock, 'src', 'lib');
 // during testing, pointing them to the actual mock implementations.
 
 // Mock the SUT's attempt to import '.../src/lib/server.ts' (when VITEST_WORKER_ID is set)
-// The path for vi.mock should be an absolute path or a path Vitest can resolve correctly.
-// Use path.join directly in vi.mock to avoid hoisting issues with variables.
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.ts path: ${path.join(srcLibPath, 'server.ts')}`);
-vi.mock(path.join(srcLibPath, 'server.ts'), () => {
-  console.log(`[INDEX_TEST_SUT_IMPORT_INTERCEPT] vi.mock factory for ${path.join(srcLibPath, 'server.ts')} is RUNNING.`);
+// The path for vi.mock must be a string literal relative to this test file for reliable hoisting.
+console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's server.ts path: ../../src/lib/server.ts`);
+vi.mock('../../src/lib/server.ts', () => {
+  console.log(`[INDEX_TEST_SUT_IMPORT_INTERCEPT] vi.mock factory for ../../src/lib/server.ts is RUNNING.`);
   return {
     // This is the mock implementation for src/lib/server.ts
     // It should export what the SUT (src/index.ts) expects from it.
@@ -23,10 +22,10 @@ vi.mock(path.join(srcLibPath, 'server.ts'), () => {
 });
 
 // Mock the SUT's attempt to import '.../src/lib/config-service.ts' (when VITEST_WORKER_ID is set)
-// Use path.join directly in vi.mock.
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.ts path: ${path.join(srcLibPath, 'config-service.ts')}`);
-vi.mock(path.join(srcLibPath, 'config-service.ts'), () => {
-  console.log(`[INDEX_TEST_SUT_IMPORT_INTERCEPT] vi.mock factory for ${path.join(srcLibPath, 'config-service.ts')} is RUNNING.`);
+// Use a string literal relative to this test file.
+console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering vi.mock for SUT's config-service.ts path: ../../src/lib/config-service.ts`);
+vi.mock('../../src/lib/config-service.ts', () => {
+  console.log(`[INDEX_TEST_SUT_IMPORT_INTERCEPT] vi.mock factory for ../../src/lib/config-service.ts is RUNNING.`);
   return {
     // This is the mock implementation for src/lib/config-service.ts
     get configService() { return currentMockConfigServiceInstance; }, // Use getter for dynamic instance
@@ -145,22 +144,26 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => {
 // For now, let's rely on the .ts path mocks being effective in the Vitest test environment.
 // The console.error logs in the mock factories will confirm which ones are being hit.
 
-// The following mocks might be redundant if the absolute path mocks for .ts files are sufficient
-// for the test environment. If they cause issues or are not hit, they can be removed.
-// Using path.join directly for these as well.
-const serverJsPathForDistMock = path.join(srcLibPath.replace('/src/', '/dist/'), 'server.js');
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering (potentially redundant) vi.mock for SUT's server.js (dist) path: ${serverJsPathForDistMock}`);
-vi.mock(serverJsPathForDistMock, async () => {
-  console.log(`[INDEX_TEST_DEBUG] Mock factory for ${serverJsPathForDistMock} (dist .js) IS RUNNING.`);
-  return {
-    get startServerHandler() { return mockStartServerHandler; },
-  };
-});
+// The following mocks for '.js' files in 'dist/lib' are likely not needed if the SUT
+// correctly imports '.ts' files from 'src/lib' when VITEST_WORKER_ID is set,
+// and those .ts imports are correctly mocked by the vi.mock calls above using relative paths.
+// Keeping them commented out for now to reduce complexity and potential conflicts.
+// If tests indicate that the SUT *is* trying to load from 'dist/lib/*.js' even in Vitest,
+// these might need to be revisited, but the goal is to mock the source '.ts' files.
 
-const configServiceJsPathForDistMock = path.join(srcLibPath.replace('/src/', '/dist/'), 'config-service.js');
-console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering (potentially redundant) vi.mock for SUT's config-service.js (dist) path: ${configServiceJsPathForDistMock}`);
-vi.mock(configServiceJsPathForDistMock, () => {
-  console.log(`[INDEX_TEST_DEBUG] Mock factory for ${configServiceJsPathForDistMock} (dist .js) IS RUNNING.`);
+// const serverJsPathForDistMock = path.join(srcLibPath.replace('/src/', '/dist/'), 'server.js');
+// console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering (potentially redundant) vi.mock for SUT's server.js (dist) path: ${serverJsPathForDistMock}`);
+// vi.mock(serverJsPathForDistMock, async () => {
+//   console.log(`[INDEX_TEST_DEBUG] Mock factory for ${serverJsPathForDistMock} (dist .js) IS RUNNING.`);
+//   return {
+//     get startServerHandler() { return mockStartServerHandler; },
+//   };
+// });
+
+// const configServiceJsPathForDistMock = path.join(srcLibPath.replace('/src/', '/dist/'), 'config-service.js');
+// console.error(`[INDEX_TEST_VI_MOCK_DEBUG] Registering (potentially redundant) vi.mock for SUT's config-service.js (dist) path: ${configServiceJsPathForDistMock}`);
+// vi.mock(configServiceJsPathForDistMock, () => {
+//   console.log(`[INDEX_TEST_DEBUG] Mock factory for ${configServiceJsPathForDistMock} (dist .js) IS RUNNING.`);
   return {
     // as they are reassigned in beforeEach
     get configService() { return currentMockConfigServiceInstance; },

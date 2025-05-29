@@ -902,6 +902,57 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 ---
 
+**Attempt 87: Analysis of `npm run build` (commit `87189a1`)**
+
+*   **Intended Fixes (from Attempt 86 Plan, leading to commit `87189a1`):**
+    1.  `src/tests/index.test.ts`: Change `vi.mock` paths to use `path.join(srcLibPath, 'moduleName.ts')` directly in the `vi.mock` call.
+    2.  Investigate integration test environment variable propagation (deferred pending SDK `stdio.ts` review).
+
+*   **Applied Changes (commit `87189a1`):**
+    *   `src/tests/index.test.ts`: `vi.mock` paths updated to use `path.join(srcLibPath, 'moduleName.ts')` directly.
+
+*   **Result (Based on User's `npm run build` Output for commit `87189a1`):**
+    *   **`tsc` Compilation:** Passed.
+    *   **Vitest Run (8 failures total):**
+        *   **`src/tests/index.test.ts` (1 Suite Failure -> 21 test failures):**
+            *   The entire suite still failed with `ReferenceError: Cannot access '__vi_import_0__' before initialization` at `src/tests/index.test.ts:15:9`. The line is `vi.mock(path.join(srcLibPath, 'server.ts'), () => { ... });`.
+            *   This indicates that even using `path.join()` directly within `vi.mock()` is not resolving the hoisting issue for variables like `srcLibPath` when used to construct the mock path. Vitest requires the path argument to `vi.mock` to be a string literal or something resolvable at a very early stage, before module execution.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   All four `startProxyServer` tests still timed out (at 30000ms).
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 Failures):**
+            *   `should execute agent_query...`: Fails with `expected 'Based on the provided context, \`file1…' to contain 'SUT_SELF_MOCK: Agent response: file1.…'`. SUT returns detailed markdown.
+            *   `should call trigger_repository_update...`: Fails with `expected '{"result":{"content":[{"type":"text",…' to contain '[MOCK_QDRANT_UPSERT]'`. SUT logs show `IsMock: false` for Qdrant client.
+            *   `should call generate_suggestion...`: Fails with `expected '# Code Suggestion for: "Suggest how t…' to contain 'SUT_SELF_MOCK: This is a generated su…'`. SUT returns detailed markdown.
+            *   `should call get_repository_context...`: Fails with `expected '# Repository Context Summary for: "Wh…' to contain 'SUT_SELF_MOCK: This is a summary of t…'`. SUT returns detailed markdown.
+            *   **SUT Environment Variable Issues (Still Critical):** The SUT logs (`[LLM_PROVIDER_SUT_ENV_DIAGNOSTIC]`, `[QDRANT_SUT_ENV_DIAGNOSTIC]`) consistently show `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM='undefined'` and `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT='undefined'`. This is the root cause for the SUT not using its internal mocks.
+            *   The test `should call switch_suggestion_model and get a success response` now **passes**.
+
+*   **Analysis/Retrospection:**
+    *   **`src/tests/index.test.ts` (`ReferenceError`):** The `vi.mock` path must be a string literal relative to the test file for Vitest's hoisting to work reliably. Variables like `srcLibPath`, even when used inside `path.join()` directly in `vi.mock()`, are not resolved early enough.
+    *   **Integration Tests (Environment Variable Propagation):** This is the most critical blocker for integration tests. The user confirmed that `node_modules/@modelcontextprotocol/sdk/src/client/stdio.ts` was not found by `cat`. However, the SDK's `package.json` `files` entry includes `src/`. This discrepancy needs to be resolved to inspect the `StdioClientTransport`'s `env` handling. The `exports` map points to `dist/client/stdio.js`.
+    *   **Integration Tests (LLM & Qdrant Mock Behavior):** Failures are due to `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` and `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` not reaching the SUT.
+
+*   **Next Steps/Plan (Attempt 88):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
+    2.  **`src/tests/index.test.ts` (`ReferenceError` Fix - CRITICAL):**
+        *   Modify the `vi.mock` calls for `server.ts` and `config-service.ts` to use **static string literals relative to `src/tests/index.test.ts`**. For example, `vi.mock('../../src/lib/server.ts', ...)` and `vi.mock('../../src/lib/config-service.ts', ...)`.
+    3.  **Investigate SDK Structure for Integration Tests (HIGHEST PRIORITY for integration tests):**
+        *   Inform the user about the discrepancy: `cat` failed for `sdk/src/client/stdio.ts`, but SDK `package.json` includes `src/` in `files`.
+        *   Request the user to re-verify the existence and content of `node_modules/@modelcontextprotocol/sdk/src/client/stdio.ts`.
+        *   If it truly doesn't exist, request the content of the compiled `node_modules/@modelcontextprotocol/sdk/dist/client/stdio.js` to analyze `env` handling.
+    4.  **Defer `server.test.ts` Timeouts.**
+    5.  **Defer Integration Test Assertion Adjustments** until environment variable propagation is fixed.
+
+*   **Blockers:**
+    *   `src/tests/index.test.ts` `ReferenceError` due to `vi.mock` path hoisting.
+    *   **Uncertainty about SDK's `StdioClientTransport` source code location/content, preventing diagnosis of environment variable propagation failure for integration tests.**
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `87189a1`.
+
+---
+
 **Attempt 84: Analysis of `npm run build` (commit `e107328`)**
 
 *   **Intended Fixes (from Attempt 83 Plan, leading to commit `e107328`):**
