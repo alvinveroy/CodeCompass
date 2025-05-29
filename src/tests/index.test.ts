@@ -411,7 +411,7 @@ describe('CLI with yargs (index.ts)', () => {
         expect.objectContaining({
           command: process.execPath,
           args: [
-            expect.stringContaining('index.js'),
+            indexPath,
             'start',
             repoPath, // Custom repoPath
             '--port', '0',
@@ -552,7 +552,7 @@ describe('CLI with yargs (index.ts)', () => {
         expect.objectContaining({
           command: process.execPath,
           args: [
-            expect.stringContaining('index.js'),
+            indexPath,
             'start',
             repoPath, // Custom repoPath from --repo
             '--port', '0', // Client-spawned server still uses port '0' in args
