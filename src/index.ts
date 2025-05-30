@@ -225,15 +225,19 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       '--port', '0',     // Instruct server to find a dynamic utility port
     ],
     // Environment variables for the spawned server process
-    env: { // Ensure this 'env' is at the top level of StdioServerParameters
-      ...process.env, // Inherit parent env
+    env: { 
+      // Selectively pass environment variables. Avoid spreading all of process.env
+      // to prevent unexpected behavior and keep the environment clean.
+      PATH: process.env.PATH, // Essential for finding 'node' and other executables
+      NODE_ENV: process.env.NODE_ENV, // Pass through NODE_ENV
       HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
-      // Propagate VITEST_WORKER_ID to ensure child SUT also knows it's in a test context if parent is
-      VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '',
-      // Propagate mock flags if set by the parent test environment
+      VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '', // Propagate if present
       CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
       CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
-      DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false', // Propagate debug flag
+      DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false',
+      // Add other specific environment variables if they are strictly necessary for the child process
+      // For example, API keys if they are not handled by configService loading in the child.
+      // However, configService in the child should ideally load its own config.
     },
     // Note: stdio options would be managed internally by StdioClientTransport
   };
