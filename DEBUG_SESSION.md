@@ -158,6 +158,26 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
         *   The continued failure suggests that either `getDefaultEnvironment()` is returning something that `cross-spawn` prioritizes, or there's another issue. The `DEBUG_SPAWNED_SERVER_ENV` log added to the top of `src/index.ts` should confirm what env vars the SUT *actually* sees upon startup.
     *   **Integration Tests (Qdrant `IsMock: false` & LLM Mock Behavior):** These are direct results of `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` and `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` not reaching the SUT.
 
+*   **Next Steps/Plan (Attempt 95):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
+    2.  **`src/index.ts` (`libPath` Declaration - CRITICAL `tsc` FIX):**
+        *   Ensure `libPath` is declared with `let libPath: string;` at the beginning of the file, in the same scope where `libPathBase` and `moduleFileExtensionForDynamicImports` are declared.
+    3.  **`src/tests/integration/stdio-client-server.integration.test.ts` (Env Var Propagation - Final Attempt):**
+        *   To be absolutely certain `currentTestSpawnEnv` is used, modify `transportParams` to set `env` directly at the top level:
+            *   `const transportParams = { command: ..., args: ..., env: currentTestSpawnEnv, options: { stdio: 'pipe' } };`
+            *   This directly populates `this._serverParams.env` in the SDK, making its `env: this._serverParams.env ?? getDefaultEnvironment()` logic use our `currentTestSpawnEnv`.
+    4.  **Await `npm run build` output.** The `[SPAWNED_SERVER_INIT_ENV_DEBUG]` log from `src/index.ts` will be crucial.
+    5.  **Defer `server.test.ts` Timeouts.**
+    6.  **Defer `index.test.ts` mock verification** until `tsc` and integration env vars are fixed.
+
+*   **Blockers:**
+    *   `tsc` error: `libPath` not defined in `src/index.ts`.
+    *   Environment variables still not propagating to SUT in integration tests.
+    *   `src/tests/server.test.ts` `startProxyServer` timeouts.
+
+*   **Metadata:**
+    *   Git Commit SHA (User Provided): `acb9bd3`.
+
 *   **Analysis/Retrospection:**
     *   **`tsc` Error (`libPath` not defined):** The `libPath` variable needs to be declared with `let libPath: string;` in the same scope as `libPathBase`.
     *   **`src/tests/index.test.ts` (`ReferenceError: libPath is not defined`):** This is a direct result of the `tsc` error. The SUT crashes before mocks can be effective.
