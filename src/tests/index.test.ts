@@ -251,7 +251,7 @@ describe('CLI with yargs (index.ts)', () => {
       // Ensure logger is mocked if it's part of actualConfigService, or handle separately
       // For this setup, logger is a separate export from the module, handled by currentMockLoggerInstance
       reloadConfigsFromFile: vi.fn(), // Ensure methods are mocked if called
-    } as ConfigService; // Assert the type to satisfy TypeScript
+    } as unknown as ConfigService; // Assert the type via unknown to satisfy TypeScript for complex class mocks
     currentMockLoggerInstance = {
       info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
     };
