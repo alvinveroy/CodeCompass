@@ -147,6 +147,16 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
             *   `should call get_repository_context...`: Fails with `expected '# Repository Context Summary for: "Wh…' to contain 'SUT_SELF_MOCK: This is a summary of t…'`.
             *   **SUT Environment Variable Issues (Still Critical):** The SUT logs (`[LLM_PROVIDER_SUT_ENV_DIAGNOSTIC]`, `[QDRANT_SUT_ENV_DIAGNOSTIC]`) consistently show `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM='undefined'` and `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT='undefined'`. This is despite the `StdioClientTransport` `options.env` fix. The environment variables are still not reaching the SUT process.
             *   **SUT Path Resolution in Integration Tests:** The SUT logs (`[SUT_INDEX_TS_ENV_CHECK_TOP]`, `[SUT_INDEX_TS_PATH_INIT_DEBUG]`, `[SUT_INDEX_TS_LIBPATH_DEBUG]`, `[SUT_INDEX_TS_LIBPATH_FINAL]`) show `__dirname` as `dist`, `VITEST_WORKER_ID` as `undefined`, and `libPath` resolving to `dist/lib` with `.js` extension. This part of the path logic in `src/index.ts` is behaving correctly for a non-Vitest execution context (which is what the spawned SUT is, even if the parent test is Vitest). The problem is that the `VITEST_WORKER_ID` and mock flags are not being passed into this spawned SUT's environment.
+
+*   **Analysis/Retrospection:**
+    *   **`tsc` Error (`libPath` not defined):** The `libPath` variable needs to be declared with `let libPath: string;` in the same scope as `libPathBase`.
+    *   **`src/tests/index.test.ts` (`ReferenceError: libPath is not defined`):** This is a direct result of the `tsc` error. The SUT crashes before mocks can be effective.
+    *   **Integration Tests (Environment Variable Propagation):** This is the most critical blocker for integration tests. The `StdioClientTransport` instantiation in `src/tests/integration/stdio-client-server.integration.test.ts` was changed to `options: { env: currentTestSpawnEnv, stdio: 'pipe' }`. The SDK's `stdio.js` code for `cross-spawn` is `spawn(this._serverParams.command, this._serverParams.args ?? [], { env: this._serverParams.env ?? getDefaultEnvironment(), stdio: this._serverParams.stdio ?? 'pipe', ...this._serverParams.options })`.
+        *   If `transportParams` (from the test) is `this._serverParams` (in the SDK), then `this._serverParams.env` would be `transportParams.env`. Since the test sets `transportParams.options.env`, `transportParams.env` is undefined.
+        *   Thus, `this._serverParams.env ?? getDefaultEnvironment()` resolves to `getDefaultEnvironment()`.
+        *   Then, `...this._serverParams.options` is spread. This means `options.env` (which is `currentTestSpawnEnv`) *should* be used by `cross-spawn`.
+        *   The continued failure suggests that either `getDefaultEnvironment()` is returning something that `cross-spawn` prioritizes, or there's another issue. The `DEBUG_SPAWNED_SERVER_ENV` log added to the top of `src/index.ts` should confirm what env vars the SUT *actually* sees upon startup.
+    *   **Integration Tests (Qdrant `IsMock: false` & LLM Mock Behavior):** These are direct results of `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` and `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` not reaching the SUT.
         *   `get_session_history` (temporarily expect 1 query instead of 2).
         *   `generate_suggestion` (match actual SUT self-mocked output).
 
