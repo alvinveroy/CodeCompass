@@ -224,22 +224,24 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       clientRepoPath,    // Repository path for the server
       '--port', '0',     // Instruct server to find a dynamic utility port
     ],
-    // Environment variables for the spawned server process
-    env: { 
-      // Selectively pass environment variables. Avoid spreading all of process.env
-      // to prevent unexpected behavior and keep the environment clean.
-      PATH: process.env.PATH ?? '', // Essential for finding 'node' and other executables
-      NODE_ENV: process.env.NODE_ENV ?? '', // Pass through NODE_ENV
-      HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
-      VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '', // Propagate if present
-      CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
-      CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
-      DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false',
-      // Add other specific environment variables if they are strictly necessary for the child process
-      // For example, API keys if they are not handled by configService loading in the child.
-      // However, configService in the child should ideally load its own config.
-    },
-    // Note: stdio options would be managed internally by StdioClientTransport
+    // Environment variables and other spawn options for the server process
+    options: {
+      stdio: 'pipe', // Default stdio for StdioClientTransport unless overridden
+      env: { 
+        // Selectively pass environment variables. Avoid spreading all of process.env
+        // to prevent unexpected behavior and keep the environment clean.
+        PATH: process.env.PATH ?? '', // Essential for finding 'node' and other executables
+        NODE_ENV: process.env.NODE_ENV ?? '', // Pass through NODE_ENV
+        HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
+        VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '', // Propagate if present
+        CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
+        CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
+        DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false',
+        // Add other specific environment variables if they are strictly necessary for the child process
+        // For example, API keys if they are not handled by configService loading in the child.
+        // However, configService in the child should ideally load its own config.
+      },
+    }
   };
 
   console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport);

@@ -281,7 +281,11 @@ describe('CLI with yargs (index.ts)', () => {
     // The second arg to process.argv should be the path of the script being "executed"
     process.argv = ['node', indexPath, ...args]; // indexPath is now src/index.ts
     
-    console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Before vi.resetModules(). Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
+    // Ensure SUT runs in a test-aware context for mocks to apply to src/*.ts files
+    process.env.VITEST_WORKER_ID = '1'; // Key for SUT to use src/lib
+    process.env.NODE_ENV = 'test';      // Standard for test environment
+
+    console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Before vi.resetModules(). Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, NODE_ENV: ${process.env.NODE_ENV}`);
     // vi.resetModules() is crucial when using vi.mock for modules that the SUT will import,
     // especially when mock implementations (like for configService and logger) change per test.
     vi.resetModules(); 
@@ -412,13 +416,18 @@ describe('CLI with yargs (index.ts)', () => {
             '.', // Default repoPath
             '--port', '0', // Client-spawned servers use dynamic utility port
           ],
-          options: expect.objectContaining({ // Correctly nest env under options
+          // Corrected: env should be nested under options for StdioClientTransport
+          options: expect.objectContaining({ 
+            stdio: 'pipe', // Default stdio if not specified by SUT, or remove if SUT doesn't set it
             env: expect.objectContaining({
-              HTTP_PORT: '0', // Client-spawned servers use dynamic utility port
+              HTTP_PORT: '0',
+              VITEST_WORKER_ID: expect.any(String), // SUT should pass this through
+              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
+              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
             }),
           }),
-        }) // This closes expect.objectContaining for the main transport args
-      ); // This closes toHaveBeenCalledWith
+        }) 
+      ); 
       // We expect the MCP client's callTool to be invoked.
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_stdio' } });
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
@@ -440,11 +449,13 @@ describe('CLI with yargs (index.ts)', () => {
             repoPath, // Custom repoPath
             '--port', '0',
           ],
-          options: expect.objectContaining({ // Correctly nest env under options
-            env: expect.objectContaining({ // Expect a more minimal env now
+          options: expect.objectContaining({
+            stdio: 'pipe',
+            env: expect.objectContaining({
               HTTP_PORT: '0',
-              VITEST_WORKER_ID: expect.any(String), // Should be passed if present
-              // CODECOMPASS_INTEGRATION_TEST_MOCK_LLM and _QDRANT should be passed if set
+              VITEST_WORKER_ID: expect.any(String),
+              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
+              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
             }),
           }),
         })
@@ -594,8 +605,12 @@ describe('CLI with yargs (index.ts)', () => {
             '--port', '0', // Client-spawned server still uses port '0' in args
           ],
           options: expect.objectContaining({
+            stdio: 'pipe',
             env: expect.objectContaining({
-              HTTP_PORT: '0', // Client-spawned servers use dynamic utility port
+              HTTP_PORT: '0',
+              VITEST_WORKER_ID: expect.any(String),
+              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
+              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
             }),
           }),
         })
