@@ -269,13 +269,11 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transportParams: StdioTransportParams = {
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
-      // Pass env and stdio directly as top-level properties
-      env: currentTestSpawnEnv, // Set env at the top level
+      // Pass env and stdio through options property as per StdioTransportParams type
       options: { // child_process.spawn options, stdio is usually here
         stdio: 'pipe',
-        // env: currentTestSpawnEnv, // Keep env also in options for safety, though top-level should be primary
+        env: currentTestSpawnEnv, // Set env in options
         // The SDK's cross-spawn call is: spawn(this._serverParams.command, this._serverParams.args ?? [], { env: this._serverParams.env ?? getDefaultEnvironment(), stdio: this._serverParams.stdio ?? 'pipe', ...this._serverParams.options })
-        // Setting env at top level of transportParams makes this._serverParams.env defined.
       }
     };
     transport = new StdioClientTransport(transportParams);

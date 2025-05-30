@@ -235,7 +235,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
       DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false', // Propagate debug flag
     },
-    stdio: 'pipe', // Explicitly set stdio for clarity, though often default
+    // Note: stdio options would be managed internally by StdioClientTransport
   };
 
   console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport);
