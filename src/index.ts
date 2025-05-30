@@ -28,6 +28,7 @@ console.error(`[SUT_INDEX_TS_ENV_CHECK_TOP] NODE_ENV: ${process.env.NODE_ENV}, V
 
 // Determine the correct path to the 'lib' directory based on execution context
 const isPackaged = !!(process as unknown as { pkg?: unknown }).pkg;
+let libPath: string; // Declare libPath here
 let libPathBase: string; // Base directory for 'lib'
 let moduleFileExtensionForDynamicImports: string;
 

@@ -270,15 +270,12 @@ describe('Stdio Client-Server Integration Tests', () => {
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
       // Pass env and stdio directly as top-level properties
+      env: currentTestSpawnEnv, // Set env at the top level
       options: { // child_process.spawn options, stdio is usually here
-        env: currentTestSpawnEnv, 
         stdio: 'pipe',
-        // Pass currentTestSpawnEnv to options.env as well if SDK expects it there for some reason,
-        // but primary fix is top-level env. SDK's stdio.js uses this._serverParams.env.
+        // env: currentTestSpawnEnv, // Keep env also in options for safety, though top-level should be primary
         // The SDK's cross-spawn call is: spawn(this._serverParams.command, this._serverParams.args ?? [], { env: this._serverParams.env ?? getDefaultEnvironment(), stdio: this._serverParams.stdio ?? 'pipe', ...this._serverParams.options })
-        // So, options.env is NOT used by the SDK's spawn call if top-level env is present.
-        // However, if top-level env is NOT present, it falls back to options.env.
-        // To be safe and explicit, we ensure top-level `env` is set.
+        // Setting env at top level of transportParams makes this._serverParams.env defined.
       }
     };
     transport = new StdioClientTransport(transportParams);
