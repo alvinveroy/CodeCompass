@@ -62,7 +62,7 @@ const mockMcpClientInstance = { // DEFINED HERE
 };
 
 // Import the actual configService to base the mock on
-import { configService as actualConfigService } from '../../src/lib/config-service';
+import { configService as actualConfigService, type ConfigService } from '../../src/lib/config-service';
 
 // Store the original configService mock structure to reset it
 // const originalMockConfigServiceInstance = { HTTP_PORT: 0, AGENT_QUERY_TIMEOUT: 180000 }; // Replaced by actualConfigService spread
@@ -251,7 +251,7 @@ describe('CLI with yargs (index.ts)', () => {
       // Ensure logger is mocked if it's part of actualConfigService, or handle separately
       // For this setup, logger is a separate export from the module, handled by currentMockLoggerInstance
       reloadConfigsFromFile: vi.fn(), // Ensure methods are mocked if called
-    };
+    } as ConfigService; // Assert the type to satisfy TypeScript
     currentMockLoggerInstance = {
       info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
     };
