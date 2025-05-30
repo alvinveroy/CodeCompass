@@ -117,6 +117,19 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 *   **Intended Fixes (from Attempt 66):**
     1.  Update `DEBUG_SESSION.MD`.
     2.  Adjust assertions in `src/tests/integration/stdio-client-server.integration.test.ts` for:
+
+---
+
+**Attempt 94: Analysis of `npm run build` (commit `acb9bd3`)**
+
+*   **Intended Fixes (from Attempt 93 Plan, leading to commit `acb9bd3`):**
+    1.  `src/index.ts`: Fix `TS2322` (env vars to child process) by adding `?? ''`. (Applied in `acb9bd3`)
+    2.  `src/tests/integration/stdio-client-server.integration.test.ts`: Fix `TS2353` (StdioClientTransport `env` option nesting). (Applied in `acb9bd3`)
+    3.  `src/tests/index.test.ts`: Fix `ReferenceError` by using static relative paths for `vi.mock`. (Applied in `acb9bd3`)
+    4.  `src/index.ts`: Refine `libPath` and `moduleFileExtensionForDynamicImports` logic. (Applied in `acb9bd3`)
+
+*   **Applied Changes (commit `acb9bd3`):**
+    *   All planned changes from Attempt 93 were applied by the user.
         *   `get_session_history` (temporarily expect 1 query instead of 2).
         *   `generate_suggestion` (match actual SUT self-mocked output).
 
