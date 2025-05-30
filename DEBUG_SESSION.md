@@ -157,6 +157,16 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
         *   Then, `...this._serverParams.options` is spread. This means `options.env` (which is `currentTestSpawnEnv`) *should* be used by `cross-spawn`.
         *   The continued failure suggests that either `getDefaultEnvironment()` is returning something that `cross-spawn` prioritizes, or there's another issue. The `DEBUG_SPAWNED_SERVER_ENV` log added to the top of `src/index.ts` should confirm what env vars the SUT *actually* sees upon startup.
     *   **Integration Tests (Qdrant `IsMock: false` & LLM Mock Behavior):** These are direct results of `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` and `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` not reaching the SUT.
+
+*   **Analysis/Retrospection:**
+    *   **`tsc` Error (`libPath` not defined):** The `libPath` variable needs to be declared with `let libPath: string;` in the same scope as `libPathBase`.
+    *   **`src/tests/index.test.ts` (`ReferenceError: libPath is not defined`):** This is a direct result of the `tsc` error. The SUT crashes before mocks can be effective.
+    *   **Integration Tests (Environment Variable Propagation):** This is the most critical blocker for integration tests. The `StdioClientTransport` instantiation in `src/tests/integration/stdio-client-server.integration.test.ts` was changed to `options: { env: currentTestSpawnEnv, stdio: 'pipe' }`. The SDK's `stdio.js` code for `cross-spawn` is `spawn(this._serverParams.command, this._serverParams.args ?? [], { env: this._serverParams.env ?? getDefaultEnvironment(), stdio: this._serverParams.stdio ?? 'pipe', ...this._serverParams.options })`.
+        *   If `transportParams` (from the test) is `this._serverParams` (in the SDK), then `this._serverParams.env` would be `transportParams.env`. Since the test sets `transportParams.options.env`, `transportParams.env` is undefined.
+        *   Thus, `this._serverParams.env ?? getDefaultEnvironment()` resolves to `getDefaultEnvironment()`.
+        *   Then, `...this._serverParams.options` is spread. This means `options.env` (which is `currentTestSpawnEnv`) *should* be used by `cross-spawn`.
+        *   The continued failure suggests that either `getDefaultEnvironment()` is returning something that `cross-spawn` prioritizes, or there's another issue. The `DEBUG_SPAWNED_SERVER_ENV` log added to the top of `src/index.ts` should confirm what env vars the SUT *actually* sees upon startup.
+    *   **Integration Tests (Qdrant `IsMock: false` & LLM Mock Behavior):** These are direct results of `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT` and `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM` not reaching the SUT.
         *   `get_session_history` (temporarily expect 1 query instead of 2).
         *   `generate_suggestion` (match actual SUT self-mocked output).
 
