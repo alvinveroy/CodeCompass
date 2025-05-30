@@ -32,13 +32,24 @@ let libPath: string; // Declare libPath here
 let libPathBase: string; // Base directory for 'lib'
 let moduleFileExtensionForDynamicImports: string;
 
+// Check for --cc-integration-test-sut-mode flag early
+const ccIntegrationTestSutMode = process.argv.includes('--cc-integration-test-sut-mode');
+
+if (ccIntegrationTestSutMode) {
+  console.error(`[SUT_INDEX_TS_MODE_DEBUG] --cc-integration-test-sut-mode detected. Forcing src paths and test mocks.`);
+  process.env.VITEST_WORKER_ID = 'integration_sut'; // Simulate test environment for path resolution
+  process.env.NODE_ENV = 'test';
+  process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM = 'true';
+  process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT = 'true';
+}
+
 // Prominent logging for initial state
 console.error(
-  `[SUT_INDEX_TS_PATH_INIT_DEBUG] __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`
+  `[SUT_INDEX_TS_PATH_INIT_DEBUG] __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, CC_INT_TEST_MODE: ${ccIntegrationTestSutMode}`
 );
 
-if (process.env.VITEST_WORKER_ID) {
-  // Running in Vitest worker, source files are in 'src' relative to project root (process.cwd())
+if (process.env.VITEST_WORKER_ID) { // This will now also be true if --cc-integration-test-sut-mode was passed
+  // Running in Vitest worker or forced integration test SUT mode, source files are in 'src' relative to project root (process.cwd())
   libPathBase = path.resolve(process.cwd(), 'src');
   moduleFileExtensionForDynamicImports = '.ts';
   console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID is set. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
@@ -375,14 +386,18 @@ export async function main() { // Add export
       apply: (value: number | undefined) => {
         if (value !== undefined) {
           if (isNaN(value) || value <= 0 || value > 65535) {
-            // yargs will typically handle this with its own validation if type: 'number' is effective
-            // but an explicit check here is safer before setting env var.
-            // Throwing an error here will be caught by yargs .fail()
             throw new Error(`Error: Invalid port number "${value}". Port must be between 1 and 65535.`);
           }
           process.env.HTTP_PORT = String(value);
         }
       }
+    })
+    .option('cc-integration-test-sut-mode', { // Add the new hidden flag
+      type: 'boolean',
+      hidden: true, // Hide from help output
+      default: false,
+      global: true, // Make it global so it's parsed early
+      // No 'apply' needed, its presence is checked at the top of the file
     })
     .option('repo', { // New global option for repository path
       alias: 'r',
@@ -555,5 +570,8 @@ export async function main() { // Add export
   }
 }
 
-// Execute the main function
-void main(); // Mark as void to satisfy no-floating-promises
+// Execute the main function only if this script is run directly
+if (require.main === module) {
+  void main(); // Mark as void to satisfy no-floating-promises
+}
+// Else, if imported, main is just exported and can be called by the importer.

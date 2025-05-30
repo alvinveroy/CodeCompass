@@ -268,7 +268,7 @@ describe('Stdio Client-Server Integration Tests', () => {
 
     const transportParams: StdioTransportParams = {
       command: process.execPath,
-      args: [mainScriptPath, 'start', testRepoPath, '--port', '0'], // --port 0 passed to CLI
+      args: [mainScriptPath, 'start', testRepoPath, '--port', '0', '--cc-integration-test-sut-mode'], // Add the flag
       // Correctly nest env under options for StdioClientTransport
       options: { 
         stdio: 'pipe', // Explicitly set stdio if needed, or rely on SDK default

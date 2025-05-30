@@ -308,16 +308,19 @@ describe('CLI with yargs (index.ts)', () => {
 
     console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] About to dynamically import SUT from (src) currentSutIndexPath: ${currentSutIndexPath}. Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
     try {
-      await import(currentSutIndexPath); // This will execute the SUT's main() via its own void main() call
-                               // and yargs will use the process.argv we set.
+      // Dynamically import the SUT module
+      const sutModule = await import(currentSutIndexPath) as { main: () => Promise<void> };
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Dynamic import of SUT from ${currentSutIndexPath} completed.`);
+      // Explicitly call the main function from the imported module
+      await sutModule.main();
+      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] SUT main() executed.`);
     } catch (e) {
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${currentSutIndexPath}:`, e);
       // This catch is primarily for errors thrown by yargs' .fail() or handlers
       // that might not be caught by the SUT's own try/catch around cli.parseAsync().
       // Or if the module import itself fails catastrophically.
       // We let the test assertions on mockProcessExit or logger.error handle verification of yargs .fail().
-      if (process.env.VITEST_TESTING_FAIL_HANDLER !== "true" && !(e instanceof Error && e.message.includes("process.exit unexpectedly called"))) {
+      if (process.env.VITEST_TESTING_FAIL_HANDLER !== "true" && !(e instanceof Error && e.message.includes("process.exit called with"))) { // Adjusted error message check
          throw e; // Re-throw if not a test-induced exit or fail handler test
       }
     }
