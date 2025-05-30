@@ -228,8 +228,8 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     env: { 
       // Selectively pass environment variables. Avoid spreading all of process.env
       // to prevent unexpected behavior and keep the environment clean.
-      PATH: process.env.PATH, // Essential for finding 'node' and other executables
-      NODE_ENV: process.env.NODE_ENV, // Pass through NODE_ENV
+      PATH: process.env.PATH ?? '', // Essential for finding 'node' and other executables
+      NODE_ENV: process.env.NODE_ENV ?? '', // Pass through NODE_ENV
       HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
       VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '', // Propagate if present
       CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
