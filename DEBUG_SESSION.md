@@ -130,6 +130,23 @@ Based on the debugging session up to Attempt 65 (commit `7f14f61`), the followin
 
 *   **Applied Changes (commit `acb9bd3`):**
     *   All planned changes from Attempt 93 were applied by the user.
+
+*   **Result (Based on User's `npm run build` Output for commit `acb9bd3`):**
+    *   **`tsc` Compilation (8 Errors in `src/index.ts`):**
+        *   All 8 errors are `TS2304: Cannot find name 'libPath'`. This indicates that the `libPath` variable, which was intended to be defined based on `libPathBase`, is not correctly in scope or was perhaps removed/misnamed during the refactoring of the path logic. The line `libPath = path.join(libPathBase, 'lib');` is present, but `libPath` itself might not have been declared with `let` in the correct scope.
+    *   **Vitest Run (30 failures total):**
+        *   **`src/tests/index.test.ts` (22 Failures):**
+            *   All 22 tests in the "CLI with yargs (index.ts)" suite failed with `ReferenceError: libPath is not defined` originating from `src/index.ts:56:1`. This is a direct consequence of the `tsc` error. The SUT (`src/index.ts`) cannot execute its dynamic import logic without `libPath`.
+            *   The `[INDEX_TEST_VI_MOCK_SETUP_DEBUG]` logs show that the test is correctly attempting to mock `../../src/lib/server.ts` and `../../src/lib/config-service.ts`. This part of the fix (static relative paths for `vi.mock`) is correctly applied in the test file. The failure is due to the SUT itself crashing.
+        *   **`src/tests/server.test.ts` (4 Failures):**
+            *   All four `startProxyServer` tests still timed out (at 30000ms).
+        *   **`src/tests/integration/stdio-client-server.integration.test.ts` (4 Failures):**
+            *   `should execute agent_query...`: Fails with `expected 'Based on the provided context, \`file1…' to contain 'SUT_SELF_MOCK: Agent response: file1.…'`.
+            *   `should call trigger_repository_update...`: Fails with `expected '{"result":{"content":[{"type":"text",…' to contain '[MOCK_QDRANT_UPSERT]'`. SUT logs show `IsMock: false` for Qdrant client.
+            *   `should call generate_suggestion...`: Fails with `expected '# Code Suggestion for: "Suggest how t…' to contain 'SUT_SELF_MOCK: This is a generated su…'`.
+            *   `should call get_repository_context...`: Fails with `expected '# Repository Context Summary for: "Wh…' to contain 'SUT_SELF_MOCK: This is a summary of t…'`.
+            *   **SUT Environment Variable Issues (Still Critical):** The SUT logs (`[LLM_PROVIDER_SUT_ENV_DIAGNOSTIC]`, `[QDRANT_SUT_ENV_DIAGNOSTIC]`) consistently show `CODECOMPASS_INTEGRATION_TEST_MOCK_LLM='undefined'` and `CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT='undefined'`. This is despite the `StdioClientTransport` `options.env` fix. The environment variables are still not reaching the SUT process.
+            *   **SUT Path Resolution in Integration Tests:** The SUT logs (`[SUT_INDEX_TS_ENV_CHECK_TOP]`, `[SUT_INDEX_TS_PATH_INIT_DEBUG]`, `[SUT_INDEX_TS_LIBPATH_DEBUG]`, `[SUT_INDEX_TS_LIBPATH_FINAL]`) show `__dirname` as `dist`, `VITEST_WORKER_ID` as `undefined`, and `libPath` resolving to `dist/lib` with `.js` extension. This part of the path logic in `src/index.ts` is behaving correctly for a non-Vitest execution context (which is what the spawned SUT is, even if the parent test is Vitest). The problem is that the `VITEST_WORKER_ID` and mock flags are not being passed into this spawned SUT's environment.
         *   `get_session_history` (temporarily expect 1 query instead of 2).
         *   `generate_suggestion` (match actual SUT self-mocked output).
 
