@@ -343,7 +343,7 @@ describe('CLI with yargs (index.ts)', () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true"; 
       await expect(runMainWithArgs(['start'])).rejects.toThrowError(startupError);
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: "Server failed to boot with fatal error" }));
-      expect(mockProcessExit).toHaveBeenCalledWith(1); // yargs .fail calls process.exit
+      expect(mockProcessExit).not.toHaveBeenCalled(); // yargs.exitProcess(false) should prevent this
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
@@ -395,20 +395,22 @@ describe('CLI with yargs (index.ts)', () => {
 
       expect(mockStdioClientTransportConstructor).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: process.execPath,
+          command: 'npx', // Expect 'npx'
           args: [
-            indexPath, // SUT script (src/index.ts or dist/index.js)
+            'tsx', // Expect 'tsx'
+            path.resolve(process.cwd(), 'src', 'index.ts'), // Expect path to src/index.ts
             'start',
             '.', // Default repoPath
-            '--port', '0', // Client-spawned servers use dynamic utility port
+            '--port', '0',
+            '--cc-integration-test-sut-mode', // Expect this flag
           ],
-          // Corrected: env is now top-level
-          env: expect.objectContaining({
-            HTTP_PORT: '0',
-            VITEST_WORKER_ID: expect.any(String), // SUT should pass this through
-            // Check for presence if set in parent, otherwise they won't be in child env
-            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM && { CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM }),
-            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT && { CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT }),
+          options: expect.objectContaining({ // env is under options for StdioServerParameters
+            env: expect.objectContaining({
+              HTTP_PORT: '0',
+              VITEST_WORKER_ID: expect.any(String),
+              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Should be explicitly true if client is in test mode
+              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true', // Should be explicitly true
+            }),
           }),
         })
       );
@@ -426,18 +428,22 @@ describe('CLI with yargs (index.ts)', () => {
 
       expect(mockStdioClientTransportConstructor).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: process.execPath,
+          command: 'npx',
           args: [
-            indexPath,
+            'tsx',
+            path.resolve(process.cwd(), 'src', 'index.ts'),
             'start',
             repoPath, // Custom repoPath
             '--port', '0',
+            '--cc-integration-test-sut-mode',
           ],
-          env: expect.objectContaining({
-            HTTP_PORT: '0',
-            VITEST_WORKER_ID: expect.any(String),
-            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM && { CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM }),
-            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT && { CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT }),
+          options: expect.objectContaining({
+            env: expect.objectContaining({
+              HTTP_PORT: '0',
+              VITEST_WORKER_ID: expect.any(String),
+              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true',
+              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true',
+            }),
           }),
         })
       );
@@ -451,13 +457,11 @@ describe('CLI with yargs (index.ts)', () => {
       mockStdioClientTransportConstructor.mockImplementation(() => {
         throw spawnError;
       });
-      process.env.VITEST_TESTING_FAIL_HANDLER = "true"; // SUT's yargs .fail() will log to logger.error
-      // runMainWithArgs itself will catch the error from mockProcessExit and re-throw if not "process.exit called with..."
-      // The SUT's main() will catch spawnError, yargs .fail() is called, mockProcessExit throws.
-      await expect(runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}'])).rejects.toThrowError(/process.exit called with 1/);
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true"; 
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}'])).rejects.toThrowError(spawnError);
       
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', spawnError);
-      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
@@ -468,31 +472,29 @@ describe('CLI with yargs (index.ts)', () => {
         close: vi.fn(),
       }));
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await expect(runMainWithArgs(['agent_query', '{"query":"test_server_exit"}'])).rejects.toThrowError(/process.exit called with 1/);
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_server_exit"}'])).rejects.toThrowError(prematureExitError);
       
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', 
         expect.objectContaining({ message: expect.stringContaining("Server process exited prematurely") })
       );
-      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     }),
 
 
     it('should handle invalid JSON parameters for client command (stdio) and log via yargs .fail()', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      // SUT's main() catches, calls yargs .fail(), which calls mockProcessExit, which throws.
-      await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(
-        /process.exit called with 1/
-      );
+      const expectedError = expect.objectContaining({ message: expect.stringContaining("Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16") });
+      await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(expectedError);
       
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Error: Invalid JSON parameters for tool 'agent_query'."));
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Details: Expected ',' or '}' after property value in JSON at position 16"));
       
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
         'CLI Error (yargs.fail):',
-        expect.objectContaining({ message: expect.stringContaining("Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16") })
+        expectedError
       );
-      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
   });
@@ -578,18 +580,22 @@ describe('CLI with yargs (index.ts)', () => {
       
       expect(mockStdioClientTransportConstructor).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: process.execPath,
+          command: 'npx',
           args: [
-            indexPath,
+            'tsx',
+            path.resolve(process.cwd(), 'src', 'index.ts'),
             'start',
             repoPath, // Custom repoPath from --repo
-            '--port', '0', // Client-spawned server still uses port '0' in args
+            '--port', '0',
+            '--cc-integration-test-sut-mode',
           ],
-          env: expect.objectContaining({
-            HTTP_PORT: '0',
-            VITEST_WORKER_ID: expect.any(String),
-            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM && { CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM }),
-            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT && { CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT }),
+          options: expect.objectContaining({
+            env: expect.objectContaining({
+              HTTP_PORT: '0',
+              VITEST_WORKER_ID: expect.any(String),
+              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true',
+              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true',
+            }),
           }),
         })
       );
@@ -597,22 +603,22 @@ describe('CLI with yargs (index.ts)', () => {
 
 
     it('--version option should display version and exit', async () => {
-      // SUT's yargs .version() calls process.exit(0) internally if not overridden by .exitProcess(false)
-      // With .exitProcess(false) in SUT's main(), yargs won't exit.
-      // The mockProcessExit will throw, which is caught by the test.
-      await expect(runMainWithArgs(['--version'])).rejects.toThrowError(/process.exit called with 0/);
+      await expect(runMainWithArgs(['--version'])).rejects.toThrowError(expect.stringContaining("process.exit called with 0"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringMatching(/\d+\.\d+\.\d+/));
-      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
+      // mockProcessExit is expected to have thrown, not just been called.
+      // The .rejects.toThrowError covers the exit behavior.
+      // If we need to assert it was called *before* throwing, that's tricky.
+      // For now, assume the throw is sufficient.
     });
 
     it('--help option should display help and exit', async () => {
-      await expect(runMainWithArgs(['--help'])).rejects.toThrowError(/process.exit called with 0/);
+      await expect(runMainWithArgs(['--help'])).rejects.toThrowError(expect.stringContaining("process.exit called with 0"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Commands:"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("codecompass start [repoPath]"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Options:"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("--help"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("--port"));
-      expect(mockProcessExit).toHaveBeenCalledWith(0);
+      // mockProcessExit is expected to have thrown.
     });
   });
   
@@ -630,21 +636,22 @@ describe('CLI with yargs (index.ts)', () => {
   describe('Error Handling and Strict Mode by yargs', () => {
     it('should show error and help for unknown command', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrowError(/process.exit called with 1/);
+      // Expect yargs to throw an error that gets caught and re-thrown by main()
+      await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrow(expect.stringContaining("Unknown argument: unknowncommand"));
       
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error (yargs.fail):', expect.stringContaining("Unknown argument: unknowncommand"));
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument: unknowncommand"));
-      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should show error and help for unknown option', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrowError(/process.exit called with 1/);
+      await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrow(expect.stringContaining("Unknown argument: unknown-option"));
       
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Usage Error (yargs.fail):', expect.stringContaining("Unknown argument: unknown-option"));
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Unknown argument: unknown-option"));
-      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
   });
@@ -714,13 +721,11 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockRejectedValue(rpcError);
       
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await expect(runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json'])).rejects.toThrowError(
-        /process.exit called with 1/
-      );
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json'])).rejects.toThrowError(rpcError);
 
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', rpcError);
-      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
@@ -729,13 +734,11 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockRejectedValue(genericError);
 
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await expect(runMainWithArgs(['agent_query', '{"query":"test_json_generic_error"}', '--json'])).rejects.toThrowError(
-        /process.exit called with 1/
-      );
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_json_generic_error"}', '--json'])).rejects.toThrowError(genericError);
       
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name } }, null, 2));
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', genericError);
-      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
     
