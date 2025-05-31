@@ -324,15 +324,17 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   }
 }
 
-async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }) {
+async function startServerHandler(
+  repoPathOrArgv: string | { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; },
+  currentProcessIndexPath: string // Add currentProcessIndexPath as a parameter
+) {
   let effectiveRepoPath: string;
   if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath
     effectiveRepoPath = repoPathOrArgv;
   } else { // Called from yargs with argv object
     const positionalRepoPath = repoPathOrArgv.repoPath;
-    // Check if the positional repoPath is the script path itself (indexPath)
-    // indexPath is globally available in this module.
-    if (positionalRepoPath && path.resolve(positionalRepoPath) === path.resolve(indexPath)) {
+    // Check if the positional repoPath is the script path itself (currentProcessIndexPath)
+    if (positionalRepoPath && path.resolve(positionalRepoPath) === path.resolve(currentProcessIndexPath)) {
       // If yargs picked up the script path as the positional argument, treat it as no argument given.
       // Then, prioritize --repo or default to '.'
       if (repoPathOrArgv.repo) {
@@ -375,6 +377,10 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
     const { logger: localLogger, configService: localConfigService } = configServiceModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported configService in startServerHandler:', typeof localConfigService, 'configService.DEEPSEEK_API_KEY (sample prop):', localConfigService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   try {
+    // Pass the module-scoped `indexPath` to the imported `startServer` function.
+    // Note: The imported `startServer` from `server.ts` does not expect `currentProcessIndexPath`.
+    // The `indexPath` check is specific to `startServerHandler` defined in `src/index.ts`.
+    // This call remains as is, as `startServer` from `lib/server.ts` doesn't need `indexPath`.
     await startServer(effectiveRepoPath);
     // If startServer resolves, it means stdio MCP is up. Utility HTTP server might be disabled
     // due to a conflict (Option C), but the instance is operational.
@@ -466,7 +472,8 @@ export async function main() { // Add export
         console.error(`[SUT_MODE_CRITICAL_ERROR] startServerHandler is NOT a function just before call. Forcing error.`);
         throw new TypeError("SUT mode: startServerHandler is not a function at point of call in main().");
       }
-      await startServerHandler({ repo: repoPath, port: parseInt(process.env.HTTP_PORT, 10), _:['start', repoPath], $0:'codecompass' });
+      // Pass the module-scoped `indexPath` to the local `startServerHandler`
+      await startServerHandler({ repo: repoPath, port: parseInt(process.env.HTTP_PORT, 10), _:['start', repoPath], $0:'codecompass' }, indexPath);
     } catch (error: unknown) {
       // Minimal error handling for SUT mode
       try {
@@ -557,7 +564,8 @@ export async function main() { // Add export
         // Pass the full argv object so startServerHandler can access .repo if .repoPath is not set
         // eslint-disable-next-line no-console
         console.log('[INDEX_TS_DEBUG] Default/Start command handler INVOKED');
-        await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; });
+        // Pass the module-scoped `indexPath` to `startServerHandler`
+        await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
       }
     );
 

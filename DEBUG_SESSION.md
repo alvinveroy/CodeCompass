@@ -45,39 +45,36 @@ The debugging process (spanning commits from approximately `7f14f61` to `691bb8f
 The debugging journey involved extensive work on Vitest mocking for dynamically imported SUT dependencies, managing environment variable propagation to child processes spawned by tests, and ensuring correct path resolution for module loading in various contexts (source vs. packaged, test execution vs. direct run). Key challenges included Vitest's mock hoisting behavior with non-literal paths, issues with the external `StdioClientTransport` SDK's handling of environment variables, and cascading failures where `tsc` errors or SUT crashes obscured underlying test logic problems. The process underscored the necessity of meticulous diagnostic logging and iterative refinement of both SUT code (for testability) and the test setups themselves.
 
 ---
-## Attempt 96: Addressing StdioServerParameters Structure and Investigating SUT Mode
+## Attempt 97: Addressing `indexPath` Scope and `StdioServerParameters`
 
-*   **Attempt Number:** 96
-*   **Last Git Commit for this attempt's changes:** `765c01d` ("fix: Add SUT mode diagnostics and improve test error propagation")
-*   **Intended Fixes (from Attempt 95):**
-    *   **`src/index.ts`:** Add diagnostic logging for `startServerHandler` in SUT mode.
-    *   **`src/tests/index.test.ts`:** Modify `runMainWithArgs` to unconditionally re-throw errors.
+*   **Attempt Number:** 97
+*   **Last Git Commit for this attempt's changes:** `78d453c` ("fix: Correct StdioServerParameters structure for SDK")
+*   **Intended Fixes (from Attempt 96):**
+    *   **`src/index.ts`:** Correct `StdioServerParameters` structure in `handleClientCommand` (addressed by `78d453c`).
 *   **Applied Changes (leading to current state):**
-    *   Commit `765c01d` was applied.
-*   **Current Errors (based on user IDE report for `src/index.ts` after `765c01d`):**
-    *   `src/index.ts:240` - TS2353: `Object literal may only specify known properties, and 'options' does not exist in type 'StdioServerParameters'.`
-    *   `src/index.ts:335` - TS2304: `Cannot find name 'indexPath'.` (Treated as potential IDE glitch unless confirmed by `tsc` build).
+    *   Commit `78d453c` was applied.
+*   **Current Errors (based on user IDE report for `src/index.ts` after `78d453c` and new analysis):**
+    *   `src/index.ts:240` - TS2353: This was fixed by commit `78d453c`.
+    *   `src/index.ts:335` - TS2304: `Cannot find name 'indexPath'.` This error is **valid**. The `indexPath` variable is defined at the module scope in `src/index.ts`, but the `startServerHandler` function (where `indexPath` is referenced on line 335 as per commit `aa08974`) does not have `indexPath` in its local scope, nor is it passed as a parameter.
 *   **Analysis/Retrospection:**
-    *   The TS2353 error on line 240 is valid. The `StdioServerParameters` type, as per the SDK, expects `env` and `stderr` (for child process stderr configuration) as top-level properties, not nested under an `options` object. The current code in `src/index.ts` (after commit `bb61240`, which was part of `aa08974` and thus before `765c01d`) incorrectly introduced this `options` nesting.
-    *   The `indexPath` error (TS2304) is likely an IDE-specific issue or was transient, as `indexPath` is defined in the module scope and should be accessible to `startServerHandler`. Previous `tsc` builds after the introduction of `indexPath` usage in `startServerHandler` did not report this error.
-    *   The SUT mode crash (`startServerHandler is not a function`) and unit test "promise resolved instead of rejecting" errors remain the primary concerns to be verified after the TS2353 fix. The diagnostics added in `765c01d` should help with the SUT mode crash. The error propagation fix in `runMainWithArgs` (also in `765c01d`) should help with the unit test promise rejections.
-*   **Next Steps/Plan (Attempt 96):**
+    *   The `StdioServerParameters` structure (TS2353) was correctly addressed by commit `78d453c`.
+    *   The `indexPath` scope issue (TS2304) is a genuine bug introduced in commit `aa08974` when `startServerHandler` was modified to check if `positionalRepoPath` was the script path itself.
+    *   The SUT mode crash (`startServerHandler is not a function`) and unit test "promise resolved instead of rejecting" errors remain the primary concerns to be verified after the `indexPath` fix.
+*   **Next Steps/Plan (Attempt 97):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **`src/index.ts` (Fix TS2353):**
-        *   In `handleClientCommand`, restructure `serverProcessParams` to remove the `options: { ... }` nesting.
-        *   Make `env` a top-level property of `serverProcessParams`.
-        *   Change the `stdio: 'pipe'` property (which is not a valid top-level property for `StdioServerParameters` in the SDK for configuring child process stdio) to `stderr: 'pipe'`. This aligns with how `StdioClientTransport` uses the `stderr` parameter to configure the third element of the `stdio` array passed to `cross-spawn`.
+    2.  **`src/index.ts` (Fix TS2304 - `indexPath` scope):**
+        *   Modify `startServerHandler` to accept `currentProcessIndexPath` (or a similar name) as an explicit parameter.
+        *   When `startServerHandler` is called from `main()` (both in SUT mode and regular CLI mode), pass the module-scoped `indexPath` variable to it.
     3.  **Verification:** User to run `npm run build` to:
-        *   Confirm TS2353 is resolved.
-        *   Confirm if TS2304 (`indexPath`) persists as a `tsc` build error (if it does, it will need a separate fix).
+        *   Confirm TS2304 (`indexPath`) is resolved.
         *   Observe the output for the SUT mode crash (diagnostics for `typeof startServerHandler` should appear).
         *   Observe the results for unit tests in `src/tests/index.test.ts` (especially "promise resolved instead of rejecting" errors).
     4.  **Defer other issues** until the build is clean and the SUT mode crash is understood.
 
 ### Blockers
-    *   TS2353 error in `src/index.ts`.
+    *   TS2304 error in `src/index.ts` (`Cannot find name 'indexPath'`).
     *   SUT crashing in integration tests (suspected `startServerHandler is not a function`).
     *   Unit test "promise resolved instead of rejecting" errors in `src/tests/index.test.ts`.
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `765c01d`
+    *   Git Commit SHA: `78d453c`
