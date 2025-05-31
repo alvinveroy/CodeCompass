@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll, type Mock } from 'vitest';
 import { spawn, type ChildProcess, type ChildProcess as NodeChildProcess, type SpawnOptions } from 'child_process'; // Use NodeChildProcess
 import { Client as MCPClient } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js'; // Import StdioServerParameters
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';

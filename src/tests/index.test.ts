@@ -127,10 +127,10 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 // the SDK's package.json ("./*": { "import": "./dist/esm/*" }) means it resolves to
 // "@modelcontextprotocol/sdk/dist/esm/client/stdio.js".
 // So, we must mock that specific resolved path.
-const sdkStdioClientPath = '@modelcontextprotocol/sdk/dist/esm/client/stdio.js';
-console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock SDK's StdioClientTransport using resolved path: ${sdkStdioClientPath}`);
-vi.mock(sdkStdioClientPath, () => { 
-  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ${sdkStdioClientPath} IS RUNNING.`);
+// Inlined the path string to avoid hoisting issues with sdkStdioClientPath variable.
+console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock SDK's StdioClientTransport using resolved path: @modelcontextprotocol/sdk/dist/esm/client/stdio.js`);
+vi.mock('@modelcontextprotocol/sdk/dist/esm/client/stdio.js', () => { 
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for @modelcontextprotocol/sdk/dist/esm/client/stdio.js IS RUNNING.`);
   return { 
     // StdioClientTransport is a named export from the SDK module
     StdioClientTransport: mockStdioClientTransportConstructor,

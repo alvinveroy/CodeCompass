@@ -1679,17 +1679,25 @@ export async function startProxyServer(
 ): Promise<http.Server | null> {
   logger.info(`[PROXY_DEBUG] startProxyServer: Attempting to start proxy. Requested main port: ${requestedPort}, Target existing server port: ${targetServerPort}`);
   
+  let proxyListenPort: number;
   try {
-    let proxyListenPort: number;
     // Determine a suitable starting port for the proxy to avoid collision
     const initialPortForProxySearch = requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50;
     logger.info(`[PROXY_DEBUG] startProxyServer: Initial port for proxy search: ${initialPortForProxySearch}`);
     
     proxyListenPort = await findFreePort(initialPortForProxySearch);
     logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
+  } catch (error) { // This catch block is specifically for errors from findFreePort
+    const err = error instanceof Error ? error : new Error(String(error));
+    // Log the specific error from findFreePort
+    logger.error(`[ProxyServer] Failed to find free port for proxy: ${err.message}`, { errorDetails: err }); // Changed log message slightly for clarity
+    return null; // Resolve the main startProxyServer promise with null
+  }
 
-    // If findFreePort succeeded, proceed to create and listen on the proxy server
-    return new Promise<http.Server | null>((resolveProxyListen, rejectProxyListen) => {
+  // If findFreePort succeeded, proceed to create and listen on the proxy server
+  // This part is now outside the initial try-catch for findFreePort
+  return new Promise<http.Server | null>((resolveProxyListen, rejectProxyListen) => {
+    try {
       const app = express();
     app.use('/mcp', express.raw({ type: '*/*', limit: '50mb' })); // For MCP JSON-RPC
 
@@ -1804,12 +1812,9 @@ export async function startProxyServer(
     });
     proxyHttpServer.on('error', (err: NodeJS.ErrnoException) => {
       logger.error(`[PROXY_DEBUG] Proxy server failed to start on port ${proxyListenPort}: ${err.message}`, { error: err });
-      rejectProxyListen(err); // Reject if listen fails
+      rejectProxyListen(err); // Reject the inner promise if listen fails
     });
   });
-  } catch (error) { // This catch block is for errors from findFreePort
-    const err = error instanceof Error ? error : new Error(String(error));
-    logger.error(`[PROXY_DEBUG] startProxyServer: Failed during port finding or proxy setup: ${err.message}`, { error: err });
-    return null; // Ensure this path resolves the outer Promise<http.Server | null>
-  }
+  // No outer catch block here anymore for findFreePort errors, as it's handled above.
+  // Other unexpected synchronous errors before new Promise would make startProxyServer reject.
 }
