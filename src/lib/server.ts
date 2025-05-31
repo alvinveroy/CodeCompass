@@ -1814,6 +1814,10 @@ export async function startProxyServer(
       logger.error(`[PROXY_DEBUG] Proxy server failed to start on port ${proxyListenPort}: ${err.message}`, { error: err });
       rejectProxyListen(err); // Reject the inner promise if listen fails
     });
+  } catch (error) {
+    logger.error(`[PROXY_DEBUG] Unexpected error setting up proxy server: ${error instanceof Error ? error.message : String(error)}`);
+    rejectProxyListen(error instanceof Error ? error : new Error(String(error)));
+  }
   });
   // No outer catch block here anymore for findFreePort errors, as it's handled above.
   // Other unexpected synchronous errors before new Promise would make startProxyServer reject.
