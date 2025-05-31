@@ -329,11 +329,22 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
   if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath
     effectiveRepoPath = repoPathOrArgv;
   } else { // Called from yargs with argv object
-    // Prioritize --repo option if positional repoPath is not provided or is the default '.'
-    if (repoPathOrArgv.repo) { // If --repo is explicitly provided
+    const positionalRepoPath = repoPathOrArgv.repoPath;
+    // Check if the positional repoPath is the script path itself (indexPath)
+    // indexPath is globally available in this module.
+    if (positionalRepoPath && path.resolve(positionalRepoPath) === path.resolve(indexPath)) {
+      // If yargs picked up the script path as the positional argument, treat it as no argument given.
+      // Then, prioritize --repo or default to '.'
+      if (repoPathOrArgv.repo) {
+        effectiveRepoPath = repoPathOrArgv.repo;
+      } else {
+        effectiveRepoPath = '.';
+      }
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Positional repoPath was script path. Using --repo or default. Effective: ${effectiveRepoPath}`);
+    } else if (repoPathOrArgv.repo) { // If --repo is explicitly provided
       effectiveRepoPath = repoPathOrArgv.repo;
-    } else if (repoPathOrArgv.repoPath && repoPathOrArgv.repoPath !== '.') { // If positional is provided and not default
-      effectiveRepoPath = repoPathOrArgv.repoPath;
+    } else if (positionalRepoPath && positionalRepoPath !== '.') { // If positional is provided and not default (and not script path)
+      effectiveRepoPath = positionalRepoPath;
     } else { // Fallback to default '.'
       effectiveRepoPath = '.';
     }
@@ -641,6 +652,12 @@ export async function main() { // Add export
       }
       // Yargs will exit with 1 by default if err is present or msg is from yargs validation.
       // No need to call process.exit(1) explicitly here if yargs handles it.
+      // However, for testing, ensure the error propagates if VITEST_TESTING_FAIL_HANDLER is set.
+      if (process.env.VITEST_TESTING_FAIL_HANDLER && err) {
+        throw err; // Re-throw the original error to make the promise from parseAsync reject.
+      }
+      // If only `msg` is present (yargs usage error), yargs might handle the exit/throw itself.
+      // If `exitProcess(false)` is set, yargs should throw an error for usage issues too.
     });
 
   try {
