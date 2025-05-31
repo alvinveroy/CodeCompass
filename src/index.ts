@@ -352,23 +352,36 @@ async function startServerHandler(
     if (argv.repo) { // --repo option always takes precedence
       effectiveRepoPath = argv.repo;
       console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using --repo option: ${effectiveRepoPath}`);
+    } else if (positionalArgs.length > 1 && positionalArgs[0] === 'start' && typeof positionalArgs[1] === 'string' && positionalArgs[1].trim() !== '' && path.resolve(positionalArgs[1]) !== path.resolve(currentProcessIndexPath)) {
+      // Case: `codecompass start /path/to/repo`
+      // argv._ is ['start', '/path/to/repo']
+      // argv.repoPath (from yargs positional for 'start' command) should also be '/path/to/repo'
+      // We prioritize argv.repoPath if available and valid, otherwise use positionalArgs[1]
+      if (argv.repoPath && argv.repoPath !== '.' && path.resolve(argv.repoPath) !== path.resolve(currentProcessIndexPath)) {
+        effectiveRepoPath = argv.repoPath;
+        console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler (explicit start): Using positional repoPath from yargs: ${effectiveRepoPath}`);
+      } else {
+        effectiveRepoPath = positionalArgs[1];
+        console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler (explicit start): Using second element of argv._ as repoPath: ${effectiveRepoPath}`);
+      }
     } else if (argv.repoPath && argv.repoPath !== '.' && path.resolve(argv.repoPath) !== path.resolve(currentProcessIndexPath)) {
-      // If 'repoPath' (yargs positional) is provided, is not '.', and is not the script path itself
+      // Case: `codecompass /path/to/repo` (default command)
+      // argv.repoPath (from yargs positional for '$0' command) is '/path/to/repo'
       effectiveRepoPath = argv.repoPath;
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using positional repoPath: ${effectiveRepoPath}`);
-    } else if (positionalArgs.length > 0 && 
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler (default command): Using positional repoPath from yargs: ${effectiveRepoPath}`);
+    } else if (positionalArgs.length === 1 && 
                typeof positionalArgs[0] === 'string' && 
-               positionalArgs[0] !== 'start' && // Not the 'start' command itself
-               !KNOWN_TOOLS.includes(positionalArgs[0]) && // Not a known tool name
-               path.resolve(positionalArgs[0]) !== path.resolve(currentProcessIndexPath) && // Not the script path
-               positionalArgs[0] !== '.') { // Not explicitly '.'
-      // This case handles `codecompass /some/path` where /some/path is the first "unknown" positional
+               positionalArgs[0] !== 'start' && 
+               !KNOWN_TOOLS.includes(positionalArgs[0]) && 
+               path.resolve(positionalArgs[0]) !== path.resolve(currentProcessIndexPath) && 
+               positionalArgs[0] !== '.') {
+      // Case: `codecompass /some/path` (first unrecognized positional, not 'start', not a tool)
       effectiveRepoPath = positionalArgs[0];
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using first unrecognized positional argument as repoPath: ${effectiveRepoPath}`);
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler (default command): Using first unrecognized positional argument as repoPath: ${effectiveRepoPath}`);
     }
     else { // Fallback to default '.'
       effectiveRepoPath = '.';
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Defaulting to repoPath '.'. Positional repoPath from yargs: '${argv.repoPath}', argv._[0]: '${positionalArgs[0]}'`);
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Defaulting to repoPath '.'. argv.repoPath: '${argv.repoPath}', argv._: ${JSON.stringify(positionalArgs)}`);
     }
   }
   console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Effective repoPath determined as: ${effectiveRepoPath}`);
