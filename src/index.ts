@@ -461,6 +461,11 @@ export async function main() { // Add export
       // When in --cc-integration-test-sut-mode, src/index.ts is the server.
       // It should call its *own* startServerHandler, not import one from server.ts.
       // The startServerHandler function is defined within this file (src/index.ts).
+      console.error(`[SUT_MODE_DEBUG_MAIN] About to call startServerHandler. typeof startServerHandler: ${typeof startServerHandler}`);
+      if (typeof startServerHandler !== 'function') {
+        console.error(`[SUT_MODE_CRITICAL_ERROR] startServerHandler is NOT a function just before call. Forcing error.`);
+        throw new TypeError("SUT mode: startServerHandler is not a function at point of call in main().");
+      }
       await startServerHandler({ repo: repoPath, port: parseInt(process.env.HTTP_PORT, 10), _:['start', repoPath], $0:'codecompass' });
     } catch (error: unknown) {
       // Minimal error handling for SUT mode

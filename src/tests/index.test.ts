@@ -318,9 +318,10 @@ describe('CLI with yargs (index.ts)', () => {
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${currentSutIndexPath}:`, errorMessage);
-      if (process.env.VITEST_TESTING_FAIL_HANDLER !== "true" && !errorMessage.includes("process.exit called with")) {
-         throw e; 
-      }
+      // Always re-throw the error. Test assertions (e.g., .rejects.toThrow()) will handle it.
+      // The VITEST_TESTING_FAIL_HANDLER logic is for the SUT's yargs.fail() internal behavior,
+      // not for how this test helper propagates errors.
+      throw e;
     }
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT import/execution finished or threw.`);
   }

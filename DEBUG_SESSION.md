@@ -45,56 +45,42 @@ The debugging process (spanning commits from approximately `7f14f61` to `691bb8f
 The debugging journey involved extensive work on Vitest mocking for dynamically imported SUT dependencies, managing environment variable propagation to child processes spawned by tests, and ensuring correct path resolution for module loading in various contexts (source vs. packaged, test execution vs. direct run). Key challenges included Vitest's mock hoisting behavior with non-literal paths, issues with the external `StdioClientTransport` SDK's handling of environment variables, and cascading failures where `tsc` errors or SUT crashes obscured underlying test logic problems. The process underscored the necessity of meticulous diagnostic logging and iterative refinement of both SUT code (for testability) and the test setups themselves.
 
 ---
-## Attempt 94: Addressing Build Failures (tsc errors, unit & integration test failures) - Post Commit `bb61240`
+## Attempt 95: Addressing SUT Mode Crash and Unit Test Error Propagation
 
-*   **Attempt Number:** 94
-*   **Last Git Commit for this attempt's changes:** `bb61240` ("fix: Fix CLI args, SUT mode, and test mocks")
-*   **Intended Fixes (from Attempt 93):**
+*   **Attempt Number:** 95
+*   **Last Git Commit for this attempt's changes:** `aa08974` ("fix: Correct CLI repoPath parsing and test error handling")
+*   **Intended Fixes (from Attempt 94 plan, partially addressed by `aa08974`):**
     *   **`src/index.ts`:**
-        *   Correct `main()` to call local `startServerHandler` in SUT mode.
-        *   Correct `StdioServerParameters` structure in `handleClientCommand`.
-    *   **`src/tests/index.test.ts`:**
-        *   Fix `toThrowError` usage for `rpcError`.
-        *   Fix `readFileSync` mock for `changelog` test.
-        *   Adjust `runMainWithArgs` for default command `repoPath` handling.
-*   **Applied Changes (leading to current build output):**
-    *   Commit `bb61240` was applied, which included the fixes listed above.
-    *   Commit `3beed84` ("test: Explicitly add 'start' for empty args in runMainWithArgs") was also applied, further refining the `runMainWithArgs` helper.
-*   **Result (Based on User's `npm run build` Output after `bb61240` and `3beed84`):**
-    *   **`tsc` Errors:**
-        *   The `tsc` errors previously noted (`TS2353` in `src/index.ts` and `TS2345` in `src/tests/index.test.ts`) are **RESOLVED**. The build output shows `Found 0 errors in 0 files` from `tsc`.
+        *   SUT Mode: Ensure `main()` calls local `startServerHandler`. (The call was changed from `directStartServerHandler` to `startServerHandler` in `aa08974`).
+        *   `startServerHandler`: Improve `repoPath` parsing to handle cases where `yargs` might pass the script path as `repoPath`. (This was addressed in `aa08974`).
+        *   `yargs.fail()`: Ensure errors are re-thrown for testability. (This was addressed in `aa08974`).
+*   **Applied Changes (leading to current state):**
+    *   Commit `aa08974` was applied.
+*   **Assumed Result (pending new `npm run build` output):**
+    *   **`tsc` Errors:** Expected to remain resolved.
     *   **Integration Test Failures (`src/tests/integration/stdio-client-server.integration.test.ts`):**
-        *   All 9 tests still fail with `MCP error -32000: Connection closed`.
-        *   The SUT's stdout still shows `TypeError: directStartServerHandler is not a function at main (/Users/alvin.tech/Projects/CodeCompass/src/index.ts:452:13)`. This indicates the fix in `src/index.ts` for SUT mode (to call the local `startServerHandler`) was either not correctly applied or there's another issue causing `startServerHandler` to be undefined in that specific execution path within `main()`.
+        *   The SUT crash (`TypeError: startServerHandler is not a function` - assuming error message updated from `directStartServerHandler`) likely persists. This is the highest priority.
     *   **Unit Test Failures (`src/tests/index.test.ts`):**
-        *   **`mockStartServerHandler` argument issue:** 3 tests still fail with `mockStartServerHandler` being called with `indexPath` (e.g., `/Users/.../src/index.ts`) as `repoPath` instead of the expected default (`.`) or specified path. This suggests the changes to `runMainWithArgs` (including commit `3beed84`) did not fully resolve how `yargs` (or the SUT's argument parsing) determines `repoPath` for the default command.
-        *   **"Promise resolved instead of rejecting" errors:** 8 tests still fail this way. This remains a significant issue, likely related to how `yargs.fail()` or `process.exit` mocks interact with the async nature of `runMainWithArgs` or the SUT's `main` function.
-        *   **`mockStdioClientTransportConstructor` not called:** 3 tests for client tool commands still show this spy not being called. This could be linked to the "promise resolved" issues if error handling short-circuits execution, or if there's a problem in `handleClientCommand` itself.
-        *   **`changelog` test:** This test now **PASSES**. The `readFileSync` mock fix was successful.
-    *   **Server Test Timeouts (`src/tests/server.test.ts`):**
-        *   4 tests in the `startProxyServer` suite are still timing out (known deferred issue).
+        *   **`mockStartServerHandler` argument issue:** The fix in `startServerHandler` (in `aa08974`) for `repoPath` parsing might have resolved some of these.
+        *   **"Promise resolved instead of rejecting" errors:** The `yargs.fail()` re-throw fix (in `aa08974`) might have improved this. However, error propagation from `mockProcessExit` via `runMainWithArgs` still needs to be addressed.
+        *   **`mockStdioClientTransportConstructor` not called:** Likely still failing, pending fixes to error propagation.
+        *   **`changelog` test:** Should remain passing.
+    *   **Server Test Timeouts (`src/tests/server.test.ts`):** Still deferred.
 *   **Analysis/Retrospection:**
-    *   The `tsc` errors are fixed, which is good progress.
-    *   The critical `TypeError: directStartServerHandler is not a function` in SUT mode for integration tests persists. This is the highest priority to fix for integration tests. The `main` function's SUT mode path needs careful review to ensure `startServerHandler` (the one defined in `src/index.ts`) is correctly in scope and called.
-    *   The `repoPath` argument issue for `mockStartServerHandler` in unit tests needs further investigation. It might be that `yargs` still picks up `indexPath` (the script being run) as a positional argument for the default command if not handled carefully.
-    *   The "promise resolved instead of rejecting" errors are a major blocker for unit test stability. This often points to problems in how test helpers (`runMainWithArgs`) or the SUT's main execution flow handle asynchronous errors and mocked exits.
-*   **Next Steps/Plan (Attempt 94):**
+    *   The SUT mode crash is critical. If `startServerHandler` (the local function) is "not a function" when called by `main()` in SUT mode, it points to a fundamental module loading or scoping issue in that specific execution context.
+    *   The "promise resolved instead of rejecting" errors in unit tests likely require `runMainWithArgs` in `src/tests/index.test.ts` to correctly re-throw errors caught from the SUT's `main()` execution, especially those originating from `mockProcessExit`.
+*   **Next Steps/Plan (Attempt 95):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **`src/index.ts` (SUT Mode `startServerHandler` Fix - CRITICAL):**
-        *   Re-examine the `main()` function's SUT mode block (`if (process.argv.includes('--cc-integration-test-sut-mode'))`). Ensure that the `startServerHandler` called is unequivocally the one defined within `src/index.ts`. The previous fix `await startServerHandler(...)` might still be ambiguous if there's an import of a different `startServerHandler` in scope. Consider explicitly calling `this.startServerHandler` if `main` and `startServerHandler` are part of a class, or ensure no conflicting imports. Given the file structure, it's likely a direct function call, so scoping or a subtle import issue might be the culprit.
-    3.  **`src/tests/index.test.ts` (Unit Test Fixes):**
-        *   **`repoPath` for default command:**
-            *   In `startServerHandler` within `src/index.ts`, add a specific check: if `repoPathOrArgv.repoPath` (the positional argument from yargs) is exactly `indexPath` (the path to `src/index.ts` itself, which `yargs` might interpret as the positional argument when no other is given), then treat it as if no repoPath was provided, thus defaulting to `.` internally.
-            *   Alternatively, in `runMainWithArgs`, when `args.length === 0` (now `effectiveProcessArgs = ['start']`), ensure that `yargs` doesn't somehow still pick up `indexPath` as a second positional argument to `start`. This might involve how `yargs` is configured or how `process.argv` is constructed.
-        *   **"Promise resolved instead of rejecting" errors:**
-            *   Review the `yargs.fail()` handler in `src/index.ts`. Ensure it correctly re-throws errors or causes a non-zero exit in a way that `runMainWithArgs` can detect as a rejection, especially when `process.env.VITEST_TESTING_FAIL_HANDLER` is set.
-            *   Ensure that when `mockProcessExit` throws its error, this error correctly propagates up to cause the promise returned by `runMainWithArgs` (or by `sutModule.main()`) to reject.
-    4.  **Defer `mockStdioClientTransportConstructor` not called** issues until the promise rejection and `repoPath` issues are resolved, as they might be symptoms.
-    5.  **Defer `server.test.ts` Timeouts.**
+    2.  **`src/index.ts` (SUT Mode `startServerHandler` Fix - CRITICAL RE-ATTEMPT):**
+        *   Add diagnostic logging immediately before the `await startServerHandler(...)` call within the SUT mode block in `main()` to verify `typeof startServerHandler`.
+        *   If it's indeed undefined, this suggests a deeper issue with module execution under `tsx` in the spawned SUT context.
+    3.  **`src/tests/index.test.ts` (Unit Test Error Propagation):**
+        *   Modify the `catch` block in `runMainWithArgs` to unconditionally re-throw any error caught from `sutModule.main()`. This will ensure that test assertions like `expect(...).rejects.toThrow(...)` can correctly catch errors, including those from `mockProcessExit`.
+    4.  **Defer other issues** until these critical items are resolved and verified with a new build.
 
 ### Blockers
-    *   SUT crashing in integration tests (`TypeError: directStartServerHandler is not a function`).
-    *   Unit test failures in `src/tests/index.test.ts` related to `repoPath` argument parsing and "promise resolved instead of rejecting" errors.
+    *   SUT crashing in integration tests (suspected `startServerHandler is not a function`).
+    *   Unit test "promise resolved instead of rejecting" errors in `src/tests/index.test.ts`.
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `3beed84` (incorporates `bb61240`)
+    *   Git Commit SHA: `aa08974`
