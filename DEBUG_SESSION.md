@@ -55,45 +55,46 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
     *   Commit `4b44e12` was applied, which should have defined `indexPath`.
 *   **Expected Result:**
     *   The `tsc` errors "Cannot find name 'indexPath'" in `src/index.ts` (previously on lines 474 and 566) should be resolved.
-*   **Attempt Number:** 103
-*   **Last Git Commit for this attempt's changes:** `042e405` ("fix: Ensure SUT uses mocks; fix CLI args and test error handling")
-*   **Intended Fixes (from Attempt 102):**
+*   **Attempt Number:** 104
+*   **Last Git Commit for this attempt's changes:** `496ac0d` ("docs: Update debug session log for attempt 103")
+*   **Intended Fixes (from Attempt 103, based on commit `042e405`):**
     *   **Integration Test Mocking (`src/index.ts`, `src/tests/integration/stdio-client-server.integration.test.ts`):**
-        *   Introduced `CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING=true` env var passed from integration tests to SUT.
-        *   Modified `src/index.ts` path logic (`isEffectiveVitestTesting`) to use this new variable to force `src` paths and `.ts` extensions for dynamic imports, ensuring mocks are loaded in the child SUT.
+        *   Introduced `CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING=true` env var.
+        *   Modified `src/index.ts` path logic (`isEffectiveVitestTesting`) to use this new variable.
         *   Ensured `handleClientCommand` in `src/index.ts` also uses and propagates this env var.
     *   **`repoPath` Argument Handling (`src/index.ts`):**
-        *   Refined `startServerHandler` to better prioritize positional `repoPath` arguments from yargs.
+        *   Refined `startServerHandler` to better prioritize positional `repoPath` arguments.
     *   **Promise Rejection Issues (`src/tests/index.test.ts`):**
-        *   Ensured `runMainWithArgs` properly awaits `sutModule.main()` to propagate rejections.
+        *   Ensured `runMainWithArgs` properly awaits `sutModule.main()`.
 *   **Applied Changes:**
-    *   Commit `042e405` was applied. All SEARCH/REPLACE blocks were applied successfully.
-    *   The one reported "failed" block for `src/index.ts` (related to the `else if (isVitestUnitTesting || ccIntegrationTestSutMode)` condition) was due to a preceding successful patch in the same file already bringing that section to the intended state (using `isEffectiveVitestTesting`). Thus, the intended change for that block was effectively applied.
-*   **Result (Based on User's `npm run build` Output):**
-    *   Pending user execution of `npm run build`.
+    *   Commit `042e405` was applied.
+*   **Result (Based on User's `npm run build` Output after `042e405`):**
+    *   **TypeScript Compilation (`tsc`):** FAILED.
+        *   `src/index.ts:48:12 - error TS2304: Cannot find name 'isVitestUnitTesting'.`
+    *   **Unit Tests (`src/tests/index.test.ts`):** 22/22 FAILED.
+        *   All tests fail with `ReferenceError: isVitestUnitTesting is not defined` originating from `src/index.ts:48:1`. This is a direct consequence of the `tsc` error.
+    *   **Integration Tests (`src/tests/integration/stdio-client-server.integration.test.ts`):** 9/9 FAILED.
+        *   All tests fail with `McpError: MCP error -32000: Connection closed`. This is also likely due to the SUT (`src/index.ts`) crashing on startup because of the `isVitestUnitTesting` ReferenceError.
+    *   **Server Tests (`src/tests/server.test.ts`):** 4/28 FAILED.
+        *   The four `startProxyServer` tests are still timing out. This issue is likely independent of the `isVitestUnitTesting` error.
 *   **Analysis/Retrospection:**
-    *   The core changes to force mock usage in the SUT child process (via `CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING` and `isEffectiveVitestTesting`) should significantly impact the integration test outcomes.
-    *   The refined `repoPath` handling in `startServerHandler` should address some of the `src/tests/index.test.ts` failures related to incorrect repository paths.
-    *   The fix in `runMainWithArgs` should help with "promise resolved instead of rejecting" errors in `src/tests/index.test.ts`.
-*   **Next Steps/Plan (Attempt 103):**
+    *   The `isVitestUnitTesting` variable was removed or renamed to `isEffectiveVitestTesting` in `src/index.ts` during the previous set of changes (commit `042e405`), but one conditional block (`else if (isVitestUnitTesting || ccIntegrationTestSutMode)`) was missed and still references the old variable name. This is the root cause of the `tsc` failure and the subsequent crash of the SUT in all tests that execute `src/index.ts`.
+    *   The `startProxyServer` timeouts in `src/tests/server.test.ts` persist and need separate investigation, likely related to async operations or mock setups for `http.Server` or `axios` within that test suite.
+*   **Next Steps/Plan (Attempt 104):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **Verification:** User to run `npm run build` and provide the full output. This will show the impact of the applied changes.
-    3.  **Analyze new build output** to determine the next set of fixes, focusing on:
-        *   Whether integration tests (`stdio-client-server.integration.test.ts`) now pass or show different errors.
-        *   The state of unit tests in `src/tests/index.test.ts` (repoPath issues, promise rejections, `mockStdioClientTransportConstructor` calls).
-        *   The state of server tests in `src/tests/server.test.ts` (timeouts in `startProxyServer`).
-        *   Any remaining unhandled rejections.
-    4.  **Address `server.test.ts` Timeouts:** If they persist, investigate the `axios` unmocking strategy in the `startProxyServer` test suite's `beforeEach` hook, ensuring `axios` is unmocked *before* `serverLibModule` (which contains `startProxyServer`) is imported.
-    5.  **Review Remaining `index.test.ts` Failures:**
-        *   Correct `readFileSync` mock/assertion for the changelog test.
-        *   Ensure `console.log` is correctly spied upon and called for JSON output tests.
-        *   Further investigate `mockStdioClientTransportConstructor` not being called if this persists.
+    2.  **Fix `isVitestUnitTesting` ReferenceError (`src/index.ts`):**
+        *   Correct the conditional block in `src/index.ts` to use `isEffectiveVitestTesting` instead of the undefined `isVitestUnitTesting`.
+    3.  **Address `server.test.ts` Timeouts:**
+        *   In `src/tests/server.test.ts`, within the `startProxyServer` suite's `beforeEach` hook:
+            *   Ensure `axios` is unmocked (`vi.doUnmock('axios')`) *before* `serverLibModule` (which contains `startProxyServer`) is imported via `await import('../lib/server.js')`. This is critical because `startProxyServer` itself uses `axios` to make outgoing requests to the target server, and these should be real HTTP requests (intercepted by `nock` in the tests), not mocked `axios` calls.
+            *   The `serverLibModule` import should happen *after* `vi.doUnmock('axios')`.
+            *   The `nock.enableNetConnect((host) => host.startsWith('127.0.0.1') || host.startsWith('localhost'));` call should allow `axios` (now unmocked) to connect to the `nock` interceptors and the proxy server itself.
+    4.  **Verification:** User to run `npm run build` and provide the full output.
+    5.  **Analyze new build output.**
 
-### Blockers (Anticipated based on previous state, pending new build output)
-    *   Outcome of integration tests with new SUT mocking strategy.
-    *   Remaining `repoPath` argument handling issues in `src/index.ts`.
-    *   Remaining error/rejection propagation issues in `src/index.ts` and `src/tests/index.test.ts`.
-    *   Potential async/mock issues in `src/tests/server.test.ts` (`startProxyServer` tests).
+### Blockers (Current)
+    *   **Critical:** `ReferenceError: isVitestUnitTesting is not defined` in `src/index.ts` causing `tsc` failure and all `index.test.ts` and `stdio-client-server.integration.test.ts` failures.
+    *   Timeouts in `src/tests/server.test.ts` for `startProxyServer` tests.
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `042e405` (Changes from Attempt 102 applied)
+    *   Git Commit SHA: `042e405` (Build output analyzed is from after this commit)

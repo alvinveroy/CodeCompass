@@ -1237,14 +1237,14 @@ describe('startProxyServer', () => {
 
   beforeEach(async () => {
     vi.resetModules(); // Crucial to get fresh modules and apply unmocking correctly
-
-    // Re-import serverLibModule to get a fresh instance for spying
-    serverLibModule = await import('../lib/server.js'); 
     
-    // Unmock axios specifically for this suite so test calls to the proxy are real
+    // Unmock axios specifically for this suite BEFORE importing serverLibModule
     vi.doUnmock('axios'); 
     realAxiosInstance = (await import('axios')).default as any; // Cast to any
 
+    // Re-import serverLibModule AFTER axios is unmocked
+    serverLibModule = await import('../lib/server.js'); 
+    
     // Spy on findFreePort from the freshly imported serverLibModule
     findFreePortSpy = vi.spyOn(serverLibModule, 'findFreePort') as MockedFunction<typeof serverLibModule.findFreePort>;
 

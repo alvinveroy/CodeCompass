@@ -45,7 +45,7 @@ if (isPackaged) {
   moduleFileExtensionForDynamicImports = '.js';
   indexPath = process.execPath; // The packaged executable itself is the main script
   console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}, indexPath: ${indexPath}`);
-} else if (isVitestUnitTesting || ccIntegrationTestSutMode) {
+} else if (isEffectiveVitestTesting || ccIntegrationTestSutMode) {
   // Running src/index.ts via tsx (either by runMainWithArgs for unit tests, or by integration test spawn)
   // __dirname when running 'tsx src/index.ts' from project root is 'project_root/src'
   // process.cwd() is project_root
