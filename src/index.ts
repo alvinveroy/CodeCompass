@@ -237,21 +237,20 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   const serverProcessParams: StdioServerParameters = {
     command: spawnCommand,
     args: spawnArgs,
-    options: { // env and other spawn options go into 'options'
-      env: {
-        PATH: process.env.PATH ?? '',
-        NODE_ENV: process.env.NODE_ENV ?? 'test', // Default to test if client is in test mode
-        HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
-        // Propagate test-related environment variables
-        ...(isVitestUnitTesting && process.env.VITEST_WORKER_ID && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID }), // Pass VITEST_WORKER_ID if client is in unit test
-        ...( (isVitestUnitTesting || ccIntegrationTestSutMode) && { // If client is in any test mode, propagate mock flags
-            CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? 'true',
-            CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? 'true',
-        }),
-        ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }),
-      },
-      stdio: 'pipe', // Explicitly set stdio
-    }
+    // env and other spawn options are top-level properties of StdioServerParameters
+    env: {
+      PATH: process.env.PATH ?? '',
+      NODE_ENV: process.env.NODE_ENV ?? 'test', // Default to test if client is in test mode
+      HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
+      // Propagate test-related environment variables
+      ...(isVitestUnitTesting && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '' }), // Ensure string if VITEST_WORKER_ID is set
+      ...( (isVitestUnitTesting || ccIntegrationTestSutMode) && { // Ensure mock flags are strings
+          CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
+          CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
+      }),
+      ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }), // Add if set
+    },
+    stdio: 'pipe', // Explicitly set stdio
   };
 
   console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport, 'serverProcessParams:', JSON.stringify(serverProcessParams));
