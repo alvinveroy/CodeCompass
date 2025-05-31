@@ -313,14 +313,13 @@ describe('CLI with yargs (index.ts)', () => {
     try {
       const sutModule = await import(currentSutIndexPath) as { main: () => Promise<void> };
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Dynamic import of SUT from ${currentSutIndexPath} completed.`);
-      await sutModule.main();
-      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] SUT main() executed.`);
+      // Ensure the promise from main() is properly handled to propagate rejections
+      await sutModule.main(); 
+      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] SUT main() executed and resolved.`);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
-      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${currentSutIndexPath}:`, errorMessage);
+      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${currentSutIndexPath}:`, errorMessage, e);
       // Always re-throw the error. Test assertions (e.g., .rejects.toThrow()) will handle it.
-      // The VITEST_TESTING_FAIL_HANDLER logic is for the SUT's yargs.fail() internal behavior,
-      // not for how this test helper propagates errors.
       throw e;
     }
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT import/execution finished or threw.`);

@@ -260,6 +260,7 @@ describe('Stdio Client-Server Integration Tests', () => {
       // Unique worker ID for test isolation if needed by other parts of the system
       VITEST_WORKER_ID: process.env.VITEST_WORKER_ID || `integration_worker_${Math.random().toString(36).substring(7)}`,
       CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true', // Activate Qdrant SUT mock
+      CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING: 'true', // New flag for SUT
       // NODE_OPTIONS for preload script removed
     };
     const currentTestSpawnEnv: Record<string, string> = { ...baseSpawnEnv };

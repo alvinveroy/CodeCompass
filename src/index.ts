@@ -29,8 +29,11 @@ console.error(`[SUT_INDEX_TS_ENV_CHECK_TOP] NODE_ENV: ${process.env.NODE_ENV}, V
 // Determine the correct path to the 'lib' directory based on execution context
 const isPackaged = !!(process as unknown as { pkg?: unknown }).pkg;
 const ccIntegrationTestSutMode = process.argv.includes('--cc-integration-test-sut-mode');
+const forceSrcPathsForTesting = process.env.CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING === 'true';
+
 // true if VITEST_WORKER_ID is set AND we are NOT in ccIntegrationTestSutMode (to distinguish unit tests from integration SUT)
-const isVitestUnitTesting = !!process.env.VITEST_WORKER_ID && !ccIntegrationTestSutMode;
+// OR if CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING is true
+const isEffectiveVitestTesting = (!!process.env.VITEST_WORKER_ID && !ccIntegrationTestSutMode) || forceSrcPathsForTesting;
 
 let libPathBase: string;
 let moduleFileExtensionForDynamicImports: string;
@@ -67,7 +70,7 @@ const libPath = path.join(libPathBase, 'lib');
 
 // Prominent logging for initial state
 console.error(
-  `[SUT_INDEX_TS_PATH_INIT_DEBUG] __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, CC_INT_TEST_MODE: ${ccIntegrationTestSutMode}, isVitestUnitTesting: ${isVitestUnitTesting}`
+  `[SUT_INDEX_TS_PATH_INIT_DEBUG] __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, CC_INT_TEST_MODE: ${ccIntegrationTestSutMode}, isEffectiveVitestTesting: ${isEffectiveVitestTesting}, CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING: ${forceSrcPathsForTesting}`
 );
 console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}, Final ext: ${moduleFileExtensionForDynamicImports}`);
 
@@ -210,14 +213,14 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   let spawnCommand: string;
   let spawnArgs: string[];
 
-  // isVitestUnitTesting and ccIntegrationTestSutMode are defined globally
+  // isEffectiveVitestTesting and ccIntegrationTestSutMode are defined globally
   if (isPackaged) {
     spawnCommand = process.execPath; // The packaged executable
     spawnArgs = [
       // No script path needed if process.execPath is the app itself
       'start', clientRepoPath, '--port', '0',
     ];
-  } else if (isVitestUnitTesting || ccIntegrationTestSutMode) {
+  } else if (isEffectiveVitestTesting || ccIntegrationTestSutMode) {
     // Client command running in a test context (unit or integration) should spawn src/index.ts via tsx
     spawnCommand = 'npx';
     spawnArgs = [
@@ -225,7 +228,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       'start', clientRepoPath, '--port', '0',
       // Crucially, pass --cc-integration-test-sut-mode to the spawned server
       // so it also knows to use src paths for its *own* dynamic imports.
-      '--cc-integration-test-sut-mode',
+      '--cc-integration-test-sut-mode', // This ensures the spawned server also uses src paths
     ];
   } else {
     // Standard execution: client spawns dist/index.js via node
@@ -248,10 +251,11 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       NODE_ENV: process.env.NODE_ENV ?? 'test', // Default to test if client is in test mode
       HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
       // Propagate test-related environment variables
-      ...(isVitestUnitTesting && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '' }), // Ensure string if VITEST_WORKER_ID is set
-      ...( (isVitestUnitTesting || ccIntegrationTestSutMode) && { // Ensure mock flags are strings
-          CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
-          CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
+      ...(isEffectiveVitestTesting && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? `cli_spawned_sut_${Date.now()}` }), // Ensure string if VITEST_WORKER_ID is set, or provide a unique one
+      ...( (isEffectiveVitestTesting || ccIntegrationTestSutMode) && { // Ensure mock flags are strings
+          CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? 'true', // Default to true if client is in test mode
+          CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? 'true', // Default to true
+          CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING: 'true', // Ensure spawned server also uses src paths
       }),
       ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }), // Add if set
     },
@@ -333,26 +337,38 @@ async function startServerHandler(
   currentProcessIndexPath: string // Add currentProcessIndexPath as a parameter
 ) {
   let effectiveRepoPath: string;
-  if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath
+  if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath (e.g. from SUT mode bypass)
     effectiveRepoPath = repoPathOrArgv;
   } else { // Called from yargs with argv object
-    const positionalRepoPath = repoPathOrArgv.repoPath;
-    // Check if the positional repoPath is the script path itself (currentProcessIndexPath)
-    if (positionalRepoPath && path.resolve(positionalRepoPath) === path.resolve(currentProcessIndexPath)) {
-      // If yargs picked up the script path as the positional argument, treat it as no argument given.
-      // Then, prioritize --repo or default to '.'
-      if (repoPathOrArgv.repo) {
-        effectiveRepoPath = repoPathOrArgv.repo;
-      } else {
-        effectiveRepoPath = '.';
-      }
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Positional repoPath was script path. Using --repo or default. Effective: ${effectiveRepoPath}`);
-    } else if (repoPathOrArgv.repo) { // If --repo is explicitly provided
-      effectiveRepoPath = repoPathOrArgv.repo;
-    } else if (positionalRepoPath && positionalRepoPath !== '.') { // If positional is provided and not default (and not script path)
-      effectiveRepoPath = positionalRepoPath;
-    } else { // Fallback to default '.'
+    const argv = repoPathOrArgv; // Rename for clarity
+    const positionalArgs = argv._;
+    const commandName = positionalArgs[0]; // e.g., 'start', 'agent_query', or the script name itself if default command
+
+    // Check if it's the default command context (no explicit command like 'start' or a tool name was given by user)
+    // For default command: yargs might put the script path or the first positional arg into argv._[0]
+    // and `repoPath` (positional descriptor) might get the first actual path-like argument.
+    // The global `indexPath` refers to the currently running script.
+
+    if (argv.repo) { // --repo option always takes precedence
+      effectiveRepoPath = argv.repo;
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using --repo option: ${effectiveRepoPath}`);
+    } else if (argv.repoPath && argv.repoPath !== '.' && path.resolve(argv.repoPath) !== path.resolve(currentProcessIndexPath)) {
+      // If 'repoPath' (yargs positional) is provided, is not '.', and is not the script path itself
+      effectiveRepoPath = argv.repoPath;
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using positional repoPath: ${effectiveRepoPath}`);
+    } else if (positionalArgs.length > 0 && 
+               typeof positionalArgs[0] === 'string' && 
+               positionalArgs[0] !== 'start' && // Not the 'start' command itself
+               !KNOWN_TOOLS.includes(positionalArgs[0]) && // Not a known tool name
+               path.resolve(positionalArgs[0]) !== path.resolve(currentProcessIndexPath) && // Not the script path
+               positionalArgs[0] !== '.') { // Not explicitly '.'
+      // This case handles `codecompass /some/path` where /some/path is the first "unknown" positional
+      effectiveRepoPath = positionalArgs[0];
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using first unrecognized positional argument as repoPath: ${effectiveRepoPath}`);
+    }
+    else { // Fallback to default '.'
       effectiveRepoPath = '.';
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Defaulting to repoPath '.'. Positional repoPath from yargs: '${argv.repoPath}', argv._[0]: '${positionalArgs[0]}'`);
     }
   }
   console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Effective repoPath determined as: ${effectiveRepoPath}`);
