@@ -1761,47 +1761,69 @@ export async function startProxyServer(
         });
         (mcpResponse.data as NodeJS.ReadableStream).pipe(res);
 
-      } catch (error: unknown) {
+      } catch (error: unknown) { // This is line 1844 in the provided file content
+        // Ensure streamToString is awaited correctly and its potential errors are handled before further logic.
+        let errorResponseData: string | undefined;
+        let isAxiosE = false; // Flag to check if it's an AxiosError
+        let axiosErrorInstance: import('axios').AxiosError | null = null; // Store the instance if it is an AxiosError
+
         if (axios.isAxiosError(error)) {
-          // Error is an AxiosError, we can access response, message, code etc.
-          const axiosError = error; // Now correctly typed
-          const errorResponseData = axiosError.response?.data ? await streamToString(axiosError.response.data as NodeJS.ReadableStream) : undefined;
-          
+          isAxiosE = true;
+          axiosErrorInstance = error; // Store the typed error
+          try {
+            if (axiosErrorInstance.response?.data) {
+              // Only attempt streamToString if data exists and might be a stream
+              if (typeof (axiosErrorInstance.response.data as NodeJS.ReadableStream).pipe === 'function') {
+                errorResponseData = await streamToString(axiosErrorInstance.response.data as NodeJS.ReadableStream);
+              } else {
+                // If not a stream, try to stringify or use as is if already string
+                errorResponseData = typeof axiosErrorInstance.response.data === 'string' 
+                                    ? axiosErrorInstance.response.data 
+                                    : JSON.stringify(axiosErrorInstance.response.data);
+              }
+            }
+          } catch (streamError) {
+            logger.error('[PROXY_DEBUG] Error converting error response data to string.', { streamError });
+            // errorResponseData remains undefined, or you could set a placeholder
+          }
+        }
+
+        if (isAxiosE && axiosErrorInstance) { // Use the flag and stored instance
           logger.error('[PROXY_DEBUG] Axios error proxying MCP request to target server.', {
-            message: axiosError.message,
-            code: axiosError.code,
+            message: axiosErrorInstance.message,
+            code: axiosErrorInstance.code,
             targetUrl,
             requestMethod: req.method,
-            responseStatus: axiosError.response?.status,
+            responseStatus: axiosErrorInstance.response?.status,
             responseDataPreview: errorResponseData?.substring(0, 200),
           });
 
-          if (axiosError.response && axiosError.response.headers) {
-            res.status(axiosError.response.status);
-            Object.keys(axiosError.response.headers).forEach(key => {
-              const headerValue = axiosError.response!.headers[key];
+          if (axiosErrorInstance.response && axiosErrorInstance.response.headers) {
+            res.status(axiosErrorInstance.response.status);
+            Object.keys(axiosErrorInstance.response.headers).forEach(key => {
+              const headerValue = axiosErrorInstance.response!.headers[key];
               if (headerValue !== undefined && ['content-type', 'content-length'].includes(key.toLowerCase())) {
                 res.setHeader(key, headerValue as string | string[]);
               }
             });
+            // Use the processed errorResponseData
             if (errorResponseData) {
               res.send(errorResponseData);
-            } else if (axiosError.response.data && typeof (axiosError.response.data as NodeJS.ReadableStream).pipe === 'function') {
-              (axiosError.response.data as NodeJS.ReadableStream).pipe(res);
-            } else if (axiosError.response.data) {
-              res.send(axiosError.response.data);
+            } else if (axiosErrorInstance.response.data) { // Fallback if streamToString failed but original data exists
+                res.send(axiosErrorInstance.response.data);
             } else {
               res.end();
             }
           } else {
             // Axios error but no response (e.g., network error like ECONNREFUSED, timeout before response)
-            res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: axiosError.message }, id: null });
+            res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: axiosErrorInstance.message }, id: null });
           }
         } else {
-          // Non-Axios error (e.g., error from streamToString, or other unexpected error)
+          // Non-Axios error OR error during streamToString of AxiosError data
           const genericErrorMessage = error instanceof Error ? error.message : String(error);
-          logger.error('[PROXY_DEBUG] Non-Axios error proxying MCP request.', {
+          logger.error('[PROXY_DEBUG] Non-Axios or data processing error while proxying MCP request.', {
             message: genericErrorMessage,
+            originalErrorType: (error as object)?.constructor?.name,
             targetUrl,
             requestMethod: req.method,
           });
