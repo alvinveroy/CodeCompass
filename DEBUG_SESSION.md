@@ -118,9 +118,9 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
         *   **Integration test failures ("Connection closed")** are very likely a downstream effect of the SUT (server process) crashing on startup due to the same yargs argument parsing issues when it's spawned by the client CLI portion of the SUT.
         *   **`server.test.ts` timeouts** in `startProxyServer` remain a persistent, separate issue, likely related to promise handling within `startProxyServer` itself under specific mock conditions (especially when `findFreePort` is mocked to reject) or complex interactions with `nock` and `http.createServer` mocks.
 *   **Applied Changes (leading to current state):**
-    *   Commit `c1beff6` ("docs: Update commit hash for Attempt 108 in debug log") applied the changes from Attempt 108.
-*   **Result (Based on User's `npm run build` Output after `c1beff6`):**
-    *   (Output for `npm run build` after `c1beff6` is pending from the user)
+    *   Commit `100e0c5` ("docs: Update commit hash for Attempt 108 in debug log") applied the changes from Attempt 108.
+*   **Result (Based on User's `npm run build` Output after `100e0c5`):**
+    *   (Output for `npm run build` after `100e0c5` is pending from the user)
 *   **Analysis/Retrospection (Anticipating results for Attempt 108):**
     *   The changes to `src/index.ts` (yargs command definitions and `.fail()` handler) are expected to resolve most of the "Unknown argument" errors and unhandled rejections in `src/tests/index.test.ts`.
     *   The adjustments to assertions in `src/tests/index.test.ts` (expecting `console.error` and specific error throws) should align with the new yargs behavior, leading to more passing tests.
@@ -133,7 +133,7 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
 ## Attempt 108: Stabilizing yargs, CLI tests, and then Integration/Server tests (Applied)
 
 *   **Attempt Number:** 108
-*   **Last Git Commit for this attempt's changes:** `c1beff6` ("docs: Update commit hash for Attempt 108 in debug log")
+*   **Last Git Commit for this attempt's changes:** `100e0c5` ("docs: Update commit hash for Attempt 108 in debug log")
 *   **Intended Fixes (from this Attempt 108):**
     *   **`src/index.ts`:**
         *   Revised yargs command definitions (default `$0` and `start`) to correctly handle `repoPath` and avoid "Unknown argument" errors.
@@ -148,12 +148,12 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
     *   **`src/tests/server.test.ts` (for `startProxyServer` timeouts):**
         *   Refined `findFreePort` mock for rejection test.
         *   Reduced timeouts for successful proxy tests.
-*   **Applied Changes:** Changes from commit `c1beff6` have been applied by the user.
-*   **Result:** (Pending user execution of `npm run build` with `c1beff6` changes)
+*   **Applied Changes:** Changes from commit `100e0c5` have been applied by the user.
+*   **Result:** (Pending user execution of `npm run build` with `100e0c5` changes)
 *   **Analysis/Retrospection:** (Will be filled after results)
 *   **Next Steps/Plan (Attempt 108 - Post-Application):**
     1.  **`DEBUG_SESSION.MD`:** Update with this current status (this step).
-    2.  **Verification:** User to run `npm run build` with the `c1beff6` changes and provide the full output.
+    2.  **Verification:** User to run `npm run build` with the `100e0c5` changes and provide the full output.
     3.  **Analyze new build output,** focusing on:
         *   Confirmation that `tsc` passes.
         *   Status of `src/tests/index.test.ts`.
