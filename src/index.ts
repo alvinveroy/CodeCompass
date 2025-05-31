@@ -172,6 +172,7 @@ interface ClientCommandArgs {
 }
 
 async function handleClientCommand(argv: ClientCommandArgs) {
+  console.error(`[SUT_INDEX_TS_HANDLE_CLIENT_CMD_DEBUG] Entered handleClientCommand. Raw argv: ${JSON.stringify(argv)}`);
   const { toolName, params: toolParamsString, outputJson } = argv;
 
   // Use the globally determined moduleFileExtensionForDynamicImports
@@ -614,6 +615,7 @@ export async function main() { // Add export
           });
       },
       async (argv) => {
+        console.error(`[SUT_INDEX_TS_YARGS_TOOL_HANDLER_DEBUG] Tool command '${toolName}' handler invoked. Raw argv: ${JSON.stringify(argv)}`);
         // Construct the ClientCommandArgs object correctly, including the toolName
         const commandArgs: ClientCommandArgs = {
           params: argv.params as string | undefined,
@@ -623,6 +625,7 @@ export async function main() { // Add export
           $0: argv.$0 as string,
           _: argv._ as (string | number)[],
         };
+        console.error(`[SUT_INDEX_TS_YARGS_TOOL_HANDLER_DEBUG] Parsed commandArgs for handleClientCommand: ${JSON.stringify(commandArgs)}`);
         await handleClientCommand(commandArgs as ClientCommandArgs & { repo?: string });
       }
     );
@@ -662,19 +665,31 @@ export async function main() { // Add export
       const isTestEnvForFail = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
       const isVitestTestingFailHandlerScenario = process.env.VITEST_TESTING_FAIL_HANDLER === 'true';
 
+      let detailedErrorMessage: string | null = null;
+      if (err) {
+        if (isJsonRpcErrorResponse(err)) {
+          detailedErrorMessage = err.error.message;
+        } else if (err instanceof Error) {
+          detailedErrorMessage = err.message;
+        }
+      }
+      detailedErrorMessage = detailedErrorMessage || msg;
+
+
       console.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
         hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
-        hasErr: !!err, errName: err?.name, errMessage: err?.message,
-        isTestEnvForFail, isVitestTestingFailHandlerScenario
+        hasErr: !!err, errName: err?.name, errMessage: (err instanceof Error ? err.message : undefined),
+        isTestEnvForFail, isVitestTestingFailHandlerScenario,
+        effectiveErrorMessageForLog: detailedErrorMessage
       });
 
       if (isTestEnvForFail) {
         if (isVitestTestingFailHandlerScenario) {
-          console.error('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', err ? (err.message || msg) : msg);
+          console.error('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', detailedErrorMessage);
         } else {
           console.error('Yargs validation/parse error in generic test context:', err || msg);
         }
-        if (err) throw err; // Prioritize actual Error object
+        if (err) throw err; // Prioritize actual Error object (or RPC error object)
         throw new Error(msg || 'yargs validation failed in test environment');
       } else {
         yargsInstance.showHelp();

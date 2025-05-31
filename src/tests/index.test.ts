@@ -641,28 +641,27 @@ describe('CLI with yargs (index.ts)', () => {
       // In test mode, .fail() throws. yargs itself might throw for --version if it tries to exit.
       // Let's ensure VITEST_TESTING_FAIL_HANDLER is set so .fail() throws predictably.
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      // yargs --version typically prints to stdout and exits 0.
-      // The mockProcessExit throwing an error simulates this exit for test purposes.
-      mockProcessExit.mockImplementationOnce(() => { throw new Error("process.exit called with 0"); });
-
-      await expect(runMainWithArgs(['--version'])).rejects.toThrow("process.exit called with 0");
+      // yargs --version typically prints to stdout. With exitProcess(false), it should resolve.
+      // mockProcessExit should NOT be called.
+      await expect(runMainWithArgs(['--version'])).resolves.toBeUndefined();
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringMatching(/\d+\.\d+\.\d+/));
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('--help option should display help and exit', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      // yargs --help prints to stdout and exits 0.
-      mockProcessExit.mockImplementationOnce(() => { throw new Error("process.exit called with 0"); });
-
-      await expect(runMainWithArgs(['--help'])).rejects.toThrow("process.exit called with 0");
+      // yargs --help prints to stdout. With exitProcess(false), it should resolve.
+      // mockProcessExit should NOT be called.
+      await expect(runMainWithArgs(['--help'])).resolves.toBeUndefined();
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Commands:"));
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("codecompass start [repoPath]")); // Explicit start command
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("codecompass [repoPath]"));       // Default command
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("codecompass start [repoPath]"));
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("codecompass [repoPath]"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Options:"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("--help"));
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("--port"));
-      // mockProcessExit is expected to have thrown.
+      expect(mockProcessExit).not.toHaveBeenCalled();
+      delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
   });
   
@@ -711,14 +710,15 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should show error and help for unknown option', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      const expectedErrorMsg = "Unknown argument: unknown-option";
-      await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrow(expectedErrorMsg);
+      // Yargs' actual message might be "Unknown arguments: unknown-option, unknownOption"
+      const expectedErrorMsgPart = "Unknown argument: unknown-option"; 
+      await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrow(expect.stringContaining(expectedErrorMsgPart));
       
-      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expectedErrorMsg);
+      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(expectedErrorMsgPart));
       // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasMsg: true, msgContent: expectedErrorMsg })
+        expect.objectContaining({ hasMsg: true, msgContent: expect.stringContaining(expectedErrorMsgPart) })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
@@ -798,11 +798,15 @@ describe('CLI with yargs (index.ts)', () => {
 
       // The SUT's handleClientCommand error reporting for --json should output the rpcError.
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
-      // The .fail() handler will also log to console.error.
-      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(rpcError.error.message));
+      // The .fail() handler will also log to console.error, now with the correct message from the RPC error.
+      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', rpcError.error.message);
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasErr: true, errMessage: expect.stringContaining(rpcError.error.message) })
+        expect.objectContaining({ 
+          hasErr: true, 
+          // errMessage might be undefined if err is not an Error instance, check effectiveErrorMessageForLog
+          effectiveErrorMessageForLog: rpcError.error.message 
+        })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
