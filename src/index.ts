@@ -337,54 +337,32 @@ async function startServerHandler(
   currentProcessIndexPath: string // Add currentProcessIndexPath as a parameter
 ) {
   let effectiveRepoPath: string;
-  if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath (e.g. from SUT mode bypass)
+
+  if (typeof repoPathOrArgv === 'string') {
+    // This case is primarily for the --cc-integration-test-sut-mode bypass,
+    // where startServerHandler might be called directly with a string path.
     effectiveRepoPath = repoPathOrArgv;
-  } else { // Called from yargs with argv object
-    const argv = repoPathOrArgv; // Rename for clarity
-    const positionalArgs = argv._;
-    const commandName = positionalArgs[0]; // e.g., 'start', 'agent_query', or the script name itself if default command
+    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using direct string repoPath: ${effectiveRepoPath}`);
+  } else {
+    // Called from yargs, repoPathOrArgv is the argv object.
+    const argv = repoPathOrArgv as { repo?: string; repoPath?: string; [key: string]: unknown; _: (string | number)[]; $0: string; };
 
-    // Check if it's the default command context (no explicit command like 'start' or a tool name was given by user)
-    // For default command: yargs might put the script path or the first positional arg into argv._[0]
-    // and `repoPath` (positional descriptor) might get the first actual path-like argument.
-    // The global `indexPath` refers to the currently running script.
-
-    if (argv.repo) { // --repo option always takes precedence
+    if (typeof argv.repo === 'string' && argv.repo.trim() !== '') {
+      // Global --repo option takes highest precedence.
       effectiveRepoPath = argv.repo;
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using --repo option: ${effectiveRepoPath}`);
-    } else if (positionalArgs.length > 1 && positionalArgs[0] === 'start' && typeof positionalArgs[1] === 'string' && positionalArgs[1].trim() !== '' && path.resolve(positionalArgs[1]) !== path.resolve(currentProcessIndexPath)) {
-      // Case: `codecompass start /path/to/repo`
-      // argv._ is ['start', '/path/to/repo']
-      // argv.repoPath (from yargs positional for 'start' command) should also be '/path/to/repo'
-      // We prioritize argv.repoPath if available and valid, otherwise use positionalArgs[1]
-      if (argv.repoPath && argv.repoPath !== '.' && path.resolve(argv.repoPath) !== path.resolve(currentProcessIndexPath)) {
-        effectiveRepoPath = argv.repoPath;
-        console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler (explicit start): Using positional repoPath from yargs: ${effectiveRepoPath}`);
-      } else {
-        effectiveRepoPath = positionalArgs[1];
-        console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler (explicit start): Using second element of argv._ as repoPath: ${effectiveRepoPath}`);
-      }
-    } else if (argv.repoPath && argv.repoPath !== '.' && path.resolve(argv.repoPath) !== path.resolve(currentProcessIndexPath)) {
-      // Case: `codecompass /path/to/repo` (default command)
-      // argv.repoPath (from yargs positional for '$0' command) is '/path/to/repo'
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using --repo option value: ${effectiveRepoPath}`);
+    } else if (typeof argv.repoPath === 'string' && argv.repoPath.trim() !== '') {
+      // Positional repoPath from yargs command definition (e.g., '$0 [repoPath]' or 'start [repoPath]').
+      // This will be `undefined` for `$0` if no path is given, or `.` for `start` if no path is given.
       effectiveRepoPath = argv.repoPath;
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler (default command): Using positional repoPath from yargs: ${effectiveRepoPath}`);
-    } else if (positionalArgs.length === 1 && 
-               typeof positionalArgs[0] === 'string' && 
-               positionalArgs[0] !== 'start' && 
-               !KNOWN_TOOLS.includes(positionalArgs[0]) && 
-               path.resolve(positionalArgs[0]) !== path.resolve(currentProcessIndexPath) && 
-               positionalArgs[0] !== '.') {
-      // Case: `codecompass /some/path` (first unrecognized positional, not 'start', not a tool)
-      effectiveRepoPath = positionalArgs[0];
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler (default command): Using first unrecognized positional argument as repoPath: ${effectiveRepoPath}`);
-    }
-    else { // Fallback to default '.'
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using positional repoPath from yargs: ${effectiveRepoPath}`);
+    } else {
+      // Fallback if neither --repo nor a positional repoPath was meaningfully provided.
       effectiveRepoPath = '.';
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Defaulting to repoPath '.'. argv.repoPath: '${argv.repoPath}', argv._: ${JSON.stringify(positionalArgs)}`);
+      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Defaulting to repoPath '.' (argv.repo: '${argv.repo}', argv.repoPath: '${argv.repoPath}')`);
     }
   }
-  console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Effective repoPath determined as: ${effectiveRepoPath}`);
+  console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Final effective repoPath: ${effectiveRepoPath}`);
     
   // Use the globally determined moduleFileExtensionForDynamicImports
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
@@ -613,22 +591,7 @@ export async function main() { // Add export
         console.log('[INDEX_TS_DEBUG] "start" command handler INVOKED');
         await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
       }
-    )
-    .command(
-      'start [repoPath]',
-      'Explicitly start the CodeCompass server.',
-      (yargsInstance) => {
-        return yargsInstance.positional('repoPath', {
-          type: 'string',
-          default: '.',
-          describe: 'Path to the git repository to serve',
-        });
-      },
-      async (argv) => {
-        console.log('[INDEX_TS_DEBUG] "start" command handler INVOKED');
-        await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
-      }
-    );
+    ); // Removed duplicate "start" command
 
   // Dynamically add commands for each known tool
   KNOWN_TOOLS.forEach(toolName => {

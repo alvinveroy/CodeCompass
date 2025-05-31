@@ -432,8 +432,7 @@ describe('CLI with yargs (index.ts)', () => {
             '--port', '0',
             '--cc-integration-test-sut-mode', // Expect this flag
           ],
-          options: expect.objectContaining({ // env is under options for StdioServerParameters
-            env: expect.objectContaining({
+          env: expect.objectContaining({ // env is a top-level property for StdioServerParameters
               HTTP_PORT: '0',
               VITEST_WORKER_ID: expect.any(String),
               CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true', // Should be explicitly true if client is in test mode
@@ -465,8 +464,7 @@ describe('CLI with yargs (index.ts)', () => {
             '--port', '0',
             '--cc-integration-test-sut-mode',
           ],
-          options: expect.objectContaining({
-            env: expect.objectContaining({
+          env: expect.objectContaining({ // env is a top-level property
               HTTP_PORT: '0',
               VITEST_WORKER_ID: expect.any(String),
               CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true',
@@ -627,8 +625,7 @@ describe('CLI with yargs (index.ts)', () => {
             '--port', '0',
             '--cc-integration-test-sut-mode',
           ],
-          options: expect.objectContaining({
-            env: expect.objectContaining({
+          env: expect.objectContaining({ // env is a top-level property
               HTTP_PORT: '0',
               VITEST_WORKER_ID: expect.any(String),
               CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: 'true',
