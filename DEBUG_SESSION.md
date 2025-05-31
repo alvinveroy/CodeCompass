@@ -45,39 +45,45 @@ The debugging process (spanning commits from approximately `7f14f61` to `691bb8f
 The debugging journey involved extensive work on Vitest mocking for dynamically imported SUT dependencies, managing environment variable propagation to child processes spawned by tests, and ensuring correct path resolution for module loading in various contexts (source vs. packaged, test execution vs. direct run). Key challenges included Vitest's mock hoisting behavior with non-literal paths, issues with the external `StdioClientTransport` SDK's handling of environment variables, and cascading failures where `tsc` errors or SUT crashes obscured underlying test logic problems. The process underscored the necessity of meticulous diagnostic logging and iterative refinement of both SUT code (for testability) and the test setups themselves.
 
 ---
-## Attempt 98: Correcting `indexPath` Usage within `startServerHandler`
+## Attempt 99: Finalizing `indexPath` Scope Correction
 
-*   **Attempt Number:** 98
-*   **Last Git Commit for this attempt's changes:** `9849337` ("fix: Correct indexPath scope in startServerHandler")
-*   **Intended Fixes (from Attempt 97):**
-    *   **`src/index.ts`:**
-        *   Modify `startServerHandler` to accept `currentProcessIndexPath`.
-        *   Update call sites of `startServerHandler` in `main()` to pass `indexPath`.
+*   **Attempt Number:** 99
+*   **Last Git Commit for this attempt's changes:** `033ad35` ("fix: Fix params passed to imported startServer in handler")
+*   **Intended Fixes (from Attempt 98):**
+    *   **`src/index.ts`:** Correct the parameters passed to the imported `startServer` function *within* `startServerHandler`. (This was addressed by commit `033ad35`).
 *   **Applied Changes (leading to current state):**
-    *   Commit `9849337` was applied.
-*   **Current Errors (based on user report for `src/index.ts` after `9849337`):**
-    *   The user reports errors on lines 476 and 568 in `src/index.ts` related to `indexPath`. These lines are the call sites of `startServerHandler` within the `main()` function (SUT mode block and yargs default command handler).
-    *   The previous fix correctly modified the `startServerHandler` signature and its call sites to pass `indexPath`.
-    *   However, one of the `SEARCH/REPLACE` blocks in the previous turn *incorrectly* modified the call to the *imported* `startServer` (from `src/lib/server.ts`) *within* `startServerHandler` to also pass `indexPath`. The imported `startServer` does not expect this parameter.
+    *   Commit `033ad35` was applied.
+*   **Current Errors (based on user report for `src/index.ts` after `033ad35`):**
+    *   The user reports errors on lines 474 and 566 (updated line numbers) in `src/index.ts` related to `indexPath`. These lines are the call sites of `startServerHandler` within the `main()` function (SUT mode block and yargs default command handler).
+    *   Commit `9849337` correctly modified the `startServerHandler` signature to accept `currentProcessIndexPath` and updated the call sites in `main()` (SUT mode and yargs default command handler) to pass `indexPath`.
+    *   Commit `033ad35` correctly fixed the call *inside* `startServerHandler` to the imported `startServer` (from `src/lib/server.ts`) so it no longer incorrectly receives `indexPath`.
+    *   The current error indicates that the `indexPath` variable itself is not found at the call sites within `main()`. This is unexpected as `indexPath` is defined at the module scope.
 *   **Analysis/Retrospection:**
-    *   The `indexPath` variable is correctly defined at the module scope.
-    *   `startServerHandler` in `src/index.ts` correctly accepts `currentProcessIndexPath` and uses it for its internal logic.
-    *   The calls to `startServerHandler` from `main()` (SUT mode and yargs handler) were correctly updated to pass `indexPath`.
-    *   The error lies in the internal call *within* `startServerHandler` to the `startServer` function imported from `../../src/lib/server.ts`. This imported function should *not* receive `indexPath`.
-*   **Next Steps/Plan (Attempt 98):**
+    *   `indexPath` is defined at the top of `src/index.ts`.
+    *   `startServerHandler` is defined in `src/index.ts` and correctly accepts `currentProcessIndexPath`.
+    *   The `main` function is also defined in `src/index.ts`.
+    *   The calls to `startServerHandler` from within `main` (both in SUT mode and the yargs default command handler) *should* have access to the module-scoped `indexPath`.
+    *   If `indexPath` is reported as "Cannot find name 'indexPath'" at these call sites, it suggests a very subtle scoping issue or perhaps an error in how the `SEARCH/REPLACE` blocks were applied or interpreted, leading to `indexPath` being undefined in the context of those specific lines within `main`.
+*   **Next Steps/Plan (Attempt 99):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **`src/index.ts` (Fix `startServer` call within `startServerHandler`):**
-        *   Locate the `try...catch` block within `startServerHandler` where `await startServer(effectiveRepoPath)` is called.
-        *   Ensure this call does NOT pass `indexPath` or `currentProcessIndexPath` as a second argument to the imported `startServer`.
+    2.  **`src/index.ts` (Verify `indexPath` at call sites in `main`):**
+        *   The `SEARCH/REPLACE` blocks from commit `9849337` that modified the calls to `startServerHandler` in `main` (lines 474 and 566) were:
+            *   `await startServerHandler({ ... }, indexPath);` for SUT mode.
+            *   `await startServerHandler(argv as { ... }, indexPath);` for yargs default command.
+        *   These appear correct. The issue might be that `indexPath` itself is somehow shadowed or not available *exactly* at those lines within the `main` function's scope. This is unlikely given its module-level definition.
+        *   Let's ensure the `indexPath` variable is indeed defined at the top of the file and not inadvertently moved or redefined. Assuming it is correctly at the top, the previous fixes should be sufficient.
+        *   No new code change is proposed for `src/index.ts` at this moment, as the previous changes for these lines *should* be correct. The user should double-check that `indexPath` is defined at the top of `src/index.ts` as:
+            `const indexPath = path.resolve(__dirname, '../../src/index.ts');`
+            And that the calls on lines 474 and 566 are indeed passing this `indexPath`.
     3.  **Verification:** User to run `npm run build` to:
-        *   Confirm `tsc` errors related to `indexPath` are resolved.
-        *   Observe the output for the SUT mode crash (diagnostics for `typeof startServerHandler` should appear).
-        *   Observe the results for unit tests in `src/tests/index.test.ts`.
+        *   Confirm if `tsc` errors related to `indexPath` on lines 474 and 566 persist. If they do, we need to see the exact code around those lines and the definition of `indexPath`.
+        *   Observe the output for the SUT mode crash.
+        *   Observe the results for unit tests.
 
 ### Blockers
-    *   Incorrect parameters being passed to the imported `startServer` function within `startServerHandler` in `src/index.ts`.
-    *   SUT crashing in integration tests (suspected `startServerHandler is not a function` - though this might be a separate issue or resolved by fixing `indexPath`).
-    *   Unit test "promise resolved instead of rejecting" errors in `src/tests/index.test.ts`.
+    *   Reported `Cannot find name 'indexPath'` errors at call sites of `startServerHandler` in `main()`.
+    *   SUT crashing in integration tests.
+    *   Unit test "promise resolved instead of rejecting" errors.
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `9849337`
+    *   Git Commit SHA: `033ad35`
