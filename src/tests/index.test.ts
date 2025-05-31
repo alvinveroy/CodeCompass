@@ -439,7 +439,6 @@ describe('CLI with yargs (index.ts)', () => {
               CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true', // Should be explicitly true
             }),
           }),
-        })
       );
       // We expect the MCP client's callTool to be invoked.
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_stdio' } });
@@ -471,7 +470,6 @@ describe('CLI with yargs (index.ts)', () => {
               CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true',
             }),
           }),
-        })
       );
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_repo' } });
       expect(mockMcpClientInstance.close).toHaveBeenCalled();
@@ -632,7 +630,6 @@ describe('CLI with yargs (index.ts)', () => {
               CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true',
             }),
           }),
-        })
       );
     });
 
