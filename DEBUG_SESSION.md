@@ -45,36 +45,39 @@ The debugging process (spanning commits from approximately `7f14f61` to `691bb8f
 The debugging journey involved extensive work on Vitest mocking for dynamically imported SUT dependencies, managing environment variable propagation to child processes spawned by tests, and ensuring correct path resolution for module loading in various contexts (source vs. packaged, test execution vs. direct run). Key challenges included Vitest's mock hoisting behavior with non-literal paths, issues with the external `StdioClientTransport` SDK's handling of environment variables, and cascading failures where `tsc` errors or SUT crashes obscured underlying test logic problems. The process underscored the necessity of meticulous diagnostic logging and iterative refinement of both SUT code (for testability) and the test setups themselves.
 
 ---
-## Attempt 97: Addressing `indexPath` Scope and `StdioServerParameters`
+## Attempt 98: Correcting `indexPath` Usage within `startServerHandler`
 
-*   **Attempt Number:** 97
-*   **Last Git Commit for this attempt's changes:** `78d453c` ("fix: Correct StdioServerParameters structure for SDK")
-*   **Intended Fixes (from Attempt 96):**
-    *   **`src/index.ts`:** Correct `StdioServerParameters` structure in `handleClientCommand` (addressed by `78d453c`).
+*   **Attempt Number:** 98
+*   **Last Git Commit for this attempt's changes:** `9849337` ("fix: Correct indexPath scope in startServerHandler")
+*   **Intended Fixes (from Attempt 97):**
+    *   **`src/index.ts`:**
+        *   Modify `startServerHandler` to accept `currentProcessIndexPath`.
+        *   Update call sites of `startServerHandler` in `main()` to pass `indexPath`.
 *   **Applied Changes (leading to current state):**
-    *   Commit `78d453c` was applied.
-*   **Current Errors (based on user IDE report for `src/index.ts` after `78d453c` and new analysis):**
-    *   `src/index.ts:240` - TS2353: This was fixed by commit `78d453c`.
-    *   `src/index.ts:335` - TS2304: `Cannot find name 'indexPath'.` This error is **valid**. The `indexPath` variable is defined at the module scope in `src/index.ts`, but the `startServerHandler` function (where `indexPath` is referenced on line 335 as per commit `aa08974`) does not have `indexPath` in its local scope, nor is it passed as a parameter.
+    *   Commit `9849337` was applied.
+*   **Current Errors (based on user report for `src/index.ts` after `9849337`):**
+    *   The user reports errors on lines 476 and 568 in `src/index.ts` related to `indexPath`. These lines are the call sites of `startServerHandler` within the `main()` function (SUT mode block and yargs default command handler).
+    *   The previous fix correctly modified the `startServerHandler` signature and its call sites to pass `indexPath`.
+    *   However, one of the `SEARCH/REPLACE` blocks in the previous turn *incorrectly* modified the call to the *imported* `startServer` (from `src/lib/server.ts`) *within* `startServerHandler` to also pass `indexPath`. The imported `startServer` does not expect this parameter.
 *   **Analysis/Retrospection:**
-    *   The `StdioServerParameters` structure (TS2353) was correctly addressed by commit `78d453c`.
-    *   The `indexPath` scope issue (TS2304) is a genuine bug introduced in commit `aa08974` when `startServerHandler` was modified to check if `positionalRepoPath` was the script path itself.
-    *   The SUT mode crash (`startServerHandler is not a function`) and unit test "promise resolved instead of rejecting" errors remain the primary concerns to be verified after the `indexPath` fix.
-*   **Next Steps/Plan (Attempt 97):**
+    *   The `indexPath` variable is correctly defined at the module scope.
+    *   `startServerHandler` in `src/index.ts` correctly accepts `currentProcessIndexPath` and uses it for its internal logic.
+    *   The calls to `startServerHandler` from `main()` (SUT mode and yargs handler) were correctly updated to pass `indexPath`.
+    *   The error lies in the internal call *within* `startServerHandler` to the `startServer` function imported from `../../src/lib/server.ts`. This imported function should *not* receive `indexPath`.
+*   **Next Steps/Plan (Attempt 98):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **`src/index.ts` (Fix TS2304 - `indexPath` scope):**
-        *   Modify `startServerHandler` to accept `currentProcessIndexPath` (or a similar name) as an explicit parameter.
-        *   When `startServerHandler` is called from `main()` (both in SUT mode and regular CLI mode), pass the module-scoped `indexPath` variable to it.
+    2.  **`src/index.ts` (Fix `startServer` call within `startServerHandler`):**
+        *   Locate the `try...catch` block within `startServerHandler` where `await startServer(effectiveRepoPath)` is called.
+        *   Ensure this call does NOT pass `indexPath` or `currentProcessIndexPath` as a second argument to the imported `startServer`.
     3.  **Verification:** User to run `npm run build` to:
-        *   Confirm TS2304 (`indexPath`) is resolved.
+        *   Confirm `tsc` errors related to `indexPath` are resolved.
         *   Observe the output for the SUT mode crash (diagnostics for `typeof startServerHandler` should appear).
-        *   Observe the results for unit tests in `src/tests/index.test.ts` (especially "promise resolved instead of rejecting" errors).
-    4.  **Defer other issues** until the build is clean and the SUT mode crash is understood.
+        *   Observe the results for unit tests in `src/tests/index.test.ts`.
 
 ### Blockers
-    *   TS2304 error in `src/index.ts` (`Cannot find name 'indexPath'`).
-    *   SUT crashing in integration tests (suspected `startServerHandler is not a function`).
+    *   Incorrect parameters being passed to the imported `startServer` function within `startServerHandler` in `src/index.ts`.
+    *   SUT crashing in integration tests (suspected `startServerHandler is not a function` - though this might be a separate issue or resolved by fixing `indexPath`).
     *   Unit test "promise resolved instead of rejecting" errors in `src/tests/index.test.ts`.
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `78d453c`
+    *   Git Commit SHA: `9849337`

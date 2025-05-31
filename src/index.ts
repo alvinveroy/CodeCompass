@@ -377,10 +377,8 @@ async function startServerHandler(
     const { logger: localLogger, configService: localConfigService } = configServiceModule;
     console.log('[SUT_INDEX_TS_DEBUG] Imported configService in startServerHandler:', typeof localConfigService, 'configService.DEEPSEEK_API_KEY (sample prop):', localConfigService.DEEPSEEK_API_KEY ? 'exists' : 'MISSING/undefined');
   try {
-    // Pass the module-scoped `indexPath` to the imported `startServer` function.
-    // Note: The imported `startServer` from `server.ts` does not expect `currentProcessIndexPath`.
-    // The `indexPath` check is specific to `startServerHandler` defined in `src/index.ts`.
-    // This call remains as is, as `startServer` from `lib/server.ts` doesn't need `indexPath`.
+    // The imported `startServer` (from `../../src/lib/server.ts`) only expects `effectiveRepoPath`.
+    // It does not need `currentProcessIndexPath`.
     await startServer(effectiveRepoPath);
     // If startServer resolves, it means stdio MCP is up. Utility HTTP server might be disabled
     // due to a conflict (Option C), but the instance is operational.
