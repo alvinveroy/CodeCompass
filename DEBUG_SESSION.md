@@ -55,72 +55,45 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
     *   Commit `4b44e12` was applied, which should have defined `indexPath`.
 *   **Expected Result:**
     *   The `tsc` errors "Cannot find name 'indexPath'" in `src/index.ts` (previously on lines 474 and 566) should be resolved.
-*   **Attempt Number:** 102 (Analysis of build output from after commit `4b44e12`)
-*   **Intended Fixes (from Attempt 101):**
-    *   `src/index.ts`: Define `indexPath` to resolve `tsc` errors. (This was successful)
+*   **Attempt Number:** 103
+*   **Last Git Commit for this attempt's changes:** `042e405` ("fix: Ensure SUT uses mocks; fix CLI args and test error handling")
+*   **Intended Fixes (from Attempt 102):**
+    *   **Integration Test Mocking (`src/index.ts`, `src/tests/integration/stdio-client-server.integration.test.ts`):**
+        *   Introduced `CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING=true` env var passed from integration tests to SUT.
+        *   Modified `src/index.ts` path logic (`isEffectiveVitestTesting`) to use this new variable to force `src` paths and `.ts` extensions for dynamic imports, ensuring mocks are loaded in the child SUT.
+        *   Ensured `handleClientCommand` in `src/index.ts` also uses and propagates this env var.
+    *   **`repoPath` Argument Handling (`src/index.ts`):**
+        *   Refined `startServerHandler` to better prioritize positional `repoPath` arguments from yargs.
+    *   **Promise Rejection Issues (`src/tests/index.test.ts`):**
+        *   Ensured `runMainWithArgs` properly awaits `sutModule.main()` to propagate rejections.
 *   **Applied Changes:**
-    *   Commit `4b44e12` was applied.
+    *   Commit `042e405` was applied. All SEARCH/REPLACE blocks were applied successfully.
+    *   The one reported "failed" block for `src/index.ts` (related to the `else if (isVitestUnitTesting || ccIntegrationTestSutMode)` condition) was due to a preceding successful patch in the same file already bringing that section to the intended state (using `isEffectiveVitestTesting`). Thus, the intended change for that block was effectively applied.
 *   **Result (Based on User's `npm run build` Output):**
-    *   **TypeScript Compilation (`tsc`):** PASSED. The `indexPath` errors are resolved.
-    *   **Unit Tests (`src/tests/index.test.ts`):** 16/22 FAILED.
-        *   `should call startServerHandler with specified repoPath for default command`: Expected `mockStartServerHandler` to be called with `'/my/repo'`, but received `'.'`.
-        *   `should call startServerHandler with specified repoPath for "start" command (positional)`: Expected `mockStartServerHandler` to be called with `'/my/repo/path'`, but received `'.'`.
-        *   `should spawn server and call tool via stdio for "agent_query"`: `mockStdioClientTransportConstructor` expected to be called but was not.
-        *   `should use --repo path for spawned server in client stdio mode`: `mockStdioClientTransportConstructor` expected to be called but was not.
-        *   `should handle client command failure (spawn error) ...`: Promise resolved "undefined" instead of rejecting.
-        *   `should handle client command failure (server process premature exit) ...`: Promise resolved "undefined" instead of rejecting.
-        *   `should handle invalid JSON parameters for client command (stdio) ...`: Promise resolved "undefined" instead of rejecting.
-        *   `--repo option should be used by client stdio command for spawned server`: `mockStdioClientTransportConstructor` expected to be called but was not.
-        *   `--version option should display version and exit`: Promise resolved "undefined" instead of rejecting.
-        *   `--help option should display help and exit`: Promise resolved "undefined" instead of rejecting.
-        *   `should display changelog`: `mockedFsSpies.readFileSync` expected `StringContaining "CHANGELOG.md"`, received `"/Users/alvin.tech/Projects/CodeCompass/package.json"`.
-        *   `should show error and help for unknown command`: Promise resolved "undefined" instead of rejecting.
-        *   `should show error and help for unknown option`: Promise resolved "undefined" instead of rejecting.
-        *   `should output raw JSON when --json flag is used on successful tool call`: Expected to find a `console.log` call with valid JSON, but none was found.
-        *   `should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)`: Promise resolved "undefined" instead of rejecting.
-        *   `should output JSON error when --json flag is used and tool call fails with generic Error (stdio)`: Promise resolved "undefined" instead of rejecting.
-    *   **Integration Tests (`src/tests/integration/stdio-client-server.integration.test.ts`):** 9/9 FAILED.
-        *   All tests fail with `McpError: MCP error -32000: Connection closed`.
-        *   SUT logs from spawned processes indicate `VITEST_WORKER_ID: undefined` and `[SUT_INDEX_TS_SERVER_MODULE_TOKEN_CHECK] { type: 'original_server_module' }`. This strongly suggests the SUT is not using the Vitest mocks for `src/lib/server.ts` when spawned as a child.
-    *   **Server Tests (`src/tests/server.test.ts`):** 4/28 FAILED.
-        *   The four `startProxyServer` tests are timing out after 30 seconds:
-            *   `should resolve with null if findFreePort fails`
-            *   `should start the proxy server, log info, and proxy /api/ping`
-            *   `should handle target server unreachable for /mcp`
-            *   `should forward target server 500 error for /mcp`
-    *   **Unhandled Rejection:** `ServerStartupError: Server failed to boot with fatal error` from `src/tests/index.test.ts`.
+    *   Pending user execution of `npm run build`.
 *   **Analysis/Retrospection:**
-    *   The `indexPath` fix was successful for `tsc`.
-    *   **Critical Issue:** The integration tests are failing because the spawned SUT (`src/index.ts`) is not recognizing the test environment and thus not loading mocked dependencies (like `src/lib/server.ts`). The `VITEST_WORKER_ID` is not propagating or being detected correctly in the child process. The SUT's dynamic import logic needs to be more robust for child processes in tests.
-    *   **`src/tests/index.test.ts` Failures:**
-        *   The `repoPath` argument parsing in `src/index.ts` (likely within `startServerHandler` and yargs setup) seems to incorrectly default to `.` when specific paths are provided via positional arguments.
-        *   The "promise resolved instead of rejecting" errors point to issues in `runMainWithArgs` or the yargs `.fail()` handler in `src/index.ts` not correctly propagating errors/rejections.
-        *   Failures where `mockStdioClientTransportConstructor` is not called suggest that `handleClientCommand` in `src/index.ts` might be exiting early or failing to set up the stdio transport, possibly due to mock resolution issues for its own dynamic imports.
-        *   The changelog test failure indicates a path issue or an incorrect mock assertion for `readFileSync`.
-    *   **`src/tests/server.test.ts` Timeouts:** These point to problems with async operations or mock setups within the `startProxyServer` tests, potentially related to `nock`, `axios` unmocking, or `http.Server` mocks.
-*   **Next Steps/Plan (Attempt 102):**
+    *   The core changes to force mock usage in the SUT child process (via `CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING` and `isEffectiveVitestTesting`) should significantly impact the integration test outcomes.
+    *   The refined `repoPath` handling in `startServerHandler` should address some of the `src/tests/index.test.ts` failures related to incorrect repository paths.
+    *   The fix in `runMainWithArgs` should help with "promise resolved instead of rejecting" errors in `src/tests/index.test.ts`.
+*   **Next Steps/Plan (Attempt 103):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **Prioritize Integration Test Mocking (`src/index.ts`, `src/tests/integration/stdio-client-server.integration.test.ts`):**
-        *   Introduce a dedicated environment variable (e.g., `CODECOMPASS_FORCE_TEST_MOCKS=true`) passed from integration tests to the spawned SUT.
-        *   Modify `src/index.ts` path logic to use this new variable to force `src` paths and `.ts` extensions for dynamic imports, ensuring mocks are loaded in the child SUT.
-    3.  **Address `repoPath` Argument Handling in `src/index.ts`:**
-        *   Refine `startServerHandler` in `src/index.ts` to correctly prioritize positional `repoPath` arguments from yargs over `indexPath` or other defaults.
-    4.  **Fix Promise Rejection Issues (`src/index.ts`, `src/tests/index.test.ts`):**
-        *   Ensure `yargs.fail()` in `src/index.ts` correctly throws an error when `VITEST_TESTING_FAIL_HANDLER` is set, so `cli.parseAsync()` rejects.
-        *   Verify `runMainWithArgs` in `src/tests/index.test.ts` properly awaits and propagates rejections.
-    5.  **Investigate `mockStdioClientTransportConstructor` Not Called (`src/index.ts`):**
-        *   Ensure `handleClientCommand` in `src/index.ts` also uses the `CODECOMPASS_FORCE_TEST_MOCKS` env var for its dynamic imports and correctly passes it to the server it spawns.
-    6.  **Address `server.test.ts` Timeouts:**
-        *   In the `startProxyServer` test suite's `beforeEach` within `src/tests/server.test.ts`, ensure `axios` is unmocked *before* `serverLibModule` (which contains `startProxyServer`) is imported. This is to ensure `startProxyServer` itself uses the real `axios` for its operations.
-    7.  **Review Remaining `index.test.ts` Failures:**
+    2.  **Verification:** User to run `npm run build` and provide the full output. This will show the impact of the applied changes.
+    3.  **Analyze new build output** to determine the next set of fixes, focusing on:
+        *   Whether integration tests (`stdio-client-server.integration.test.ts`) now pass or show different errors.
+        *   The state of unit tests in `src/tests/index.test.ts` (repoPath issues, promise rejections, `mockStdioClientTransportConstructor` calls).
+        *   The state of server tests in `src/tests/server.test.ts` (timeouts in `startProxyServer`).
+        *   Any remaining unhandled rejections.
+    4.  **Address `server.test.ts` Timeouts:** If they persist, investigate the `axios` unmocking strategy in the `startProxyServer` test suite's `beforeEach` hook, ensuring `axios` is unmocked *before* `serverLibModule` (which contains `startProxyServer`) is imported.
+    5.  **Review Remaining `index.test.ts` Failures:**
         *   Correct `readFileSync` mock/assertion for the changelog test.
         *   Ensure `console.log` is correctly spied upon and called for JSON output tests.
+        *   Further investigate `mockStdioClientTransportConstructor` not being called if this persists.
 
-### Blockers (Current)
-    *   **Critical:** SUT (`src/index.ts`) not using Vitest mocks when spawned as a child process in integration tests.
-    *   Incorrect `repoPath` argument handling in `src/index.ts`.
-    *   Error/rejection propagation issues in `src/index.ts` and `src/tests/index.test.ts`.
+### Blockers (Anticipated based on previous state, pending new build output)
+    *   Outcome of integration tests with new SUT mocking strategy.
+    *   Remaining `repoPath` argument handling issues in `src/index.ts`.
+    *   Remaining error/rejection propagation issues in `src/index.ts` and `src/tests/index.test.ts`.
     *   Potential async/mock issues in `src/tests/server.test.ts` (`startProxyServer` tests).
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `4b44e12` (Build output analyzed is from after this commit)
+    *   Git Commit SHA: `042e405` (Changes from Attempt 102 applied)
