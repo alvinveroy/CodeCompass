@@ -696,14 +696,19 @@ export async function main() { // Add export
         console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
       }
 
+      // Define these constants first
+      const isTestEnvForFail = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
+      const isVitestTestingFailHandlerScenario = process.env.VITEST_TESTING_FAIL_HANDLER === 'true';
+
       failLogger.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
         hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
-        hasErr: !!err, errName: err?.name, errMessage: err?.message
+        hasErr: !!err, errName: err?.name, errMessage: err?.message,
+        isTestEnvForFail, isVitestTestingFailHandlerScenario // Added these
       });
 
-      const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
+      const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID; // Original definition remains for now
 
-      if (isTestEnv) {
+      if (isTestEnv) { // Original condition remains for now
         // In test environments, always log the error/message for debugging.
         if (err) {
           failLogger.error('CLI Error (yargs.fail in test mode):', err);
