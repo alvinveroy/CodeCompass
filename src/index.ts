@@ -3,6 +3,12 @@
 // Add this block at the VERY TOP of the file, before any other imports
 // to ensure it runs before anything else can modify process.env or console.
 // This is for debugging spawned server environment in integration tests.
+// SUT_VERY_EARLY_DEBUG_MAIN: For integration tests, to see what the spawned SUT sees.
+if (process.argv.includes('--cc-integration-test-sut-mode') || process.env.DEBUG_SPAWNED_SERVER_ENV === 'true') {
+  console.error(`[SUT_VERY_EARLY_DEBUG_MAIN] Raw process.argv: ${JSON.stringify(process.argv)}`);
+  console.error(`[SUT_VERY_EARLY_DEBUG_MAIN] __dirname: ${typeof __dirname !== 'undefined' ? __dirname : 'undefined'}`);
+  console.error(`[SUT_VERY_EARLY_DEBUG_MAIN] process.cwd(): ${process.cwd()}`);
+}
 if (process.env.DEBUG_SPAWNED_SERVER_ENV === 'true') {
   const initialEnv = {
     NODE_ENV: process.env.NODE_ENV,
