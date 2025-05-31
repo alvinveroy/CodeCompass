@@ -173,3 +173,41 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
 ### Blockers (Anticipated based on current analysis)
 *   The `startProxyServer` timeouts in `server.test.ts` will likely persist and require dedicated investigation.
 *   Subtle yargs parsing edge cases might still exist, though hopefully reduced.
+
+---
+## Attempt 111: Overhauling yargs Configuration and CLI Test Assertions (Applied)
+
+*   **Attempt Number:** 111
+*   **Last Git Commit for this attempt's changes:** `b8565d4` ("fix: Overhaul yargs config and CLI test assertions")
+*   **Intended Fixes (from Attempt 110's plan for Attempt 111):**
+    *   **`src/index.ts`:**
+        *   Reordered yargs command definitions to prioritize specific commands (like `start`, tool commands) over the default `$0` command. This was to prevent `repoPath` from the default command definition from consuming actual command names (e.g., `agent_query`) when no explicit `repoPath` was provided for the default command.
+        *   Updated `startServerHandler` logic to correctly determine `effectiveRepoPath` from either the global `--repo` option or positional arguments (`repoPath` from `start [repoPath]` or `$0 [repoPath]`), ensuring consistent path resolution.
+        *   Modified the yargs `.fail()` handler to be synchronous, log errors directly to `console.error`, and throw errors consistently, especially in test environments, to allow for better error capture by test runners.
+    *   **`src/tests/index.test.ts`:**
+        *   Adjusted assertions for the yargs `.fail()` handler to expect errors to be logged to `console.error` and for specific error messages/types to be thrown, aligning with the changes in `src/index.ts`.
+*   **Applied Changes:**
+    *   Commit `b8565d4` applied the changes described above.
+*   **Expected Result (Post-`b8565d4`):**
+    *   **`src/tests/index.test.ts`:**
+        *   Significant reduction or elimination of "Unknown argument" errors from yargs.
+        *   Fewer unhandled promise rejections related to yargs failures.
+        *   A higher number of passing tests due to more predictable yargs behavior and error handling.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`:**
+        *   Potential improvement if SUT crashes (leading to "Connection closed" errors) were caused by yargs parsing issues in the spawned server process.
+    *   **`src/tests/server.test.ts`:**
+        *   The `startProxyServer` timeouts are expected to persist as these changes did not target them.
+    *   **TypeScript Compilation (`tsc`):**
+        *   Expected to pass, as the changes were primarily logic and test assertion updates.
+*   **Next Steps/Plan (Attempt 112 - Post-`b8565d4` Verification):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this current status (this step).
+    2.  **Verification:** User to run `npm run build` with the `b8565d4` changes and provide the full output.
+    3.  **Analyze new build output,** focusing on:
+        *   Confirmation that `tsc` passes.
+        *   Status of `src/tests/index.test.ts` (expecting significant improvement).
+        *   Status of `src/tests/integration/stdio-client-server.integration.test.ts` (expecting improvement if SUT crashes were resolved).
+        *   Status of `src/tests/server.test.ts`, particularly the `startProxyServer` timeouts (expected to remain).
+    4.  Based on the new output, formulate a plan for Attempt 112. If `index.test.ts` and integration tests are mostly stable, the next focus will be the `server.test.ts` timeouts.
+
+### Blockers (Anticipated based on current analysis)
+*   The `startProxyServer` timeouts in `server.test.ts` will likely persist and require dedicated investigation.
