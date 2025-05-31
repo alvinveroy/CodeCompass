@@ -118,26 +118,26 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
         *   **Integration test failures ("Connection closed")** are very likely a downstream effect of the SUT (server process) crashing on startup due to the same yargs argument parsing issues when it's spawned by the client CLI portion of the SUT.
         *   **`server.test.ts` timeouts** in `startProxyServer` remain a persistent, separate issue, likely related to promise handling within `startProxyServer` itself under specific mock conditions (especially when `findFreePort` is mocked to reject) or complex interactions with `nock` and `http.createServer` mocks.
 *   **Applied Changes (leading to current state):**
-    *   Commit `03dcdf6` ("refactor: Improve yargs fail handler logic for tests and exit") applied the changes from Attempt 108.
-*   **Result (Based on User's `npm run build` Output after `03dcdf6`):**
-    *   (Output for `npm run build` after `03dcdf6` is pending from the user)
+    *   Commit `31d3395` ("fix: Broaden fail logger type to include warn") applied the changes from Attempt 108.
+*   **Result (Based on User's `npm run build` Output after `31d3395`):**
+    *   (Output for `npm run build` after `31d3395` is pending from the user)
 *   **Analysis/Retrospection (Anticipating results for Attempt 108):**
     *   The changes to `src/index.ts` (yargs command definitions and `.fail()` handler) are expected to resolve most of the "Unknown argument" errors and unhandled rejections in `src/tests/index.test.ts`.
     *   The adjustments to assertions in `src/tests/index.test.ts` (expecting `console.error` and specific error throws) should align with the new yargs behavior, leading to more passing tests.
     *   The `mockProcessExit` configuration in `src/tests/index.test.ts` should now correctly simulate process exits, allowing tests for `--version`, `--help`, etc., to pass.
     *   The fix for `readFileSync` paths in the changelog test should resolve that specific failure.
     *   If the yargs argument parsing issues were indeed causing the SUT to crash in integration tests (`stdio-client-server.integration.test.ts`), those tests should now show improvement (i.e., fewer "Connection closed" errors).
-    *   The changes to `src/lib/server.ts` (ensuring `startProxyServer` resolves with `null` if `findFreePort` rejects) and the refined mocks in `src/tests/server.test.ts` (especially for the `should resolve with null if findFreePort fails` test and reduced timeouts) are aimed at fixing the `startProxyServer` timeouts.
+    *   The changes to `src/lib/server.ts` (ensuring `startProxyServer` resolves with `null` if `findFreePort` rejects, and improved proxy error handling) and the refined mocks in `src/tests/server.test.ts` (especially for the `should resolve with null if findFreePort fails` test and reduced timeouts) are aimed at fixing the `startProxyServer` timeouts.
 
 ---
 ## Attempt 108: Stabilizing yargs, CLI tests, and then Integration/Server tests (Applied)
 
 *   **Attempt Number:** 108
-*   **Last Git Commit for this attempt's changes:** `03dcdf6` ("refactor: Improve yargs fail handler logic for tests and exit")
+*   **Last Git Commit for this attempt's changes:** `31d3395` ("fix: Broaden fail logger type to include warn")
 *   **Intended Fixes (from this Attempt 108):**
     *   **`src/index.ts`:**
         *   Revised yargs command definitions (default `$0` and `start`) to correctly handle `repoPath` and avoid "Unknown argument" errors.
-        *   Modified the `yargs.fail()` handler for consistent error throwing in tests and proper logging/exit in production.
+        *   Modified the `yargs.fail()` handler for consistent error throwing in tests and proper logging/exit in production, including broadening the `failLogger` type.
     *   **`src/tests/index.test.ts`:**
         *   Adjusted assertions for `yargs.fail()` to expect `console.error` and specific error throws.
         *   Ensured `mockProcessExit` throws to simulate exit for promise rejection tests.
@@ -145,15 +145,16 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
         *   Refined JSON output test assertions.
     *   **`src/lib/server.ts` (for `startProxyServer`):**
         *   Ensured `startProxyServer` resolves with `null` if `findFreePort()` rejects.
+        *   Improved error handling in the proxy MCP request handler using `axios.isAxiosError()`.
     *   **`src/tests/server.test.ts` (for `startProxyServer` timeouts):**
         *   Refined `findFreePort` mock for rejection test.
         *   Reduced timeouts for successful proxy tests.
-*   **Applied Changes:** Changes from commit `03dcdf6` have been applied by the user. All planned code changes for Attempt 108 are complete.
-*   **Result:** (Pending user execution of `npm run build` with `03dcdf6` changes)
+*   **Applied Changes:** Changes from commit `31d3395` have been applied by the user. All planned code changes for Attempt 108 are complete.
+*   **Result:** (Pending user execution of `npm run build` with `31d3395` changes)
 *   **Analysis/Retrospection:** (Will be filled after results)
 *   **Next Steps/Plan (Attempt 108 - Post-Application):**
     1.  **`DEBUG_SESSION.MD`:** Update with this current status (this step).
-    2.  **Verification:** User to run `npm run build` with the `03dcdf6` changes and provide the full output.
+    2.  **Verification:** User to run `npm run build` with the `31d3395` changes and provide the full output.
     3.  **Analyze new build output,** focusing on:
         *   Confirmation that `tsc` passes.
         *   Status of `src/tests/index.test.ts`.
