@@ -1678,25 +1678,19 @@ export async function startProxyServer(
   existingServerVersion?: string
 ): Promise<http.Server | null> {
   logger.info(`[PROXY_DEBUG] startProxyServer: Attempting to start proxy. Requested main port: ${requestedPort}, Target existing server port: ${targetServerPort}`);
-  let proxyListenPort: number;
+  
   try {
+    let proxyListenPort: number;
     // Determine a suitable starting port for the proxy to avoid collision
-    // If requestedPort (main server's attempted port) is the same as targetServerPort (where existing server is),
-    // then the proxy needs to pick a clearly different port. Otherwise, it can try requestedPort + 50.
     const initialPortForProxySearch = requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50;
     logger.info(`[PROXY_DEBUG] startProxyServer: Initial port for proxy search: ${initialPortForProxySearch}`);
+    
     proxyListenPort = await findFreePort(initialPortForProxySearch);
     logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
 
-  } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    logger.error(`[PROXY_DEBUG] startProxyServer: Failed to find free port for proxy: ${err.message}`, { error: err });
-    return null;
-  }
-
-  // If findFreePort succeeded, proceed to create and listen on the proxy server
-  return new Promise<http.Server | null>((resolveProxyListen, rejectProxyListen) => {
-    const app = express();
+    // If findFreePort succeeded, proceed to create and listen on the proxy server
+    return new Promise<http.Server | null>((resolveProxyListen, rejectProxyListen) => {
+      const app = express();
     app.use('/mcp', express.raw({ type: '*/*', limit: '50mb' })); // For MCP JSON-RPC
 
     // Proxy MCP requests
@@ -1813,4 +1807,9 @@ export async function startProxyServer(
       rejectProxyListen(err); // Reject if listen fails
     });
   });
+  } catch (error) { // This catch block is for errors from findFreePort
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`[PROXY_DEBUG] startProxyServer: Failed during port finding or proxy setup: ${err.message}`, { error: err });
+    return null; // Ensure this path resolves the outer Promise<http.Server | null>
+  }
 }

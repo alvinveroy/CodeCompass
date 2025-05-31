@@ -86,3 +86,77 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
 
 ### Last Analyzed Commit
     *   Git Commit SHA: `cf05956` (Changes from Attempt 105 applied)
+
+---
+## Attempt 106: Addressing Widespread Test Failures (Integration, CLI, Server Timeouts)
+
+*   **Attempt Number:** 106
+*   **Last Git Commit for this attempt's changes:** (Will be the commit before these new changes)
+*   **Intended Fixes (from this Attempt 106):**
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`:** Correct the way environment variables are passed to the spawned SUT via `StdioClientTransport` to resolve "MCP error -32000: Connection closed" errors.
+    *   **`src/index.ts`:** Fix argument parsing in `startServerHandler` for the explicit `start [repoPath]` command.
+    *   **`src/tests/index.test.ts`:**
+        *   Correct the mock path for `@modelcontextprotocol/sdk/client/stdio.js` to match ESM resolution.
+        *   Adjust assertions for `readFileSync` in the changelog test.
+        *   Investigate and fix tests where promises resolve instead of rejecting (e.g., for `process.exit` mocks or yargs `.fail()` handler).
+        *   Investigate JSON output test failure.
+    *   **`src/tests/server.test.ts`:**
+        *   Address timeouts in `startProxyServer` tests, likely by refining `findFreePort` mocking or `http.createServer` interactions within this suite.
+*   **Applied Changes (leading to current state):**
+    *   User has provided the output of `npm run build` after commit `cf05956`. No new code changes have been applied yet for Attempt 106.
+*   **Result (Based on User's `npm run build` Output after `cf05956`):**
+    *   **TypeScript Compilation (`tsc`):** Passed (as it's not mentioned as failing, and tests ran).
+    *   **`src/tests/index.test.ts` (CLI Unit Tests):** 15/22 tests failed.
+        *   `should call startServerHandler with specified repoPath for "start" command (positional)`: Failed. Expected mock to be called with `'/my/repo/path'`, received `'.'`.
+        *   `should spawn server and call tool via stdio for "agent_query"`: Failed. Expected `mockStdioClientTransportConstructor` to be called, but it was not.
+        *   `should use --repo path for spawned server in client stdio mode`: Failed. Expected `mockStdioClientTransportConstructor` to be called, but it was not.
+        *   `should handle client command failure (spawn error) and log via yargs .fail()`: Failed. Promise resolved instead of rejecting.
+        *   `should handle client command failure (server process premature exit) and log via yargs .fail()`: Failed. Promise resolved instead of rejecting.
+        *   `should handle invalid JSON parameters for client command (stdio) and log via yargs .fail()`: Failed. Promise resolved instead of rejecting.
+        *   `--repo option should be used by client stdio command for spawned server`: Failed. Expected `mockStdioClientTransportConstructor` to be called, but it was not.
+        *   `--version option should display version and exit`: Failed. Promise resolved instead of rejecting.
+        *   `--help option should display help and exit`: Failed. Promise resolved instead of rejecting.
+        *   `should display changelog`: Failed. `readFileSync` mock assertion failed (called with `package.json` path instead of `CHANGELOG.md` path for the specific assertion).
+        *   `should show error and help for unknown command`: Failed. Promise resolved instead of rejecting.
+        *   `should show error and help for unknown option`: Failed. Promise resolved instead of rejecting.
+        *   `should output raw JSON when --json flag is used on successful tool call`: Failed. Expected console.log with JSON, but not found.
+        *   `should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)`: Failed. Promise resolved instead of rejecting.
+        *   `should output JSON error when --json flag is used and tool call fails with generic Error (stdio)`: Failed. Promise resolved instead of rejecting.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`:** All 9 tests failed with "MCP error -32000: Connection closed". SUT logs indicate `NODE_ENV: undefined, VITEST_WORKER_ID: undefined`, suggesting environment variables are not propagating to the spawned SUT.
+    *   **`src/tests/server.test.ts`:** 4/28 tests failed (all in `startProxyServer` suite due to timeouts).
+        *   `should resolve with null if findFreePort fails`: Timed out.
+        *   `should start the proxy server, log info, and proxy /api/ping`: Timed out.
+        *   `should handle target server unreachable for /mcp`: Timed out.
+        *   `should forward target server 500 error for /mcp`: Timed out.
+    *   **Other test suites (`config-service.test.ts`, `query-refinement.helpers.test.ts`, `utils.test.ts`, `llm-provider.test.ts`, `repository.test.ts`, `agent.test.ts`, `server-tools.test.ts`):** All tests passed.
+    *   **Unhandled Errors:** 1 unhandled `ServerStartupError` from `src/tests/index.test.ts:356:28` (related to `should handle startServer failure (fatal error, exitCode 1)...`).
+*   **Analysis/Retrospection (Attempt 106):**
+    *   **Integration Tests:** The "Connection closed" errors are almost certainly due to the SUT crashing. The SUT logs confirm that `NODE_ENV` and `VITEST_WORKER_ID` are undefined in the spawned process. This points to an issue with how `StdioClientTransport` is instantiated or how it passes environment variables. The SDK's `StdioClientTransport` expects `env` as a top-level parameter in `StdioServerParameters`, not nested under an `options` object.
+    *   **CLI Tests (`index.test.ts`):**
+        *   The `startServerHandler` path issue for `start /some/path` needs adjustment in `src/index.ts`'s argument parsing logic.
+        *   The `mockStdioClientTransportConstructor` not being called suggests the `vi.mock` path for the SDK's stdio client module is incorrect, likely due to ESM resolution via `exports` map in the SDK's `package.json`.
+        *   Promises resolving instead of rejecting indicate that errors (from `process.exit` mocks or yargs `.fail` handler) are not correctly propagating up the promise chain in the test execution flow for `runMainWithArgs`.
+        *   Changelog test mock assertion needs to be more specific.
+        *   JSON output test failure is puzzling and needs closer inspection of `mockConsoleLog` calls.
+    *   **Server Test Timeouts:** The `startProxyServer` timeouts are concerning. They might stem from issues in `findFreePort`'s interaction with suite-specific `http.createServer` mocks, or problems with `nock` when `axios` is unmocked for that suite. The fact that `should resolve with null if findFreePort fails` also times out (where `findFreePort` itself is mocked to reject) is particularly indicative of a fundamental promise handling issue within `startProxyServer` or the test setup for it.
+    *   **Unhandled Error:** The unhandled `ServerStartupError` in `index.test.ts` means a test that expected an error to be thrown and caught (likely by `rejects.toThrow`) didn't have the error propagate correctly, or the error was thrown outside the expected promise chain.
+*   **Next Steps/Plan (Attempt 106):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
+    2.  **`src/tests/integration/stdio-client-server.integration.test.ts`:**
+        *   Modify the `transportParams` for `StdioClientTransport` to pass the `env` object at the top level, not nested under `options`. This should align with the `StdioServerParameters` interface expected by the SDK and ensure environment variables (including `PATH` and custom test flags) are correctly propagated to the spawned SUT.
+    3.  **`src/index.ts`:**
+        *   Refine the `effectiveRepoPath` logic in `startServerHandler` to correctly parse the repository path when the `start` command is used explicitly with a positional argument (e.g., `codecompass start /path/to/repo`).
+    4.  **`src/tests/index.test.ts`:**
+        *   Change the mock path for `@modelcontextprotocol/sdk/client/stdio.js` to `@modelcontextprotocol/sdk/dist/esm/client/stdio.js` to align with the SDK's ESM export mapping.
+        *   For the changelog test, make the `readFileSync` assertion more specific (e.g., using `toHaveBeenNthCalledWith` or refining the mock implementation).
+        *   Investigate why `runMainWithArgs` is resolving instead of rejecting for tests involving `process.exit` mocks or yargs `.fail()` handler. Ensure errors thrown by mocks or yargs are causing the `parseAsync()` promise to reject and that this rejection propagates through `sutModule.main()`.
+        *   Examine the `mockConsoleLog.mock.calls` in the failing JSON output test to understand why the expected JSON string isn't being logged.
+    5.  **`src/tests/server.test.ts`:**
+        *   For the `startProxyServer` timeouts, particularly `should resolve with null if findFreePort fails`, scrutinize the promise chain within `startProxyServer` when `findFreePort` (mocked) rejects. Ensure the rejection is caught and `Promise.resolve(null)` is correctly returned and awaited.
+        *   If the above doesn't fix other timeouts, re-evaluate the `http.createServer` mock within the `startProxyServer` suite and its interaction with the real `axios` and `nock`.
+    6.  **Verification:** After applying these changes, run `npm run build` and analyze the output.
+
+### Blockers (Anticipated based on current analysis)
+*   Complex interactions between yargs, `process.exit` mocks, and Vitest's promise handling for `rejects.toThrow` in `index.test.ts`.
+*   Potential deep-seated issues in `server.test.ts`'s `startProxyServer` promise logic or its complex mocking setup for `http` and `axios`.
+*   Ensuring the SUT in integration tests correctly receives and acts upon all necessary environment variables.

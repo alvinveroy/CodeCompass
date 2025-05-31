@@ -122,13 +122,18 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
   get StreamableHTTPClientTransport() { return vi.fn(); } 
 }));
 
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => { 
-  console.log('[INDEX_TEST_DEBUG] Mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING');
+// The SUT (src/index.ts) is ESM and will resolve SDK imports via its "exports" map.
+// For 'import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"',
+// the SDK's package.json ("./*": { "import": "./dist/esm/*" }) means it resolves to
+// "@modelcontextprotocol/sdk/dist/esm/client/stdio.js".
+// So, we must mock that specific resolved path.
+const sdkStdioClientPath = '@modelcontextprotocol/sdk/dist/esm/client/stdio.js';
+console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock SDK's StdioClientTransport using resolved path: ${sdkStdioClientPath}`);
+vi.mock(sdkStdioClientPath, () => { 
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ${sdkStdioClientPath} IS RUNNING.`);
   return { 
-    get StdioClientTransport() { 
-      console.log('[INDEX_TEST_DEBUG] Getter for StdioClientTransport in stdio.js mock accessed.');
-      return mockStdioClientTransportConstructor; 
-    } 
+    // StdioClientTransport is a named export from the SDK module
+    StdioClientTransport: mockStdioClientTransportConstructor,
   };
 });
 
@@ -654,8 +659,9 @@ describe('CLI with yargs (index.ts)', () => {
       
       await runMainWithArgs(['changelog']);
       
-      expect(mockedFsSpies.readFileSync).toHaveBeenCalledWith(expect.stringContaining('package.json'), 'utf8');
-      expect(mockedFsSpies.readFileSync).toHaveBeenCalledWith(expect.stringContaining('CHANGELOG.md'), 'utf8');
+      expect(mockedFsSpies.readFileSync).toHaveBeenCalledTimes(2);
+      expect(mockedFsSpies.readFileSync).toHaveBeenNthCalledWith(1, expect.stringContaining('package.json'), 'utf8');
+      expect(mockedFsSpies.readFileSync).toHaveBeenNthCalledWith(2, expect.stringContaining('CHANGELOG.md'), 'utf8');
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('## Test Changelog Content'));
     });
   });

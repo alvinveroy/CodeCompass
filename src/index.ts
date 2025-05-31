@@ -641,54 +641,52 @@ export async function main() { // Add export
     .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass')
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
-    .fail(async (msg, err, yargsInstance) => { // Changed _yargsInstance to yargsInstance
-    // Dynamically import logger for failure messages if possible
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
-    let failLogger: { error: (...args: any[]) => void } = console; // Default to console
-    try {
-      // Use the globally determined moduleFileExtensionForDynamicImports
-      const loggerModuleFilenameForFail = `config-service${moduleFileExtensionForDynamicImports}`;
-      const loggerModulePathForFail = path.join(libPath, loggerModuleFilenameForFail);
-      console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import loggerModule (in .fail()) from: ${loggerModulePathForFail} (__dirname: ${__dirname}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, ext: ${moduleFileExtensionForDynamicImports})`);
-      const loggerModule = await import(loggerModulePathForFail);
-      failLogger = loggerModule.logger;
-    } catch (e) {
-      console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
-    }
-    
-    failLogger.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
-      hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
-      hasErr: !!err, errName: err?.name, errMessage: err?.message
-    });
-      // The try-catch block for failLogger is now handled by the above initialization.
-      // The original logic for logging the error or message:
-      if (process.env.VITEST_TESTING_FAIL_HANDLER) { // Check if in test fail handler mode
-        if (err) {
-            failLogger.error('CLI Error (yargs.fail):', err); // Log the error object directly for tests
-        } else if (msg) {
-            failLogger.error('CLI Usage Error (yargs.fail):', msg);
-        }
-      } else {
-        // Default behavior for actual CLI execution
-        yargsInstance.showHelp(); // Show help to the user
-        if (err) {
-            failLogger.error(`\nError: ${err.message || msg}`);
-        } else if (msg) {
-            failLogger.error(`\nError: ${msg}`);
-        }
+    .fail(async (msg, err, yargsInstance) => {
+      let failLogger: { error: (...args: any[]) => void } = console;
+      try {
+        const loggerModuleFilenameForFail = `config-service${moduleFileExtensionForDynamicImports}`;
+        const loggerModulePathForFail = path.join(libPath, loggerModuleFilenameForFail);
+        // console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import loggerModule (in .fail()) from: ${loggerModulePathForFail} ...`);
+        const loggerModule = await import(loggerModulePathForFail);
+        failLogger = loggerModule.logger;
+      } catch (e) {
+        console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
       }
 
-      if (!err && msg && !process.env.VITEST_TESTING_FAIL_HANDLER) { // Avoid double console.error if VITEST_TESTING_FAIL_HANDLER already logged
-        console.error(msg);
+      failLogger.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
+        hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
+        hasErr: !!err, errName: err?.name, errMessage: err?.message
+      });
+
+      const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
+
+      if (isTestEnv) {
+        // In test environments, always log the error/message for debugging.
+        if (err) {
+          failLogger.error('CLI Error (yargs.fail in test mode):', err);
+        } else if (msg) {
+          failLogger.error('CLI Usage Error (yargs.fail in test mode):', msg);
+        }
+        // Crucially, if an error object exists, throw it to make parseAsync() reject.
+        // If only a message exists (yargs validation/usage error), yargs with exitProcess(false) should throw it.
+        // If yargs doesn't throw for msg-only, this throw will ensure rejection.
+        if (err) {
+          throw err;
+        } else if (msg) {
+          // yargs should throw an error for msg when exitProcess(false) is true.
+          // If it doesn't, throwing new Error(msg) here ensures rejection.
+          throw new Error(msg);
+        }
+      } else {
+        // Default behavior for actual CLI execution (not in a test environment)
+        yargsInstance.showHelp();
+        const errorMessage = err ? (err.message || msg) : msg;
+        if (errorMessage) {
+          failLogger.error(`\nError: ${errorMessage}`);
+          console.error(`\nError: ${errorMessage}`); // Also to raw stderr
+        }
+        process.exit(1); // Explicitly exit for non-test environments
       }
-      // Yargs will exit with 1 by default if err is present or msg is from yargs validation.
-      // No need to call process.exit(1) explicitly here if yargs handles it.
-      // However, for testing, ensure the error propagates if VITEST_TESTING_FAIL_HANDLER is set.
-      if (process.env.VITEST_TESTING_FAIL_HANDLER && err) {
-        throw err; // Re-throw the original error to make the promise from parseAsync reject.
-      }
-      // If only `msg` is present (yargs usage error), yargs might handle the exit/throw itself.
-      // If `exitProcess(false)` is set, yargs should throw an error for usage issues too.
     });
 
   try {

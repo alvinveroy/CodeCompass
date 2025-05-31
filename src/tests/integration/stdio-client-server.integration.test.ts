@@ -277,14 +277,12 @@ describe('Stdio Client-Server Integration Tests', () => {
     console.log(`[INTEGRATION_TEST_ENV_PRE_SPAWN_CHECK] MOCK_QDRANT: ${currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}`);
 
     // Construct parameters according to the SDK's StdioServerParameters structure
-    const transportParams = { // Removed StdioTransportParams type, should align with SDK's StdioServerParameters
+    const transportParams: StdioServerParameters = { 
         command: 'npx',
         args: ['tsx', path.resolve(__dirname, '../../../src/index.ts'), 'start', testRepoPath, '--port', '0', '--cc-integration-test-sut-mode'],
-        options: {
-            env: currentTestSpawnEnv,
-            stdio: 'pipe' // This configures stdin, stdout, and stderr to be piped
-            // `cwd` could be added here if needed: cwd: process.cwd(),
-        }
+        env: currentTestSpawnEnv, // Pass env at the top level
+        stderr: 'pipe', // Configure child's stderr to be piped. SDK handles stdin/stdout as pipe.
+        // cwd can be specified here if needed: cwd: process.cwd(),
     };
     transport = new StdioClientTransport(transportParams);
     client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
