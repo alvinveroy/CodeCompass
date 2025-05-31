@@ -468,33 +468,31 @@ describe('CLI with yargs (index.ts)', () => {
         close: vi.fn(),
       }));
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await expect(runMainWithArgs(['agent_query', '{"query":"test_server_exit"}'])).rejects.toThrowError(prematureExitError);
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_server_exit"}'])).rejects.toThrowError(/process.exit called with 1/);
       
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', 
         expect.objectContaining({ message: expect.stringContaining("Server process exited prematurely") })
       );
-      expect(mockProcessExit).toHaveBeenCalledWith(1); // yargs .fail calls process.exit
+      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     }),
 
 
     it('should handle invalid JSON parameters for client command (stdio) and log via yargs .fail()', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
+      // SUT's main() catches, calls yargs .fail(), which calls mockProcessExit, which throws.
       await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(
-        expect.objectContaining({ message: expect.stringContaining('Invalid JSON parameters') })
+        /process.exit called with 1/
       );
       
-      // The SUT's yargs .fail() handler should have been called.
-      // It logs to console.error first, then to logger.error if VITEST_TESTING_FAIL_HANDLER is set.
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Error: Invalid JSON parameters for tool 'agent_query'."));
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Details: Expected ',' or '}' after property value in JSON at position 16"));
       
-      // Check logger.error call from .fail()
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
         'CLI Error (yargs.fail):',
         expect.objectContaining({ message: expect.stringContaining("Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16") })
       );
-      expect(mockProcessExit).toHaveBeenCalledWith(1);
+      // mockProcessExit assertion is implicitly covered by .rejects.toThrowError
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
   });
