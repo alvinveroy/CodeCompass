@@ -213,44 +213,46 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
 *   **Analysis/Retrospection (Attempt 111 Results):**
     *   The yargs configuration overhaul in `b8565d4` did **not** resolve the "Unknown argument" errors.
     *   The root cause appears to be how arguments are passed to `yargs` when `src/index.ts` is executed via `npx tsx` (as in the tests). `hideBin(process.argv)` correctly returns `['src/index.ts', ...actual_cli_args]` in this scenario. However, `yargs` then misinterprets `src/index.ts` as a command or positional argument, causing subsequent actual arguments to be flagged as "unknown."
-*   **Result (Based on User's `npm run build` Output after `eb69bbd`):**
+*   **Result (Based on User's `npm run build` Output after `54db9fc`):**
     *   **TypeScript Compilation (`tsc`):**
         *   **PASSES.**
     *   **`src/tests/index.test.ts` (CLI Unit Tests):**
-        *   **9/22 tests FAILED.** (Improvement from 20/22).
-        *   "Unknown argument" errors are largely resolved due to the argument slicing in `src/index.ts`.
-        *   Remaining failures include:
-            *   `mockStdioClientTransportConstructor` not being called in several client tool tests.
-            *   Promises resolving instead of rejecting for tests involving `process.exit` mocks (e.g., `--version`, `--help`, some error cases).
-            *   Slight mismatch in error message for "unknown option".
-            *   Incorrect assertion for `mockConsoleError` in the JSON-RPC error output test due to how the `.fail()` handler logs non-Error objects.
+        *   **7/22 tests FAILED.** (Improvement from 9/22).
+        *   Failures:
+            *   3 client tool tests: `mockStdioClientTransportConstructor` not called.
+            *   1 client tool spawn error test: "promise resolved undefined instead of rejecting".
+            *   `--version` test: `mockConsoleLog` assertion fails (unexpected logs).
+            *   "unknown command" test: "promise resolved undefined instead of rejecting".
+            *   "unknown option" test: "expected error to match asymmetric matcher".
     *   **`src/tests/integration/stdio-client-server.integration.test.ts`:**
         *   **9/9 tests FAILED** with "MCP error -32000: Connection closed".
-        *   SUT logs (`[SUT_INDEX_TS_SERVER_MODULE_TOKEN_CHECK]`) indicate that the spawned SUT process is loading a *mocked* `server.ts` (from `index.test.ts`'s `vi.mock`), likely due to `VITEST_WORKER_ID` being present in the SUT's environment and `tsx` picking up Vitest's global mock context. This is causing the SUT to crash.
+        *   Removing `VITEST_WORKER_ID` from SUT env did not fix SUT crashes.
+        *   SUT debug logs from yargs handlers / `handleClientCommand` are *not* appearing, indicating a very early crash in the SUT when spawned by integration tests.
     *   **`src/tests/server.test.ts`:**
         *   **4/28 tests FAILED** (all timeouts in `startProxyServer` suite), as expected.
-*   **Analysis/Retrospection (Attempt 112 Results):**
-    *   The yargs argument preparation in `src/index.ts` (commit `eb69bbd`) was successful in fixing most "Unknown argument" errors.
-    *   The primary blocker for integration tests is the SUT inheriting the unit test's mock environment for `server.ts`.
-    *   Several `index.test.ts` failures are due to incorrect assumptions about how yargs/`process.exit` interacts with `exitProcess(false)` and promise rejections, or subtle issues in the `.fail()` handler's logging.
-*   **Next Steps/Plan (Attempt 113):**
+*   **Analysis/Retrospection (Attempt 113 Results):**
+    *   The yargs `.fail()` handler and `index.test.ts` assertion refinements (commit `54db9fc`) helped reduce `index.test.ts` failures.
+    *   **Integration Test SUT Crash:** The SUT is crashing before yargs command handlers are reached. The argument parsing logic in `src/index.ts` (`hideBin` and subsequent slicing) is still the primary suspect for this context.
+    *   **CLI Unit Test Failures (`index.test.ts`):**
+        *   `mockStdioClientTransportConstructor` not called: Likely due to yargs parsing issues or early exit/throw before `handleClientCommand` is reached.
+        *   Promise resolving instead of rejecting: Issues with how errors are propagated through yargs and caught by tests, especially concerning the `.fail()` handler's behavior in test mode.
+        *   `--version` log assertion: Needs to account for other logs or clear them.
+        *   "unknown option" assertion: Needs to be less strict.
+*   **Next Steps/Plan (Attempt 114):**
     1.  **`DEBUG_SESSION.MD`:** Update with this current status (this step).
-    2.  **`src/tests/integration/stdio-client-server.integration.test.ts`:**
-        *   In `beforeEach`, modify `currentTestSpawnEnv` to **remove `VITEST_WORKER_ID`**. This should prevent the spawned SUT from using Vitest's global mocks from `index.test.ts`. The SUT will still use `src/*.ts` files due to `CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING`.
-    3.  **`src/index.ts`:**
-        *   Refine the yargs `.fail()` handler: When logging errors in `VITEST_TESTING_FAIL_HANDLER` mode, if `err` is a JSON-RPC error object (like `{ jsonrpc: "2.0", error: { message: "..." } }`), log `err.error.message` instead of `err.message` (which would be undefined).
-        *   Add detailed debug logs:
-            *   Inside each yargs tool command handler, before calling `handleClientCommand`.
-            *   At the very beginning of `handleClientCommand`.
-    4.  **`src/tests/index.test.ts`:**
-        *   For `--version` and `--help` tests: Adjust assertions to expect `mockConsoleLog` to be called with version/help text, and for `runMainWithArgs(...)` promise to *resolve* (not reject). `mockProcessExit` should *not* be called in these cases because `yargsInstance.exitProcess(false)` is set.
-        *   For "unknown command" test: This test *should* reject. If it continues to resolve, it indicates a deeper issue with yargs error handling or the test setup's expectation of `.fail()`.
-        *   For "unknown option" test: Update assertion to `expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining('Unknown argument: unknown-option'));` (to be less strict about the exact full message which might include camelCase).
-        *   For "should output JSON error when --json flag is used and tool call fails with JSON-RPC error (stdio)": Update `mockConsoleError` assertion for `YARGS_FAIL_TEST_MODE_ERROR_OUTPUT` to expect the actual error message from `rpcError.error.message` due to the `.fail()` handler fix.
-    5.  **Verification:** User to run `npm run build` and provide the full output.
-    6.  **Analyze new build output.**
+    2.  **`src/index.ts` (for Integration Test SUT crashes & CLI stability):**
+        *   In `main()`, add very early `console.error` logs:
+            *   Log `process.argv` *before* `hideBin`.
+            *   Log `argsForYargs` *immediately after* `hideBin`.
+            *   Log `argsForYargs` *after* the slicing logic.
+        *   Refine the yargs `.fail()` handler: Ensure it *always* throws an error when `isTestEnvForFail` and `isVitestTestingFailHandlerScenario` are true (even if `err` is null/undefined and only `msg` is provided).
+    3.  **`src/tests/index.test.ts` (CLI Unit Test assertion refinements):**
+        *   For `--version` test: Clear `mockConsoleLog.mock.calls` before `runMainWithArgs`, then assert `mockConsoleLog` was called with `expect.stringMatching(/\d+\.\d+\.\d+/)`.
+        *   For "unknown option" test: Update `toThrow` assertion to use `expect.stringContaining('Unknown arguments: unknown-option')`.
+    4.  **Verification:** User to run `npm run build` and provide the full output.
+    5.  **Analyze new build output.** Focus on SUT logs from integration tests and remaining `index.test.ts` failures.
 
 ### Blockers (Anticipated based on current analysis)
 *   The `startProxyServer` timeouts in `server.test.ts`.
-*   The root cause for `mockStdioClientTransportConstructor` not being called in some `index.test.ts` client command tests might still be elusive and require more debugging based on the new SUT logs.
-*   The "unknown command" test in `index.test.ts` might still behave unexpectedly.
+*   Root cause of `mockStdioClientTransportConstructor` not being called in `index.test.ts` might still require more specific SUT logging if the above doesn't reveal it.
+*   The "unknown command" and "spawn error" promise rejection issues in `index.test.ts` depend heavily on the `.fail()` handler behaving as expected.

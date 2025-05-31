@@ -641,10 +641,19 @@ describe('CLI with yargs (index.ts)', () => {
       // In test mode, .fail() throws. yargs itself might throw for --version if it tries to exit.
       // Let's ensure VITEST_TESTING_FAIL_HANDLER is set so .fail() throws predictably.
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
+      mockConsoleLog.mock.calls = []; // Clear previous calls
+
       // yargs --version typically prints to stdout. With exitProcess(false), it should resolve.
       // mockProcessExit should NOT be called.
       await expect(runMainWithArgs(['--version'])).resolves.toBeUndefined();
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringMatching(/\d+\.\d+\.\d+/));
+      
+      // Check that among all calls, one matches the version string.
+      // This is more robust against other debug logs.
+      const versionLogFound = mockConsoleLog.mock.calls.some(call => 
+        typeof call[0] === 'string' && /\d+\.\d+\.\d+/.test(call[0])
+      );
+      expect(versionLogFound, `Expected console.log to be called with version string. Calls: ${JSON.stringify(mockConsoleLog.mock.calls)}`).toBe(true);
+      
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
@@ -710,15 +719,15 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should show error and help for unknown option', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      // Yargs' actual message might be "Unknown arguments: unknown-option, unknownOption"
-      const expectedErrorMsgPart = "Unknown argument: unknown-option"; 
+      // Yargs' actual message is "Unknown arguments: unknown-option, unknownOption"
+      const expectedErrorMsgPart = "Unknown arguments: unknown-option"; 
       await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrow(expect.stringContaining(expectedErrorMsgPart));
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(expectedErrorMsgPart));
       // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasMsg: true, msgContent: expect.stringContaining(expectedErrorMsgPart) })
+        expect.objectContaining({ hasMsg: true, msgContent: expect.stringContaining(expectedErrorMsgPart) }) // msgContent will contain the full yargs message
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;

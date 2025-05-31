@@ -403,6 +403,11 @@ async function startServerHandler(
 // Main CLI execution logic using yargs
 export async function main() { // Add export
 
+  // Extremely early logging for spawned SUT context
+  if (process.argv.includes('--cc-integration-test-sut-mode') || process.env.DEBUG_SPAWNED_SERVER_ENV === 'true') {
+    console.error(`[SUT_EARLY_DEBUG_MAIN] Raw process.argv: ${JSON.stringify(process.argv)}`);
+  }
+
   // Early check for --cc-integration-test-sut-mode to bypass full yargs parsing if needed.
   // This flag indicates that src/index.ts is being spawned as a server for integration tests.
   if (process.argv.includes('--cc-integration-test-sut-mode')) {
@@ -495,7 +500,11 @@ export async function main() { // Add export
   }
 
   // Original yargs CLI setup follows for non-SUT-mode execution
-  let argsForYargs = hideBin(process.argv);
+  const rawHideBinArgs = hideBin(process.argv);
+  if (process.argv.includes('--cc-integration-test-sut-mode') || process.env.DEBUG_SPAWNED_SERVER_ENV === 'true') {
+    console.error(`[SUT_EARLY_DEBUG_MAIN] Args after hideBin(process.argv): ${JSON.stringify(rawHideBinArgs)}`);
+  }
+  let argsForYargs = [...rawHideBinArgs]; // Operate on a copy
 
   // If running via tsx (common in dev and tests for .ts files),
   // hideBin(process.argv) might return [script_name_for_tsx, ...actual_cli_args].
@@ -511,6 +520,9 @@ export async function main() { // Add export
         argsForYargs = argsForYargs.slice(1);
       }
     }
+  }
+  if (process.argv.includes('--cc-integration-test-sut-mode') || process.env.DEBUG_SPAWNED_SERVER_ENV === 'true') {
+    console.error(`[SUT_EARLY_DEBUG_MAIN] Args after potential slicing: ${JSON.stringify(argsForYargs)}`);
   }
   console.error(`[SUT_INDEX_TS_YARGS_PREP_DEBUG] Final arguments for yargs: ${JSON.stringify(argsForYargs)}`);
 
@@ -689,8 +701,9 @@ export async function main() { // Add export
         } else {
           console.error('Yargs validation/parse error in generic test context:', err || msg);
         }
-        if (err) throw err; // Prioritize actual Error object (or RPC error object)
-        throw new Error(msg || 'yargs validation failed in test environment');
+        // Ensure an error is always thrown in this specific test scenario
+        if (err) throw err; 
+        throw new Error(detailedErrorMessage || 'yargs validation failed in test environment (no specific error/msg)');
       } else {
         yargsInstance.showHelp();
         const errorMessage = err ? (err.message || msg) : msg;
