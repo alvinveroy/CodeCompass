@@ -237,21 +237,21 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   const serverProcessParams: StdioServerParameters = {
     command: spawnCommand,
     args: spawnArgs,
-    options: { // env and stdio should be nested under options
-      env: {
-        PATH: process.env.PATH ?? '',
-        NODE_ENV: process.env.NODE_ENV ?? 'test', // Default to test if client is in test mode
-        HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
-        // Propagate test-related environment variables
-        ...(isVitestUnitTesting && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '' }), // Ensure string if VITEST_WORKER_ID is set
-        ...( (isVitestUnitTesting || ccIntegrationTestSutMode) && { // Ensure mock flags are strings
-            CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
-            CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
-        }),
-        ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }), // Add if set
-      },
-      stdio: 'pipe', // Explicitly set stdio
-    }
+    // env is a top-level property.
+    // stderr configures the child process's stderr. stdin/stdout are always 'pipe'.
+    env: {
+      PATH: process.env.PATH ?? '',
+      NODE_ENV: process.env.NODE_ENV ?? 'test', // Default to test if client is in test mode
+      HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
+      // Propagate test-related environment variables
+      ...(isVitestUnitTesting && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '' }), // Ensure string if VITEST_WORKER_ID is set
+      ...( (isVitestUnitTesting || ccIntegrationTestSutMode) && { // Ensure mock flags are strings
+          CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
+          CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
+      }),
+      ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }), // Add if set
+    },
+    stderr: 'pipe', // Configure child's stderr to be piped. SDK handles stdin/stdout as pipe.
   };
 
   console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport, 'serverProcessParams:', JSON.stringify(serverProcessParams));

@@ -45,42 +45,39 @@ The debugging process (spanning commits from approximately `7f14f61` to `691bb8f
 The debugging journey involved extensive work on Vitest mocking for dynamically imported SUT dependencies, managing environment variable propagation to child processes spawned by tests, and ensuring correct path resolution for module loading in various contexts (source vs. packaged, test execution vs. direct run). Key challenges included Vitest's mock hoisting behavior with non-literal paths, issues with the external `StdioClientTransport` SDK's handling of environment variables, and cascading failures where `tsc` errors or SUT crashes obscured underlying test logic problems. The process underscored the necessity of meticulous diagnostic logging and iterative refinement of both SUT code (for testability) and the test setups themselves.
 
 ---
-## Attempt 95: Addressing SUT Mode Crash and Unit Test Error Propagation
+## Attempt 96: Addressing StdioServerParameters Structure and Investigating SUT Mode
 
-*   **Attempt Number:** 95
-*   **Last Git Commit for this attempt's changes:** `aa08974` ("fix: Correct CLI repoPath parsing and test error handling")
-*   **Intended Fixes (from Attempt 94 plan, partially addressed by `aa08974`):**
-    *   **`src/index.ts`:**
-        *   SUT Mode: Ensure `main()` calls local `startServerHandler`. (The call was changed from `directStartServerHandler` to `startServerHandler` in `aa08974`).
-        *   `startServerHandler`: Improve `repoPath` parsing to handle cases where `yargs` might pass the script path as `repoPath`. (This was addressed in `aa08974`).
-        *   `yargs.fail()`: Ensure errors are re-thrown for testability. (This was addressed in `aa08974`).
+*   **Attempt Number:** 96
+*   **Last Git Commit for this attempt's changes:** `765c01d` ("fix: Add SUT mode diagnostics and improve test error propagation")
+*   **Intended Fixes (from Attempt 95):**
+    *   **`src/index.ts`:** Add diagnostic logging for `startServerHandler` in SUT mode.
+    *   **`src/tests/index.test.ts`:** Modify `runMainWithArgs` to unconditionally re-throw errors.
 *   **Applied Changes (leading to current state):**
-    *   Commit `aa08974` was applied.
-*   **Assumed Result (pending new `npm run build` output):**
-    *   **`tsc` Errors:** Expected to remain resolved.
-    *   **Integration Test Failures (`src/tests/integration/stdio-client-server.integration.test.ts`):**
-        *   The SUT crash (`TypeError: startServerHandler is not a function` - assuming error message updated from `directStartServerHandler`) likely persists. This is the highest priority.
-    *   **Unit Test Failures (`src/tests/index.test.ts`):**
-        *   **`mockStartServerHandler` argument issue:** The fix in `startServerHandler` (in `aa08974`) for `repoPath` parsing might have resolved some of these.
-        *   **"Promise resolved instead of rejecting" errors:** The `yargs.fail()` re-throw fix (in `aa08974`) might have improved this. However, error propagation from `mockProcessExit` via `runMainWithArgs` still needs to be addressed.
-        *   **`mockStdioClientTransportConstructor` not called:** Likely still failing, pending fixes to error propagation.
-        *   **`changelog` test:** Should remain passing.
-    *   **Server Test Timeouts (`src/tests/server.test.ts`):** Still deferred.
+    *   Commit `765c01d` was applied.
+*   **Current Errors (based on user IDE report for `src/index.ts` after `765c01d`):**
+    *   `src/index.ts:240` - TS2353: `Object literal may only specify known properties, and 'options' does not exist in type 'StdioServerParameters'.`
+    *   `src/index.ts:335` - TS2304: `Cannot find name 'indexPath'.` (Treated as potential IDE glitch unless confirmed by `tsc` build).
 *   **Analysis/Retrospection:**
-    *   The SUT mode crash is critical. If `startServerHandler` (the local function) is "not a function" when called by `main()` in SUT mode, it points to a fundamental module loading or scoping issue in that specific execution context.
-    *   The "promise resolved instead of rejecting" errors in unit tests likely require `runMainWithArgs` in `src/tests/index.test.ts` to correctly re-throw errors caught from the SUT's `main()` execution, especially those originating from `mockProcessExit`.
-*   **Next Steps/Plan (Attempt 95):**
+    *   The TS2353 error on line 240 is valid. The `StdioServerParameters` type, as per the SDK, expects `env` and `stderr` (for child process stderr configuration) as top-level properties, not nested under an `options` object. The current code in `src/index.ts` (after commit `bb61240`, which was part of `aa08974` and thus before `765c01d`) incorrectly introduced this `options` nesting.
+    *   The `indexPath` error (TS2304) is likely an IDE-specific issue or was transient, as `indexPath` is defined in the module scope and should be accessible to `startServerHandler`. Previous `tsc` builds after the introduction of `indexPath` usage in `startServerHandler` did not report this error.
+    *   The SUT mode crash (`startServerHandler is not a function`) and unit test "promise resolved instead of rejecting" errors remain the primary concerns to be verified after the TS2353 fix. The diagnostics added in `765c01d` should help with the SUT mode crash. The error propagation fix in `runMainWithArgs` (also in `765c01d`) should help with the unit test promise rejections.
+*   **Next Steps/Plan (Attempt 96):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **`src/index.ts` (SUT Mode `startServerHandler` Fix - CRITICAL RE-ATTEMPT):**
-        *   Add diagnostic logging immediately before the `await startServerHandler(...)` call within the SUT mode block in `main()` to verify `typeof startServerHandler`.
-        *   If it's indeed undefined, this suggests a deeper issue with module execution under `tsx` in the spawned SUT context.
-    3.  **`src/tests/index.test.ts` (Unit Test Error Propagation):**
-        *   Modify the `catch` block in `runMainWithArgs` to unconditionally re-throw any error caught from `sutModule.main()`. This will ensure that test assertions like `expect(...).rejects.toThrow(...)` can correctly catch errors, including those from `mockProcessExit`.
-    4.  **Defer other issues** until these critical items are resolved and verified with a new build.
+    2.  **`src/index.ts` (Fix TS2353):**
+        *   In `handleClientCommand`, restructure `serverProcessParams` to remove the `options: { ... }` nesting.
+        *   Make `env` a top-level property of `serverProcessParams`.
+        *   Change the `stdio: 'pipe'` property (which is not a valid top-level property for `StdioServerParameters` in the SDK for configuring child process stdio) to `stderr: 'pipe'`. This aligns with how `StdioClientTransport` uses the `stderr` parameter to configure the third element of the `stdio` array passed to `cross-spawn`.
+    3.  **Verification:** User to run `npm run build` to:
+        *   Confirm TS2353 is resolved.
+        *   Confirm if TS2304 (`indexPath`) persists as a `tsc` build error (if it does, it will need a separate fix).
+        *   Observe the output for the SUT mode crash (diagnostics for `typeof startServerHandler` should appear).
+        *   Observe the results for unit tests in `src/tests/index.test.ts` (especially "promise resolved instead of rejecting" errors).
+    4.  **Defer other issues** until the build is clean and the SUT mode crash is understood.
 
 ### Blockers
+    *   TS2353 error in `src/index.ts`.
     *   SUT crashing in integration tests (suspected `startServerHandler is not a function`).
     *   Unit test "promise resolved instead of rejecting" errors in `src/tests/index.test.ts`.
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `aa08974`
+    *   Git Commit SHA: `765c01d`
