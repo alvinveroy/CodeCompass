@@ -624,11 +624,23 @@ describe('CLI with yargs (index.ts)', () => {
   
   describe('Changelog Command', () => {
     it('should display changelog', async () => {
-      mockedFsSpies.statSync.mockReturnValue({ mtimeMs: Date.now() } as fs.Stats); // NEW
-      mockedFsSpies.readFileSync.mockReturnValue('## Test Changelog Content'); // NEW
+      mockedFsSpies.statSync.mockReturnValue({ mtimeMs: Date.now() } as fs.Stats);
+      mockedFsSpies.readFileSync.mockImplementation((filePath: string) => {
+        if (typeof filePath === 'string' && filePath.endsWith('package.json')) {
+          return '{"version":"0.0.0-test"}';
+        }
+        if (typeof filePath === 'string' && filePath.endsWith('CHANGELOG.md')) {
+          return '## Test Changelog Content';
+        }
+        // For any other file, return empty or throw to indicate unexpected read
+        // For safety in tests, let's return empty string.
+        return ''; 
+      });
       
       await runMainWithArgs(['changelog']);
-      expect(mockedFsSpies.readFileSync).toHaveBeenCalledWith(expect.stringContaining('CHANGELOG.md'), 'utf8'); // NEW
+      
+      expect(mockedFsSpies.readFileSync).toHaveBeenCalledWith(expect.stringContaining('package.json'), 'utf8');
+      expect(mockedFsSpies.readFileSync).toHaveBeenCalledWith(expect.stringContaining('CHANGELOG.md'), 'utf8');
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('## Test Changelog Content'));
     });
   });
@@ -721,10 +733,16 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockRejectedValue(rpcError);
       
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      await expect(runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json'])).rejects.toThrowError(rpcError);
+      // When rpcError is an object, toThrowError expects an Error instance or a string/regex.
+      // We should check if the thrown error (which is likely an McpError from the SDK)
+      // contains the message from our rpcError object.
+      await expect(runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json']))
+        .rejects.toThrow(expect.objectContaining({ message: expect.stringContaining(rpcError.error.message) }));
 
+      // The console output should still be the JSON string of the rpcError object itself,
+      // as per the SUT's error handling logic for --json output.
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', rpcError);
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', expect.objectContaining({ message: expect.stringContaining(rpcError.error.message) }));
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });

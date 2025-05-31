@@ -237,20 +237,21 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   const serverProcessParams: StdioServerParameters = {
     command: spawnCommand,
     args: spawnArgs,
-    // env and other spawn options are top-level properties of StdioServerParameters
-    env: {
-      PATH: process.env.PATH ?? '',
-      NODE_ENV: process.env.NODE_ENV ?? 'test', // Default to test if client is in test mode
-      HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
-      // Propagate test-related environment variables
-      ...(isVitestUnitTesting && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '' }), // Ensure string if VITEST_WORKER_ID is set
-      ...( (isVitestUnitTesting || ccIntegrationTestSutMode) && { // Ensure mock flags are strings
-          CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
-          CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
-      }),
-      ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }), // Add if set
-    },
-    stdio: 'pipe', // Explicitly set stdio
+    options: { // env and stdio should be nested under options
+      env: {
+        PATH: process.env.PATH ?? '',
+        NODE_ENV: process.env.NODE_ENV ?? 'test', // Default to test if client is in test mode
+        HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
+        // Propagate test-related environment variables
+        ...(isVitestUnitTesting && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '' }), // Ensure string if VITEST_WORKER_ID is set
+        ...( (isVitestUnitTesting || ccIntegrationTestSutMode) && { // Ensure mock flags are strings
+            CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
+            CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
+        }),
+        ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }), // Add if set
+      },
+      stdio: 'pipe', // Explicitly set stdio
+    }
   };
 
   console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport, 'serverProcessParams:', JSON.stringify(serverProcessParams));
@@ -446,10 +447,10 @@ export async function main() { // Add export
     const configServiceModulePath = path.join(libPath, configServiceModuleFilename);
 
     try {
-      const serverModule = await import(serverModulePath);
-      const { startServerHandler: directStartServerHandler } = serverModule; // Renamed to avoid conflict
-      // Pass an object that mimics yargs argv structure expected by startServerHandler
-      await directStartServerHandler({ repo: repoPath, port: parseInt(process.env.HTTP_PORT, 10), _:['start', repoPath], $0:'codecompass' });
+      // When in --cc-integration-test-sut-mode, src/index.ts is the server.
+      // It should call its *own* startServerHandler, not import one from server.ts.
+      // The startServerHandler function is defined within this file (src/index.ts).
+      await startServerHandler({ repo: repoPath, port: parseInt(process.env.HTTP_PORT, 10), _:['start', repoPath], $0:'codecompass' });
     } catch (error: unknown) {
       // Minimal error handling for SUT mode
       try {
