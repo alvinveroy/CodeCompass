@@ -199,15 +199,33 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
         *   The `startProxyServer` timeouts are expected to persist as these changes did not target them.
     *   **TypeScript Compilation (`tsc`):**
         *   Expected to pass, as the changes were primarily logic and test assertion updates.
-*   **Next Steps/Plan (Attempt 112 - Post-`b8565d4` Verification):**
+*   **Result (Based on User's `npm run build` Output after `b8565d4` / `0ae0dee`):**
+    *   **TypeScript Compilation (`tsc`):**
+        *   **PASSES.**
+    *   **`src/tests/index.test.ts` (CLI Unit Tests):**
+        *   **20/22 tests FAILED.**
+        *   Most failures are "Unknown argument: ..." errors from yargs (e.g., "Unknown argument: start", "Unknown argument: /my/repo", "Unknown arguments: agent_query, {...}").
+        *   Tests for `--version` and `--help` fail with "promise resolved undefined instead of rejecting".
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`:**
+        *   **9/9 tests FAILED** with "MCP error -32000: Connection closed". This is likely due to the SUT (spawned server) crashing because of yargs parsing errors.
+    *   **`src/tests/server.test.ts`:**
+        *   **4/28 tests FAILED** (all timeouts in `startProxyServer` suite), as expected.
+*   **Analysis/Retrospection (Attempt 111 Results):**
+    *   The yargs configuration overhaul in `b8565d4` did **not** resolve the "Unknown argument" errors.
+    *   The root cause appears to be how arguments are passed to `yargs` when `src/index.ts` is executed via `npx tsx` (as in the tests). `hideBin(process.argv)` correctly returns `['src/index.ts', ...actual_cli_args]` in this scenario. However, `yargs` then misinterprets `src/index.ts` as a command or positional argument, causing subsequent actual arguments to be flagged as "unknown."
+*   **Next Steps/Plan (Attempt 112):**
     1.  **`DEBUG_SESSION.MD`:** Update with this current status (this step).
-    2.  **Verification:** User to run `npm run build` with the `b8565d4` changes and provide the full output.
-    3.  **Analyze new build output,** focusing on:
-        *   Confirmation that `tsc` passes.
-        *   Status of `src/tests/index.test.ts` (expecting significant improvement).
-        *   Status of `src/tests/integration/stdio-client-server.integration.test.ts` (expecting improvement if SUT crashes were resolved).
-        *   Status of `src/tests/server.test.ts`, particularly the `startProxyServer` timeouts (expected to remain).
-    4.  Based on the new output, formulate a plan for Attempt 112. If `index.test.ts` and integration tests are mostly stable, the next focus will be the `server.test.ts` timeouts.
+    2.  **`src/index.ts`:**
+        *   In the `main()` function, adjust the argument array passed to the `yargs()` constructor.
+        *   After calling `hideBin(process.argv)`, check if the execution context is via `tsx` (e.g., by checking `isPackaged`, `isEffectiveVitestTesting`, or `ccIntegrationTestSutMode` flags, or by inspecting `process.argv[1]`).
+        *   If so, and if the first argument in the array from `hideBin` is the script name itself (e.g., `src/index.ts`), then `slice(1)` this first element off before passing the array to `yargs()`. This will ensure `yargs` only processes the actual CLI arguments.
+    3.  **Verification:** User to run `npm run build` and provide the full output.
+    4.  **Analyze new build output,** focusing on:
+        *   `src/tests/index.test.ts`: Expecting a significant reduction in "Unknown argument" errors and potentially fixes for `--help`/`--version` test failures.
+        *   `src/tests/integration/stdio-client-server.integration.test.ts`: Expecting fewer "Connection closed" errors if the SUT no longer crashes on argument parsing.
+        *   `src/tests/server.test.ts`: Timeouts expected to remain.
+    5.  If CLI and integration tests stabilize, the next focus will be the `server.test.ts` timeouts.
 
 ### Blockers (Anticipated based on current analysis)
 *   The `startProxyServer` timeouts in `server.test.ts` will likely persist and require dedicated investigation.
+*   The exact condition to detect and slice off the script name from `hideBin` results needs to be robust.

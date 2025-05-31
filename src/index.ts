@@ -494,7 +494,26 @@ export async function main() { // Add export
   }
 
   // Original yargs CLI setup follows for non-SUT-mode execution
-  const cli = yargs(hideBin(process.argv));
+  let argsForYargs = hideBin(process.argv);
+
+  // If running via tsx (common in dev and tests for .ts files),
+  // hideBin(process.argv) might return [script_name_for_tsx, ...actual_cli_args].
+  // We need to remove script_name_for_tsx in that case.
+  // isPackaged, isEffectiveVitestTesting, ccIntegrationTestSutMode, and indexPath are globally defined.
+  if (!isPackaged && (isEffectiveVitestTesting || ccIntegrationTestSutMode)) {
+    if (argsForYargs.length > 0) {
+      // Check if the first argument from hideBin is the script tsx is running.
+      // path.resolve can normalize paths for comparison.
+      // indexPath is the fully resolved path to src/index.ts in this context.
+      if (path.resolve(process.cwd(), argsForYargs[0]) === indexPath) {
+        console.error(`[SUT_INDEX_TS_YARGS_PREP_DEBUG] Slicing off script name '${argsForYargs[0]}' from yargs input.`);
+        argsForYargs = argsForYargs.slice(1);
+      }
+    }
+  }
+  console.error(`[SUT_INDEX_TS_YARGS_PREP_DEBUG] Final arguments for yargs: ${JSON.stringify(argsForYargs)}`);
+
+  const cli = yargs(argsForYargs);
 
   // Configure yargs instance for testability (e.g., prevent exit)
   // This needs to be done *before* commands and options that might trigger .fail() or exit.
@@ -669,7 +688,9 @@ export async function main() { // Add export
 
   try {
     console.log('[INDEX_TS_DEBUG] Before cli.parseAsync()');
-    await cli.parseAsync();
+    // parseAsync() will use the argsForYargs provided to the yargs() constructor
+    // if no argument is passed to parseAsync itself.
+    await cli.parseAsync(); 
     console.log('[INDEX_TS_DEBUG] After cli.parseAsync() - success path');
   } catch (error) {
     console.log('[INDEX_TS_DEBUG] After cli.parseAsync() - catch block');
