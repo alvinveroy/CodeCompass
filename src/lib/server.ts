@@ -1762,39 +1762,50 @@ export async function startProxyServer(
         (mcpResponse.data as NodeJS.ReadableStream).pipe(res);
 
       } catch (error: unknown) {
-        const axiosError = error as import('axios').AxiosError;
-        const errorResponseData = axiosError.response?.data ? await streamToString(axiosError.response.data as NodeJS.ReadableStream) : undefined;
-        logger.error('[PROXY_DEBUG] Error proxying MCP request to target server.', {
-          message: axiosError.message,
-          targetUrl,
-          requestMethod: req.method,
-          responseStatus: axiosError.response?.status,
-          responseDataPreview: errorResponseData?.substring(0, 200), // Limit preview
-        });
+        if (axios.isAxiosError(error)) {
+          // Error is an AxiosError, we can access response, message, code etc.
+          const axiosError = error; // Now correctly typed
+          const errorResponseData = axiosError.response?.data ? await streamToString(axiosError.response.data as NodeJS.ReadableStream) : undefined;
+          
+          logger.error('[PROXY_DEBUG] Axios error proxying MCP request to target server.', {
+            message: axiosError.message,
+            code: axiosError.code,
+            targetUrl,
+            requestMethod: req.method,
+            responseStatus: axiosError.response?.status,
+            responseDataPreview: errorResponseData?.substring(0, 200),
+          });
 
-        if (axiosError.response && axiosError.response.headers) {
-          res.status(axiosError.response.status);
-          // Forward relevant headers from error response
-          Object.keys(axiosError.response.headers).forEach(key => {
-            const headerValue = axiosError.response!.headers[key];
-            if (headerValue !== undefined) {
-              if (['content-type', 'content-length'].includes(key.toLowerCase())) {
+          if (axiosError.response && axiosError.response.headers) {
+            res.status(axiosError.response.status);
+            Object.keys(axiosError.response.headers).forEach(key => {
+              const headerValue = axiosError.response!.headers[key];
+              if (headerValue !== undefined && ['content-type', 'content-length'].includes(key.toLowerCase())) {
                 res.setHeader(key, headerValue as string | string[]);
               }
+            });
+            if (errorResponseData) {
+              res.send(errorResponseData);
+            } else if (axiosError.response.data && typeof (axiosError.response.data as NodeJS.ReadableStream).pipe === 'function') {
+              (axiosError.response.data as NodeJS.ReadableStream).pipe(res);
+            } else if (axiosError.response.data) {
+              res.send(axiosError.response.data);
+            } else {
+              res.end();
             }
-          });
-          if (errorResponseData) {
-            res.send(errorResponseData);
-          } else if (axiosError.response.data && typeof (axiosError.response.data as NodeJS.ReadableStream).pipe === 'function') {
-            (axiosError.response.data as NodeJS.ReadableStream).pipe(res);
-          } else if (axiosError.response.data) {
-            res.send(axiosError.response.data); // Send data as is if not streamable
           } else {
-            res.end();
+            // Axios error but no response (e.g., network error like ECONNREFUSED, timeout before response)
+            res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: axiosError.message }, id: null });
           }
         } else {
-          // Network error or other issue before response from target
-          res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: axiosError.message }, id: null });
+          // Non-Axios error (e.g., error from streamToString, or other unexpected error)
+          const genericErrorMessage = error instanceof Error ? error.message : String(error);
+          logger.error('[PROXY_DEBUG] Non-Axios error proxying MCP request.', {
+            message: genericErrorMessage,
+            targetUrl,
+            requestMethod: req.method,
+          });
+          res.status(500).json({ jsonrpc: "2.0", error: { code: -32002, message: 'Proxy error: Internal Server Error', data: genericErrorMessage }, id: null });
         }
       }
     });
