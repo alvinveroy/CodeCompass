@@ -485,25 +485,30 @@ describe('CLI with yargs (index.ts)', () => {
       mockStdioClientTransportConstructor.mockImplementation(() => {
         throw spawnError;
       });
-      process.env.VITEST_TESTING_FAIL_HANDLER = "true"; 
+      process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await expect(runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}'])).rejects.toThrowError(spawnError);
       
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', spawnError);
+      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', spawnError.message);
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+        'YARGS_FAIL_HANDLER_INVOKED --- Details:',
+        expect.objectContaining({ hasErr: true, errMessage: spawnError.message })
+      );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should handle client command failure (server process premature exit) and log via yargs .fail()', async () => {
       const prematureExitError = new Error("Server process exited prematurely");
-      mockStdioClientTransportConstructor.mockImplementation(() => ({
-        connect: vi.fn().mockRejectedValue(prematureExitError),
-        close: vi.fn(),
-      }));
+      // Mock connect to reject, simulating an issue after transport is created but before/during connection
+      mockMcpClientInstance.connect.mockRejectedValue(prematureExitError);
+      
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await expect(runMainWithArgs(['agent_query', '{"query":"test_server_exit"}'])).rejects.toThrowError(prematureExitError);
       
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith('CLI Error (yargs.fail):', 
-        expect.objectContaining({ message: expect.stringContaining("Server process exited prematurely") })
+      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', prematureExitError.message);
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+        'YARGS_FAIL_HANDLER_INVOKED --- Details:',
+        expect.objectContaining({ hasErr: true, errMessage: prematureExitError.message })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
@@ -512,15 +517,20 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should handle invalid JSON parameters for client command (stdio) and log via yargs .fail()', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      const expectedError = expect.objectContaining({ message: expect.stringContaining("Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16") });
-      await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(expectedError);
+      const expectedErrorMessage = "Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16";
+      // yargs itself will likely throw an error due to invalid JSON before handleClientCommand is called.
+      // The .fail() handler will catch this.
+      await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(expectedErrorMessage);
       
+      // SUT's handleClientCommand logs to console.error directly when it catches JSON.parse error
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Error: Invalid JSON parameters for tool 'agent_query'."));
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Details: Expected ',' or '}' after property value in JSON at position 16"));
       
+      // The .fail() handler will also log
+      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(expectedErrorMessage));
       expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
-        'CLI Error (yargs.fail):',
-        expectedError
+        'YARGS_FAIL_HANDLER_INVOKED --- Details:',
+        expect.objectContaining({ hasErr: true, errMessage: expect.stringContaining(expectedErrorMessage) })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
