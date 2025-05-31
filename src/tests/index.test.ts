@@ -425,18 +425,16 @@ describe('CLI with yargs (index.ts)', () => {
             '.', // Default repoPath
             '--port', '0', // Client-spawned servers use dynamic utility port
           ],
-          // Corrected: env should be nested under options for StdioClientTransport
-          options: expect.objectContaining({ 
-            stdio: 'pipe', // Default stdio if not specified by SUT, or remove if SUT doesn't set it
-            env: expect.objectContaining({
-              HTTP_PORT: '0',
-              VITEST_WORKER_ID: expect.any(String), // SUT should pass this through
-              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
-              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
-            }),
+          // Corrected: env is now top-level
+          env: expect.objectContaining({
+            HTTP_PORT: '0',
+            VITEST_WORKER_ID: expect.any(String), // SUT should pass this through
+            // Check for presence if set in parent, otherwise they won't be in child env
+            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM && { CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM }),
+            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT && { CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT }),
           }),
-        }) 
-      ); 
+        })
+      );
       // We expect the MCP client's callTool to be invoked.
       expect(mockMcpClientInstance.callTool).toHaveBeenCalledWith({ name: 'agent_query', arguments: { query: 'test_stdio' } });
       expect(mockConsoleLog).toHaveBeenCalledWith('Tool call success');
@@ -458,14 +456,11 @@ describe('CLI with yargs (index.ts)', () => {
             repoPath, // Custom repoPath
             '--port', '0',
           ],
-          options: expect.objectContaining({
-            stdio: 'pipe',
-            env: expect.objectContaining({
-              HTTP_PORT: '0',
-              VITEST_WORKER_ID: expect.any(String),
-              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
-              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
-            }),
+          env: expect.objectContaining({
+            HTTP_PORT: '0',
+            VITEST_WORKER_ID: expect.any(String),
+            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM && { CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM }),
+            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT && { CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT }),
           }),
         })
       );
@@ -613,14 +608,11 @@ describe('CLI with yargs (index.ts)', () => {
             repoPath, // Custom repoPath from --repo
             '--port', '0', // Client-spawned server still uses port '0' in args
           ],
-          options: expect.objectContaining({
-            stdio: 'pipe',
-            env: expect.objectContaining({
-              HTTP_PORT: '0',
-              VITEST_WORKER_ID: expect.any(String),
-              CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
-              CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
-            }),
+          env: expect.objectContaining({
+            HTTP_PORT: '0',
+            VITEST_WORKER_ID: expect.any(String),
+            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM && { CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM }),
+            ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT && { CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT }),
           }),
         })
       );
