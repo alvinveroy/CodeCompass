@@ -45,35 +45,30 @@ The debugging process (spanning commits from approximately `7f14f61` to `691bb8f
 The debugging journey involved extensive work on Vitest mocking for dynamically imported SUT dependencies, managing environment variable propagation to child processes spawned by tests, and ensuring correct path resolution for module loading in various contexts (source vs. packaged, test execution vs. direct run). Key challenges included Vitest's mock hoisting behavior with non-literal paths, issues with the external `StdioClientTransport` SDK's handling of environment variables, and cascading failures where `tsc` errors or SUT crashes obscured underlying test logic problems. The process underscored the necessity of meticulous diagnostic logging and iterative refinement of both SUT code (for testability) and the test setups themselves.
 
 ---
-## Attempt 100: Defining `indexPath` in `src/index.ts`
+## Attempt 101: Verifying `indexPath` Definition Fix
 
-*   **Attempt Number:** 100
-*   **Last Git Commit for this attempt's changes:** `6b9b6d4` ("docs: Update debug session log for attempt 99")
-*   **Intended Fixes (from Attempt 99 plan):**
-    *   Verify `indexPath` definition and usage in `src/index.ts`.
+*   **Attempt Number:** 101
+*   **Last Git Commit for this attempt's changes:** `4b44e12` ("fix: Define indexPath based on execution context")
+*   **Intended Fixes (from Attempt 100):**
+    *   **`src/index.ts`:** Define the `indexPath` variable in the module scope, determining its value based on the execution context (packaged, source, or dist).
 *   **Applied Changes (leading to current state):**
-    *   User confirmed `indexPath` is used on lines 474 and 566 but is not defined.
-*   **Current Errors (based on user report for `src/index.ts`):**
-    *   `src/index.ts` lines 474 and 566: `Cannot find name 'indexPath'.ts(2304)`.
+    *   Commit `4b44e12` was applied, which should have defined `indexPath`.
+*   **Expected Result:**
+    *   The `tsc` errors "Cannot find name 'indexPath'" in `src/index.ts` (previously on lines 474 and 566) should be resolved.
 *   **Analysis/Retrospection:**
-    *   The root cause of the "Cannot find name 'indexPath'" errors is that the `indexPath` variable, while used in `main()` when calling `startServerHandler`, was never actually defined in the module scope of `src/index.ts` in the file content provided.
-    *   The `startServerHandler` function correctly expects `currentProcessIndexPath` (which `indexPath` is passed as).
-    *   The calls to `startServerHandler` in `main()` correctly attempt to pass `indexPath`.
-    *   The missing piece is the definition of `const indexPath = ...;`.
-*   **Next Steps/Plan (Attempt 100):**
+    *   With `indexPath` now defined, the TypeScript compiler should no longer complain about its absence.
+    *   The primary remaining blockers are expected to be:
+        *   The SUT crashing in integration tests (`src/tests/integration/stdio-client-server.integration.test.ts`), potentially due to `startServerHandler` not being found or correctly invoked in SUT mode. The diagnostics added in commit `765c01d` should provide more insight here.
+        *   Unit test failures in `src/tests/index.test.ts`, particularly the "promise resolved instead of rejecting" errors, which the error propagation fix in `runMainWithArgs` (commit `765c01d`) aimed to address.
+*   **Next Steps/Plan (Attempt 101):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **`src/index.ts` (Define `indexPath`):**
-        *   Add the definition for `indexPath` in the module scope, after `libPathBase` and `moduleFileExtensionForDynamicImports` are determined.
-        *   `indexPath` should point to the main script file being executed (e.g., `src/index.ts` when run from source, `dist/index.js` when run from dist, or `process.execPath` when packaged).
-    3.  **Verification:** User to run `npm run build` to:
-        *   Confirm `tsc` errors related to `indexPath` are resolved.
-        *   Observe the output for the SUT mode crash.
-        *   Observe the results for unit tests.
+    2.  **Verification:** User to run `npm run build` and provide the full output. This will confirm if the `indexPath` `tsc` errors are resolved and show the current status of integration and unit tests.
+    3.  **Analyze new build output** to determine the next set of fixes.
 
-### Blockers
-    *   `indexPath` variable not defined in `src/index.ts`.
+### Blockers (Anticipated based on previous state)
     *   SUT crashing in integration tests.
-    *   Unit test "promise resolved instead of rejecting" errors.
+    *   Unit test "promise resolved instead of rejecting" errors in `src/tests/index.test.ts`.
+    *   Potentially other unit test failures in `src/tests/index.test.ts` related to `mockStartServerHandler` arguments or `mockStdioClientTransportConstructor` calls, depending on how previous fixes interact.
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `6b9b6d4`
+    *   Git Commit SHA: `4b44e12`
