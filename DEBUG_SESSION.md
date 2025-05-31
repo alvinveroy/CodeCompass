@@ -111,40 +111,57 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
         *   **NEW ERROR:** Suite failed with `ReferenceError: Cannot access 'sdkStdioClientPath' before initialization` at `src/tests/index.test.ts:132:9`. This indicates a vi.mock hoisting issue. All 22 tests in this suite likely did not run or failed due to this setup error.
     *   **`src/tests/integration/stdio-client-server.integration.test.ts`:** All 9 tests still failing with "MCP error -32000: Connection closed". The new `StdioServerParameters` TypeScript error might be preventing the test from correctly setting up the transport, or the SUT is still crashing for other reasons (e.g., environment variables not fully propagated or SUT-side issues).
     *   **`src/tests/server.test.ts`:** 4/28 tests still failed (all in `startProxyServer` suite due to timeouts). The previous fixes to `startProxyServer` in `src/lib/server.ts` did not resolve these timeouts.
-        *   `should resolve with null if findFreePort fails`: Timed out.
-        *   `should start the proxy server, log info, and proxy /api/ping`: Timed out.
-        *   `should handle target server unreachable for /mcp`: Timed out.
-        *   `should forward target server 500 error for /mcp`: Timed out.
-    *   **Other test suites (`config-service.test.ts`, `query-refinement.helpers.test.ts`, `utils.test.ts`, `llm-provider.test.ts`, `repository.test.ts`, `agent.test.ts`, `server-tools.test.ts`):** All tests passed.
-*   **Analysis/Retrospection (Attempt 106 Results):**
-    *   The `StdioServerParameters` type error is a new regression, likely due to an incorrect type name or missing import in `stdio-client-server.integration.test.ts` when attempting to type `transportParams`. The SDK likely exports this type.
-    *   The `sdkStdioClientPath` hoisting issue in `index.test.ts` is a common problem with `vi.mock` when using variables in the path argument. The variable must be defined before the `vi.mock` call, or the path string must be inlined.
-    *   The persistent timeouts in `server.test.ts`'s `startProxyServer` suite, especially the `should resolve with null if findFreePort fails` test, indicate that the promise handling within `startProxyServer` or the test's interaction with it (even when `findFreePort` is mocked to reject) is still flawed. The changes in `src/lib/server.ts` for Attempt 106 were intended to fix this, but were insufficient.
-    *   Integration test failures ("Connection closed") remain. The `StdioServerParameters` type error could contribute if it leads to malformed transport parameters. However, the core issue of the SUT potentially not receiving correct environment variables (as indicated by SUT logs in previous attempts showing `NODE_ENV: undefined`) might still be present if the `env` propagation fix in `stdio-client-server.integration.test.ts` (Attempt 106) wasn't fully effective or if there are other SUT startup issues in test mode.
+    *   **Analysis/Retrospection (Attempt 107 Results):**
+        *   **`src/index.ts` / `yargs` is the primary suspect for `index.test.ts` failures and unhandled rejections.** The `yargs.fail()` handler at `src/index.ts:691` (`throw new Error(msg)`) is causing tests to fail unexpectedly when yargs reports "Unknown argument". The root cause is likely that yargs is misinterpreting arguments passed via `runMainWithArgs` (e.g. `['start']`, `['/some/path']`, `['agent_query', '{...}']`). This needs to be the top priority.
+        *   The "promise resolved instead of rejecting" errors in `index.test.ts` are likely a consequence of the yargs fail handler not behaving as tests expect (e.g., not causing `process.exit` to be called in a way that the mock can throw and reject the promise).
+        *   The `StdioClientTransport` constructor not being called in client command tests is also likely due to yargs failing before client logic is reached.
+        *   **Integration test failures ("Connection closed")** are very likely a downstream effect of the SUT (server process) crashing on startup due to the same yargs argument parsing issues when it's spawned by the client CLI portion of the SUT.
+        *   **`server.test.ts` timeouts** in `startProxyServer` remain a persistent, separate issue, likely related to promise handling within `startProxyServer` itself under specific mock conditions (especially when `findFreePort` is mocked to reject) or complex interactions with `nock` and `http.createServer` mocks.
+*   **Applied Changes (leading to current state):**
+    *   Commit `a935007` ("fix: Fix yargs parsing, update fail handler tests, reduce server timeouts") applied the changes from Attempt 108.
+*   **Result (Based on User's `npm run build` Output after `a935007`):**
+    *   (Output for `npm run build` after `a935007` is pending from the user)
+*   **Analysis/Retrospection (Anticipating results for Attempt 108):**
+    *   The changes to `src/index.ts` (yargs command definitions and `.fail()` handler) are expected to resolve most of the "Unknown argument" errors and unhandled rejections in `src/tests/index.test.ts`.
+    *   The adjustments to assertions in `src/tests/index.test.ts` (expecting `console.error` and specific error throws) should align with the new yargs behavior, leading to more passing tests.
+    *   The `mockProcessExit` configuration in `src/tests/index.test.ts` should now correctly simulate process exits, allowing tests for `--version`, `--help`, etc., to pass.
+    *   The fix for `readFileSync` paths in the changelog test should resolve that specific failure.
+    *   If the yargs argument parsing issues were indeed causing the SUT to crash in integration tests (`stdio-client-server.integration.test.ts`), those tests should now show improvement (i.e., fewer "Connection closed" errors).
+    *   The changes to `src/lib/server.ts` (ensuring `startProxyServer` resolves with `null` if `findFreePort` rejects) and the refined mocks in `src/tests/server.test.ts` (especially for the `should resolve with null if findFreePort fails` test and reduced timeouts) are aimed at fixing the `startProxyServer` timeouts.
 
 ---
-## Attempt 107: Addressing TSC Error, Hoisting, Timeouts, and Integration Failures
+## Attempt 108: Stabilizing yargs, CLI tests, and then Integration/Server tests (Applied)
 
-*   **Attempt Number:** 107
-*   **Last Git Commit for this attempt's changes:** `090a2a5`
-*   **Intended Fixes (from this Attempt 107):**
-    *   **`src/tests/integration/stdio-client-server.integration.test.ts`:** Import `StdioServerParameters` type from `@modelcontextprotocol/sdk/client/stdio.js`.
-    *   **`src/tests/index.test.ts`:** Fix `sdkStdioClientPath` hoisting issue by inlining the path string in the `vi.mock` call.
-    *   **`src/tests/server.test.ts`:** Further investigate and attempt to fix `startProxyServer` timeouts. This might involve ensuring `nock` is active for all outgoing `axios` calls made by the SUT within these tests, or that `http.createServer` mocks behave correctly regarding async operations and event emissions.
-    *   **`src/lib/server.ts`:** Re-examine `findFreePort` for potential hangs under specific mock conditions if `server.test.ts` fixes are insufficient.
-*   **Applied Changes:** (Will be applied in this attempt)
-*   **Result:** (Pending user execution of `npm run build`)
+*   **Attempt Number:** 108
+*   **Last Git Commit for this attempt's changes:** `a935007` ("fix: Fix yargs parsing, update fail handler tests, reduce server timeouts")
+*   **Intended Fixes (from this Attempt 108):**
+    *   **`src/index.ts`:**
+        *   Revised yargs command definitions (default `$0` and `start`) to correctly handle `repoPath` and avoid "Unknown argument" errors.
+        *   Modified the `yargs.fail()` handler for consistent error throwing in tests and proper logging/exit in production.
+    *   **`src/tests/index.test.ts`:**
+        *   Adjusted assertions for `yargs.fail()` to expect `console.error` and specific error throws.
+        *   Ensured `mockProcessExit` throws to simulate exit for promise rejection tests.
+        *   Corrected `readFileSync` mock paths for changelog test.
+        *   Refined JSON output test assertions.
+    *   **`src/lib/server.ts` (for `startProxyServer`):**
+        *   Ensured `startProxyServer` resolves with `null` if `findFreePort()` rejects.
+    *   **`src/tests/server.test.ts` (for `startProxyServer` timeouts):**
+        *   Refined `findFreePort` mock for rejection test.
+        *   Reduced timeouts for successful proxy tests.
+*   **Applied Changes:** Changes from commit `a935007` have been applied by the user.
+*   **Result:** (Pending user execution of `npm run build` with `a935007` changes)
 *   **Analysis/Retrospection:** (Will be filled after results)
-*   **Next Steps/Plan (Attempt 107):**
-    1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
-    2.  **`src/tests/integration/stdio-client-server.integration.test.ts`:** Add the import for `StdioServerParameters`.
-    3.  **`src/tests/index.test.ts`:** Inline the `sdkStdioClientPath` string in `vi.mock`.
-    4.  **`src/tests/server.test.ts`:** For the `startProxyServer` suite:
-        *   Ensure `nock.isActive()` is true before any `axios` calls that are expected to be mocked.
-        *   Verify that `http.createServer().listen()` mock correctly calls its callback or resolves its promise in all scenarios, especially error paths.
-        *   If `findFreePort` is suspected, simplify its mock in the `startProxyServer` suite's `beforeEach` to always resolve or reject predictably for specific tests, bypassing its complex internal logic for these timeout-prone tests.
-    5.  **Verification:** After applying these changes, run `npm run build` and analyze the output. Focus on whether the SUT in integration tests now receives correct environment variables (check SUT logs if possible).
+*   **Next Steps/Plan (Attempt 108 - Post-Application):**
+    1.  **`DEBUG_SESSION.MD`:** Update with this current status (this step).
+    2.  **Verification:** User to run `npm run build` with the `a935007` changes and provide the full output.
+    3.  **Analyze new build output,** focusing on:
+        *   Confirmation that `tsc` passes.
+        *   Status of `src/tests/index.test.ts`.
+        *   Status of `src/tests/integration/stdio-client-server.integration.test.ts`.
+        *   Status of `src/tests/server.test.ts`, particularly the `startProxyServer` timeouts.
+    4.  Based on the new output, formulate a plan for Attempt 109.
 
 ### Blockers (Anticipated based on current analysis)
-*   The root cause of `startProxyServer` timeouts in `server.test.ts` might be subtle, involving interactions between `vi.doUnmock('axios')`, `nock`, and `http.createServer` mocks.
-*   If integration tests still fail with "Connection closed" after the type fix, the SUT crash reason needs further investigation, potentially requiring more detailed SUT-side logging during startup in test mode.
+*   Subtle yargs parsing edge cases might still exist.
+*   `startProxyServer` timeouts in `server.test.ts` might persist if the root cause is a complex mock interaction not yet fully addressed.
+*   Integration test SUT crashes could still occur if there are other SUT startup issues beyond yargs argument parsing.
