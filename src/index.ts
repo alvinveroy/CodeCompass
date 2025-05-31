@@ -28,50 +28,44 @@ console.error(`[SUT_INDEX_TS_ENV_CHECK_TOP] NODE_ENV: ${process.env.NODE_ENV}, V
 
 // Determine the correct path to the 'lib' directory based on execution context
 const isPackaged = !!(process as unknown as { pkg?: unknown }).pkg;
-let libPath: string; // Declare libPath here
-let libPathBase: string; // Base directory for 'lib'
-// ALWAYS use .js for dynamic imports. Tests run against compiled output or Vitest handles .ts -> .js mapping.
-const moduleFileExtensionForDynamicImports = '.js';
-
-// Check for --cc-integration-test-sut-mode flag early
 const ccIntegrationTestSutMode = process.argv.includes('--cc-integration-test-sut-mode');
+// true if VITEST_WORKER_ID is set AND we are NOT in ccIntegrationTestSutMode (to distinguish unit tests from integration SUT)
+const isVitestUnitTesting = !!process.env.VITEST_WORKER_ID && !ccIntegrationTestSutMode;
 
-if (ccIntegrationTestSutMode) {
-  console.error(`[SUT_INDEX_TS_MODE_DEBUG] --cc-integration-test-sut-mode detected. Forcing test mocks and NODE_ENV=test.`);
-  // process.env.VITEST_WORKER_ID = 'integration_sut'; // No longer needed to force .ts, SUT always uses .js
-  process.env.NODE_ENV = 'test'; // Ensure test configurations are loaded
-  process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM = 'true';
-  process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT = 'true';
-  // If VITEST_WORKER_ID was set by the test runner, it will persist.
-  // If not, this mode still implies a test-like environment for mocks.
-}
-
-// Prominent logging for initial state
-console.error(
-  `[SUT_INDEX_TS_PATH_INIT_DEBUG] __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, CC_INT_TEST_MODE: ${ccIntegrationTestSutMode}`
-);
-
-// Determine libPathBase for dynamic imports.
-// All dynamic imports should target compiled '.js' files, typically in 'dist/lib'.
+let libPathBase: string;
+let moduleFileExtensionForDynamicImports: string;
 
 if (isPackaged) {
   // Packaged app: 'lib' is relative to the executable's directory.
   libPathBase = path.dirname(process.execPath);
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPathBase for imports: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
-} else if (process.env.VITEST_WORKER_ID || ccIntegrationTestSutMode) {
-  // Test environment (unit or integration SUT mode):
-  // Even if Vitest runs src/index.ts, dynamic imports should target 'dist/lib'
-  // because that's where the compiled dependent modules reside.
-  libPathBase = path.resolve(process.cwd(), 'dist');
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID or ccIntegrationTestSutMode is set. libPathBase for imports: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+  moduleFileExtensionForDynamicImports = '.js';
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+} else if (isVitestUnitTesting || ccIntegrationTestSutMode) {
+  // Running src/index.ts via tsx (either by runMainWithArgs for unit tests, or by integration test spawn)
+  // __dirname when running 'tsx src/index.ts' from project root is 'project_root/src'
+  // process.cwd() is project_root
+  libPathBase = path.resolve(process.cwd(), 'src'); // Imports will be from src/lib
+  moduleFileExtensionForDynamicImports = '.ts'; // Dynamically import .ts files
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Vitest unit test or Integration SUT mode. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+  if (ccIntegrationTestSutMode) {
+    console.error(`[SUT_INDEX_TS_MODE_DEBUG] --cc-integration-test-sut-mode detected. Forcing test mocks and NODE_ENV=test.`);
+    process.env.NODE_ENV = 'test';
+    process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM = 'true';
+    process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT = 'true';
+  }
 } else {
-  // Standard execution (e.g., `node dist/index.js`): __dirname is project/dist.
-  libPathBase = __dirname;
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Standard execution (e.g., node dist/index.js). libPathBase for imports: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+  // Standard execution (e.g., node dist/index.js): __dirname is project/dist.
+  libPathBase = __dirname; // Imports will be from dist/lib
+  moduleFileExtensionForDynamicImports = '.js';
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Standard execution (e.g., node dist/index.js). libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
 }
-libPath = path.join(libPathBase, 'lib'); // Ensures imports are from 'dist/lib' or equivalent.
+const libPath = path.join(libPathBase, 'lib');
 
-console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}, Final ext: ${moduleFileExtensionForDynamicImports}, __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
+// Prominent logging for initial state
+console.error(
+  `[SUT_INDEX_TS_PATH_INIT_DEBUG] __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, CC_INT_TEST_MODE: ${ccIntegrationTestSutMode}, isVitestUnitTesting: ${isVitestUnitTesting}`
+);
+console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}, Final ext: ${moduleFileExtensionForDynamicImports}`);
 
 import { hideBin } from 'yargs/helpers'; // Import hideBin
 
@@ -208,64 +202,59 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   
   // const isPkg = typeof (process as any).pkg !== 'undefined'; // isPackaged is already defined globally
   // Determine the SUT script path for StdioClientTransport's args
-  // When tests run (VITEST_WORKER_ID is set), the client should spawn the compiled SUT from 'dist'.
-  // When running normally from 'dist', it should also spawn 'dist/index.js'.
-  // When packaged, it spawns the packaged 'index.js'.
-  let sutScriptPathForClientSpawn: string;
+
+  let spawnCommand: string;
+  let spawnArgs: string[];
+
+  // isVitestUnitTesting and ccIntegrationTestSutMode are defined globally
   if (isPackaged) {
-    // When packaged, process.execPath is the executable itself.
-    // The 'start' command and other args are passed directly to it.
-    // Assuming the main script inside the package is 'index.js' relative to executable.
-    // However, if the pkg setup involves Node, this might need adjustment.
-    // For now, assuming process.execPath is the primary command.
-    // If node is bundled, args might need to include the script path within the package.
-    // This logic aligns with typical Node.js script execution.
-    sutScriptPathForClientSpawn = path.resolve(path.dirname(process.execPath), 'index.js'); // Path to the bundled index.js
-    // This might be incorrect if __dirname inside pkg is different or if the packaged structure is different.
-    // A more robust way for pkg might be needed if this fails.
-    sutScriptPathForClientSpawn = path.resolve(path.dirname(process.execPath), 'index.js'); // Path to the bundled index.js
+    spawnCommand = process.execPath; // The packaged executable
+    spawnArgs = [
+      // No script path needed if process.execPath is the app itself
+      'start', clientRepoPath, '--port', '0',
+    ];
+  } else if (isVitestUnitTesting || ccIntegrationTestSutMode) {
+    // Client command running in a test context (unit or integration) should spawn src/index.ts via tsx
+    spawnCommand = 'npx';
+    spawnArgs = [
+      'tsx', path.resolve(process.cwd(), 'src', 'index.ts'), // Path to SUT's src/index.ts
+      'start', clientRepoPath, '--port', '0',
+      // Crucially, pass --cc-integration-test-sut-mode to the spawned server
+      // so it also knows to use src paths for its *own* dynamic imports.
+      '--cc-integration-test-sut-mode',
+    ];
   } else {
-    // Default: running from source (via Vitest) or from compiled 'dist'.
-    // Always spawn the 'dist/index.js' version for the server.
-    // process.cwd() is the project root.
-    sutScriptPathForClientSpawn = path.resolve(process.cwd(), 'dist', 'index.js');
+    // Standard execution: client spawns dist/index.js via node
+    spawnCommand = process.execPath; // Path to node executable
+    spawnArgs = [
+      path.resolve(process.cwd(), 'dist', 'index.js'), // Path to SUT's dist/index.js
+      'start', clientRepoPath, '--port', '0',
+    ];
   }
-  console.error(`[SUT_INDEX_TS_CLIENT_SPAWN_DEBUG] sutScriptPathForClientSpawn: ${sutScriptPathForClientSpawn}`);
+  console.error(`[SUT_INDEX_TS_CLIENT_SPAWN_DEBUG] Spawning server with command: '${spawnCommand}', args: ${JSON.stringify(spawnArgs)}`);
 
   // Parameters for StdioClientTransport to spawn the server
   const serverProcessParams: StdioServerParameters = {
-    command: process.execPath, // Path to node executable
-    args: [
-      sutScriptPathForClientSpawn, // Path to SUT script (src/index.ts for tests, dist/index.js otherwise)
-      'start',           // Command for the server to start
-      clientRepoPath,    // Repository path for the server
-      '--port', '0',     // Instruct server to find a dynamic utility port
-    ],
-    // Environment variables for the server process.
-    // StdioClientTransport's StdioServerParameters expects 'env' as a top-level property.
-    // 'options' was incorrect and caused TS2353.
-    // stdio handling is typically managed by the SDK or its default spawn options.
-    env: {
-      // Selectively pass environment variables.
-      PATH: process.env.PATH ?? '',
-      NODE_ENV: process.env.NODE_ENV ?? '',
-      // HTTP_PORT for the spawned server:
-      // 1. Use --port from the client command's argv if it were to exist (it doesn't currently, but for future proofing).
-      // 2. Fallback to the client's process.env.HTTP_PORT.
-      // 3. Default to '0' for dynamic port assignment in the spawned server.
-      HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
-      // Propagate test-related environment variables if they are set in the client's environment.
-      ...(process.env.VITEST_WORKER_ID && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID }),
-      ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM && { CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM }),
-      ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT && { CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT }),
-      ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }),
-    },
-    // SpawnOptions like 'stdio' can be added here if StdioServerParameters supports them directly,
-    // or they might be part of an 'options' property if the SDK's API for StdioServerParameters changes.
-    // For now, assuming 'stdio: "pipe"' is a default or handled internally by StdioClientTransport.
+    command: spawnCommand,
+    args: spawnArgs,
+    options: { // env and other spawn options go into 'options'
+      env: {
+        PATH: process.env.PATH ?? '',
+        NODE_ENV: process.env.NODE_ENV ?? 'test', // Default to test if client is in test mode
+        HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
+        // Propagate test-related environment variables
+        ...(isVitestUnitTesting && process.env.VITEST_WORKER_ID && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID }), // Pass VITEST_WORKER_ID if client is in unit test
+        ...( (isVitestUnitTesting || ccIntegrationTestSutMode) && { // If client is in any test mode, propagate mock flags
+            CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? 'true',
+            CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? 'true',
+        }),
+        ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }),
+      },
+      stdio: 'pipe', // Explicitly set stdio
+    }
   };
 
-  console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport, 'serverProcessParams.env:', JSON.stringify(serverProcessParams.env));
+  console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport, 'serverProcessParams:', JSON.stringify(serverProcessParams));
   const transport = new StdioClientTransport(serverProcessParams);
   const client = new MCPClientSdk({ name: "codecompass-cli-client", version: getPackageVersion() });
 
@@ -482,8 +471,16 @@ export async function main() { // Add export
   }
 
   // Original yargs CLI setup follows for non-SUT-mode execution
-  const cli = yargs(hideBin(process.argv))
-    .option('port', {
+  const cli = yargs(hideBin(process.argv));
+
+  // Configure yargs instance for testability (e.g., prevent exit)
+  // This needs to be done *before* commands and options that might trigger .fail() or exit.
+  if (process.env.VITEST_WORKER_ID || process.env.NODE_ENV === 'test') {
+    cli.exitProcess(false);
+    // console.error('[SUT_INDEX_TS_YARGS_CONFIG] yargs.exitProcess(false) configured for test environment.');
+  }
+
+  cli.option('port', {
       alias: 'p',
       type: 'number',
       description: 'Specify the HTTP port for the server or spawned client server. Overrides HTTP_PORT env var.',
