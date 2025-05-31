@@ -245,8 +245,18 @@ describe('Stdio Client-Server Integration Tests', () => {
     }
 
     // Setup transport and client for each test to ensure fresh state and proper env application
-    const baseSpawnEnv = {
-      ...process.env,
+    const filteredProcessEnv: Record<string, string> = {};
+    for (const key in process.env) {
+      if (Object.prototype.hasOwnProperty.call(process.env, key)) {
+        const value = process.env[key];
+        if (value !== undefined) {
+          filteredProcessEnv[key] = value;
+        }
+      }
+    }
+
+    const baseSpawnEnv: Record<string, string> = {
+      ...filteredProcessEnv,
       NODE_ENV: 'test', // Crucial for configService behavior in spawned process
       HTTP_PORT: '0', // Ensure dynamic port for the server utility HTTP interface
       LLM_PROVIDER: "ollama", // Added for Attempt 14
@@ -257,7 +267,7 @@ describe('Stdio Client-Server Integration Tests', () => {
       CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: 'true', // Activate Qdrant SUT mock
       // NODE_OPTIONS for preload script removed
     };
-    const currentTestSpawnEnv: Record<string, string | undefined> = { ...baseSpawnEnv };
+    const currentTestSpawnEnv: Record<string, string> = { ...baseSpawnEnv };
     // Ensure CODECOMPASS_INTEGRATION_TEST_MOCK_LLM is set to 'true'
     currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM = 'true';
     currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT = 'true'; // Ensure this is set
