@@ -204,25 +204,27 @@ async function handleClientCommand(argv: ClientCommandArgs) {
   
   // const isPkg = typeof (process as any).pkg !== 'undefined'; // isPackaged is already defined globally
   // Determine the SUT script path for StdioClientTransport's args
-  // When tests run src/index.ts, the client should also spawn src/index.ts (via ts-node or Vitest's mechanisms)
-  // When running dist/index.js, it should spawn dist/index.js
+  // When tests run (VITEST_WORKER_ID is set), the client should spawn the compiled SUT from 'dist'.
+  // When running normally from 'dist', it should also spawn 'dist/index.js'.
+  // When packaged, it spawns the packaged 'index.js'.
   let sutScriptPathForClientSpawn: string;
-  if (process.env.VITEST_WORKER_ID) {
-    // In Vitest, assume we want to spawn the .ts version of the SUT for consistency
-    sutScriptPathForClientSpawn = path.resolve(__dirname, 'index.ts');
-  } else if (isPackaged) {
+  if (isPackaged) {
     // When packaged, process.execPath is the executable itself.
     // The 'start' command and other args are passed directly to it.
+    // Assuming the main script inside the package is 'index.js' relative to executable.
     // However, if the pkg setup involves Node, this might need adjustment.
     // For now, assuming process.execPath is the primary command.
     // If node is bundled, args might need to include the script path within the package.
     // This logic aligns with typical Node.js script execution.
     sutScriptPathForClientSpawn = path.resolve(path.dirname(process.execPath), 'index.js'); // Path to the bundled index.js
-    // This might be incorrect if __dirname inside pkg is different.
+    // This might be incorrect if __dirname inside pkg is different or if the packaged structure is different.
     // A more robust way for pkg might be needed if this fails.
-    // For now, this aligns with non-pkg `dist` execution.
+    sutScriptPathForClientSpawn = path.resolve(path.dirname(process.execPath), 'index.js'); // Path to the bundled index.js
   } else {
-    sutScriptPathForClientSpawn = path.resolve(__dirname, 'index.js'); // Path to the compiled index.js in dist
+    // Default: running from source (via Vitest) or from compiled 'dist'.
+    // Always spawn the 'dist/index.js' version for the server.
+    // process.cwd() is the project root.
+    sutScriptPathForClientSpawn = path.resolve(process.cwd(), 'dist', 'index.js');
   }
   console.error(`[SUT_INDEX_TS_CLIENT_SPAWN_DEBUG] sutScriptPathForClientSpawn: ${sutScriptPathForClientSpawn}`);
 
