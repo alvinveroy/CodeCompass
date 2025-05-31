@@ -120,8 +120,8 @@ async function configureMcpServerInstance(
   mcpInstance: McpServer,
   qdrantClient: QdrantClient,
   repoPath: string,
-  suggestionModelAvailable: boolean
-  // Add other dependencies like VERSION if needed by resource/tool registration
+  suggestionModelAvailable: boolean,
+  VERSION: string // Add VERSION as a parameter
 ) {
   // Register resources
   if (typeof mcpInstance.resource !== "function") {
@@ -484,7 +484,7 @@ export async function startServer(repoPath: string): Promise<void> {
     const mainStdioMcpServer = new McpServer({
       name: "CodeCompass", version: VERSION, vendor: "CodeCompass", capabilities: serverCapabilities,
     });
-    await configureMcpServerInstance(mainStdioMcpServer, qdrantClient, repoPath, suggestionModelAvailable);
+    await configureMcpServerInstance(mainStdioMcpServer, qdrantClient, repoPath, suggestionModelAvailable, VERSION);
 
     // StdioServerTransport constructor expects stdin and stdout properties
     // Assuming StdioServerTransport defaults to process.stdin/stdout if no args are provided,
@@ -1836,15 +1836,15 @@ export async function startProxyServer(
       logger.info(`[PROXY_DEBUG] MCP requests to http://localhost:${proxyListenPort}/mcp will be forwarded to http://localhost:${targetServerPort}/mcp`);
       logger.info(`[PROXY_DEBUG] API endpoints /api/ping and /api/indexing-status are also proxied.`);
       console.error(`CodeCompass Proxy running on port ${proxyListenPort}, forwarding to main server on ${targetServerPort}.`);
-      resolveProxyListen(proxyHttpServer);
+      resolveOuter(proxyHttpServer); // Use resolveOuter
     });
     proxyHttpServer.on('error', (err: NodeJS.ErrnoException) => {
       logger.error(`[PROXY_DEBUG] Proxy server failed to start on port ${proxyListenPort}: ${err.message}`, { error: err });
-      rejectProxyListen(err); // Reject the inner promise if listen fails
+      rejectOuter(err); // Use rejectOuter
     });
   } catch (error) {
     logger.error(`[PROXY_DEBUG] Unexpected error setting up proxy server: ${error instanceof Error ? error.message : String(error)}`);
-    rejectProxyListen(error instanceof Error ? error : new Error(String(error)));
+    rejectOuter(error instanceof Error ? error : new Error(String(error))); // Use rejectOuter
   }
   });
   // No outer catch block here anymore for findFreePort errors, as it's handled above.
