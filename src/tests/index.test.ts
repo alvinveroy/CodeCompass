@@ -303,8 +303,9 @@ describe('CLI with yargs (index.ts)', () => {
     // The import of the SUT (src/index.ts) will trigger its execution
     // because src/index.ts ends with `void main();`.
     // Mocks should be applied due to vi.resetModules() and importing from src.
-    const isClientCommandTest = args.some(arg => KNOWN_TOOLS.includes(arg));
-    const currentSutIndexPath = isClientCommandTest ? path.resolve(__dirname, '../../src/index.ts') : indexPath; // Ensure client commands also use .ts
+    // const isClientCommandTest = args.some(arg => KNOWN_TOOLS.includes(arg)); // Not strictly needed, indexPath is always src/index.ts
+    // const currentSutIndexPath = isClientCommandTest ? path.resolve(__dirname, '../../src/index.ts') : indexPath; // Ensure client commands also use .ts
+    const currentSutIndexPath = indexPath; // indexPath is already resolved to src/index.ts
 
     console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] About to dynamically import SUT from (src) currentSutIndexPath: ${currentSutIndexPath}. Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
     try {
@@ -315,14 +316,19 @@ describe('CLI with yargs (index.ts)', () => {
       await sutModule.main();
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] SUT main() executed.`);
     } catch (e) {
-      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${currentSutIndexPath}:`, e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Error during dynamic import or execution of SUT from ${currentSutIndexPath}:`, errorMessage);
       // This catch is primarily for errors thrown by yargs' .fail() or handlers
       // that might not be caught by the SUT's own try/catch around cli.parseAsync().
       // Or if the module import itself fails catastrophically.
       // We let the test assertions on mockProcessExit or logger.error handle verification of yargs .fail().
-      if (process.env.VITEST_TESTING_FAIL_HANDLER !== "true" && !(e instanceof Error && e.message.includes("process.exit called with"))) { // Adjusted error message check
+      // The mockProcessExit throws an error like "process.exit called with X".
+      // If the error is NOT that, and not a VITEST_TESTING_FAIL_HANDLER scenario, re-throw.
+      if (process.env.VITEST_TESTING_FAIL_HANDLER !== "true" && !errorMessage.includes("process.exit called with")) {
          throw e; // Re-throw if not a test-induced exit or fail handler test
       }
+      // If it IS a "process.exit called with" error, or if VITEST_TESTING_FAIL_HANDLER is true,
+      // then the test is likely expecting this error (e.g., via .rejects.toThrowError), so don't re-throw here.
     }
     console.log(`[INDEX_TEST_DEBUG] runMainWithArgs: SUT import/execution finished or threw.`);
   }

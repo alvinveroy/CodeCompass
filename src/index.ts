@@ -235,27 +235,31 @@ async function handleClientCommand(argv: ClientCommandArgs) {
       clientRepoPath,    // Repository path for the server
       '--port', '0',     // Instruct server to find a dynamic utility port
     ],
-    // Environment variables and other spawn options for the server process
-    options: {
-      stdio: 'pipe', // Default stdio for StdioClientTransport unless overridden
-      env: { 
-        // Selectively pass environment variables. Avoid spreading all of process.env
-        // to prevent unexpected behavior and keep the environment clean.
-        PATH: process.env.PATH ?? '', // Essential for finding 'node' and other executables
-        NODE_ENV: process.env.NODE_ENV ?? '', // Pass through NODE_ENV
-        HTTP_PORT: '0', // Explicitly set for child, yargs in child will pick this up
-        VITEST_WORKER_ID: process.env.VITEST_WORKER_ID ?? '', // Propagate if present
-        CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM ?? '',
-        CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT ?? '',
-        DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV || 'false',
-        // Add other specific environment variables if they are strictly necessary for the child process
-        // For example, API keys if they are not handled by configService loading in the child.
-        // However, configService in the child should ideally load its own config.
-      },
-    }
+    // Environment variables for the server process.
+    // StdioClientTransport's StdioServerParameters expects 'env' as a top-level property.
+    // 'options' was incorrect and caused TS2353.
+    // stdio handling is typically managed by the SDK or its default spawn options.
+    env: {
+      // Selectively pass environment variables.
+      PATH: process.env.PATH ?? '',
+      NODE_ENV: process.env.NODE_ENV ?? '',
+      // HTTP_PORT for the spawned server:
+      // 1. Use --port from the client command's argv if it were to exist (it doesn't currently, but for future proofing).
+      // 2. Fallback to the client's process.env.HTTP_PORT.
+      // 3. Default to '0' for dynamic port assignment in the spawned server.
+      HTTP_PORT: argv.port?.toString() ?? process.env.HTTP_PORT ?? '0',
+      // Propagate test-related environment variables if they are set in the client's environment.
+      ...(process.env.VITEST_WORKER_ID && { VITEST_WORKER_ID: process.env.VITEST_WORKER_ID }),
+      ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM && { CODECOMPASS_INTEGRATION_TEST_MOCK_LLM: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM }),
+      ...(process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT && { CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT: process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT }),
+      ...(process.env.DEBUG_SPAWNED_SERVER_ENV && { DEBUG_SPAWNED_SERVER_ENV: process.env.DEBUG_SPAWNED_SERVER_ENV }),
+    },
+    // SpawnOptions like 'stdio' can be added here if StdioServerParameters supports them directly,
+    // or they might be part of an 'options' property if the SDK's API for StdioServerParameters changes.
+    // For now, assuming 'stdio: "pipe"' is a default or handled internally by StdioClientTransport.
   };
 
-  console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport);
+  console.log('[SUT_INDEX_TS_DEBUG] About to instantiate StdioClientTransport. Type of StdioClientTransport:', typeof StdioClientTransport, 'serverProcessParams.env:', JSON.stringify(serverProcessParams.env));
   const transport = new StdioClientTransport(serverProcessParams);
   const client = new MCPClientSdk({ name: "codecompass-cli-client", version: getPackageVersion() });
 
@@ -330,8 +334,16 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
   if (typeof repoPathOrArgv === 'string') { // Called directly with repoPath
     effectiveRepoPath = repoPathOrArgv;
   } else { // Called from yargs with argv object
-    effectiveRepoPath = repoPathOrArgv.repoPath || repoPathOrArgv.repo || '.';
+    // Prioritize --repo option if positional repoPath is not provided or is the default '.'
+    if (repoPathOrArgv.repo) { // If --repo is explicitly provided
+      effectiveRepoPath = repoPathOrArgv.repo;
+    } else if (repoPathOrArgv.repoPath && repoPathOrArgv.repoPath !== '.') { // If positional is provided and not default
+      effectiveRepoPath = repoPathOrArgv.repoPath;
+    } else { // Fallback to default '.'
+      effectiveRepoPath = '.';
+    }
   }
+  console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Effective repoPath determined as: ${effectiveRepoPath}`);
     
   // Use the globally determined moduleFileExtensionForDynamicImports
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require for config after potential env changes by yargs
@@ -377,6 +389,93 @@ async function startServerHandler(repoPathOrArgv: string | { repoPath?: string; 
 
 // Main CLI execution logic using yargs
 export async function main() { // Add export
+
+  // Early check for --cc-integration-test-sut-mode to bypass full yargs parsing if needed.
+  // This flag indicates that src/index.ts is being spawned as a server for integration tests.
+  if (process.argv.includes('--cc-integration-test-sut-mode')) {
+    console.error('[SUT_INDEX_TS_MODE_DEBUG] --cc-integration-test-sut-mode detected. Bypassing full CLI parsing for server startup.');
+
+    // Simplified argument parsing for this mode.
+    // We expect 'start' command, optionally a repoPath, and optionally --port.
+    const args = hideBin(process.argv);
+    let repoPath = '.'; // Default repo path
+    let portArg = '0';   // Default to dynamic port
+
+    // Find 'start' command
+    const startIndex = args.findIndex(arg => arg === 'start');
+    if (startIndex === -1 && !args.includes('--cc-integration-test-sut-mode')) { // 'start' might be implicit if only repoPath is given after the flag
+        // This case should ideally not happen if client always passes 'start'
+        console.error('[SUT_INDEX_TS_MODE_DEBUG] "start" command not found in SUT mode args, defaulting repoPath.');
+    }
+
+    // Look for positional repoPath after 'start' or after the mode flag
+    let potentialRepoPathIndex = -1;
+    if (startIndex !== -1 && args.length > startIndex + 1 && !args[startIndex + 1].startsWith('--')) {
+        potentialRepoPathIndex = startIndex + 1;
+    } else {
+        // If 'start' is not explicit, check after the mode flag itself
+        const modeFlagIndex = args.indexOf('--cc-integration-test-sut-mode');
+        if (modeFlagIndex !== -1 && args.length > modeFlagIndex + 1 && !args[modeFlagIndex + 1].startsWith('--')) {
+            potentialRepoPathIndex = modeFlagIndex + 1;
+        }
+    }
+    if (potentialRepoPathIndex !== -1) {
+        repoPath = args[potentialRepoPathIndex];
+    }
+    
+    // Check for --repo option as an override
+    const repoOptionIndex = args.indexOf('--repo');
+    if (repoOptionIndex > -1 && args.length > repoOptionIndex + 1) {
+      repoPath = args[repoOptionIndex + 1];
+    }
+
+    // Check for --port option
+    const portOptionIndex = args.indexOf('--port');
+    if (portOptionIndex > -1 && args.length > portOptionIndex + 1) {
+      portArg = args[portOptionIndex + 1];
+    }
+
+    // Set process.env.HTTP_PORT based on extracted portArg
+    if (!isNaN(parseInt(portArg, 10)) && parseInt(portArg, 10) >= 0 && parseInt(portArg, 10) <= 65535) {
+      process.env.HTTP_PORT = portArg;
+    } else {
+      console.error(`[SUT_INDEX_TS_MODE_DEBUG] Invalid port '${portArg}' provided in SUT mode. Using default '0'.`);
+      process.env.HTTP_PORT = '0';
+    }
+    console.error(`[SUT_INDEX_TS_MODE_DEBUG] SUT mode determined: repoPath='${repoPath}', HTTP_PORT='${process.env.HTTP_PORT}'`);
+
+    // Dynamically import and run startServerHandler
+    // libPath and moduleFileExtensionForDynamicImports are already set globally at the top of the file.
+    const serverModuleFilename = `server${moduleFileExtensionForDynamicImports}`;
+    const serverModulePath = path.join(libPath, serverModuleFilename);
+    const configServiceModuleFilename = `config-service${moduleFileExtensionForDynamicImports}`;
+    const configServiceModulePath = path.join(libPath, configServiceModuleFilename);
+
+    try {
+      const serverModule = await import(serverModulePath);
+      const { startServerHandler: directStartServerHandler } = serverModule; // Renamed to avoid conflict
+      // Pass an object that mimics yargs argv structure expected by startServerHandler
+      await directStartServerHandler({ repo: repoPath, port: parseInt(process.env.HTTP_PORT, 10), _:['start', repoPath], $0:'codecompass' });
+    } catch (error: unknown) {
+      // Minimal error handling for SUT mode
+      try {
+        const { logger: critLogger } = await import(configServiceModulePath) as typeof import('./lib/config-service');
+        critLogger.error('Critical unhandled error in SUT integration mode startup:', error);
+      } catch (logErr) {
+        console.error('Fallback SUT mode error (logger unavailable):', error, 'Logger load error:', logErr);
+      }
+      // In test environment, re-throw to allow test to fail and capture the error.
+      // Otherwise, exit.
+      if (process.env.NODE_ENV !== 'test' && process.env.VITEST_WORKER_ID === undefined) {
+          process.exit(1);
+      } else {
+          throw error; 
+      }
+    }
+    return; // Exit main early, skipping full CLI parsing
+  }
+
+  // Original yargs CLI setup follows for non-SUT-mode execution
   const cli = yargs(hideBin(process.argv))
     .option('port', {
       alias: 'p',
