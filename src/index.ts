@@ -337,30 +337,21 @@ async function startServerHandler(
   currentProcessIndexPath: string // Add currentProcessIndexPath as a parameter
 ) {
   let effectiveRepoPath: string;
+  const argv = repoPathOrArgv as { repo?: string; repoPath?: string; $0?: string; [key: string]: unknown; _: (string | number)[] };
 
-  if (typeof repoPathOrArgv === 'string') {
-    // This case is primarily for the --cc-integration-test-sut-mode bypass,
-    // where startServerHandler might be called directly with a string path.
-    effectiveRepoPath = repoPathOrArgv;
-    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using direct string repoPath: ${effectiveRepoPath}`);
+  if (typeof argv.repo === 'string' && argv.repo.trim() !== '') {
+    // Global --repo option takes highest precedence.
+    effectiveRepoPath = argv.repo;
+    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using global --repo option value: ${effectiveRepoPath}`);
+  } else if (typeof argv.repoPath === 'string') {
+    // Positional repoPath from yargs command definition (e.g., '$0 [repoPath]' or 'start [repoPath]').
+    // This has a default value of '.' set in yargs.
+    effectiveRepoPath = argv.repoPath;
+    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using positional repoPath (defaulting to '.' if not provided): ${effectiveRepoPath}`);
   } else {
-    // Called from yargs, repoPathOrArgv is the argv object.
-    const argv = repoPathOrArgv as { repo?: string; repoPath?: string; [key: string]: unknown; _: (string | number)[]; $0: string; };
-
-    if (typeof argv.repo === 'string' && argv.repo.trim() !== '') {
-      // Global --repo option takes highest precedence.
-      effectiveRepoPath = argv.repo;
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using --repo option value: ${effectiveRepoPath}`);
-    } else if (typeof argv.repoPath === 'string' && argv.repoPath.trim() !== '') {
-      // Positional repoPath from yargs command definition (e.g., '$0 [repoPath]' or 'start [repoPath]').
-      // This will be `undefined` for `$0` if no path is given, or `.` for `start` if no path is given.
-      effectiveRepoPath = argv.repoPath;
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using positional repoPath from yargs: ${effectiveRepoPath}`);
-    } else {
-      // Fallback if neither --repo nor a positional repoPath was meaningfully provided.
-      effectiveRepoPath = '.';
-      console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Defaulting to repoPath '.' (argv.repo: '${argv.repo}', argv.repoPath: '${argv.repoPath}')`);
-    }
+    // Fallback, though yargs default for repoPath should prevent this.
+    effectiveRepoPath = '.';
+    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Fallback to repoPath '.' (argv.repo: '${argv.repo}', argv.repoPath: '${argv.repoPath}')`);
   }
   console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Final effective repoPath: ${effectiveRepoPath}`);
     
@@ -540,6 +531,7 @@ export async function main() { // Add export
       global: true,
       // No 'apply' needed, handlers will use this value from argv.
     })
+    .scriptName("codecompass") // Set script name for help output
     .command(
       'changelog',
       'Show the project changelog',
@@ -556,27 +548,6 @@ export async function main() { // Add export
         // If displayChangelog were async, we'd await it.
       }
     )
-    .scriptName("codecompass") // Set script name for help output
-    .command(
-      // Default command for starting the server when a path is provided, or no command.
-      '$0 [repoPath]',
-      'Start the CodeCompass server (default command if repoPath is given or no command specified). Use "start" command for explicit start.',
-      (yargsInstance) => {
-        return yargsInstance.positional('repoPath', {
-          type: 'string',
-          default: '.',
-          describe: 'Path to the git repository to serve',
-        });
-      },
-      async (argv) => {
-        // process.env.HTTP_PORT would have been set by the global 'port' option's 'apply'
-        // Pass the full argv object so startServerHandler can access .repo if .repoPath is not set
-        // eslint-disable-next-line no-console
-        console.log('[INDEX_TS_DEBUG] Default/Start command handler INVOKED');
-        // Pass the module-scoped `indexPath` to `startServerHandler`
-        await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
-      }
-    )
     .command(
       'start [repoPath]',
       'Explicitly start the CodeCompass server.',
@@ -591,7 +562,7 @@ export async function main() { // Add export
         console.log('[INDEX_TS_DEBUG] "start" command handler INVOKED');
         await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
       }
-    ); // Removed duplicate "start" command
+    );
 
   // Dynamically add commands for each known tool
   KNOWN_TOOLS.forEach(toolName => {
@@ -638,6 +609,23 @@ export async function main() { // Add export
     );
   });
 
+  // Define $0 (default) command last so specific commands take precedence
+  cli.command(
+    '$0 [repoPath]',
+    'Start the CodeCompass server (default action). Use "start" command for explicit start with options.',
+    (yargsInstance) => {
+      return yargsInstance.positional('repoPath', {
+        type: 'string',
+        default: '.',
+        describe: 'Path to the git repository to serve. Defaults to current directory.',
+      });
+    },
+    async (argv) => {
+      console.log('[INDEX_TS_DEBUG] Default ($0) command handler INVOKED');
+      await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
+    }
+  );
+
   cli
     .version(getPackageVersion()) // Setup --version
     .alias('v', 'version')
@@ -645,56 +633,36 @@ export async function main() { // Add export
     .alias('h', 'help')
     .wrap(Math.min(120, yargs(hideBin(process.argv)).terminalWidth())) // Use yargs().terminalWidth()
     .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass')
+    // Require a command to be specified, or $0 will handle it.
+    // The message appears if too many commands are given or if parsing fails before a command is identified.
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
-    .fail(async (msg, err, yargsInstance) => {
-      let failLogger: { 
-        error: (...args: any[]) => void; 
-        warn: (...args: any[]) => void;
-        info: (...args: any[]) => void;
-        debug: (...args: any[]) => void;
-      } = console;
-      try {
-        const loggerModuleFilenameForFail = `config-service${moduleFileExtensionForDynamicImports}`;
-        const loggerModulePathForFail = path.join(libPath, loggerModuleFilenameForFail);
-        // console.error(`[SUT_INDEX_TS_REQUIRE_DEBUG] About to import loggerModule (in .fail()) from: ${loggerModulePathForFail} ...`);
-        const loggerModule = await import(loggerModulePathForFail);
-        failLogger = loggerModule.logger;
-      } catch (e) {
-        console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
-      }
-      // Define these constants first
+    .fail((msg, err, yargsInstance) => { // Made synchronous: removed async, removed await import for logger
+      // Use console.error for logging in .fail() as dynamic import of main logger is async.
+      // Tests can spy on console.error.
       const isTestEnvForFail = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
       const isVitestTestingFailHandlerScenario = process.env.VITEST_TESTING_FAIL_HANDLER === 'true';
 
-      failLogger.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
+      console.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
         hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
         hasErr: !!err, errName: err?.name, errMessage: err?.message,
         isTestEnvForFail, isVitestTestingFailHandlerScenario
       });
 
       if (isTestEnvForFail) {
-        // In test environments (Vitest worker or NODE_ENV=test), ensure errors are thrown to reject parseAsync()
         if (isVitestTestingFailHandlerScenario) {
-          // For tests that specifically set VITEST_TESTING_FAIL_HANDLER, use console.error for easier spy verification
           console.error('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', err ? (err.message || msg) : msg);
         } else {
-          // General test environment logging
-          (err ? failLogger.error : failLogger.warn)('Yargs validation/parse error in generic test context:', err || msg);
+          console.error('Yargs validation/parse error in generic test context:', err || msg);
         }
-        // Always throw to ensure parseAsync() rejects, which test assertions expect.
-        // Prioritize the actual Error object if available.
-        if (err) throw err;
+        if (err) throw err; // Prioritize actual Error object
         throw new Error(msg || 'yargs validation failed in test environment');
       } else {
-        // Production/normal CLI execution behavior
         yargsInstance.showHelp();
         const errorMessage = err ? (err.message || msg) : msg;
         if (errorMessage) {
-          failLogger.error(`\nError: ${errorMessage}`);
-          console.error(`\nError: ${errorMessage}`); // Also to raw stderr for visibility
+          console.error(`\nError: ${errorMessage}`);
         }
-        // Use yargsInstance.exit() for proper yargs exit handling in non-test scenarios
         yargsInstance.exit(1, err || new Error(msg || 'yargs command failed'));
       }
     });

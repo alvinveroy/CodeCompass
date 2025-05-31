@@ -366,8 +366,8 @@ describe('CLI with yargs (index.ts)', () => {
 
       // The new .fail() handler in test mode with VITEST_TESTING_FAIL_HANDLER will use console.error
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', startupError.message);
-      // It will also log to currentMockLoggerInstance.error via the YARGS_FAIL_HANDLER_INVOKED log
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
+      expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ hasErr: true, errMessage: startupError.message })
       );
@@ -485,7 +485,8 @@ describe('CLI with yargs (index.ts)', () => {
       await expect(runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}'])).rejects.toThrowError(spawnError);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', spawnError.message);
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
+      expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ hasErr: true, errMessage: spawnError.message })
       );
@@ -502,7 +503,8 @@ describe('CLI with yargs (index.ts)', () => {
       await expect(runMainWithArgs(['agent_query', '{"query":"test_server_exit"}'])).rejects.toThrowError(prematureExitError);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', prematureExitError.message);
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
+      expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ hasErr: true, errMessage: prematureExitError.message })
       );
@@ -522,9 +524,9 @@ describe('CLI with yargs (index.ts)', () => {
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Error: Invalid JSON parameters for tool 'agent_query'."));
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Details: Expected ',' or '}' after property value in JSON at position 16"));
       
-      // The .fail() handler will also log
+      // The .fail() handler will also log to console.error
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(expectedErrorMessage));
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ hasErr: true, errMessage: expect.stringContaining(expectedErrorMessage) })
       );
@@ -698,7 +700,8 @@ describe('CLI with yargs (index.ts)', () => {
       await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrow(expectedErrorMsg);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expectedErrorMsg);
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
+      expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ hasMsg: true, msgContent: expectedErrorMsg })
       );
@@ -712,7 +715,8 @@ describe('CLI with yargs (index.ts)', () => {
       await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrow(expectedErrorMsg);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expectedErrorMsg);
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
+      expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ hasMsg: true, msgContent: expectedErrorMsg })
       );
@@ -794,9 +798,9 @@ describe('CLI with yargs (index.ts)', () => {
 
       // The SUT's handleClientCommand error reporting for --json should output the rpcError.
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
-      // The .fail() handler will also log.
+      // The .fail() handler will also log to console.error.
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(rpcError.error.message));
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ hasErr: true, errMessage: expect.stringContaining(rpcError.error.message) })
       );
@@ -813,9 +817,9 @@ describe('CLI with yargs (index.ts)', () => {
       
       // SUT's handleClientCommand error reporting for --json
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name } }, null, 2));
-      // .fail() handler logging
+      // .fail() handler logging to console.error
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', genericError.message);
-      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ hasErr: true, errMessage: genericError.message })
       );
