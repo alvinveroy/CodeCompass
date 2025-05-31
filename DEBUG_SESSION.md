@@ -55,46 +55,39 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
     *   Commit `4b44e12` was applied, which should have defined `indexPath`.
 *   **Expected Result:**
     *   The `tsc` errors "Cannot find name 'indexPath'" in `src/index.ts` (previously on lines 474 and 566) should be resolved.
-*   **Attempt Number:** 104
-*   **Last Git Commit for this attempt's changes:** `496ac0d` ("docs: Update debug session log for attempt 103")
-*   **Intended Fixes (from Attempt 103, based on commit `042e405`):**
-    *   **Integration Test Mocking (`src/index.ts`, `src/tests/integration/stdio-client-server.integration.test.ts`):**
-        *   Introduced `CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING=true` env var.
-        *   Modified `src/index.ts` path logic (`isEffectiveVitestTesting`) to use this new variable.
-        *   Ensured `handleClientCommand` in `src/index.ts` also uses and propagates this env var.
-    *   **`repoPath` Argument Handling (`src/index.ts`):**
-        *   Refined `startServerHandler` to better prioritize positional `repoPath` arguments.
-    *   **Promise Rejection Issues (`src/tests/index.test.ts`):**
-        *   Ensured `runMainWithArgs` properly awaits `sutModule.main()`.
+*   **Attempt Number:** 105
+*   **Last Git Commit for this attempt's changes:** `2ea39d9` ("fix: Correct isVitestUnitTesting ref and fix proxy test timeouts")
+*   **Intended Fixes (from Attempt 104, based on commit `2ea39d9`):**
+    *   **`src/index.ts`:** Correct `isVitestUnitTesting` reference to `isEffectiveVitestTesting`.
+    *   **`src/tests/server.test.ts`:** Ensure `axios` is unmocked *before* `serverLibModule` import in `startProxyServer` suite's `beforeEach`.
 *   **Applied Changes:**
-    *   Commit `042e405` was applied.
-*   **Result (Based on User's `npm run build` Output after `042e405`):**
+    *   Commit `2ea39d9` was applied.
+*   **Result (Based on User's `npm run build` Output after `2ea39d9`):**
     *   **TypeScript Compilation (`tsc`):** FAILED.
         *   `src/index.ts:48:12 - error TS2304: Cannot find name 'isVitestUnitTesting'.`
+        *   This indicates the fix for `src/index.ts` was not effectively applied or the provided file content was outdated relative to the commit. The user-provided file content for `src/index.ts` (trusted as current) *still shows the error*.
     *   **Unit Tests (`src/tests/index.test.ts`):** 22/22 FAILED.
-        *   All tests fail with `ReferenceError: isVitestUnitTesting is not defined` originating from `src/index.ts:48:1`. This is a direct consequence of the `tsc` error.
+        *   All tests fail with `ReferenceError: isVitestUnitTesting is not defined` originating from `src/index.ts:48:1`, due to the `tsc` error.
     *   **Integration Tests (`src/tests/integration/stdio-client-server.integration.test.ts`):** 9/9 FAILED.
-        *   All tests fail with `McpError: MCP error -32000: Connection closed`. This is also likely due to the SUT (`src/index.ts`) crashing on startup because of the `isVitestUnitTesting` ReferenceError.
+        *   All tests fail with `McpError: MCP error -32000: Connection closed`. The SUT (`src/index.ts`) crashes on startup due to the `isVitestUnitTesting` ReferenceError.
     *   **Server Tests (`src/tests/server.test.ts`):** 4/28 FAILED.
-        *   The four `startProxyServer` tests are still timing out. This issue is likely independent of the `isVitestUnitTesting` error.
+        *   The four `startProxyServer` tests are still timing out. The `axios` unmocking fix *is* present in the user-provided `src/tests/server.test.ts`.
 *   **Analysis/Retrospection:**
-    *   The `isVitestUnitTesting` variable was removed or renamed to `isEffectiveVitestTesting` in `src/index.ts` during the previous set of changes (commit `042e405`), but one conditional block (`else if (isVitestUnitTesting || ccIntegrationTestSutMode)`) was missed and still references the old variable name. This is the root cause of the `tsc` failure and the subsequent crash of the SUT in all tests that execute `src/index.ts`.
-    *   The `startProxyServer` timeouts in `src/tests/server.test.ts` persist and need separate investigation, likely related to async operations or mock setups for `http.Server` or `axios` within that test suite.
-*   **Next Steps/Plan (Attempt 104):**
+    *   **Critical:** The `isVitestUnitTesting` ReferenceError in `src/index.ts` persists because the file content provided by the user (which is trusted as current) still contains the incorrect variable name. This must be fixed.
+    *   **`startProxyServer` Timeouts:** The `axios` unmocking order fix is confirmed to be in `src/tests/server.test.ts`. The continued timeouts suggest other issues. One likely candidate is the test `should start the proxy server, log info, and proxy /api/ping`, which appears to be missing a `nock` interceptor for the target server's `/api/ping` endpoint.
+*   **Next Steps/Plan (Attempt 105):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
     2.  **Fix `isVitestUnitTesting` ReferenceError (`src/index.ts`):**
-        *   Correct the conditional block in `src/index.ts` to use `isEffectiveVitestTesting` instead of the undefined `isVitestUnitTesting`.
-    3.  **Address `server.test.ts` Timeouts:**
-        *   In `src/tests/server.test.ts`, within the `startProxyServer` suite's `beforeEach` hook:
-            *   Ensure `axios` is unmocked (`vi.doUnmock('axios')`) *before* `serverLibModule` (which contains `startProxyServer`) is imported via `await import('../lib/server.js')`. This is critical because `startProxyServer` itself uses `axios` to make outgoing requests to the target server, and these should be real HTTP requests (intercepted by `nock` in the tests), not mocked `axios` calls.
-            *   The `serverLibModule` import should happen *after* `vi.doUnmock('axios')`.
-            *   The `nock.enableNetConnect((host) => host.startsWith('127.0.0.1') || host.startsWith('localhost'));` call should allow `axios` (now unmocked) to connect to the `nock` interceptors and the proxy server itself.
+        *   Re-apply the correction in `src/index.ts` to use `isEffectiveVitestTesting` instead of `isVitestUnitTesting`.
+    3.  **Address `server.test.ts` Timeouts (Further Investigation):**
+        *   Add the missing `nock` interceptor for the target server in the `should start the proxy server, log info, and proxy /api/ping` test within `src/tests/server.test.ts`.
+        *   If the `should resolve with null if findFreePort fails` test still times out after the `src/index.ts` fix (which might be affecting test runner stability), further specific diagnostics for that test will be needed.
     4.  **Verification:** User to run `npm run build` and provide the full output.
     5.  **Analyze new build output.**
 
 ### Blockers (Current)
-    *   **Critical:** `ReferenceError: isVitestUnitTesting is not defined` in `src/index.ts` causing `tsc` failure and all `index.test.ts` and `stdio-client-server.integration.test.ts` failures.
-    *   Timeouts in `src/tests/server.test.ts` for `startProxyServer` tests.
+    *   **Critical:** `ReferenceError: isVitestUnitTesting is not defined` in `src/index.ts` (based on user-provided file content).
+    *   Timeouts in `src/tests/server.test.ts` for `startProxyServer` tests, potentially due to missing nock interceptor in one test.
 
 ### Last Analyzed Commit
-    *   Git Commit SHA: `042e405` (Build output analyzed is from after this commit)
+    *   Git Commit SHA: `2ea39d9` (Build output analyzed is from after this commit)

@@ -1415,6 +1415,11 @@ describe('startProxyServer', () => {
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetExistingServerPort}.`));
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`This instance (CodeCompass Proxy) is running on port ${actualProxyListenPort}.`));
 
+    // Nock the target server for the /api/ping call
+    nock(`http://localhost:${targetExistingServerPort}`)
+      .get('/api/ping')
+      .reply(200, { service: "CodeCompassTarget", status: "ok_target_ping", version: "1.0.0" });
+
     // Use realAxiosInstance for the call TO the proxy
     const response = await realAxiosInstance.get(`http://localhost:${actualProxyListenPort}/api/ping`);
     expect(response.status).toBe(200);
