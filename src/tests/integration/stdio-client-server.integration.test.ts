@@ -269,10 +269,8 @@ describe('Stdio Client-Server Integration Tests', () => {
     const transportParams: StdioTransportParams = {
       command: process.execPath,
       args: [mainScriptPath, 'start', testRepoPath, '--port', '0', '--cc-integration-test-sut-mode'], // Add the flag
-      // Corrected: env is now top-level for StdioServerParameters used by StdioClientTransport
-      env: currentTestSpawnEnv,
-      // 'options' would be for other SpawnOptions if StdioServerParameters supports it directly
-      // options: { stdio: 'pipe' } // Example if 'options' was for general spawn options
+      env: currentTestSpawnEnv, // env is a direct property of StdioServerParameters
+      // options: { stdio: 'pipe' } // SpawnOptions like stdio are often handled by default or can be added if needed
     };
     transport = new StdioClientTransport(transportParams);
     client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });

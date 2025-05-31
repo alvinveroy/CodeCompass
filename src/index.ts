@@ -30,17 +30,20 @@ console.error(`[SUT_INDEX_TS_ENV_CHECK_TOP] NODE_ENV: ${process.env.NODE_ENV}, V
 const isPackaged = !!(process as unknown as { pkg?: unknown }).pkg;
 let libPath: string; // Declare libPath here
 let libPathBase: string; // Base directory for 'lib'
-let moduleFileExtensionForDynamicImports: string;
+// ALWAYS use .js for dynamic imports. Tests run against compiled output or Vitest handles .ts -> .js mapping.
+const moduleFileExtensionForDynamicImports = '.js';
 
 // Check for --cc-integration-test-sut-mode flag early
 const ccIntegrationTestSutMode = process.argv.includes('--cc-integration-test-sut-mode');
 
 if (ccIntegrationTestSutMode) {
-  console.error(`[SUT_INDEX_TS_MODE_DEBUG] --cc-integration-test-sut-mode detected. Forcing src paths and test mocks.`);
-  process.env.VITEST_WORKER_ID = 'integration_sut'; // Simulate test environment for path resolution
-  process.env.NODE_ENV = 'test';
+  console.error(`[SUT_INDEX_TS_MODE_DEBUG] --cc-integration-test-sut-mode detected. Forcing test mocks and NODE_ENV=test.`);
+  // process.env.VITEST_WORKER_ID = 'integration_sut'; // No longer needed to force .ts, SUT always uses .js
+  process.env.NODE_ENV = 'test'; // Ensure test configurations are loaded
   process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_LLM = 'true';
   process.env.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT = 'true';
+  // If VITEST_WORKER_ID was set by the test runner, it will persist.
+  // If not, this mode still implies a test-like environment for mocks.
 }
 
 // Prominent logging for initial state
@@ -48,24 +51,25 @@ console.error(
   `[SUT_INDEX_TS_PATH_INIT_DEBUG] __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, CC_INT_TEST_MODE: ${ccIntegrationTestSutMode}`
 );
 
-if (process.env.VITEST_WORKER_ID) { // This will now also be true if --cc-integration-test-sut-mode was passed
-  // Running in Vitest worker or forced integration test SUT mode, source files are in 'src' relative to project root (process.cwd())
-  libPathBase = path.resolve(process.cwd(), 'src');
-  moduleFileExtensionForDynamicImports = '.ts';
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID is set. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
-} else if (isPackaged) {
-  // Running as a packaged executable, 'lib' is relative to the executable's directory
+// Determine libPathBase for dynamic imports.
+// All dynamic imports should target compiled '.js' files, typically in 'dist/lib'.
+
+if (isPackaged) {
+  // Packaged app: 'lib' is relative to the executable's directory.
   libPathBase = path.dirname(process.execPath);
-  moduleFileExtensionForDynamicImports = '.js';
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPathBase for imports: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+} else if (process.env.VITEST_WORKER_ID || ccIntegrationTestSutMode) {
+  // Test environment (unit or integration SUT mode):
+  // Even if Vitest runs src/index.ts, dynamic imports should target 'dist/lib'
+  // because that's where the compiled dependent modules reside.
+  libPathBase = path.resolve(process.cwd(), 'dist');
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: VITEST_WORKER_ID or ccIntegrationTestSutMode is set. libPathBase for imports: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
 } else {
-  // Default: running compiled .js from 'dist' (e.g., node dist/index.js)
-  // In this case, __dirname is /path/to/project/dist
+  // Standard execution (e.g., `node dist/index.js`): __dirname is project/dist.
   libPathBase = __dirname;
-  moduleFileExtensionForDynamicImports = '.js';
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Fallback (likely node dist/index.js). libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Standard execution (e.g., node dist/index.js). libPathBase for imports: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
 }
-libPath = path.join(libPathBase, 'lib'); // libPath will be project/src/lib or project/dist/lib or <executable_dir>/lib
+libPath = path.join(libPathBase, 'lib'); // Ensures imports are from 'dist/lib' or equivalent.
 
 console.error(`[SUT_INDEX_TS_LIBPATH_FINAL] Final libPath: ${libPath}, Final ext: ${moduleFileExtensionForDynamicImports}, __dirname: ${__dirname}, CWD: ${process.cwd()}, isPackaged: ${isPackaged}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
 
