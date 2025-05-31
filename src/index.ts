@@ -695,7 +695,6 @@ export async function main() { // Add export
       } catch (e) {
         console.error("[SUT_INDEX_TS_DEBUG] Failed to load logger in .fail(), using console.error", e);
       }
-
       // Define these constants first
       const isTestEnvForFail = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
       const isVitestTestingFailHandlerScenario = process.env.VITEST_TESTING_FAIL_HANDLER === 'true';
@@ -703,37 +702,32 @@ export async function main() { // Add export
       failLogger.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
         hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
         hasErr: !!err, errName: err?.name, errMessage: err?.message,
-        isTestEnvForFail, isVitestTestingFailHandlerScenario // Added these
+        isTestEnvForFail, isVitestTestingFailHandlerScenario
       });
 
-      const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID; // Original definition remains for now
-
-      if (isTestEnv) { // Original condition remains for now
-        // In test environments, always log the error/message for debugging.
-        if (err) {
-          failLogger.error('CLI Error (yargs.fail in test mode):', err);
-        } else if (msg) {
-          failLogger.error('CLI Usage Error (yargs.fail in test mode):', msg);
+      if (isTestEnvForFail) {
+        // In test environments (Vitest worker or NODE_ENV=test), ensure errors are thrown to reject parseAsync()
+        if (isVitestTestingFailHandlerScenario) {
+          // For tests that specifically set VITEST_TESTING_FAIL_HANDLER, use console.error for easier spy verification
+          console.error('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', err ? (err.message || msg) : msg);
+        } else {
+          // General test environment logging
+          (err ? failLogger.error : failLogger.warn)('Yargs validation/parse error in generic test context:', err || msg);
         }
-        // Crucially, if an error object exists, throw it to make parseAsync() reject.
-        // If only a message exists (yargs validation/usage error), yargs with exitProcess(false) should throw it.
-        // If yargs doesn't throw for msg-only, this throw will ensure rejection.
-        if (err) {
-          throw err;
-        } else if (msg) {
-          // yargs should throw an error for msg when exitProcess(false) is true.
-          // If it doesn't, throwing new Error(msg) here ensures rejection.
-          throw new Error(msg);
-        }
+        // Always throw to ensure parseAsync() rejects, which test assertions expect.
+        // Prioritize the actual Error object if available.
+        if (err) throw err;
+        throw new Error(msg || 'yargs validation failed in test environment');
       } else {
-        // Default behavior for actual CLI execution (not in a test environment)
+        // Production/normal CLI execution behavior
         yargsInstance.showHelp();
         const errorMessage = err ? (err.message || msg) : msg;
         if (errorMessage) {
           failLogger.error(`\nError: ${errorMessage}`);
-          console.error(`\nError: ${errorMessage}`); // Also to raw stderr
+          console.error(`\nError: ${errorMessage}`); // Also to raw stderr for visibility
         }
-        process.exit(1); // Explicitly exit for non-test environments
+        // Use yargsInstance.exit() for proper yargs exit handling in non-test scenarios
+        yargsInstance.exit(1, err || new Error(msg || 'yargs command failed'));
       }
     });
 
