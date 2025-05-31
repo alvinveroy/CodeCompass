@@ -685,7 +685,12 @@ export async function main() { // Add export
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
     .strict() // Error on unknown options/commands
     .fail(async (msg, err, yargsInstance) => {
-      let failLogger: { error: (...args: any[]) => void } = console;
+      let failLogger: { 
+        error: (...args: any[]) => void; 
+        warn: (...args: any[]) => void;
+        info: (...args: any[]) => void;
+        debug: (...args: any[]) => void;
+      } = console;
       try {
         const loggerModuleFilenameForFail = `config-service${moduleFileExtensionForDynamicImports}`;
         const loggerModulePathForFail = path.join(libPath, loggerModuleFilenameForFail);
