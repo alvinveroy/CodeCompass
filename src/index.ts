@@ -580,9 +580,9 @@ export async function main() { // Add export
     )
     .scriptName("codecompass") // Set script name for help output
     .command(
-      // Default command for starting the server
-      ['start [repoPath]', '$0 [repoPath]'],
-      'Start the CodeCompass server (default command)',
+      // Default command for starting the server when a path is provided, or no command.
+      '$0 [repoPath]',
+      'Start the CodeCompass server (default command if repoPath is given or no command specified). Use "start" command for explicit start.',
       (yargsInstance) => {
         return yargsInstance.positional('repoPath', {
           type: 'string',
@@ -596,6 +596,21 @@ export async function main() { // Add export
         // eslint-disable-next-line no-console
         console.log('[INDEX_TS_DEBUG] Default/Start command handler INVOKED');
         // Pass the module-scoped `indexPath` to `startServerHandler`
+        await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
+      }
+    )
+    .command(
+      'start [repoPath]',
+      'Explicitly start the CodeCompass server.',
+      (yargsInstance) => {
+        return yargsInstance.positional('repoPath', {
+          type: 'string',
+          default: '.',
+          describe: 'Path to the git repository to serve',
+        });
+      },
+      async (argv) => {
+        console.log('[INDEX_TS_DEBUG] "start" command handler INVOKED');
         await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
       }
     );

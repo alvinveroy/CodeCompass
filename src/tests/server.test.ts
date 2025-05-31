@@ -1385,17 +1385,21 @@ describe('startProxyServer', () => {
   });
 
   it('should resolve with null if findFreePort fails', async () => {
-    const findFreePortError = new Error("No free ports available.");
-    // Override the default mock for this specific test case
-    findFreePortSpy.mockRejectedValueOnce(findFreePortError);
+    const findFreePortError = new Error("No free ports available from mock.");
+    findFreePortSpy.mockRejectedValueOnce(findFreePortError); // Ensure this mock is active
+
+    // Add a log to confirm the spy is set up
+    console.log('[TEST_DEBUG] findFreePortSpy is mocked to reject for "should resolve with null if findFreePort fails"');
 
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
+    
     expect(proxyServerHttpInstance).toBeNull();
-    // Adjust assertion to match current SUT logging (single string message)
     expect(ml.error).toHaveBeenCalledWith(
-      `[ProxyServer] Failed to find free port for proxy: ${findFreePortError.message}`
+      `[ProxyServer] Failed to find free port for proxy: ${findFreePortError.message}`,
+      // The SUT logs an object as the second argument if errorDetails are present
+      expect.objectContaining({ errorDetails: findFreePortError }) 
     );
-  }, 30000); // Increased timeout
+  }, 5000); // Reduced timeout as this should be quick if findFreePort rejects promptly
 
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
     // findFreePortSpy is already mocked in beforeEach to resolve with proxyListenPort
@@ -1421,11 +1425,11 @@ describe('startProxyServer', () => {
       .reply(200, { service: "CodeCompassTarget", status: "ok_target_ping", version: "1.0.0" });
 
     // Use realAxiosInstance for the call TO the proxy
-    const response = await realAxiosInstance.get(`http://localhost:${actualProxyListenPort}/api/ping`);
+    const response = await realAxiosInstance.get(`http://127.0.0.1:${actualProxyListenPort}/api/ping`); // Use 127.0.0.1 for consistency
     expect(response.status).toBe(200);
     expect(response.data).toEqual({ service: "CodeCompassTarget", status: "ok_target_ping", version: "1.0.0" });
     expect(nock.isDone()).toBe(true); // Nock for targetExistingServerPort should be consumed
-  }, 30000); // Increased timeout
+  }, 5000); // Reduced timeout
 
   it('should handle target server unreachable for /mcp', async () => {
     // findFreePortSpy is mocked in beforeEach
@@ -1460,7 +1464,7 @@ describe('startProxyServer', () => {
       })
     );
     expect(nock.isDone()).toBe(true);
-  }, 30000); // Increased timeout
+  }, 5000); // Reduced timeout
   
   it('should forward target server 500 error for /mcp', async () => {
     // findFreePortSpy is mocked in beforeEach
@@ -1486,7 +1490,7 @@ describe('startProxyServer', () => {
       expect(error.response.data).toEqual(errorBody);
     }
     expect(nock.isDone()).toBe(true);
-  }, 30000); // Increased timeout
+  }, 5000); // Reduced timeout
 });
 
 describe('MCP Tool Relaying', () => {

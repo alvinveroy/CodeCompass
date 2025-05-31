@@ -1680,25 +1680,53 @@ export async function startProxyServer(
   logger.info(`[PROXY_DEBUG] startProxyServer: Attempting to start proxy. Requested main port: ${requestedPort}, Target existing server port: ${targetServerPort}`);
   
   let proxyListenPort: number;
-  try {
-    // Determine a suitable starting port for the proxy to avoid collision
-    const initialPortForProxySearch = requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50;
-    logger.info(`[PROXY_DEBUG] startProxyServer: Initial port for proxy search: ${initialPortForProxySearch}`);
-    
-    proxyListenPort = await findFreePort(initialPortForProxySearch);
-    logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
-  } catch (error) { // This catch block is specifically for errors from findFreePort
-    const err = error instanceof Error ? error : new Error(String(error));
-    // Log the specific error from findFreePort
-    logger.error(`[ProxyServer] Failed to find free port for proxy: ${err.message}`, { errorDetails: err }); // Changed log message slightly for clarity
-    return null; // Resolve the main startProxyServer promise with null
-  }
-
-  // If findFreePort succeeded, proceed to create and listen on the proxy server
-  // This part is now outside the initial try-catch for findFreePort
-  return new Promise<http.Server | null>((resolveProxyListen, rejectProxyListen) => {
+  // Wrap the entire logic in a promise to handle findFreePort rejection properly
+  return new Promise<http.Server | null>(async (resolveOuter, rejectOuter) => {
     try {
-      const app = express();
+      // Determine a suitable starting port for the proxy to avoid collision
+      const initialPortForProxySearch = requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50;
+      logger.info(`[PROXY_DEBUG] startProxyServer: Initial port for proxy search: ${initialPortForProxySearch}`);
+      
+      proxyListenPort = await findFreePort(initialPortForProxySearch);
+      logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
+    } catch (error) { // This catch block is specifically for errors from findFreePort
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[ProxyServer] Failed to find free port for proxy: ${err.message}`, { errorDetails: err });
+      resolveOuter(null); // Resolve the main startProxyServer promise with null
+      return; // Exit the async function for the outer promise
+    }
+
+    // If findFreePort succeeded, proceed to create and listen on the proxy server
+    // This part is now inside the main try-catch for the outer promise
+    // No, this new Promise is for the listen part specifically.
+    // The outer promise handles findFreePort.
+    // Let's keep the structure where findFreePort error directly returns null from startProxyServer.
+    // The issue might be that the original startProxyServer wasn't async, or the promise wasn't returned.
+    // The current structure with `return new Promise` for the listen part is fine if findFreePort is awaited first.
+
+    // The previous structure was:
+    // try { proxyListenPort = await findFreePort... } catch { return null; }
+    // return new Promise((resolveProxyListen, rejectProxyListen) => { /* app setup */ });
+    // This is correct. The timeout implies the inner new Promise for listen is not resolving/rejecting.
+
+    // The current structure for the listen part:
+    // return new Promise<http.Server | null>((resolveProxyListen, rejectProxyListen) => {
+    //   try { /* app setup and proxyHttpServer.listen */ } catch (error) { rejectProxyListen(error) }
+    // });
+    // This seems fine. The timeout must be within the listen callback or nock/axios interactions.
+
+    // No changes needed here based on the current analysis for findFreePort rejection,
+    // as the existing `catch` block for `findFreePort` already returns `null`.
+    // The timeouts are more likely related to the `proxyHttpServer.listen` or subsequent `axios` calls.
+
+    // For robustness, ensure the listen promise itself has a timeout or clear rejection path.
+    // The `proxyHttpServer.on('error', ...)` handles listen errors.
+    // The `proxyHttpServer.listen(..., () => { resolveProxyListen(...) })` handles success.
+    // This part seems okay. The problem is likely in the tests' interaction or nock.
+
+    // Let's proceed with the existing structure for the listen promise.
+    // The primary fix for "resolve with null if findFreePort fails" is in the test's mock of findFreePort.
+    const app = express();
     app.use('/mcp', express.raw({ type: '*/*', limit: '50mb' })); // For MCP JSON-RPC
 
     // Proxy MCP requests
