@@ -34,19 +34,22 @@ const isVitestUnitTesting = !!process.env.VITEST_WORKER_ID && !ccIntegrationTest
 
 let libPathBase: string;
 let moduleFileExtensionForDynamicImports: string;
+let indexPath: string; // Declare indexPath
 
 if (isPackaged) {
   // Packaged app: 'lib' is relative to the executable's directory.
   libPathBase = path.dirname(process.execPath);
   moduleFileExtensionForDynamicImports = '.js';
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+  indexPath = process.execPath; // The packaged executable itself is the main script
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: isPackaged. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}, indexPath: ${indexPath}`);
 } else if (isVitestUnitTesting || ccIntegrationTestSutMode) {
   // Running src/index.ts via tsx (either by runMainWithArgs for unit tests, or by integration test spawn)
   // __dirname when running 'tsx src/index.ts' from project root is 'project_root/src'
   // process.cwd() is project_root
   libPathBase = path.resolve(process.cwd(), 'src'); // Imports will be from src/lib
   moduleFileExtensionForDynamicImports = '.ts'; // Dynamically import .ts files
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Vitest unit test or Integration SUT mode. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+  indexPath = path.resolve(process.cwd(), 'src', 'index.ts'); // Path to the source script
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Vitest unit test or Integration SUT mode. libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}, indexPath: ${indexPath}`);
   if (ccIntegrationTestSutMode) {
     console.error(`[SUT_INDEX_TS_MODE_DEBUG] --cc-integration-test-sut-mode detected. Forcing test mocks and NODE_ENV=test.`);
     process.env.NODE_ENV = 'test';
@@ -57,7 +60,8 @@ if (isPackaged) {
   // Standard execution (e.g., node dist/index.js): __dirname is project/dist.
   libPathBase = __dirname; // Imports will be from dist/lib
   moduleFileExtensionForDynamicImports = '.js';
-  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Standard execution (e.g., node dist/index.js). libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}`);
+  indexPath = path.resolve(__dirname, 'index.js'); // Path to the dist script
+  console.error(`[SUT_INDEX_TS_LIBPATH_DEBUG] Condition: Standard execution (e.g., node dist/index.js). libPathBase: ${libPathBase}, ext: ${moduleFileExtensionForDynamicImports}, indexPath: ${indexPath}`);
 }
 const libPath = path.join(libPathBase, 'lib');
 
