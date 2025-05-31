@@ -10,11 +10,15 @@ let actualConfigServiceForMock: typeof import('../../lib/config-service').config
 
 // CustomStdioClientTransportOptions interface removed as it's no longer used.
 
-// Interface for StdioClientTransport constructor parameters
+// Interface for StdioClientTransport constructor parameters,
+// matching the structure expected by the SDK's StdioClientTransport (StdioServerParameters).
 interface StdioTransportParams {
   command: string;
   args?: string[];
-  options?: SpawnOptions;
+  env?: NodeJS.ProcessEnv; // Environment variables for the spawned process
+  stderr?: 'pipe' | 'inherit' | 'ignore' | NodeJS.WritableStream | number; // How to handle stderr
+  cwd?: string; // Current working directory for the spawned process
+  // Note: `options` for `cross-spawn` is handled internally by the SDK's transport.
 }
 
 // Local interface for StdioClientTransport options when spawning a process
@@ -266,13 +270,14 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Specifically log the QDRANT mock env var that will be part of the spawned SUT's environment
     console.log(`[INTEGRATION_TEST_ENV_PRE_SPAWN_CHECK] MOCK_QDRANT: ${currentTestSpawnEnv.CODECOMPASS_INTEGRATION_TEST_MOCK_QDRANT}`);
 
+    // Construct parameters according to the updated StdioTransportParams interface
+    // and the SDK's StdioClientTransport constructor requirements.
     const transportParams: StdioTransportParams = {
-      command: 'npx', // Use npx to run tsx
-      args: ['tsx', path.resolve(__dirname, '../../../src/index.ts'), 'start', testRepoPath, '--port', '0', '--cc-integration-test-sut-mode'], // Add the flag
-      options: {
-        env: currentTestSpawnEnv, // env is nested under options
-        stdio: 'pipe' // Explicitly set stdio if needed by StdioClientTransport or for debugging
-      }
+        command: 'npx',
+        args: ['tsx', path.resolve(__dirname, '../../../src/index.ts'), 'start', testRepoPath, '--port', '0', '--cc-integration-test-sut-mode'],
+        env: currentTestSpawnEnv, // `env` is a direct property
+        stderr: 'pipe'            // `stderr` is a direct property, controls how SDK handles stderr for cross-spawn
+        // `cwd` could be added here if needed: cwd: process.cwd(),
     };
     transport = new StdioClientTransport(transportParams);
     client = new MCPClient({ name: "integration-test-client", version: "0.1.0" });
