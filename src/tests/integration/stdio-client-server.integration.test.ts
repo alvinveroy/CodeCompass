@@ -10,16 +10,11 @@ let actualConfigServiceForMock: typeof import('../../lib/config-service').config
 
 // CustomStdioClientTransportOptions interface removed as it's no longer used.
 
-// Interface for StdioClientTransport constructor parameters,
-// matching the structure expected by the SDK's StdioClientTransport (StdioServerParameters).
-interface StdioTransportParams {
-  command: string;
-  args?: string[];
-  env?: NodeJS.ProcessEnv; // Environment variables for the spawned process
-  stderr?: 'pipe' | 'inherit' | 'ignore' | NodeJS.WritableStream | number; // How to handle stderr
-  cwd?: string; // Current working directory for the spawned process
-  // Note: `options` for `cross-spawn` is handled internally by the SDK's transport.
-}
+// The local StdioTransportParams interface has been removed as it was unused and
+// its definition (especially for `env`) was inconsistent with the actual
+// structure being passed to StdioClientTransport and potentially confusing type inference.
+// The `transportParams` object is now inferred directly from its structure,
+// which should align with the SDK's StdioServerParameters.
 
 // Local interface for StdioClientTransport options when spawning a process
 // interface MyStdioClientTransportOptions { // This interface is no longer needed
