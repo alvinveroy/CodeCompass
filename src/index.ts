@@ -642,6 +642,21 @@ export async function main() { // Add export
   }
   console.error(`[SUT_INDEX_TS_YARGS_PREP_DEBUG] Final arguments for yargs: ${JSON.stringify(argsForYargs)}`);
 
+  let critLogger = { error: (...args: any[]) => console.error(...args) }; // Default to console.error
+  let failLogger = critLogger; // Initialize failLogger, will be updated by middleware if logger changes
+  let sutIndexLogger = critLogger; // Initialize sutIndexLogger
+
+  try {
+    // Dynamic import for logger
+    const configServiceModule = await import(path.join(libPath, `config-service${moduleFileExtensionForDynamicImports}`)) as typeof import('./lib/config-service');
+    critLogger = configServiceModule.logger;
+    failLogger = configServiceModule.logger; 
+    sutIndexLogger = configServiceModule.logger;
+    sutIndexLogger.info('[SUT_INDEX_TS_MAIN_DEBUG] Using mainLogger for SUT index operations.');
+  } catch (e) {
+    console.error('[SUT_INDEX_TS_MAIN_DEBUG] Failed to import logger, defaulting to console.error:', e);
+  }
+
   const cli = yargs(argsForYargs);
 
   // Configure yargs instance for testability (e.g., prevent exit)
