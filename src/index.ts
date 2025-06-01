@@ -774,8 +774,8 @@ export async function main() { // Add export
     // Require a command to be specified, or $0 will handle it.
     // The message appears if too many commands are given or if parsing fails before a command is identified.
     .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
-    .strict() // Error on unknown options
     .strictCommands(true) // Report errors for unknown commands
+    .strict() // Error on unknown options
     .fail((msg, err, yargsInstance) => { // Made synchronous: removed async, removed await import for logger
       // Use console.error for logging in .fail() as dynamic import of main logger is async.
       // Tests can spy on console.error.
