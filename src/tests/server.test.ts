@@ -1358,7 +1358,7 @@ describe('startProxyServer', () => {
     // This mock is specific to the 'startProxyServer' describe block.
     vi.mocked(http.createServer).mockImplementation((requestListener?: http.RequestListener) => {
       const EventEmitter = (require('events') as { EventEmitter: typeof import('events.EventEmitter')}).EventEmitter;
-      const serverInstance = new EventEmitter() as unknown as MockedHttpServer & { 
+      const serverInstance = new EventEmitter() as MockedHttpServer & { 
         _storedPort?: number; 
         _storedHost?: string;
         _listenShouldError?: NodeJS.ErrnoException | null;
@@ -1389,22 +1389,28 @@ describe('startProxyServer', () => {
            actualCallback = portOrPathOrOptions;
         }
 
-
         serverInstance._storedPort = portToListen ?? 0;
         serverInstance._storedHost = hostToListen;
 
+        // Ensure the callback is called before 'listening' is emitted for findFreePort logic
         process.nextTick(() => {
           if (serverInstance._listenShouldError) {
+            // If there's an error to simulate, emit it.
             serverInstance.emit('error', serverInstance._listenShouldError);
+            // If it's not EADDRINUSE, still call the callback as real http.Server might.
             if (actualCallback && serverInstance._listenShouldError.code !== 'EADDRINUSE') {
                actualCallback();
             }
+            // If it was EADDRINUSE, we typically don't emit 'listening' or call callback.
+            // The 'error' event is primary for findFreePort to detect EADDRINUSE.
             if (serverInstance._listenShouldError.code === 'EADDRINUSE') return;
           }
           
+          // If no error, or error was not EADDRINUSE and callback was called:
           if (actualCallback && !serverInstance._listenShouldError) {
             actualCallback();
           }
+          // Emit 'listening' only if no critical error (like EADDRINUSE) occurred.
           if (!serverInstance._listenShouldError) {
             serverInstance.emit('listening');
           }
@@ -1415,7 +1421,8 @@ describe('startProxyServer', () => {
       serverInstance.close = vi.fn((cb?: (err?: Error) => void) => {
         process.nextTick(() => {
           if (serverInstance._closeShouldError) {
-            serverInstance.emit('error', serverInstance._closeShouldError);
+            // Emit error first if one is set for close
+            serverInstance.emit('error', serverInstance._closeShouldError); 
             if (cb) cb(serverInstance._closeShouldError);
           } else {
             serverInstance.emit('close');
@@ -1430,7 +1437,6 @@ describe('startProxyServer', () => {
         return { port: serverInstance._storedPort, address: serverInstance._storedHost || '127.0.0.1', family: 'IPv4' };
       });
       
-      // Standard EventEmitter methods are inherited, but if specific mock behavior is needed:
       serverInstance.on = vi.fn(serverInstance.on.bind(serverInstance));
       serverInstance.once = vi.fn(serverInstance.once.bind(serverInstance));
       serverInstance.emit = vi.fn(serverInstance.emit.bind(serverInstance));
