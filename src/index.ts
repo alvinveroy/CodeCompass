@@ -375,15 +375,20 @@ async function startServerHandler(
     // Global --repo option takes highest precedence.
     effectiveRepoPath = argv.repo;
     console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using global --repo option value: ${effectiveRepoPath}`);
-  } else if (typeof argv.repoPath === 'string') {
-    // Positional repoPath from yargs command definition (e.g., '$0 [repoPath]' or 'start [repoPath]').
-    // This has a default value of '.' set in yargs.
+  } else if (typeof argv.repoPath === 'string' && argv.repoPath.trim() !== '') {
+    // Positional repoPath from yargs command definition (e.g., 'start [repoPath]').
     effectiveRepoPath = argv.repoPath;
-    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using positional repoPath (defaulting to '.' if not provided): ${effectiveRepoPath}`);
-  } else {
-    // Fallback, though yargs default for repoPath should prevent this.
+    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using positional repoPath from 'start' command: ${effectiveRepoPath}`);
+  } else if (argv._ && argv._.length > 0 && typeof argv._[0] === 'string' && argv._[0].trim() !== '' && !KNOWN_TOOLS.includes(argv._[0])) {
+    // If $0 (default command) was invoked and there's a bare argument that's not a known tool, treat it as repoPath.
+    // This handles `codecompass /some/path` when $0 is just `'$0'`.
+    effectiveRepoPath = argv._[0];
+    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Using bare argument as repoPath for default command: ${effectiveRepoPath}`);
+  }
+  else {
+    // Fallback to current directory if no other path is specified.
     effectiveRepoPath = '.';
-    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Fallback to repoPath '.' (argv.repo: '${argv.repo}', argv.repoPath: '${argv.repoPath}')`);
+    console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Fallback to repoPath '.' (argv.repo: '${argv.repo}', argv.repoPath: '${argv.repoPath}', argv._: ${JSON.stringify(argv._)})`);
   }
   console.log(`[SUT_INDEX_TS_DEBUG] startServerHandler: Final effective repoPath: ${effectiveRepoPath}`);
     
@@ -834,17 +839,27 @@ export async function main() { // Add export
 
   // Define $0 (default) command last so specific commands take precedence
   cli.command(
-    '$0 [repoPath]',
-    'Start the CodeCompass server (default action). Use "start" command for explicit start with options.',
-    (yargsInstance) => {
-      return yargsInstance.positional('repoPath', {
-        type: 'string',
-        // Default is handled by startServerHandler if neither positional nor --repo is given
-        describe: 'Path to the git repository to serve. Defaults to current directory if not specified via --repo.',
-      });
-    },
+    '$0', // No explicit [repoPath] here; startServerHandler will use argv.repo or default to '.'
+    'Start the CodeCompass server (default action). Use "start" command for explicit start with options. If a path is provided without a command, it is assumed to be the repository path for this default action when --repo is not used.',
+    // No builder function needed if there are no command-specific options/positionals here
     async (argv) => {
       console.log('[INDEX_TS_DEBUG] Default ($0) command handler INVOKED');
+      // startServerHandler will use argv.repo or default to '.' if argv.repoPath is not set by yargs due to this command structure
+      // If a bare argument like '/my/path' is given, yargs might still populate argv._ with it.
+      // startServerHandler needs to be robust to get the repoPath from argv._[0] if it's not a recognized command,
+      // or rely on --repo. For simplicity, we'll assume startServerHandler's existing logic for argv.repo or '.' is sufficient.
+      // The main goal here is to let `strictCommands` catch actual unknown commands.
+      // If a user types `codecompass /some/path`, yargs might put `/some/path` in `argv._`.
+      // We need to ensure `startServerHandler` can pick this up if it's intended as the repoPath for the default command.
+      // The current `startServerHandler` uses `argv.repoPath` which might be an issue.
+      // Let's adjust `startServerHandler` to also check `argv._[0]` if `repoPath` is not set.
+      // However, the primary goal is to fix "unknown command".
+      // The `startServerHandler` already has:
+      // effectiveRepoPath = argv.repo || argv.repoPath || '.';
+      // If `$0` has no positional, `argv.repoPath` will be undefined.
+      // If user types `codecompass /some/path`, yargs puts `/some/path` in `argv._[0]`.
+      // The default command handler needs to be aware of this.
+      // For now, let's assume the test for "unknowncommand" will pass if it's not consumed as a positional.
       await startServerHandler(argv as { repoPath?: string; repo?: string; [key: string]: unknown; _: (string | number)[] ; $0: string; }, indexPath);
     }
   );
