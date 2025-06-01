@@ -841,7 +841,7 @@ export async function main() { // Add export
   cli.command(
     '$0', // No explicit [repoPath] here; startServerHandler will use argv.repo or default to '.'
     'Start the CodeCompass server (default action). Use "start" command for explicit start with options. If a path is provided without a command, it is assumed to be the repository path for this default action when --repo is not used.',
-    // No builder function needed if there are no command-specific options/positionals here
+    (yargsInstance) => yargsInstance, // Add empty builder to help TypeScript infer argv type correctly
     async (argv) => {
       console.log('[INDEX_TS_DEBUG] Default ($0) command handler INVOKED');
       // startServerHandler will use argv.repo or default to '.' if argv.repoPath is not set by yargs due to this command structure
