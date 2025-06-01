@@ -1356,93 +1356,90 @@ describe('startProxyServer', () => {
 
     // Ensure the http.createServer mock used by startProxyServer behaves asynchronously for listen and close
     // This mock is specific to the 'startProxyServer' describe block.
-    vi.mocked(http.createServer).mockImplementation(() => {
-      const serverInstance = {
-        _listeners: {} as Record<string, ((...args: any[]) => void) | ((...args: any[]) => void)[] | undefined>,
-        _port: null as number | null,
-        _host: null as string | null,
-        listen: vi.fn(function(this: any, portOrPathOrOptions: any, hostOrCb?: any, backlogOrCb?: any, cb?: any) {
-          let portToListen: number | undefined;
-          let hostToListen: string | undefined = '127.0.0.1'; // Default host for listen
-          let actualCallback: (() => void) | undefined;
+    vi.mocked(http.createServer).mockImplementation((requestListener?: http.RequestListener) => {
+      const EventEmitter = (require('events') as { EventEmitter: typeof import('events.EventEmitter')}).EventEmitter;
+      const serverInstance = new EventEmitter() as unknown as MockedHttpServer & { 
+        _storedPort?: number; 
+        _storedHost?: string;
+        _listenShouldError?: NodeJS.ErrnoException | null;
+        _closeShouldError?: Error | null;
+        requestListener?: http.RequestListener;
+      };
+      
+      serverInstance.requestListener = requestListener;
 
-          if (typeof portOrPathOrOptions === 'number') {
-            portToListen = portOrPathOrOptions;
-            if (typeof hostOrCb === 'string') {
-              hostToListen = hostOrCb;
-              if (typeof backlogOrCb === 'function') actualCallback = backlogOrCb;
-              else if (typeof cb === 'function') actualCallback = cb;
-            } else if (typeof hostOrCb === 'function') {
-              actualCallback = hostOrCb;
+      serverInstance.listen = vi.fn((portOrPathOrOptions: any, arg2?: any, arg3?: any, arg4?: any) => {
+        let portToListen: number | undefined;
+        let hostToListen: string | undefined = '127.0.0.1';
+        let actualCallback: (() => void) | undefined;
+
+        if (typeof portOrPathOrOptions === 'number') {
+          portToListen = portOrPathOrOptions;
+          if (typeof arg2 === 'string') {
+            hostToListen = arg2;
+            actualCallback = typeof arg3 === 'function' ? arg3 : (typeof arg4 === 'function' ? arg4 : undefined);
+          } else if (typeof arg2 === 'function') {
+            actualCallback = arg2;
+          }
+        } else if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) {
+          portToListen = (portOrPathOrOptions as import('net').ListenOptions).port;
+          hostToListen = (portOrPathOrOptions as import('net').ListenOptions).host || hostToListen;
+          actualCallback = typeof arg2 === 'function' ? arg2 : undefined;
+        } else if (typeof portOrPathOrOptions === 'function') {
+           actualCallback = portOrPathOrOptions;
+        }
+
+
+        serverInstance._storedPort = portToListen ?? 0;
+        serverInstance._storedHost = hostToListen;
+
+        process.nextTick(() => {
+          if (serverInstance._listenShouldError) {
+            serverInstance.emit('error', serverInstance._listenShouldError);
+            if (actualCallback && serverInstance._listenShouldError.code !== 'EADDRINUSE') {
+               actualCallback();
             }
-          } else if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) {
-            portToListen = (portOrPathOrOptions as import('net').ListenOptions).port;
-            hostToListen = (portOrPathOrOptions as import('net').ListenOptions).host || hostToListen;
-            if (typeof hostOrCb === 'function') actualCallback = hostOrCb;
+            if (serverInstance._listenShouldError.code === 'EADDRINUSE') return;
           }
           
-          this._port = portToListen ?? null;
-          this._host = hostToListen ?? null;
+          if (actualCallback && !serverInstance._listenShouldError) {
+            actualCallback();
+          }
+          if (!serverInstance._listenShouldError) {
+            serverInstance.emit('listening');
+          }
+        });
+        return serverInstance;
+      });
 
-          process.nextTick(() => {
-            // Emit 'listening' event
-            if (typeof this.emit === 'function') {
-              this.emit('listening');
-            }
-            // Call direct callback if provided
-            if (actualCallback) actualCallback();
-          });
-          return this; 
-        }),
-        on: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
-          if (!this._listeners[event]) {
-            this._listeners[event] = [];
-          }
-          const listenersArray = this._listeners[event] as ((...args: any[]) => void)[];
-          if (!Array.isArray(listenersArray)) { // Should not happen if initialized as array
-            this._listeners[event] = [callback];
+      serverInstance.close = vi.fn((cb?: (err?: Error) => void) => {
+        process.nextTick(() => {
+          if (serverInstance._closeShouldError) {
+            serverInstance.emit('error', serverInstance._closeShouldError);
+            if (cb) cb(serverInstance._closeShouldError);
           } else {
-            listenersArray.push(callback);
-          }
-          return this;
-        }),
-        once: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
-          const onceWrapper = (...args: any[]) => {
-            const listenersArray = this._listeners[event] as ((...args: any[]) => void)[];
-            if (Array.isArray(listenersArray)) {
-              this._listeners[event] = listenersArray.filter(fn => fn !== onceWrapper);
-            }
-            callback(...args);
-          };
-          this.on(event, onceWrapper);
-          return this;
-        }),
-        address: vi.fn(function(this: any) {
-          if (this._port !== null) {
-            return { port: this._port, address: this._host || '127.0.0.1', family: 'IPv4' };
-          }
-          return null;
-        }),
-        close: vi.fn(function(this: any, cb?: (err?: Error) => void) { 
-          process.nextTick(() => {
-            if (typeof this.emit === 'function') {
-              this.emit('close');
-            }
+            serverInstance.emit('close');
             if (cb) cb();
-          });
-          return this; 
-        }),
-        removeAllListeners: vi.fn().mockReturnThis(),
-        emit: vi.fn(function(this: any, event: string, ...args: any[]) {
-            const listeners = this._listeners?.[event];
-            if (typeof listeners === 'function') { // Should not happen with 'on' pushing to array
-                listeners(...args);
-            } else if (Array.isArray(listeners)) {
-                // Iterate over a copy in case a listener removes itself
-                [...listeners].forEach(fn => fn(...args));
-            }
-        }),
-      };
+          }
+        });
+        return serverInstance;
+      });
+
+      serverInstance.address = vi.fn(() => {
+        if (serverInstance._storedPort === undefined) return null;
+        return { port: serverInstance._storedPort, address: serverInstance._storedHost || '127.0.0.1', family: 'IPv4' };
+      });
+      
+      // Standard EventEmitter methods are inherited, but if specific mock behavior is needed:
+      serverInstance.on = vi.fn(serverInstance.on.bind(serverInstance));
+      serverInstance.once = vi.fn(serverInstance.once.bind(serverInstance));
+      serverInstance.emit = vi.fn(serverInstance.emit.bind(serverInstance));
+      serverInstance.removeAllListeners = vi.fn(serverInstance.removeAllListeners.bind(serverInstance));
+
+      if (requestListener) {
+        serverInstance.on('request', requestListener);
+      }
+      
       return serverInstance as unknown as http.Server;
     });
   });
