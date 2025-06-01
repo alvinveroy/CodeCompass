@@ -347,15 +347,18 @@ describe('CLI with yargs (index.ts)', () => {
 
     console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] About to dynamically import SUT from (src) currentSutIndexPath: ${currentSutIndexPath}. Current VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}`);
     try {
-      const sutModule = await import(currentSutIndexPath) as { main: () => Promise<void> };
+      const sutModuleUntyped = await import(currentSutIndexPath);
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Dynamic import of SUT from ${currentSutIndexPath} completed.`);
-      // Ensure the promise from main() is properly handled to propagate rejections
-      if (typeof sutModule.main === 'function') {
-        await sutModule.main();
-      } else {
-        // This case should ideally not be reached due to the type assertion on import
-        throw new Error('SUT main function not found or not a function after dynamic import.');
+
+      // Perform more explicit checks before asserting the type and calling main
+      if (typeof sutModuleUntyped !== 'object' || sutModuleUntyped === null || typeof (sutModuleUntyped as any).main !== 'function') {
+        throw new Error(`SUT module from ${currentSutIndexPath} does not have a valid exported 'main' function.`);
       }
+      
+      // Now that we've checked, we can assert the type more confidently for the call.
+      const sutModule = sutModuleUntyped as { main: () => Promise<void> };
+      await sutModule.main();
+      
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] SUT main() executed and resolved.`);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
@@ -763,7 +766,8 @@ describe('CLI with yargs (index.ts)', () => {
       const expectedErrorMsgPart = "Unknown arguments: unknown-option";
       const errorMatcher = expect.objectContaining({ message: expect.stringContaining(expectedErrorMsgPart) });
       // Yargs throws an error object. The message property contains the string.
-      await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrow(errorMatcher);
+      // Using toThrowError as yargs typically throws Error instances.
+      await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrowError(errorMatcher);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(expectedErrorMsgPart));
       // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
