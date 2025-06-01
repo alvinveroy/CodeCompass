@@ -568,6 +568,7 @@ describe('CLI with yargs (index.ts)', () => {
       mockConsoleError.mockClear(); // Clear before run
       
       await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(
+        // This error is thrown by handleClientCommand and then re-thrown by yargs.fail()
         new Error("Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16")
       );
       
@@ -659,11 +660,10 @@ describe('CLI with yargs (index.ts)', () => {
       expect(mockStartServerHandler).toHaveBeenCalled(); 
       
       // Check if the SUT's yargs middleware logged the port being observed.
-      expect(currentMockLoggerInstance.info.mock.calls).toEqual(
-        expect.arrayContaining([
-          [expect.stringContaining(`[SUT_INDEX_TS_YARGS_MW] --port option value at middleware: ${customPort}`)]
-        ])
+      const portLogFound = currentMockLoggerInstance.info.mock.calls.some(
+        call => typeof call[0] === 'string' && call[0].includes(`[SUT_INDEX_TS_YARGS_MW] --port option value at middleware: ${customPort}`)
       );
+      expect(portLogFound, `Expected SUT log for --port middleware. Calls: ${JSON.stringify(currentMockLoggerInstance.info.mock.calls)}`).toBe(true);
       
       // Restore original
       if (originalHttpPort === undefined) delete process.env.HTTP_PORT;
@@ -778,7 +778,7 @@ describe('CLI with yargs (index.ts)', () => {
       mockConsoleError.mockClear(); // Clear before run
       mockProcessExit.mockClear();
 
-      const expectedErrorPattern = /Unknown command: unknowncommand|You must provide a command to run|Not enough non-option arguments|Unknown argument: unknowncommand/; // Added Unknown argument
+      const expectedErrorPattern = /Unknown command: unknowncommand|You must provide a command to run|Not enough non-option arguments|Unknown argument: unknowncommand/;
       await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrowError(expectedErrorPattern);
 
       const consoleErrorCalls = mockConsoleError.mock.calls.map(call => call.join(' ')).join('\n');
@@ -881,10 +881,15 @@ describe('CLI with yargs (index.ts)', () => {
       
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await expect(runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json']))
-        .rejects.toThrow(expect.objectContaining({ // Check for an object that contains the jsonRpcError
-          message: `Tool 'agent_query' failed: ${rpcErrorObject.message}`,
-          jsonRpcError: rpcErrorObject
-        }));
+        .rejects.toThrow(
+          // The error thrown by yargs.fail() will be an Error instance.
+          // If handleClientCommand throws an error with a jsonRpcError property,
+          // yargs.fail() should re-throw that error object.
+          expect.objectContaining({
+            message: `Tool 'agent_query' failed: ${rpcErrorObject.message}`,
+            jsonRpcError: rpcErrorObject,
+          })
+        );
 
       // SUT's handleClientCommand logs the JSON error to console.error when --json is active
       // It logs the error object passed to it, which now includes jsonRpcError
@@ -906,7 +911,7 @@ describe('CLI with yargs (index.ts)', () => {
         call[0] === 'YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:' && 
         typeof call[1] === 'string' && call[1].includes(`Tool 'agent_query' failed: ${rpcErrorObject.message}`)
       );
-      expect(yargsFailOutputLogged).toBe(true);
+      expect(yargsFailOutputLogged, `Expected yargs fail output. Calls: ${JSON.stringify(mockConsoleError.mock.calls)}`).toBe(true);
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
@@ -935,7 +940,7 @@ describe('CLI with yargs (index.ts)', () => {
         call[0] === 'YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:' && 
         typeof call[1] === 'string' && call[1] === genericError.message
       );
-      expect(yargsFailOutputLogged).toBe(true);
+      expect(yargsFailOutputLogged, `Expected yargs fail output. Calls: ${JSON.stringify(mockConsoleError.mock.calls)}`).toBe(true);
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });

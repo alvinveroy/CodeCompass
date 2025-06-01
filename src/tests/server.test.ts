@@ -1385,11 +1385,11 @@ describe('startProxyServer', () => {
           this._host = hostToListen ?? null;
 
           process.nextTick(() => {
-            if (this._listeners && typeof this._listeners.listening === 'function') {
-              (this._listeners.listening as () => void)();
-            } else if (Array.isArray(this._listeners?.listening)) {
-                (this._listeners.listening as ((...args: any[]) => void)[]).forEach(fn => fn());
+            // Emit 'listening' event
+            if (typeof this.emit === 'function') {
+              this.emit('listening');
             }
+            // Call direct callback if provided
             if (actualCallback) actualCallback();
           });
           return this; 
@@ -1398,23 +1398,23 @@ describe('startProxyServer', () => {
           if (!this._listeners[event]) {
             this._listeners[event] = [];
           }
-          if (Array.isArray(this._listeners[event])) {
-            (this._listeners[event] as ((...args: any[]) => void)[]).push(callback);
-          } else { // If it was a single function (e.g. from 'once'), make it an array
-            this._listeners[event] = [this._listeners[event] as (...args: any[]) => void, callback];
+          const listenersArray = this._listeners[event] as ((...args: any[]) => void)[];
+          if (!Array.isArray(listenersArray)) { // Should not happen if initialized as array
+            this._listeners[event] = [callback];
+          } else {
+            listenersArray.push(callback);
           }
           return this;
         }),
         once: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
           const onceWrapper = (...args: any[]) => {
-            if (Array.isArray(this._listeners[event])) {
-              this._listeners[event] = (this._listeners[event] as ((...args: any[]) => void)[]).filter(fn => fn !== onceWrapper);
-            } else if (this._listeners[event] === onceWrapper) {
-              delete this._listeners[event];
+            const listenersArray = this._listeners[event] as ((...args: any[]) => void)[];
+            if (Array.isArray(listenersArray)) {
+              this._listeners[event] = listenersArray.filter(fn => fn !== onceWrapper);
             }
             callback(...args);
           };
-          this.on(event, onceWrapper); // Use the 'on' method to add it
+          this.on(event, onceWrapper);
           return this;
         }),
         address: vi.fn(function(this: any) {
@@ -1425,10 +1425,8 @@ describe('startProxyServer', () => {
         }),
         close: vi.fn(function(this: any, cb?: (err?: Error) => void) { 
           process.nextTick(() => {
-            if (this._listeners && typeof this._listeners.close === 'function') {
-                (this._listeners.close as () => void)();
-            } else if (Array.isArray(this._listeners?.close)) {
-                (this._listeners.close as ((...args: any[]) => void)[]).forEach(fn => fn());
+            if (typeof this.emit === 'function') {
+              this.emit('close');
             }
             if (cb) cb();
           });
@@ -1437,10 +1435,11 @@ describe('startProxyServer', () => {
         removeAllListeners: vi.fn().mockReturnThis(),
         emit: vi.fn(function(this: any, event: string, ...args: any[]) {
             const listeners = this._listeners?.[event];
-            if (typeof listeners === 'function') {
+            if (typeof listeners === 'function') { // Should not happen with 'on' pushing to array
                 listeners(...args);
             } else if (Array.isArray(listeners)) {
-                listeners.forEach(fn => fn(...args));
+                // Iterate over a copy in case a listener removes itself
+                [...listeners].forEach(fn => fn(...args));
             }
         }),
       };
