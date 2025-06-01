@@ -93,7 +93,7 @@ const changelogCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 const CACHE_KEY_CONTENT = 'changelogContent';
 const CACHE_KEY_MTIME = 'changelogMtime';
 
-function getPackageVersion(): string {
+export function getPackageVersion(): string { // Add export
   try {
     const packageJsonPath = path.resolve(__dirname, '../package.json');
     const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');

@@ -702,8 +702,9 @@ describe('CLI with yargs (index.ts)', () => {
       // Check that among all calls, one matches the version string.
       // This is more robust against other debug logs.
       // Import getPackageVersion from SUT or replicate its logic for assertion
-      const { getPackageVersion: sutGetPackageVersion } = await import('../../src/index.ts'); // Import from SUT
-      const expectedVersion = sutGetPackageVersion();
+      // Change .ts to .js for NodeNext module resolution compatibility
+      const sutModule = await import('../../src/index.js') as { getPackageVersion: () => string; main: () => Promise<void> };
+      const expectedVersion = sutModule.getPackageVersion();
 
       const versionLogFound = mockConsoleLog.mock.calls.some(call =>
         call.length > 0 && typeof call[0] === 'string' && call[0].trim() === expectedVersion
