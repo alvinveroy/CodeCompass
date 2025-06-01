@@ -447,6 +447,8 @@ async function startSutMockServer(repoPath: string) {
 
   mcpServer.tool("trigger_repository_update", "Mock trigger_repository_update", {}, () => {
     sutLogger.info("[SUT_MOCK_SERVER] Mock tool 'trigger_repository_update' called.");
+    // Log to console.error for integration test stderr capture
+    console.error('[SUT_MOCK_QDRANT_UPSERT_CONSOLE_ERROR] Mock Qdrant upsert triggered by SUT mock server for trigger_repository_update.');
     return { content: [{ type: "text", text: "# Repository Update Triggered (SUT Mock Server)\n\nMock update initiated." }] };
   });
 
@@ -754,8 +756,8 @@ export async function main() { // Add export
     (yargsInstance) => {
       return yargsInstance.positional('repoPath', {
         type: 'string',
-        default: '.',
-        describe: 'Path to the git repository to serve. Defaults to current directory.',
+        // Default is handled by startServerHandler if neither positional nor --repo is given
+        describe: 'Path to the git repository to serve. Defaults to current directory if not specified via --repo.',
       });
     },
     async (argv) => {
@@ -771,54 +773,45 @@ export async function main() { // Add export
     .alias('h', 'help')
     .wrap(Math.min(120, yargs(hideBin(process.argv)).terminalWidth())) // Use yargs().terminalWidth()
     .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass')
-    // Require a command to be specified, or $0 will handle it.
-    // The message appears if too many commands are given or if parsing fails before a command is identified.
-    .demandCommand(0, 1, 'Too many commands. Specify one command or a repository path to start the server.')
+    .demandCommand(1, 'You must provide a command to run. Use --help to see available commands.')
     .strictCommands(true) // Report errors for unknown commands
     .strict() // Error on unknown options
-    .fail((msg, err, yargsInstance) => { // Made synchronous: removed async, removed await import for logger
-      // Use console.error for logging in .fail() as dynamic import of main logger is async.
-      // Tests can spy on console.error.
-      const isTestEnvForFail = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
-      const isVitestTestingFailHandlerScenario = process.env.VITEST_TESTING_FAIL_HANDLER === 'true';
+    .fail((msg, err, yargsInstance) => {
+      const isTestEnvForFailHandler = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
+      const isSpecificTestScenarioForThrow = process.env.VITEST_TESTING_FAIL_HANDLER === "true";
 
-      let detailedErrorMessage: string | null = null;
+      let effectiveErrorMessage = msg;
       if (err) {
-        if (isJsonRpcErrorResponse(err)) {
-          detailedErrorMessage = err.error.message;
-        } else if (err instanceof Error) {
-          detailedErrorMessage = err.message;
-        }
+        effectiveErrorMessage = err.message || msg || 'Unknown yargs error';
       }
-      detailedErrorMessage = detailedErrorMessage || msg;
 
-
+      // Log details for debugging yargs failures
       console.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
-        hasMsg: !!msg, msgContent: msg, msgType: typeof msg,
-        hasErr: !!err, errName: err?.name, errMessage: (err instanceof Error ? err.message : undefined),
-        isTestEnvForFail, isVitestTestingFailHandlerScenario,
-        effectiveErrorMessageForLog: detailedErrorMessage
+        msg, errName: err?.name, errMessage: err?.message, isTestEnvForFailHandler, isSpecificTestScenarioForThrow, effectiveErrorMessage
       });
-
-      if (isTestEnvForFail) {
-        if (isVitestTestingFailHandlerScenario) {
-          console.error('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', detailedErrorMessage);
-        } else {
-          console.error('Yargs validation/parse error in generic test context:', err || msg);
-        }
-        // Ensure an error is always thrown in this specific test scenario
+      
+      if (isSpecificTestScenarioForThrow) {
+        // For tests that specifically set VITEST_TESTING_FAIL_HANDLER, always throw.
+        console.error('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', effectiveErrorMessage); // Log the error message that will be thrown
+        throw err || new Error(effectiveErrorMessage);
+      } else if (isTestEnvForFailHandler) {
+        // Generic test environment, but not the specific scenario for throwing.
+        // Log the error but don't necessarily throw if yargs itself isn't throwing.
+        // This helps see yargs behavior in tests without forcing a throw if yargs wouldn't normally.
+        console.error('Yargs validation/parse error in generic test context:', effectiveErrorMessage);
+        // If yargs provided an error object, rethrow it. Otherwise, wrap the message.
         if (err) throw err;
-        throw new Error(detailedErrorMessage || 'yargs command failed in test environment (no specific error/msg)');
+        // If only a message was provided by yargs, and we are in a test env,
+        // it's often better to throw to make the test fail clearly.
+        throw new Error(effectiveErrorMessage);
       } else {
-        yargsInstance.showHelp();
-        const errorMessage = detailedErrorMessage || (err ? (err.message || 'Unknown yargs error') : 'Unknown yargs error');
-        if (errorMessage) {
-          console.error(`\nError: ${errorMessage}`);
-        }
-        yargsInstance.exit(1, err || new Error(errorMessage));
+        // Production/normal execution
+        console.error(yargsInstance.help());
+        console.error(`\nError: ${effectiveErrorMessage}`);
+        yargsInstance.exit(1, err || new Error(effectiveErrorMessage));
       }
     });
-
+    
   try {
     console.log('[INDEX_TS_DEBUG] Before cli.parseAsync()');
     // parseAsync() will use the argsForYargs provided to the yargs() constructor

@@ -1680,52 +1680,24 @@ export async function startProxyServer(
   logger.info(`[PROXY_DEBUG] startProxyServer: Attempting to start proxy. Requested main port: ${requestedPort}, Target existing server port: ${targetServerPort}`);
   
   let proxyListenPort: number;
-  // Wrap the entire logic in a promise to handle findFreePort rejection properly
-  return new Promise<http.Server | null>(async (resolveOuter, rejectOuter) => {
-    try {
-      // Determine a suitable starting port for the proxy to avoid collision
-      const initialPortForProxySearch = requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50;
-      logger.info(`[PROXY_DEBUG] startProxyServer: Initial port for proxy search: ${initialPortForProxySearch}`);
-      
-      proxyListenPort = await findFreePort(initialPortForProxySearch);
-      logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
-    } catch (error) { // This catch block is specifically for errors from findFreePort
-      const err = error instanceof Error ? error : new Error(String(error));
-      logger.error(`[ProxyServer] Failed to find free port for proxy: ${err.message}`, { errorDetails: err });
-      resolveOuter(null); // Resolve the main startProxyServer promise with null
-      return; // Exit the async function for the outer promise
-    }
+  try {
+    // Determine a suitable starting port for the proxy to avoid collision
+    const initialPortForProxySearch = requestedPort === targetServerPort ? requestedPort + 1 : requestedPort + 50;
+    logger.info(`[PROXY_DEBUG] startProxyServer: Initial port for proxy search: ${initialPortForProxySearch}`);
+    
+    // findFreePort now takes a server instance as its last argument.
+    // Create a temporary server for findFreePort to use for its checks.
+    const tempServerForPortCheck = http.createServer();
+    proxyListenPort = await findFreePort(initialPortForProxySearch, initialPortForProxySearch + 50, '127.0.0.1', tempServerForPortCheck);
+    logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`[ProxyServer] Failed to find free port for proxy: ${err.message}`, { errorDetails: err });
+    return null; // Return null if findFreePort fails
+  }
 
-    // If findFreePort succeeded, proceed to create and listen on the proxy server
-    // This part is now inside the main try-catch for the outer promise
-    // No, this new Promise is for the listen part specifically.
-    // The outer promise handles findFreePort.
-    // Let's keep the structure where findFreePort error directly returns null from startProxyServer.
-    // The issue might be that the original startProxyServer wasn't async, or the promise wasn't returned.
-    // The current structure with `return new Promise` for the listen part is fine if findFreePort is awaited first.
-
-    // The previous structure was:
-    // try { proxyListenPort = await findFreePort... } catch { return null; }
-    // return new Promise((resolveProxyListen, rejectProxyListen) => { /* app setup */ });
-    // This is correct. The timeout implies the inner new Promise for listen is not resolving/rejecting.
-
-    // The current structure for the listen part:
-    // return new Promise<http.Server | null>((resolveProxyListen, rejectProxyListen) => {
-    //   try { /* app setup and proxyHttpServer.listen */ } catch (error) { rejectProxyListen(error) }
-    // });
-    // This seems fine. The timeout must be within the listen callback or nock/axios interactions.
-
-    // No changes needed here based on the current analysis for findFreePort rejection,
-    // as the existing `catch` block for `findFreePort` already returns `null`.
-    // The timeouts are more likely related to the `proxyHttpServer.listen` or subsequent `axios` calls.
-
-    // For robustness, ensure the listen promise itself has a timeout or clear rejection path.
-    // The `proxyHttpServer.on('error', ...)` handles listen errors.
-    // The `proxyHttpServer.listen(..., () => { resolveProxyListen(...) })` handles success.
-    // This part seems okay. The problem is likely in the tests' interaction or nock.
-
-    // Let's proceed with the existing structure for the listen promise.
-    // The primary fix for "resolve with null if findFreePort fails" is in the test's mock of findFreePort.
+  // If findFreePort succeeded, proceed to create and listen on the proxy server
+  return new Promise<http.Server | null>((resolveOuter, rejectOuter) => {
     const app = express();
     app.use('/mcp', express.raw({ type: '*/*', limit: '50mb' })); // For MCP JSON-RPC
 
@@ -1761,73 +1733,38 @@ export async function startProxyServer(
         });
         (mcpResponse.data as NodeJS.ReadableStream).pipe(res);
 
-      } catch (error: unknown) { // This is line 1844 in the provided file content
-        // Ensure streamToString is awaited correctly and its potential errors are handled before further logic.
-        let errorResponseData: string | undefined;
-        let isAxiosE = false; // Flag to check if it's an AxiosError
-        let axiosErrorInstance: import('axios').AxiosError | null = null; // Store the instance if it is an AxiosError
-
+      } catch (error: unknown) {
+        const reqId = (req.body as {id?: string | number})?.id || null;
         if (axios.isAxiosError(error)) {
-          isAxiosE = true;
-          axiosErrorInstance = error; // Store the typed error
-          try {
-            if (axiosErrorInstance.response?.data) {
-              // Only attempt streamToString if data exists and might be a stream
-              if (typeof (axiosErrorInstance.response.data as NodeJS.ReadableStream).pipe === 'function') {
-                errorResponseData = await streamToString(axiosErrorInstance.response.data as NodeJS.ReadableStream);
-              } else {
-                // If not a stream, try to stringify or use as is if already string
-                errorResponseData = typeof axiosErrorInstance.response.data === 'string' 
-                                    ? axiosErrorInstance.response.data 
-                                    : JSON.stringify(axiosErrorInstance.response.data);
-              }
-            }
-          } catch (streamError) {
-            logger.error('[PROXY_DEBUG] Error converting error response data to string.', { streamError });
-            // errorResponseData remains undefined, or you could set a placeholder
-          }
-        }
-
-        if (isAxiosE && axiosErrorInstance) { // Use the flag and stored instance
-          logger.error('[PROXY_DEBUG] Axios error proxying MCP request to target server.', {
-            message: axiosErrorInstance.message,
-            code: axiosErrorInstance.code,
-            targetUrl,
-            requestMethod: req.method,
-            responseStatus: axiosErrorInstance.response?.status,
-            responseDataPreview: errorResponseData?.substring(0, 200),
-          });
-
-          if (axiosErrorInstance.response && axiosErrorInstance.response.headers) {
-            res.status(axiosErrorInstance.response.status);
-            Object.keys(axiosErrorInstance.response.headers).forEach(key => {
-              const headerValue = axiosErrorInstance.response!.headers[key];
+          if (error.response) {
+            // Target server responded with an error (e.g., 4xx, 5xx)
+            logger.warn(`[ProxyServer] MCP target ${targetUrl} responded with ${error.response.status} for reqId ${reqId}. Forwarding response.`);
+            res.status(error.response.status);
+            Object.keys(error.response.headers).forEach(key => {
+              const headerValue = error.response!.headers[key];
               if (headerValue !== undefined && ['content-type', 'content-length'].includes(key.toLowerCase())) {
                 res.setHeader(key, headerValue as string | string[]);
               }
             });
-            // Use the processed errorResponseData
-            if (errorResponseData) {
-              res.send(errorResponseData);
-            } else if (axiosErrorInstance.response.data) { // Fallback if streamToString failed but original data exists
-                res.send(axiosErrorInstance.response.data);
+            // Try to stream or send data
+            if (typeof (error.response.data as NodeJS.ReadableStream)?.pipe === 'function') {
+              (error.response.data as NodeJS.ReadableStream).pipe(res);
             } else {
-              res.end();
+              res.send(error.response.data);
             }
+          } else if (error.request) {
+            // Request was made but no response received (e.g., ECONNREFUSED, ETIMEDOUT)
+            logger.error(`[ProxyServer] MCP target ${targetUrl} unreachable for reqId ${reqId}: ${error.message}`);
+            res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: "Proxy: Target server unreachable" }, id: reqId });
           } else {
-            // Axios error but no response (e.g., network error like ECONNREFUSED, timeout before response)
-            res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: 'Proxy error: Bad Gateway', data: axiosErrorInstance.message }, id: null });
+            // Unexpected Axios error
+            logger.error(`[ProxyServer] Unexpected Axios error while proxying to ${targetUrl} for reqId ${reqId}: ${error.message}`);
+            res.status(500).json({ jsonrpc: "2.0", error: { code: -32002, message: "Proxy: Internal error during request forwarding" }, id: reqId });
           }
         } else {
-          // Non-Axios error OR error during streamToString of AxiosError data
-          const genericErrorMessage = error instanceof Error ? error.message : String(error);
-          logger.error('[PROXY_DEBUG] Non-Axios or data processing error while proxying MCP request.', {
-            message: genericErrorMessage,
-            originalErrorType: (error as object)?.constructor?.name,
-            targetUrl,
-            requestMethod: req.method,
-          });
-          res.status(500).json({ jsonrpc: "2.0", error: { code: -32002, message: 'Proxy error: Internal Server Error', data: genericErrorMessage }, id: null });
+          // Non-Axios error
+          logger.error(`[ProxyServer] Non-Axios error while proxying to ${targetUrl} for reqId ${reqId}: ${(error as Error).message}`);
+          res.status(500).json({ jsonrpc: "2.0", error: { code: -32003, message: "Proxy: Unexpected internal error" }, id: reqId });
         }
       }
     });

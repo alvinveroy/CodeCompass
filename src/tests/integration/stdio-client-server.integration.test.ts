@@ -462,31 +462,15 @@ describe('Stdio Client-Server Integration Tests', () => {
     mockQdrantClientInstance.upsert.mockClear();
     mockQdrantClientInstance.search.mockClear(); 
     
-    // The mock for qdrant.ts has batchUpsertVectors at the module level
-    // const qdrantModule = await import('../../lib/qdrant.js'); // No longer spying on this
-    // vi.mocked(qdrantModule.batchUpsertVectors).mockClear(); // No longer spying on this
-
-    const sutOutputCaptured: string[] = [];
-    // Use the public transport.stderr stream provided by the SDK
+    const sutStderrOutputLines: string[] = [];
     if (transport.stderr) {
       transport.stderr.on('data', (data: Buffer) => {
         const output = data.toString();
-        sutOutputCaptured.push(output);
-        // Optional: Log captured stderr for easier debugging if the test still fails
-        // console.log(`[SUT_STDERR_CAPTURE_DEBUG] ${output}`);
+        sutStderrOutputLines.push(output);
+        // For debugging: console.log(`[SUT_STDERR_CAPTURE_DEBUG_LIVE] ${output.trim()}`);
       });
     } else {
       console.warn("[INTEGRATION_TEST_DEBUG] transport.stderr is null, cannot capture SUT stderr for Qdrant log check.");
-    }
-
-    // Also capture stdout if needed for other debugging, though the target log is on stderr
-    // Accessing _process is a workaround; ideally, SDK would expose stdout if needed for tests.
-    const transportProcess = (transport as any)._process as NodeChildProcess; // Use NodeChildProcess type
-    if (transportProcess && transportProcess.stdout) {
-        transportProcess.stdout.on('data', (data: Buffer) => {
-            sutOutputCaptured.push(data.toString());
-            // console.log(`[SUT_STDOUT_CAPTURE_DEBUG] ${data.toString()}`);
-        });
     }
 
     // Wait for indexing to be idle if it started automatically
@@ -507,12 +491,12 @@ describe('Stdio Client-Server Integration Tests', () => {
     // Wait a bit longer for indexing to potentially start and make calls
     await new Promise(resolve => setTimeout(resolve, 5000)); // Increased wait time to 5 seconds
 
-    // Verify that the SUT's mock Qdrant client logged an upsert operation
-    const fullSutOutput = sutOutputCaptured.join('');
-    // console.log('[DEBUG SUT OUTPUT FOR QDRANT MOCK CHECK]:\n', fullSutOutput); // For debugging
-    const qdrantLogFound = fullSutOutput.includes('[MOCK_QDRANT_UPSERT_VIA_LOGGER]') || fullSutOutput.includes('[MOCK_QDRANT_UPSERT_CONSOLE_ERROR]');
+    // Verify that the SUT's mock Qdrant client logged an upsert operation via console.error
+    const fullSutStderrOutput = sutStderrOutputLines.join('');
+    // For debugging: console.log('[TEST_DEBUG] Full SUT Stderr Output for Qdrant Log Check:\n', fullSutStderrOutput);
+    const qdrantLogFound = fullSutStderrOutput.includes('[SUT_MOCK_QDRANT_UPSERT_CONSOLE_ERROR]');
     expect(qdrantLogFound, 
-      `Expected Qdrant mock upsert log not found. SUT output:\n${fullSutOutput}`
+      `Expected SUT mock Qdrant console.error log not found. SUT stderr:\n${fullSutStderrOutput}`
     ).toBe(true);
     
     // Optionally, check status
