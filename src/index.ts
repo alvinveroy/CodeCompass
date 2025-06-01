@@ -805,15 +805,15 @@ export async function main() { // Add export
           console.error('Yargs validation/parse error in generic test context:', err || msg);
         }
         // Ensure an error is always thrown in this specific test scenario
-        if (err) throw err; 
-        throw new Error(detailedErrorMessage || 'yargs validation failed in test environment (no specific error/msg)');
+        if (err) throw err;
+        throw new Error(detailedErrorMessage || 'yargs command failed in test environment (no specific error/msg)');
       } else {
         yargsInstance.showHelp();
-        const errorMessage = err ? (err.message || msg) : msg;
+        const errorMessage = detailedErrorMessage || (err ? (err.message || 'Unknown yargs error') : 'Unknown yargs error');
         if (errorMessage) {
           console.error(`\nError: ${errorMessage}`);
         }
-        yargsInstance.exit(1, err || new Error(msg || 'yargs command failed'));
+        yargsInstance.exit(1, err || new Error(errorMessage));
       }
     });
 
