@@ -434,7 +434,25 @@ async function startServerHandler(
 // SUT-internal mock server for integration tests
 async function startSutMockServer(repoPath: string) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { logger: sutLogger, configService: sutConfigService } = await import(path.join(libPath, `config-service${moduleFileExtensionForDynamicImports}`)) as typeof import('./lib/config-service');
+  const configServiceModule = await import(path.join(libPath, `config-service${moduleFileExtensionForDynamicImports}`)) as typeof import('./lib/config-service');
+  let sutLogger = createFallbackLogger('[SUT_MOCK_LOGGER_INIT_FALLBACK]'); // Use module-scoped createFallbackLogger
+  const sutConfigService = configServiceModule.configService; // Assign directly
+
+  if (configServiceModule && configServiceModule.logger) {
+    // Check if the imported logger has the methods we expect.
+    if (typeof configServiceModule.logger.info === 'function' &&
+        typeof configServiceModule.logger.warn === 'function' &&
+        typeof configServiceModule.logger.debug === 'function') {
+      sutLogger = configServiceModule.logger; // Assign the actual logger if import was successful and complete
+    } else {
+      // If the imported logger is minimal (e.g., only has .error), use its .error but keep other fallback methods.
+      sutLogger.error = configServiceModule.logger.error; // Preserve its error method
+      sutLogger.warn(`[SUT_MOCK_SERVER] Imported logger from config-service was minimal or incorrectly typed. Using fallback for info/warn/debug, but imported error method.`);
+    }
+  } else {
+    sutLogger.warn(`[SUT_MOCK_SERVER] Logger could not be obtained from dynamically imported config-service. Using full fallback logger.`);
+  }
+  
   sutLogger.info(`[SUT_MOCK_SERVER] Starting SUT Mock Server for integration test. Repo: ${repoPath}`);
 
   const mockServerCapabilities = {
