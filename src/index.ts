@@ -85,6 +85,10 @@ import { hideBin } from 'yargs/helpers'; // Import hideBin
 // SDK imports will be done dynamically within handleClientCommand
 // Do not import configService or startServer here yet if we need to set process.env first.
 
+// Imports for SUT Mock Server (used in ccIntegrationTestSutMode)
+import { McpServer, StdioServerTransport as SdkStdioServerTransport } from '@modelcontextprotocol/sdk/server/mcp.js'; // Use .js for SDK
+import { z } from 'zod'; // For defining mock tool schemas
+
 const changelogCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 const CACHE_KEY_CONTENT = 'changelogContent';
 const CACHE_KEY_MTIME = 'changelogMtime';
@@ -406,6 +410,104 @@ async function startServerHandler(
   }
 }
 
+// SUT-internal mock server for integration tests
+async function startSutMockServer(repoPath: string) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { logger: sutLogger, configService: sutConfigService } = await import(path.join(libPath, `config-service${moduleFileExtensionForDynamicImports}`)) as typeof import('./lib/config-service');
+  sutLogger.info(`[SUT_MOCK_SERVER] Starting SUT Mock Server for integration test. Repo: ${repoPath}`);
+
+  const mockServerCapabilities = {
+    tools: {
+      get_indexing_status: { schema: {} },
+      trigger_repository_update: { schema: {} },
+      agent_query: { schema: { query: z.string() } },
+      search_code: { schema: { query: z.string() } },
+      get_changelog: { schema: {} },
+      switch_suggestion_model: { schema: { model: z.string(), provider: z.string().optional() } },
+      get_session_history: { schema: { sessionId: z.string() } },
+      generate_suggestion: { schema: { query: z.string() } },
+      get_repository_context: { schema: { query: z.string() } },
+    },
+    prompts: {},
+    resources: {},
+  };
+
+  const mcpServer = new McpServer({
+    name: "CodeCompassSutMock",
+    version: getPackageVersion(),
+    vendor: "CodeCompassTest",
+    capabilities: mockServerCapabilities,
+  });
+
+  mcpServer.tool("get_indexing_status", "Mock get_indexing_status", {}, () => {
+    sutLogger.info("[SUT_MOCK_SERVER] Mock tool 'get_indexing_status' called.");
+    return { content: [{ type: "text", text: "# Indexing Status\n- Status: idle\n- Progress: 100%\n- Message: SUT Mock Server Idle" }] };
+  });
+
+  mcpServer.tool("trigger_repository_update", "Mock trigger_repository_update", {}, () => {
+    sutLogger.info("[SUT_MOCK_SERVER] Mock tool 'trigger_repository_update' called.");
+    return { content: [{ type: "text", text: "# Repository Update Triggered (SUT Mock Server)\n\nMock update initiated." }] };
+  });
+
+  mcpServer.tool("agent_query", "Mock agent_query", { query: z.string() }, (args: { query: string }) => {
+    sutLogger.info(`[SUT_MOCK_SERVER] Mock tool 'agent_query' called with query: ${args.query}`);
+    let responseText = `SUT_SELF_MOCK: Agent response for query "${args.query}". Session ID: SUT_SELF_MOCK_SESSION_ID`;
+    if (args.query === "What is in file1.ts?") {
+      responseText = "SUT_SELF_MOCK: Agent response: file1.ts contains console.log(\"Hello from file1\"); and const x = 10; Session ID: SUT_SELF_MOCK_SESSION_ID";
+    }
+    return { content: [{ type: "text", text: responseText }] };
+  });
+  
+  mcpServer.tool("search_code", "Mock search_code", { query: z.string() }, (args: { query: string }) => {
+    sutLogger.info(`[SUT_MOCK_SERVER] Mock tool 'search_code' called with query: ${args.query}`);
+    return { content: [{ type: "text", text: `# Search Results for: "${args.query}" (SUT Mock)\n\nNo actual search performed.` }] };
+  });
+
+  mcpServer.tool("get_changelog", "Mock get_changelog", {}, () => {
+    sutLogger.info("[SUT_MOCK_SERVER] Mock tool 'get_changelog' called.");
+    return { content: [{ type: "text", text: `# Test Changelog (SUT Mock v${getPackageVersion()})\n\n- Mock changelog entry.` }] };
+  });
+  
+  mcpServer.tool("switch_suggestion_model", "Mock switch_suggestion_model", { model: z.string(), provider: z.string().optional() }, (args: {model: string, provider?: string}) => {
+    sutLogger.info(`[SUT_MOCK_SERVER] Mock tool 'switch_suggestion_model' called with model: ${args.model}, provider: ${args.provider}`);
+    sutConfigService.SUGGESTION_MODEL = args.model;
+    if (args.provider) sutConfigService.SUGGESTION_PROVIDER = args.provider;
+    return { content: [{ type: "text", text: `# Suggestion Model Switched (SUT Mock)\n\nSwitched to ${args.model}` }] };
+  });
+
+  mcpServer.tool("get_session_history", "Mock get_session_history", { sessionId: z.string() }, (args: {sessionId: string}) => {
+    sutLogger.info(`[SUT_MOCK_SERVER] Mock tool 'get_session_history' called for session: ${args.sessionId}`);
+    return { content: [{ type: "text", text: `# Session History for ${args.sessionId} (SUT Mock)\n\n- Mock query 1\n- Mock query 2` }] };
+  });
+
+  mcpServer.tool("generate_suggestion", "Mock generate_suggestion", { query: z.string() }, (args: { query: string }) => {
+    sutLogger.info(`[SUT_MOCK_SERVER] Mock tool 'generate_suggestion' called with query: ${args.query}`);
+    let responseText = `SUT_SELF_MOCK: This is a generated suggestion for "${args.query}" (SUT Mock).`;
+    if (args.query === "Suggest how to use file1.ts") {
+        responseText = "SUT_SELF_MOCK: This is a generated suggestion based on context from file1.ts. * Wraps the logging in a reusable function. **Suggested Implementation**: `func() {}`";
+    }
+    return { content: [{ type: "text", text: responseText }] };
+  });
+
+  mcpServer.tool("get_repository_context", "Mock get_repository_context", { query: z.string() }, (args: { query: string }) => {
+    sutLogger.info(`[SUT_MOCK_SERVER] Mock tool 'get_repository_context' called with query: ${args.query}`);
+     let responseText = `SUT_SELF_MOCK: This is a summary of the repository context for query "${args.query}" (SUT Mock).`;
+    if (args.query === "What is the main purpose of this repo?") {
+        responseText = "SUT_SELF_MOCK: This is a summary of the repository context, using info from file2.txt and mentioning agent orchestration and tool unification. ### File: CHANGELOG.md";
+    }
+    return { content: [{ type: "text", text: responseText }] };
+  });
+
+  const transport = new SdkStdioServerTransport(); // Uses process.stdin/stdout by default
+  await mcpServer.connect(transport);
+  sutLogger.info("[SUT_MOCK_SERVER] SUT Mock Server connected to stdio transport. Ready for MCP communication.");
+  console.error(`[SUT_MOCK_SERVER] CodeCompass SUT Mock Server v${getPackageVersion()} running for repo: ${repoPath}. MCP active on stdio.`);
+
+  // Keep alive for integration tests
+  return new Promise(() => { /* Keep server running indefinitely */ });
+}
+
+
 // Main CLI execution logic using yargs
 export async function main() { // Add export
 
@@ -468,24 +570,19 @@ export async function main() { // Add export
     }
     console.error(`[SUT_INDEX_TS_MODE_DEBUG] SUT mode determined: repoPath='${repoPath}', HTTP_PORT='${process.env.HTTP_PORT}'`);
 
-    // Dynamically import and run startServerHandler
-    // libPath and moduleFileExtensionForDynamicImports are already set globally at the top of the file.
-    const serverModuleFilename = `server${moduleFileExtensionForDynamicImports}`;
-    const serverModulePath = path.join(libPath, serverModuleFilename);
+    // Dynamically import and run startServerHandler or startSutMockServer
     const configServiceModuleFilename = `config-service${moduleFileExtensionForDynamicImports}`;
     const configServiceModulePath = path.join(libPath, configServiceModuleFilename);
 
     try {
       // When in --cc-integration-test-sut-mode, src/index.ts is the server.
-      // It should call its *own* startServerHandler, not import one from server.ts.
-      // The startServerHandler function is defined within this file (src/index.ts).
-      console.error(`[SUT_MODE_DEBUG_MAIN] About to call startServerHandler. typeof startServerHandler: ${typeof startServerHandler}`);
-      if (typeof startServerHandler !== 'function') {
-        console.error(`[SUT_MODE_CRITICAL_ERROR] startServerHandler is NOT a function just before call. Forcing error.`);
-        throw new TypeError("SUT mode: startServerHandler is not a function at point of call in main().");
+      // It should call its *own* startSutMockServer.
+      console.error(`[SUT_MODE_DEBUG_MAIN] About to call startSutMockServer. typeof startSutMockServer: ${typeof startSutMockServer}`);
+      if (typeof startSutMockServer !== 'function') {
+        console.error(`[SUT_MODE_CRITICAL_ERROR] startSutMockServer is NOT a function just before call. Forcing error.`);
+        throw new TypeError("SUT mode: startSutMockServer is not a function at point of call in main().");
       }
-      // Pass the module-scoped `indexPath` to the local `startServerHandler`
-      await startServerHandler({ repo: repoPath, port: parseInt(process.env.HTTP_PORT, 10), _:['start', repoPath], $0:'codecompass' }, indexPath);
+      await startSutMockServer(repoPath); // Pass repoPath to the mock server
     } catch (error: unknown) {
       // Minimal error handling for SUT mode
       try {

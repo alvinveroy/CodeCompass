@@ -128,12 +128,15 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 // "@modelcontextprotocol/sdk/dist/esm/client/stdio.js".
 // So, we must mock that specific resolved path.
 // Inlined the path string to avoid hoisting issues with sdkStdioClientPath variable.
-console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock SDK's StdioClientTransport using resolved path: @modelcontextprotocol/sdk/dist/esm/client/stdio.js`);
-vi.mock('@modelcontextprotocol/sdk/dist/esm/client/stdio.js', () => { 
-  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for @modelcontextprotocol/sdk/dist/esm/client/stdio.js IS RUNNING.`);
-  return { 
-    // StdioClientTransport is a named export from the SDK module
+// Changed to mock the package path directly, letting SDK's "exports" handle resolution.
+console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock SDK's StdioClientTransport using package path: @modelcontextprotocol/sdk/client/stdio.js`);
+vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => {
+  console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for @modelcontextprotocol/sdk/client/stdio.js IS RUNNING.`);
+  // Ensure the factory returns an object where StdioClientTransport is a property.
+  return {
     StdioClientTransport: mockStdioClientTransportConstructor,
+    // Add other named exports from this SDK module if the SUT uses them and they need mocking.
+    // e.g., getDefaultEnvironment: vi.fn(), DEFAULT_INHERITED_ENV_VARS: []
   };
 });
 
@@ -239,13 +242,10 @@ describe('CLI with yargs (index.ts)', () => {
     
     // Spy on console.log but also call the original implementation
     originalConsoleLog = console.log.bind(console);
-    mockConsoleLog = vi.spyOn(console, 'log').mockImplementation((...args: any[]) => {
-      // originalConsoleLog(...args); // Optionally call original to see logs during test run
-      // For now, let's keep it as a pure spy to not clutter test output unless needed for specific debugging.
-      // If SUT logs are still not appearing, we can uncomment the line above.
-      return undefined; // Mock implementation should return void or undefined if original console.log does
-    });
+    mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(vi.fn()); // Pure spy for assertions
     mockConsoleError = vi.spyOn(console, 'error').mockImplementation(vi.fn());
+    
+    mockProcessExit.mockClear(); // Clear mockProcessExit calls
         
     // Reset the mutable mockConfigServiceInstance by spreading the actual and overriding
     currentMockConfigServiceInstance = {
@@ -649,12 +649,16 @@ describe('CLI with yargs (index.ts)', () => {
       
       // Check that among all calls, one matches the version string.
       // This is more robust against other debug logs.
-      const versionLogFound = mockConsoleLog.mock.calls.some(call => 
-        typeof call[0] === 'string' && /\d+\.\d+\.\d+/.test(call[0])
+      // Import getPackageVersion from SUT or replicate its logic for assertion
+      const { getPackageVersion: sutGetPackageVersion } = await import('../../src/index.ts'); // Import from SUT
+      const expectedVersion = sutGetPackageVersion();
+
+      const versionLogFound = mockConsoleLog.mock.calls.some(call =>
+        call.length > 0 && typeof call[0] === 'string' && call[0].trim() === expectedVersion
       );
-      expect(versionLogFound, `Expected console.log to be called with version string. Calls: ${JSON.stringify(mockConsoleLog.mock.calls)}`).toBe(true);
-      
-      expect(mockProcessExit).not.toHaveBeenCalled();
+      expect(versionLogFound, `Expected console.log to be called with version string "${expectedVersion}". Calls: ${JSON.stringify(mockConsoleLog.mock.calls)}`).toBe(true);
+
+      expect(mockProcessExit).not.toHaveBeenCalled(); // yargs --version with exitProcess(false) should not call process.exit
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
@@ -705,7 +709,8 @@ describe('CLI with yargs (index.ts)', () => {
     it('should show error and help for unknown command', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       const expectedErrorMsg = "Unknown argument: unknowncommand";
-      await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrow(expectedErrorMsg);
+      // yargs.fail in test mode with VITEST_TESTING_FAIL_HANDLER throws the error or a wrapper.
+      await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrowError(expectedErrorMsg);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expectedErrorMsg);
       // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
