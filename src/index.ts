@@ -860,39 +860,33 @@ export async function main() { // Add export
     .strictCommands(true) 
     .strict() 
     .fail((msg, err, yargsInstance) => {
-      const isTestEnv = process.env.VITEST_TESTING_FAIL_HANDLER === "true";
-      const errName = err?.name;
-      const errMessage = err?.message;
-      const effectiveErrorMessage = msg || errMessage || "Unknown yargs error";
+      const isTestEnvForFail = process.env.VITEST_TESTING_FAIL_HANDLER === "true";
+      const effectiveErrorMessage = msg || (err?.message) || "Unknown yargs error";
 
-      // Use failLogger for production, console.error for test-specific fail handling
-      const loggerForFail = isTestEnv ? console : failLogger;
-
-      if (isTestEnv) {
-        loggerForFail.error("YARGS_FAIL_HANDLER_INVOKED --- Details:", {
-          msg: msg,
-          errName: errName,
-          errMessage: errMessage,
-          hasErr: !!err,
-          isTestEnvForFailHandler: true, // Keep this specific flag for tests if needed
-          isSpecificTestScenarioForThrow: true, 
-          effectiveErrorMessage: effectiveErrorMessage
-        });
-        loggerForFail.error("YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:", effectiveErrorMessage);
-        
-        if (err) {
-          throw err; 
+      if (isTestEnvForFail) {
+        // In test mode, log minimal info and re-throw to allow test assertions.
+        // The console.error calls here are for test debugging if needed, but tests should primarily assert the thrown error.
+        console.error("YARGS_FAIL_HANDLER_INVOKED (Test Mode):", { msg, errMessage: err?.message, effectiveErrorMessage });
+        console.error("YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:", effectiveErrorMessage);
+        // Throw the original error if it exists and is an Error instance, otherwise wrap msg.
+        if (err instanceof Error) {
+          throw err;
+        } else if (err) { // If err is not an Error but is truthy (e.g. an object from JSON-RPC error)
+          const errorToThrow = new Error(typeof err === 'string' ? err : effectiveErrorMessage);
+          // Attach original non-Error 'err' if it might be useful, e.g. JSON-RPC error object
+          if (typeof err === 'object' && err !== null) (errorToThrow as any).originalErrorData = err;
+          throw errorToThrow;
         } else {
           throw new Error(effectiveErrorMessage);
         }
       } else {
         // Production/User-facing behavior
-        loggerForFail.error("\n" + yargsInstance.help());
-        loggerForFail.error(`\nError: ${effectiveErrorMessage}\n`);
-        if (err && errMessage !== effectiveErrorMessage) { 
-          loggerForFail.error("Original Error Details:", err);
+        failLogger.error("\n" + yargsInstance.help()); // Use the imported failLogger
+        failLogger.error(`\nError: ${effectiveErrorMessage}\n`);
+        if (err && err.message !== effectiveErrorMessage) { 
+          failLogger.error("Original Error Details:", err);
         }
-        process.exit(1); // Use process.exit for production failures
+        process.exit(1);
       }
     });
     

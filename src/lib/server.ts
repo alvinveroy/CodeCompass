@@ -1687,10 +1687,10 @@ export async function startProxyServer(
     
     // findFreePort now takes a server instance as its last argument.
     // Create a temporary server for findFreePort to use for its checks.
-    const tempServerForPortCheck = http.createServer();
-    proxyListenPort = await findFreePort(initialPortForProxySearch);
+    // const tempServerForPortCheck = http.createServer(); // Not needed if findFreePort creates its own
+    proxyListenPort = await findFreePort(initialPortForProxySearch); // findFreePort internally creates server for checks
     logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
-  } catch (error) {
+  } catch (error: unknown) { // Ensure error is typed as unknown or any
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error(`[ProxyServer] Failed to find free port for proxy: ${err.message}`, { errorDetails: err });
     return null; // Return null if findFreePort fails
@@ -1740,31 +1740,37 @@ export async function startProxyServer(
             // Target server responded with an error (e.g., 4xx, 5xx)
             logger.warn(`[ProxyServer] MCP target ${targetUrl} responded with ${error.response.status} for reqId ${reqId}. Forwarding response.`);
             res.status(error.response.status);
+            // Forward relevant headers from target server's error response
             Object.keys(error.response.headers).forEach(key => {
-              const headerValue = error.response!.headers[key];
-              if (headerValue !== undefined && ['content-type', 'content-length'].includes(key.toLowerCase())) {
-                res.setHeader(key, headerValue as string | string[]);
-              }
+                const headerValue = error.response!.headers[key];
+                // Forward common headers, especially content-type for JSON errors
+                if (headerValue !== undefined && ['content-type', 'content-length', 'mcp-session-id', 'cache-control', 'connection'].includes(key.toLowerCase())) {
+                    res.setHeader(key, headerValue as string | string[]);
+                }
             });
             // Try to stream or send data
             if (typeof (error.response.data as NodeJS.ReadableStream)?.pipe === 'function') {
               (error.response.data as NodeJS.ReadableStream).pipe(res);
             } else {
+              // Ensure JSON errors are sent with correct content type if not already set
+              if (!res.getHeader('Content-Type') && typeof error.response.data === 'object') {
+                res.type('application/json');
+              }
               res.send(error.response.data);
             }
           } else if (error.request) {
             // Request was made but no response received (e.g., ECONNREFUSED, ETIMEDOUT)
             logger.error(`[ProxyServer] MCP target ${targetUrl} unreachable for reqId ${reqId}: ${error.message}`);
-            res.status(502).json({ jsonrpc: "2.0", error: { code: -32001, message: "Proxy: Target server unreachable" }, id: reqId });
+            res.status(502).type('application/json').json({ jsonrpc: "2.0", error: { code: -32001, message: "Proxy: Target server unreachable" }, id: reqId });
           } else {
             // Unexpected Axios error
             logger.error(`[ProxyServer] Unexpected Axios error while proxying to ${targetUrl} for reqId ${reqId}: ${error.message}`);
-            res.status(500).json({ jsonrpc: "2.0", error: { code: -32002, message: "Proxy: Internal error during request forwarding" }, id: reqId });
+            res.status(500).type('application/json').json({ jsonrpc: "2.0", error: { code: -32002, message: "Proxy: Internal error during request forwarding" }, id: reqId });
           }
         } else {
           // Non-Axios error
           logger.error(`[ProxyServer] Non-Axios error while proxying to ${targetUrl} for reqId ${reqId}: ${(error as Error).message}`);
-          res.status(500).json({ jsonrpc: "2.0", error: { code: -32003, message: "Proxy: Unexpected internal error" }, id: reqId });
+          res.status(500).type('application/json').json({ jsonrpc: "2.0", error: { code: -32003, message: "Proxy: Unexpected internal error" }, id: reqId });
         }
       }
     });

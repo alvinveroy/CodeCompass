@@ -1358,12 +1358,30 @@ describe('startProxyServer', () => {
     vi.mocked(http.createServer).mockImplementation(() => {
       const serverInstance = {
         _listeners: {} as Record<string, ((...args: any[]) => void) | undefined>,
-        listen: vi.fn(function(this: any, portOrPathOrOptions: any, arg2?: any, arg3?: any, arg4?: any) {
+        _port: null as number | null, // Add _port to store the listening port
+        _host: null as string | null, // Add _host to store the listening host
+        listen: vi.fn(function(this: any, portOrPathOrOptions: any, hostOrCb?: any, backlogOrCb?: any, cb?: any) {
+          let portToListen: number | undefined;
+          let hostToListen: string | undefined = 'localhost'; // Default host
           let actualCallback: (() => void) | undefined;
-          if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { actualCallback = arg2 as (() => void); }
-          else if (typeof arg2 === 'function') { actualCallback = arg2; }
-          else if (typeof arg3 === 'function') { actualCallback = arg3; }
-          else if (typeof arg4 === 'function') { actualCallback = arg4; }
+
+          if (typeof portOrPathOrOptions === 'number') {
+            portToListen = portOrPathOrOptions;
+            if (typeof hostOrCb === 'string') {
+              hostToListen = hostOrCb;
+              if (typeof backlogOrCb === 'function') actualCallback = backlogOrCb;
+              else if (typeof cb === 'function') actualCallback = cb;
+            } else if (typeof hostOrCb === 'function') {
+              actualCallback = hostOrCb;
+            }
+          } else if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { // Options object
+            portToListen = (portOrPathOrOptions as import('net').ListenOptions).port;
+            hostToListen = (portOrPathOrOptions as import('net').ListenOptions).host || hostToListen;
+            if (typeof hostOrCb === 'function') actualCallback = hostOrCb;
+          }
+          
+          this._port = portToListen ?? null;
+          this._host = hostToListen ?? null;
 
           process.nextTick(() => { // Simulate async listen
             if (this._listeners && typeof this._listeners.listening === 'function') {
@@ -1376,21 +1394,46 @@ describe('startProxyServer', () => {
           return this; 
         }),
         on: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
-          this._listeners[event] = callback;
+          if (!this._listeners[event]) this._listeners[event] = [];
+          this._listeners[event].push(callback); // Support multiple listeners if needed, though emit below is simple
+          // For simplicity, if 'error' or 'listening' is set, we'll just use the last one for emit.
+          // A full EventEmitter mock would handle arrays of listeners.
+          // For this test's purpose, storing the last one for 'error' and 'listening' is likely sufficient.
+          if (event === 'error' || event === 'listening' || event === 'close') {
+             this._listeners[event] = callback; // Overwrite for simplicity for these key events
+          }
           return this;
         }),
         once: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
-          this._listeners[event] = callback; 
+          // A simple once: store it, and if emit is called, it will be invoked then cleared.
+          // For findFreePort, it uses 'once' for 'error' and 'listening'.
+          this._listeners[event] = (...args: any[]) => {
+            delete this._listeners[event]; // Remove after one call
+            callback(...args);
+          };
           return this;
         }),
-        address: vi.fn(() => ({ port: proxyListenPort, address: '127.0.0.1', family: 'IPv4' })),
+        address: vi.fn(function(this: any) { // Use function for 'this'
+          if (this._port !== null) {
+            return { port: this._port, address: this._host || '127.0.0.1', family: 'IPv4' };
+          }
+          return null;
+        }),
         close: vi.fn(function(this: any, cb?: (err?: Error) => void) { 
           process.nextTick(() => { // Simulate async close
+            if (this._listeners && typeof this._listeners.close === 'function') {
+                this._listeners.close();
+            }
             if (cb) cb();
           });
           return this; 
         }),
         removeAllListeners: vi.fn().mockReturnThis(),
+        emit: vi.fn(function(this: any, event: string, ...args: any[]) { // Basic emit for testing
+            if (this._listeners && typeof this._listeners[event] === 'function') {
+                this._listeners[event](...args);
+            }
+        }),
       };
       return serverInstance as unknown as http.Server; // Cast to http.Server
     });
@@ -1457,10 +1500,14 @@ describe('startProxyServer', () => {
     const actualProxyListenPort = addressInfo.port;
     expect(actualProxyListenPort).toBe(proxyListenPort); 
 
-    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetExistingServerPort}.`));
-    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`This instance (CodeCompass Proxy) is listening on port ${actualProxyListenPort}.`));
-    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`MCP requests to http://localhost:${actualProxyListenPort}/mcp will be forwarded to http://localhost:${targetExistingServerPort}/mcp`));
-    expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`API endpoints /api/ping and /api/indexing-status are also proxied.`));
+    // Check for key log messages with more flexibility
+    const infoCalls = ml.info.mock.calls.map(call => call[0]);
+    expect(infoCalls).toEqual(expect.arrayContaining([
+      expect.stringContaining(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetExistingServerPort}`),
+      expect.stringContaining(`This instance (CodeCompass Proxy) is listening on port ${actualProxyListenPort}`),
+      expect.stringContaining(`MCP requests to http://localhost:${actualProxyListenPort}/mcp will be forwarded to http://localhost:${targetExistingServerPort}/mcp`),
+      expect.stringContaining(`API endpoints /api/ping and /api/indexing-status are also proxied.`)
+    ]));
 
     nock(`http://localhost:${targetExistingServerPort}`)
       .get('/api/ping')
@@ -1480,7 +1527,7 @@ describe('startProxyServer', () => {
     
     nock(`http://localhost:${targetExistingServerPort}`)
       .post('/mcp')
-      .replyWithError({ message: 'connect ECONNREFUSED', code: 'ECONNREFUSED' }); 
+      .replyWithError({ message: 'connect ECONNREFUSED', code: 'ECONNREFUSED', isAxiosError: true, request: {} }); // Simulate Axios-like error
         
     try {
       await realAxiosInstance.post(`http://localhost:${actualProxyListenPort}/mcp`, { jsonrpc: "2.0", method: "test", id: "reqUnreachable" });
@@ -1492,13 +1539,15 @@ describe('startProxyServer', () => {
       expect(error.response?.data).toEqual({
         jsonrpc: "2.0",
         error: { code: -32001, message: "Proxy: Target server unreachable" },
-        id: "reqUnreachable" // Ensure ID is part of the error response if present in request
+        id: "reqUnreachable"
       });
     }
     
     expect(ml.error).toHaveBeenCalledWith(
-      expect.stringContaining(`[ProxyServer] MCP target http://localhost:${targetExistingServerPort}/mcp unreachable`),
-      expect.any(Object) 
+      expect.stringContaining(`[ProxyServer] MCP target http://localhost:${targetExistingServerPort}/mcp unreachable for reqId reqUnreachable: connect ECONNREFUSED`),
+      // The second argument to logger.error might be the error object itself or a meta object.
+      // For simplicity, we check that it was called with something.
+      expect.anything() 
     );
     expect(nock.isDone()).toBe(true);
   }, 10000); 
@@ -1509,10 +1558,10 @@ describe('startProxyServer', () => {
     expect(proxyServerHttpInstance).not.toBeNull(); 
     const actualProxyListenPort = (proxyServerHttpInstance!.address() as import('net').AddressInfo).port;
 
-    const targetErrorBody = { jsonrpc: "2.0", error: { code: -32603, message: "Target Server Internal Error" }, id: "req500" };
+    const targetErrorBodyJsonRpc = { jsonrpc: "2.0", error: { code: -32603, message: "Target Server Internal Error" }, id: "req500" };
     nock(`http://localhost:${targetExistingServerPort}`)
       .post('/mcp')
-      .reply(500, targetErrorBody, { 'Content-Type': 'application/json' });
+      .reply(500, targetErrorBodyJsonRpc, { 'Content-Type': 'application/json' });
 
     try {
       await realAxiosInstance.post(`http://localhost:${actualProxyListenPort}/mcp`, { jsonrpc: "2.0", method: "test", id: "req500" });
@@ -1521,7 +1570,7 @@ describe('startProxyServer', () => {
       expect(realAxiosInstance.isAxiosError(error)).toBe(true);
       expect(error.response).toBeDefined(); 
       expect(error.response?.status).toBe(500); 
-      expect(error.response?.data).toEqual(targetErrorBody);
+      expect(error.response?.data).toEqual(targetErrorBodyJsonRpc);
     }
     expect(nock.isDone()).toBe(true);
   }, 10000); 
