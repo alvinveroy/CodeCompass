@@ -338,20 +338,55 @@ The debugging journey involved extensive work on Vitest mocking for dynamically 
     *   The remaining integration test failures are due to assertions expecting output from a "real" or more detailed server, while the SUT mock server provides simpler, "SUT Mock"-branded responses. These assertions need to be aligned with the mock server's actual behavior.
     *   The `index.test.ts` failure (`should show error and help for unknown command` resolving undefined) suggests that yargs is not treating "unknowncommand" as an error that causes a promise rejection. This is likely because the default command `$0 [repoPath]` is consuming "unknowncommand" as a valid `repoPath`, and the mocked `startServerHandler` then completes successfully. Adding `.strictCommands(true)` to yargs should address this.
     *   The `server.test.ts` `startProxyServer` timeouts persist. Increasing test timeouts is a first step to diagnose if it's slowness or a genuine hang.
-*   **Next Steps/Plan (Attempt 117):**
+*   **Next Steps/Plan (Attempt 118 - from previous analysis, before this current output):**
+    1.  **`DEBUG_SESSION.MD`:** Update with analysis of Attempt 118's results.
+    2.  **`src/index.ts` (Yargs unknown command handling):** Modify yargs config (e.g. `demandCommand(1, ...)` and ensure `$0` default is less greedy).
+    3.  **`src/tests/index.test.ts` (`should show error and help for unknown command`):** Expect test to pass with yargs changes.
+    4.  **`src/index.ts` (SUT Mock for `trigger_repository_update`):** Modify SUT mock to log expected Qdrant message.
+    5.  **`src/lib/server.ts` & `src/tests/server.test.ts` (`startProxyServer` Timeouts):** Add diagnostic logging to `startProxyServer` and the failing test.
+
+---
+## Attempt 118: Addressing Yargs, Integration Qdrant Log, and Server Timeouts - Results
+
+*   **Attempt Number:** 118
+*   **Last Git Commit for this attempt's changes:** User applied changes based on Attempt 117's plan (e.g., `demandCommand`, SUT mock logging, `startProxyServer` diagnostics).
+*   **Intended Fixes (from Attempt 117's plan):**
+    *   Resolve `index.test.ts` "unknown command" failure with yargs `demandCommand` and adjustments.
+    *   Resolve `integration.test.ts` `trigger_repository_update` failure by having the SUT mock log the expected Qdrant message.
+    *   Gain insights into `server.test.ts` `startProxyServer` timeouts with added diagnostic logging.
+*   **Applied Changes (leading to current state):**
+    *   User applied the changes as per the plan for Attempt 118.
+*   **Result (Based on User's `npm run build` Output after applying Attempt 117's plan):**
+    *   **TypeScript Compilation (`tsc`):**
+        *   **PASSES.**
+    *   **`src/tests/index.test.ts` (CLI Unit Tests):**
+        *   **1/22 tests FAILED.**
+        *   `CLI with yargs (index.ts) > Error Handling and Strict Mode by yargs > should show error and help for unknown command`: Still fails with `AssertionError: promise resolved "undefined" instead of rejecting`. The `demandCommand(1, ...)` change did not resolve this.
+    *   **`src/tests/integration/stdio-client-server.integration.test.ts`:**
+        *   **1/9 tests FAILED.**
+        *   `Stdio Client-Server Integration Tests > should call trigger_repository_update and verify indexing starts`: Still fails with `AssertionError: Expected Qdrant mock upsert log not found. SUT output: ...`. The SUT output provided in the error message is JSON-RPC, not the raw SUT console/stderr output where the mock log would appear. The SUT mock server's `console.error` log for Qdrant upsert was likely not captured or asserted correctly by the test.
+    *   **`src/tests/server.test.ts`:**
+        *   **4/28 tests FAILED** (all timeouts in `startProxyServer` suite), no change. The added diagnostic logs were not included in the user's summary, so their content is unknown, but the tests still timed out.
+*   **Analysis/Retrospection (Attempt 118 Results):**
+    *   **Yargs Unknown Command (`index.test.ts`):** The `demandCommand(1, ...)` in `src/index.ts` was insufficient. The default command `$0 [repoPath]` likely still consumes "unknowncommand" as `repoPath`, preventing yargs from flagging it as an unknown command and triggering the `.fail()` handler as expected by the test. The test expects a rejection, but the command handler resolves.
+    *   **Integration Test Qdrant Log (`integration.test.ts`):** The test `should call trigger_repository_update and verify indexing starts` is not correctly capturing or asserting the `console.error` log from the SUT's mock Qdrant simulation. The test captures `sutOutputCaptured` by directly attaching to the spawned SUT process's `stdout` and `stderr`. The SDK's `StdioClientTransport` itself provides a `stderr` stream property that should be used for capturing stderr output from the SUT.
+    *   **Server Timeouts (`server.test.ts`):** The `startProxyServer` tests continue to time out even with increased individual test timeouts and added SUT-side logging. The root cause is likely within the test setup for `startProxyServer`, specifically how `http.createServer()` and its methods (`listen`, `on`, `once`, `close`) are mocked within this suite's `beforeEach`. If the mock server instance returned by `http.createServer()` doesn't correctly simulate event emissions (e.g., `'listening'`) or callback invocations, `findFreePort` (which is called by `startProxyServer`) can hang, leading to timeouts in all tests that use `startProxyServer` without a rejecting mock for `findFreePort`. The test `should resolve with null if findFreePort fails` also times out, which is particularly indicative of `findFreePort` (or the promise chain in `startProxyServer`) not settling when `findFreePort` is mocked to reject.
+*   **Next Steps/Plan (Attempt 119):**
     1.  **`DEBUG_SESSION.MD`:** Update with this analysis (this step).
     2.  **`src/index.ts` (Yargs unknown command handling):**
-        *   Add `.strictCommands(true)` to the yargs configuration to ensure truly unknown commands trigger an error.
+        *   Add `.strict()` to the yargs configuration. This makes yargs strict about all unrecognized arguments (commands and options). This, in conjunction with `.strictCommands(true)`, should ensure that an argument not matching any defined command or option is treated as an error.
     3.  **`src/tests/index.test.ts` (`should show error and help for unknown command`):**
-        *   The existing test assertion for this case should pass once `strictCommands(true)` is added to `src/index.ts`, as the yargs `.fail()` handler (with `VITEST_TESTING_FAIL_HANDLER="true"`) is designed to throw the expected error. No change to the test itself is anticipated for this specific issue.
-    4.  **`src/tests/integration/stdio-client-server.integration.test.ts` (Assertion Errors):**
-        *   Update the assertions in the 5 failing tests to match the actual responses generated by the SUT's internal mock server (`startSutMockServer` and its tool handlers in `src/index.ts`).
+        *   No changes anticipated for the test itself. The yargs configuration change should allow the existing assertion (`expect(...).rejects.toThrowError(...)`) to pass.
+    4.  **`src/tests/integration/stdio-client-server.integration.test.ts` (`trigger_repository_update` Qdrant log):**
+        *   Modify the test `should call trigger_repository_update and verify indexing starts`. Instead of accessing `(transport as any)._process.stderr`, it should use the public `transport.stderr` stream provided by the `StdioClientTransport` SDK to capture SUT stderr output.
     5.  **`src/tests/server.test.ts` (`startProxyServer` Timeouts):**
-        *   For all 4 failing `startProxyServer` tests, increase their individual test timeouts from 5000ms to 10000ms.
-
-### Blockers (Anticipated based on current analysis)
-*   The `startProxyServer` timeouts in `server.test.ts`, if increasing the timeout doesn't resolve them.
-*   Ensuring the yargs configuration in `src/index.ts` and the corresponding test in `src/tests/index.test.ts` correctly handle unknown commands and their errors after adding `strictCommands(true)`.
+        *   In the `beforeEach` hook for the `startProxyServer` test suite, significantly revise the mock implementation for `http.createServer()`. The mock server instance returned by `vi.mocked(http.createServer).mockReturnValue(...)` must:
+            *   Correctly handle `on(event, callback)` and `once(event, callback)` to store listeners on the mock instance itself.
+            *   Ensure its `listen` method, when successful, asynchronously emits the `'listening'` event (e.g., using `process.nextTick(() => this._listeners.listening())`) *before* calling any direct callback passed to `listen`. This is crucial for `findFreePort`'s logic.
+            *   Ensure its `close` method correctly calls its callback.
+        *   This change aims to make `findFreePort` behave correctly when it's not explicitly spied on to reject, which should resolve the timeouts in the four `startProxyServer` tests. The test `should resolve with null if findFreePort fails` should also pass as `startProxyServer`'s promise will settle correctly when its `await findFreePort()` call (which is mocked to reject in that specific test) throws.
+*   **Blockers (Anticipated based on current analysis):**
+    *   Ensuring the revised `http.createServer` mock in `server.test.ts` is comprehensive enough to satisfy all interactions by `findFreePort` and `startProxyServer`.
 
 ---
 

@@ -1288,35 +1288,65 @@ describe('startProxyServer', () => {
     // Ensure the createServer mock returns an object that includes 'once' correctly.
     // The createNewMockServerObject function (used by the global http mock) already does this.
     // We need to ensure the local override for this suite also does.
-    // Default mock for http.createServer and its listen method for this suite
-    // This ensures that the server instance created by startProxyServer has an async listen.
-    const mockProxyHttpServerInstance = {
-      listen: vi.fn((portOrPathOrOptions: any, arg2: any, arg3: any, arg4: any) => {
-        let actualCallback: (() => void) | undefined;
-        // Determine which argument is the callback based on common http.Server.listen signatures
-        if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { // listen(options, callback)
-          actualCallback = arg2 as (() => void);
-        } else if (typeof arg2 === 'function') { // listen(port, callback)
-          actualCallback = arg2;
-        } else if (typeof arg3 === 'function') { // listen(port, host, callback)
-          actualCallback = arg3;
-        } else if (typeof arg4 === 'function') { // listen(port, host, backlog, callback)
-          actualCallback = arg4;
-        }
+    
+    // Revised mock for http.createServer specifically for the startProxyServer suite
+    const createMockHttpServerForProxyTests = () => {
+      const serverInstance = {
+        _listeners: {} as Record<string, ((...args: any[]) => void) | undefined>,
+        listen: vi.fn(function(this: any, portOrPathOrOptions: any, arg2?: any, arg3?: any, arg4?: any) {
+          let actualCallback: (() => void) | undefined;
+          if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { actualCallback = arg2 as (() => void); }
+          else if (typeof arg2 === 'function') { actualCallback = arg2; }
+          else if (typeof arg3 === 'function') { actualCallback = arg3; }
+          else if (typeof arg4 === 'function') { actualCallback = arg4; }
 
-        if (actualCallback) {
-          process.nextTick(actualCallback);
-        }
-        return mockProxyHttpServerInstance; // Return itself
-      }),
-      on: vi.fn().mockReturnThis(),
-      once: vi.fn().mockReturnThis(),
-      address: vi.fn(() => ({ port: proxyListenPort, address: '127.0.0.1', family: 'IPv4' })),
-      close: vi.fn((cb) => { if (cb) cb(); return mockProxyHttpServerInstance; }), // Ensure close calls callback
-      removeAllListeners: vi.fn().mockReturnThis(),
-      _listeners: {} as Record<string, (...args: any[]) => void>,
+          const portToListen = typeof portOrPathOrOptions === 'number' ? portOrPathOrOptions : (portOrPathOrOptions as net.ListenOptions)?.port;
+
+          // Simulate EADDRINUSE for findFreePort tests if needed by a specific test's mock of listen
+          // For startProxyServer itself, we usually want listen to succeed for the proxy.
+          // The findFreePort function, when *not* spied on, will use this http.createServer mock.
+          if (process.env.SIMULATE_EADDRINUSE_FOR_PROXY_SUITE_LISTEN === String(portToListen)) {
+            if (this._listeners && typeof this._listeners.error === 'function') {
+              const error = new Error(`Simulated EADDRINUSE for port ${portToListen}`) as NodeJS.ErrnoException;
+              error.code = 'EADDRINUSE';
+              process.nextTick(() => this._listeners.error!(error));
+            }
+          } else {
+            // Simulate successful listen: emit 'listening' then call direct callback
+            process.nextTick(() => {
+              if (this._listeners && typeof this._listeners.listening === 'function') {
+                this._listeners.listening();
+              }
+              if (actualCallback) {
+                actualCallback();
+              }
+            });
+          }
+          return this; // Return server instance
+        }),
+        on: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
+          this._listeners[event] = callback;
+          return this;
+        }),
+        once: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
+          // Simple 'once' implementation for mock: store it, findFreePort uses it once.
+          this._listeners[event] = callback; 
+          return this;
+        }),
+        address: vi.fn(() => ({ port: proxyListenPort, address: '127.0.0.1', family: 'IPv4' })),
+        close: vi.fn(function(this: any, cb?: (err?: Error) => void) { // Ensure 'this' context and optional error
+          if (cb) {
+            // Simulate async close if necessary, or just call back
+            process.nextTick(() => cb()); 
+          }
+          return this; 
+        }),
+        removeAllListeners: vi.fn().mockReturnThis(),
+      };
+      return serverInstance;
     };
-    vi.mocked(http.createServer).mockReturnValue(mockProxyHttpServerInstance as unknown as http.Server);
+    vi.mocked(http.createServer).mockImplementation(createMockHttpServerForProxyTests as any);
+
 
     // Default successful behavior for findFreePortSpy
     findFreePortSpy.mockReset().mockResolvedValue(proxyListenPort);

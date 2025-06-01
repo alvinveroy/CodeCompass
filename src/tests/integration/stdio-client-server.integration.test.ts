@@ -467,16 +467,26 @@ describe('Stdio Client-Server Integration Tests', () => {
     // vi.mocked(qdrantModule.batchUpsertVectors).mockClear(); // No longer spying on this
 
     const sutOutputCaptured: string[] = [];
-    // Access the underlying process directly to capture output
-    // We need to cast transport to access private members
-    const transportProcess = (transport as any)._process as ChildProcess;
-    if (transportProcess) {
-      transportProcess.stdout?.on('data', (data) => {
-        sutOutputCaptured.push(data.toString());
+    // Use the public transport.stderr stream provided by the SDK
+    if (transport.stderr) {
+      transport.stderr.on('data', (data: Buffer) => {
+        const output = data.toString();
+        sutOutputCaptured.push(output);
+        // Optional: Log captured stderr for easier debugging if the test still fails
+        // console.log(`[SUT_STDERR_CAPTURE_DEBUG] ${output}`);
       });
-      transportProcess.stderr?.on('data', (data) => {
-        sutOutputCaptured.push(data.toString());
-      });
+    } else {
+      console.warn("[INTEGRATION_TEST_DEBUG] transport.stderr is null, cannot capture SUT stderr for Qdrant log check.");
+    }
+
+    // Also capture stdout if needed for other debugging, though the target log is on stderr
+    // Accessing _process is a workaround; ideally, SDK would expose stdout if needed for tests.
+    const transportProcess = (transport as any)._process as NodeChildProcess; // Use NodeChildProcess type
+    if (transportProcess && transportProcess.stdout) {
+        transportProcess.stdout.on('data', (data: Buffer) => {
+            sutOutputCaptured.push(data.toString());
+            // console.log(`[SUT_STDOUT_CAPTURE_DEBUG] ${data.toString()}`);
+        });
     }
 
     // Wait for indexing to be idle if it started automatically
