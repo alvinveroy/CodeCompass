@@ -350,7 +350,12 @@ describe('CLI with yargs (index.ts)', () => {
       const sutModule = await import(currentSutIndexPath) as { main: () => Promise<void> };
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] Dynamic import of SUT from ${currentSutIndexPath} completed.`);
       // Ensure the promise from main() is properly handled to propagate rejections
-      await sutModule.main(); 
+      if (typeof sutModule.main === 'function') {
+        await sutModule.main();
+      } else {
+        // This case should ideally not be reached due to the type assertion on import
+        throw new Error('SUT main function not found or not a function after dynamic import.');
+      }
       console.error(`[INDEX_TEST_RUN_MAIN_DEBUG] SUT main() executed and resolved.`);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
@@ -755,11 +760,10 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should show error and help for unknown option', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      const expectedErrorMsgPart = "Unknown arguments: unknown-option"; 
+      const expectedErrorMsgPart = "Unknown arguments: unknown-option";
+      const errorMatcher = expect.objectContaining({ message: expect.stringContaining(expectedErrorMsgPart) });
       // Yargs throws an error object. The message property contains the string.
-      await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrow(
-        expect.objectContaining({ message: expect.stringContaining(expectedErrorMsgPart) })
-      );
+      await expect(runMainWithArgs(['--unknown-option'])).rejects.toThrow(errorMatcher);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(expectedErrorMsgPart));
       // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
