@@ -34,8 +34,8 @@ console.error(`[INDEX_TEST_VI_MOCK_SETUP_DEBUG] Attempting to mock config-servic
 vi.mock('../../src/lib/config-service.ts', () => {
   console.log(`[INDEX_TEST_VI_MOCK_DEBUG] TOP-LEVEL vi.mock factory for ../../src/lib/config-service.ts (config-service.ts) IS RUNNING.`);
   return {
-    get configService() { return currentMockConfigServiceInstance; },
-    get logger() { return currentMockLoggerInstance; },
+    configService: mockConfigServiceForFactory, // Return the stable mock object directly
+    logger: mockLoggerForFactory,           // Return the stable mock object directly
   };
 });
 
@@ -61,17 +61,46 @@ const mockMcpClientInstance = { // DEFINED HERE
   close: vi.fn(),
 };
 
-// Import the actual configService to base the mock on
-import { configService as actualConfigService, type ConfigService } from '../../src/lib/config-service';
-
-// Store the original configService mock structure to reset it
-// const originalMockConfigServiceInstance = { HTTP_PORT: 0, AGENT_QUERY_TIMEOUT: 180000 }; // Replaced by actualConfigService spread
-
-// These will be freshly created in beforeEach
-let currentMockConfigServiceInstance: typeof actualConfigService; 
-let currentMockLoggerInstance: { 
-  info: Mock; warn: Mock; error: Mock; debug: Mock;
+// Import the TYPE of the actual ConfigService, not the instance.
+import type { ConfigService as ActualConfigServiceType } from '../../src/lib/config-service';
+// Define the stable mock objects that the factory will return.
+const mockLoggerForFactory = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
 };
+
+const mockConfigServiceForFactory = {
+  // Properties from ActualConfigServiceType that the SUT might use
+  HTTP_PORT: 0, // Default for tests, mutable
+  AGENT_QUERY_TIMEOUT: 180000, // Default, mutable
+  DEEPSEEK_API_KEY: 'mock_deepseek_key',
+  OLLAMA_HOST: 'http://mock-ollama',
+  QDRANT_HOST: 'http://mock-qdrant',
+  COLLECTION_NAME: 'mock-collection',
+  SUGGESTION_MODEL: 'mock-suggestion-model',
+  SUGGESTION_PROVIDER: 'mock-suggestion-provider',
+  EMBEDDING_MODEL: 'mock-embedding-model',
+  EMBEDDING_PROVIDER: 'mock-embedding-provider',
+  OPENAI_API_KEY: 'mock_openai_key',
+  GEMINI_API_KEY: 'mock_gemini_key',
+  CLAUDE_API_KEY: 'mock_claude_key',
+  VERSION: 'mock-version-from-factory', // Specific to mock
+  MAX_INPUT_LENGTH: 1000,
+  MAX_SNIPPET_LENGTH: 100,
+  REQUEST_TIMEOUT: 5000,
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 100,
+  // Add any other properties or getters from ActualConfigServiceType as needed
+  // e.g., get LLM_PROVIDER() { return this.SUGGESTION_PROVIDER; },
+  // Methods
+  reloadConfigsFromFile: vi.fn(),
+} as unknown as ActualConfigServiceType & { reloadConfigsFromFile: Mock; VERSION: string; AGENT_QUERY_TIMEOUT: number }; // Cast for type safety, include mutable/mock-specific props
+
+// These `let` variables will be assigned in `beforeEach` for convenience.
+let currentMockConfigServiceInstance: typeof mockConfigServiceForFactory;
+let currentMockLoggerInstance: typeof mockLoggerForFactory;
 
 // Define mock functions and ServerStartupError class first
 const mockStartServerHandler = vi.fn().mockResolvedValue({ close: vi.fn() }); // Renamed from mockStartServer for clarity
@@ -247,21 +276,23 @@ describe('CLI with yargs (index.ts)', () => {
     
     mockProcessExit.mockClear(); // Clear mockProcessExit calls
         
-    // Reset the mutable mockConfigServiceInstance by spreading the actual and overriding
-    currentMockConfigServiceInstance = {
-      ...actualConfigService, // Spread all properties from the actual configService
-      // Override specific properties for tests:
-      HTTP_PORT: 0, // Default for tests, can be overridden by yargs --port
-      AGENT_QUERY_TIMEOUT: 1000, // Shorter timeout for tests
-      // Ensure logger is mocked if it's part of actualConfigService, or handle separately
-      // For this setup, logger is a separate export from the module, handled by currentMockLoggerInstance
-      reloadConfigsFromFile: vi.fn(), // Ensure methods are mocked if called
-    } as unknown as ConfigService; // Assert the type via unknown to satisfy TypeScript for complex class mocks
-    currentMockLoggerInstance = {
-      info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
-    };
+    // Assign references to the stable mock singletons
+    currentMockConfigServiceInstance = mockConfigServiceForFactory;
+    currentMockLoggerInstance = mockLoggerForFactory;
+
+    // Reset the state of the stable mock singletons
+    currentMockConfigServiceInstance.reloadConfigsFromFile.mockClear();
+    currentMockConfigServiceInstance.HTTP_PORT = 0; // Reset to default test value
+    currentMockConfigServiceInstance.AGENT_QUERY_TIMEOUT = 1000; // Reset to test value
+    // Add resets for any other properties of mockConfigServiceForFactory that tests might change
+
+    currentMockLoggerInstance.info.mockClear();
+    currentMockLoggerInstance.warn.mockClear();
+    currentMockLoggerInstance.error.mockClear();
+    currentMockLoggerInstance.debug.mockClear();
+    
     // Reset other top-level mocks that might be stateful
-    mockStartServerHandler.mockReset().mockResolvedValue(undefined); // mockStartServerHandler is defined before vi.doMock
+    mockStartServerHandler.mockReset().mockResolvedValue(undefined);
     mockStartProxyServer.mockReset().mockResolvedValue(undefined);
     
     mockMcpClientInstance.callTool.mockReset().mockResolvedValue({ content: [{ type: 'text', text: 'Tool call success' }] });
