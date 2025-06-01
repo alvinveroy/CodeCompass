@@ -471,8 +471,8 @@ async function startSutMockServer(repoPath: string) {
   
   mcpServer.tool("switch_suggestion_model", "Mock switch_suggestion_model", { model: z.string(), provider: z.string().optional() }, (args: {model: string, provider?: string}) => {
     sutLogger.info(`[SUT_MOCK_SERVER] Mock tool 'switch_suggestion_model' called with model: ${args.model}, provider: ${args.provider}`);
-    sutConfigService.SUGGESTION_MODEL = args.model;
-    if (args.provider) sutConfigService.SUGGESTION_PROVIDER = args.provider;
+    global.CURRENT_SUGGESTION_MODEL = args.model;
+    if (args.provider) global.CURRENT_SUGGESTION_PROVIDER = args.provider;
     return { content: [{ type: "text", text: `# Suggestion Model Switched (SUT Mock)\n\nSwitched to ${args.model}` }] };
   });
 
