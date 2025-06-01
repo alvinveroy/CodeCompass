@@ -1355,14 +1355,15 @@ describe('startProxyServer', () => {
     nock.enableNetConnect((host) => host.startsWith('127.0.0.1') || host.startsWith('localhost'));
 
     // Ensure the http.createServer mock used by startProxyServer behaves asynchronously for listen and close
+    // This mock is specific to the 'startProxyServer' describe block.
     vi.mocked(http.createServer).mockImplementation(() => {
       const serverInstance = {
-        _listeners: {} as Record<string, ((...args: any[]) => void) | undefined>,
-        _port: null as number | null, // Add _port to store the listening port
-        _host: null as string | null, // Add _host to store the listening host
+        _listeners: {} as Record<string, ((...args: any[]) => void) | ((...args: any[]) => void)[] | undefined>,
+        _port: null as number | null,
+        _host: null as string | null,
         listen: vi.fn(function(this: any, portOrPathOrOptions: any, hostOrCb?: any, backlogOrCb?: any, cb?: any) {
           let portToListen: number | undefined;
-          let hostToListen: string | undefined = 'localhost'; // Default host
+          let hostToListen: string | undefined = '127.0.0.1'; // Default host for listen
           let actualCallback: (() => void) | undefined;
 
           if (typeof portOrPathOrOptions === 'number') {
@@ -1374,7 +1375,7 @@ describe('startProxyServer', () => {
             } else if (typeof hostOrCb === 'function') {
               actualCallback = hostOrCb;
             }
-          } else if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { // Options object
+          } else if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) {
             portToListen = (portOrPathOrOptions as import('net').ListenOptions).port;
             hostToListen = (portOrPathOrOptions as import('net').ListenOptions).host || hostToListen;
             if (typeof hostOrCb === 'function') actualCallback = hostOrCb;
@@ -1383,59 +1384,67 @@ describe('startProxyServer', () => {
           this._port = portToListen ?? null;
           this._host = hostToListen ?? null;
 
-          process.nextTick(() => { // Simulate async listen
+          process.nextTick(() => {
             if (this._listeners && typeof this._listeners.listening === 'function') {
-              this._listeners.listening();
+              (this._listeners.listening as () => void)();
+            } else if (Array.isArray(this._listeners?.listening)) {
+                (this._listeners.listening as ((...args: any[]) => void)[]).forEach(fn => fn());
             }
-            if (actualCallback) {
-              actualCallback();
-            }
+            if (actualCallback) actualCallback();
           });
           return this; 
         }),
         on: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
-          if (!this._listeners[event]) this._listeners[event] = [];
-          this._listeners[event].push(callback); // Support multiple listeners if needed, though emit below is simple
-          // For simplicity, if 'error' or 'listening' is set, we'll just use the last one for emit.
-          // A full EventEmitter mock would handle arrays of listeners.
-          // For this test's purpose, storing the last one for 'error' and 'listening' is likely sufficient.
-          if (event === 'error' || event === 'listening' || event === 'close') {
-             this._listeners[event] = callback; // Overwrite for simplicity for these key events
+          if (!this._listeners[event]) {
+            this._listeners[event] = [];
+          }
+          if (Array.isArray(this._listeners[event])) {
+            (this._listeners[event] as ((...args: any[]) => void)[]).push(callback);
+          } else { // If it was a single function (e.g. from 'once'), make it an array
+            this._listeners[event] = [this._listeners[event] as (...args: any[]) => void, callback];
           }
           return this;
         }),
         once: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
-          // A simple once: store it, and if emit is called, it will be invoked then cleared.
-          // For findFreePort, it uses 'once' for 'error' and 'listening'.
-          this._listeners[event] = (...args: any[]) => {
-            delete this._listeners[event]; // Remove after one call
+          const onceWrapper = (...args: any[]) => {
+            if (Array.isArray(this._listeners[event])) {
+              this._listeners[event] = (this._listeners[event] as ((...args: any[]) => void)[]).filter(fn => fn !== onceWrapper);
+            } else if (this._listeners[event] === onceWrapper) {
+              delete this._listeners[event];
+            }
             callback(...args);
           };
+          this.on(event, onceWrapper); // Use the 'on' method to add it
           return this;
         }),
-        address: vi.fn(function(this: any) { // Use function for 'this'
+        address: vi.fn(function(this: any) {
           if (this._port !== null) {
             return { port: this._port, address: this._host || '127.0.0.1', family: 'IPv4' };
           }
           return null;
         }),
         close: vi.fn(function(this: any, cb?: (err?: Error) => void) { 
-          process.nextTick(() => { // Simulate async close
+          process.nextTick(() => {
             if (this._listeners && typeof this._listeners.close === 'function') {
-                this._listeners.close();
+                (this._listeners.close as () => void)();
+            } else if (Array.isArray(this._listeners?.close)) {
+                (this._listeners.close as ((...args: any[]) => void)[]).forEach(fn => fn());
             }
             if (cb) cb();
           });
           return this; 
         }),
         removeAllListeners: vi.fn().mockReturnThis(),
-        emit: vi.fn(function(this: any, event: string, ...args: any[]) { // Basic emit for testing
-            if (this._listeners && typeof this._listeners[event] === 'function') {
-                this._listeners[event](...args);
+        emit: vi.fn(function(this: any, event: string, ...args: any[]) {
+            const listeners = this._listeners?.[event];
+            if (typeof listeners === 'function') {
+                listeners(...args);
+            } else if (Array.isArray(listeners)) {
+                listeners.forEach(fn => fn(...args));
             }
         }),
       };
-      return serverInstance as unknown as http.Server; // Cast to http.Server
+      return serverInstance as unknown as http.Server;
     });
   });
 
@@ -1501,7 +1510,7 @@ describe('startProxyServer', () => {
     expect(actualProxyListenPort).toBe(proxyListenPort); 
 
     // Check for key log messages with more flexibility
-    const infoCalls = ml.info.mock.calls.map(call => call[0]);
+    const infoCalls = ml.info.mock.calls.map(call => String(call[0])); // Ensure string for matching
     expect(infoCalls).toEqual(expect.arrayContaining([
       expect.stringContaining(`Original CodeCompass server (v1.0.0-existing) is running on port ${targetExistingServerPort}`),
       expect.stringContaining(`This instance (CodeCompass Proxy) is listening on port ${actualProxyListenPort}`),

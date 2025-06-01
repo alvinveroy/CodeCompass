@@ -1690,7 +1690,7 @@ export async function startProxyServer(
     // const tempServerForPortCheck = http.createServer(); // Not needed if findFreePort creates its own
     proxyListenPort = await findFreePort(initialPortForProxySearch); // findFreePort internally creates server for checks
     logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
-  } catch (error: unknown) { // Ensure error is typed as unknown or any
+  } catch (error) { // Keep error as any or unknown for broader catch
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error(`[ProxyServer] Failed to find free port for proxy: ${err.message}`, { errorDetails: err });
     return null; // Return null if findFreePort fails
@@ -1744,7 +1744,7 @@ export async function startProxyServer(
             Object.keys(error.response.headers).forEach(key => {
                 const headerValue = error.response!.headers[key];
                 // Forward common headers, especially content-type for JSON errors
-                if (headerValue !== undefined && ['content-type', 'content-length', 'mcp-session-id', 'cache-control', 'connection'].includes(key.toLowerCase())) {
+                if (headerValue !== undefined && ['content-type', 'content-length', 'mcp-session-id', 'cache-control', 'connection', 'transfer-encoding'].includes(key.toLowerCase())) {
                     res.setHeader(key, headerValue as string | string[]);
                 }
             });
