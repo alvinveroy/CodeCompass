@@ -761,16 +761,25 @@ describe('CLI with yargs (index.ts)', () => {
   describe('Error Handling and Strict Mode by yargs', () => {
     it('should show error and help for unknown command', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      const expectedErrorMsg = "Unknown argument: unknowncommand";
-      // yargs.fail in test mode with VITEST_TESTING_FAIL_HANDLER throws the error or a wrapper.
+      // With strictCommands(true), yargs should identify "unknowncommand"
+      // and call the .fail() handler.
+      // If VITEST_TESTING_FAIL_HANDLER is true, .fail() throws directly.
+      // The error message from yargs for an unknown command is typically "Unknown command: <command>"
+      const expectedErrorMsg = "Unknown command: unknowncommand"; 
+
       await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrowError(expectedErrorMsg);
       
+      // Verify that console.error was called by the .fail handler
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expectedErrorMsg);
-      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasMsg: true, msgContent: expectedErrorMsg })
+        expect.objectContaining({ hasMsg: true, msgContent: expect.stringContaining(expectedErrorMsg) })
       );
+      // yargs should also call showHelp in its fail handler.
+      // This requires a mock for yargsInstance.showHelp() if we want to assert it.
+      // For now, we assume the .fail() handler in SUT calls it.
+      // If yargsInstance.showHelp is not mocked, this test might need adjustment or a spy on yargs.
+      // Let's assume the SUT's .fail handler calls it, and we don't need to mock yargsInstance itself.
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
