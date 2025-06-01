@@ -29,6 +29,16 @@ import type { ChildProcess } from 'child_process';
 import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Client as MCPClientSdk } from '@modelcontextprotocol/sdk/client/index.js';
 
+// Helper function to create a fallback logger with no-op methods
+const createFallbackLogger = (prefix = '[FALLBACK_LOGGER]') => ({
+  error: (...args: any[]) => console.error(prefix, ...args),
+  info: (..._args: any[]) => { /* no-op */ },
+  warn: (..._args: any[]) => { /* no-op */ },
+  debug: (..._args: any[]) => { /* no-op */ },
+  // Add other common logger methods as no-ops if necessary
+  // Example: log: (..._args: any[]) => { /* no-op */ },
+});
+
 // Prominent logging for NODE_ENV, VITEST_WORKER_ID, and __dirname
 console.error(`[SUT_INDEX_TS_ENV_CHECK_TOP] NODE_ENV: ${process.env.NODE_ENV}, VITEST_WORKER_ID: ${process.env.VITEST_WORKER_ID}, __dirname: ${__dirname}, isPackaged: ${!!(process as unknown as { pkg?: unknown }).pkg}`);
 
@@ -915,29 +925,19 @@ if (require.main === module) {
       libPathBaseForCatch = path.resolve(process.cwd(), 'src');
       moduleFileExtensionForDynamicImportsForCatch = '.ts';
     } else {
-      // Fallback if __dirname is not available (e.g. ESM in some Node versions without specific flags)
-      const currentFileUrl = import.meta.url;
-      const currentFilePath = new URL(currentFileUrl).pathname;
-      const currentDir = path.dirname(currentFilePath);
-      libPathBaseForCatch = path.resolve(currentDir, '../dist'); // Assuming dist is one level up from src/index.ts if __dirname is not typical
-      if (typeof __dirname !== 'undefined') { // Prefer __dirname if available
-        libPathBaseForCatch = __dirname; // In dist/index.js, __dirname is dist
-      }
-      moduleFileExtensionForDynamicImportsForCatch = '.js';
+      // Fallback if __dirname is not available (this primarily applies to pure ESM modules not run by tsx/ts-node)
+      // For 'node dist/index.js', __dirname will be 'project_root/dist'.
+      // For 'tsx src/index.ts', __dirname will be 'project_root/src'.
+      // The logic here mirrors the main() function's path determination.
+      libPathBaseForCatch = typeof __dirname !== 'undefined' ? __dirname : path.resolve(process.cwd(), 'dist');
+      moduleFileExtensionForDynamicImportsForCatch = '.js'; // Assume .js for this fallback context
     }
     const libPathForCatch = path.join(libPathBaseForCatch, 'lib');
     const configServicePathForCatch = path.join(libPathForCatch, `config-service${moduleFileExtensionForDynamicImportsForCatch}`);
 
     // Fallback logger if main one hasn't initialized or failed
-    // createFallbackLogger should be defined globally or imported if it's in a shared util
-    // For now, assuming createFallbackLogger is accessible or we define a simple one here.
-    const simpleFallbackLogger = (prefix = '[FALLBACK_LOGGER]') => ({
-        error: (...args: any[]) => console.error(prefix, ...args),
-        info: (..._args: any[]) => { /* no-op */ },
-        warn: (..._args: any[]) => { /* no-op */ },
-        debug: (..._args: any[]) => { /* no-op */ },
-    });
-    let finalLogger = simpleFallbackLogger('[FINAL_CATCH_FALLBACK]');
+    // Use the module-scoped createFallbackLogger
+    let finalLogger = createFallbackLogger('[FINAL_CATCH_FALLBACK]');
 
     try {
       // Dynamically import the config service to get the logger
