@@ -86,7 +86,8 @@ import { hideBin } from 'yargs/helpers'; // Import hideBin
 // Do not import configService or startServer here yet if we need to set process.env first.
 
 // Imports for SUT Mock Server (used in ccIntegrationTestSutMode)
-import { McpServer, StdioServerTransport as SdkStdioServerTransport } from '@modelcontextprotocol/sdk/server/mcp.js'; // Use .js for SDK
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'; // McpServer from mcp.js
+import { StdioServerTransport as SdkStdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'; // StdioServerTransport from stdio.js
 import { z } from 'zod'; // For defining mock tool schemas
 
 const changelogCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
