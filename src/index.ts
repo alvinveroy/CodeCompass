@@ -346,7 +346,7 @@ async function handleClientCommand(argv: ClientCommandArgs) {
           // stderr: serverStderrOutput.slice(-1000) // serverStderrOutput is not defined here, remove for now or pass it
         }
       };
-      const jsonRpcErr = (err as any).jsonRpcError as z.infer<typeof import('@modelcontextprotocol/sdk').JSONRPCErrorSchema>['error'] | undefined;
+      const jsonRpcErr = (err as any).jsonRpcError as z.infer<typeof import('@modelcontextprotocol/sdk/types').JSONRPCErrorSchema>['error'] | undefined;
       if (jsonRpcErr) {
         errorPayload.error.code = jsonRpcErr.code;
         errorPayload.error.data = jsonRpcErr.data;
