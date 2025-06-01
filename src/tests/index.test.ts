@@ -568,7 +568,6 @@ describe('CLI with yargs (index.ts)', () => {
       mockConsoleError.mockClear(); // Clear before run
       
       await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(
-        // This error is thrown by handleClientCommand and then re-thrown by yargs.fail()
         new Error("Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16")
       );
       
@@ -661,7 +660,7 @@ describe('CLI with yargs (index.ts)', () => {
       
       // Check if the SUT's yargs middleware logged the port being observed.
       const portLogFound = currentMockLoggerInstance.info.mock.calls.some(
-        call => typeof call[0] === 'string' && call[0].includes(`[SUT_INDEX_TS_YARGS_MW] --port option value at middleware: ${customPort}`)
+        (call: any) => typeof call[0] === 'string' && call[0].includes(`[SUT_INDEX_TS_YARGS_MW] --port option value at middleware: ${customPort}`)
       );
       expect(portLogFound, `Expected SUT log for --port middleware. Calls: ${JSON.stringify(currentMockLoggerInstance.info.mock.calls)}`).toBe(true);
       
@@ -781,7 +780,7 @@ describe('CLI with yargs (index.ts)', () => {
       const expectedErrorPattern = /Unknown command: unknowncommand|You must provide a command to run|Not enough non-option arguments|Unknown argument: unknowncommand/;
       await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrowError(expectedErrorPattern);
 
-      const consoleErrorCalls = mockConsoleError.mock.calls.map(call => call.join(' ')).join('\n');
+      const consoleErrorCalls = mockConsoleError.mock.calls.map((call: any) => call.join(' ')).join('\n');
       // Check that help output was logged
       expect(consoleErrorCalls).toMatch(/Usage: codecompass <command> \[options\]/);
       // Check that the specific error message from yargs was logged by the .fail() handler's test mode path
@@ -800,7 +799,7 @@ describe('CLI with yargs (index.ts)', () => {
       const expectedErrorMsgPattern = /Unknown argument: --unknown-option|Unknown arguments: unknown-option, unknownOption/;
       await expect(runMainWithArgs(['start', '--unknown-option'])).rejects.toThrowError(expectedErrorMsgPattern);
       
-      const consoleErrorCalls = mockConsoleError.mock.calls.map(call => call.join(' ')).join('\n');
+      const consoleErrorCalls = mockConsoleError.mock.calls.map((call: any) => call.join(' ')).join('\n');
       expect(consoleErrorCalls).toMatch(/Usage: codecompass <command> \[options\]/);
       // Check that the specific error message from yargs was logged by the .fail() handler's test mode path
       expect(consoleErrorCalls).toMatch(/YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:.*(Unknown argument: --unknown-option|Unknown arguments: unknown-option, unknownOption)/s);
@@ -882,9 +881,6 @@ describe('CLI with yargs (index.ts)', () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
       await expect(runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json']))
         .rejects.toThrow(
-          // The error thrown by yargs.fail() will be an Error instance.
-          // If handleClientCommand throws an error with a jsonRpcError property,
-          // yargs.fail() should re-throw that error object.
           expect.objectContaining({
             message: `Tool 'agent_query' failed: ${rpcErrorObject.message}`,
             jsonRpcError: rpcErrorObject,
@@ -907,7 +903,7 @@ describe('CLI with yargs (index.ts)', () => {
       )).toBe(true);
       
       // yargs .fail() handler also logs
-      const yargsFailOutputLogged = mockConsoleError.mock.calls.some(call => 
+      const yargsFailOutputLogged = mockConsoleError.mock.calls.some((call: any) => 
         call[0] === 'YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:' && 
         typeof call[1] === 'string' && call[1].includes(`Tool 'agent_query' failed: ${rpcErrorObject.message}`)
       );
@@ -936,7 +932,7 @@ describe('CLI with yargs (index.ts)', () => {
       expect(genericErrorJsonLogged, `Expected console.error to be called with: ${expectedJsonErrorLog}. Calls: ${JSON.stringify(mockConsoleError.mock.calls)}`).toBe(true);
       
       // yargs .fail() handler also logs
-      const yargsFailOutputLogged = mockConsoleError.mock.calls.some(call => 
+      const yargsFailOutputLogged = mockConsoleError.mock.calls.some((call: any) => 
         call[0] === 'YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:' && 
         typeof call[1] === 'string' && call[1] === genericError.message
       );

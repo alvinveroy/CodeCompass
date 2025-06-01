@@ -1690,7 +1690,7 @@ export async function startProxyServer(
     // const tempServerForPortCheck = http.createServer(); // Not needed if findFreePort creates its own
     proxyListenPort = await findFreePort(initialPortForProxySearch); // findFreePort internally creates server for checks
     logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
-  } catch (error: unknown) { // Explicitly type error as unknown
+  } catch (error) { // Revert to 'any' or keep 'unknown' if preferred, but ensure catch block handles it.
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error(`[ProxyServer] Failed to find free port for proxy: ${err.message}`, { errorDetails: err });
     return null; // Return null if findFreePort fails
