@@ -63,6 +63,19 @@ const mockMcpClientInstance = { // DEFINED HERE
 
 // Import the TYPE of the actual ConfigService, not the instance.
 import type { ConfigService as ActualConfigServiceType } from '../../src/lib/config-service';
+
+// Define types for the mock config service to ensure mutability for test properties
+type MockConfigServiceOverrides = {
+  HTTP_PORT: number; // Mutable for tests
+  AGENT_QUERY_TIMEOUT: number; // Mutable for tests
+  VERSION: string; // Mock-specific version
+  reloadConfigsFromFile: Mock; // Mocked method
+  // Add other properties here if they are readonly in ActualConfigServiceType but need to be mutable in tests
+};
+
+// This type combines the actual service type with our overrides, ensuring mutability.
+type TestMockConfigService = Omit<ActualConfigServiceType, keyof MockConfigServiceOverrides> & MockConfigServiceOverrides;
+
 // Define the stable mock objects that the factory will return.
 const mockLoggerForFactory = {
   info: vi.fn(),
@@ -96,7 +109,7 @@ const mockConfigServiceForFactory = {
   // e.g., get LLM_PROVIDER() { return this.SUGGESTION_PROVIDER; },
   // Methods
   reloadConfigsFromFile: vi.fn(),
-} as unknown as ActualConfigServiceType & { reloadConfigsFromFile: Mock; VERSION: string; AGENT_QUERY_TIMEOUT: number }; // Cast for type safety, include mutable/mock-specific props
+} as unknown as TestMockConfigService; // Use the new TestMockConfigService type for the cast
 
 // These `let` variables will be assigned in `beforeEach` for convenience.
 let currentMockConfigServiceInstance: typeof mockConfigServiceForFactory;
