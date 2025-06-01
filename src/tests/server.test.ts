@@ -1350,39 +1350,58 @@ describe('startProxyServer', () => {
 
     // Default successful behavior for findFreePortSpy
     findFreePortSpy.mockReset().mockResolvedValue(proxyListenPort);
-    // ... (nock setup) ...
 
-    nock.disableNetConnect(); // Default: disable network
-    // Allow connections to localhost for the proxy server itself to listen
-    // and for axios in the test to connect to the proxy.
+    nock.disableNetConnect(); 
     nock.enableNetConnect((host) => host.startsWith('127.0.0.1') || host.startsWith('localhost'));
 
-    // Ensure http.createServer mock returns a server with an async listen for this suite
-    const mockReturnedHttpServer = http.createServer(); // This will use the mock from global setup
-    // Override listen for instances created in this suite's context if needed,
-    // or ensure the global mockHttpServerListenFn (used by createNewMockServerObject) is async.
-    // The global mockHttpServerListenFn is already designed to be async with process.nextTick.
-    // This specific override ensures any http.Server instance created *within this suite's tests*
-    // (if http.createServer is called directly in test logic or by SUT functions called here)
-    // will have this specific async listen behavior.
-    if (mockReturnedHttpServer && typeof mockReturnedHttpServer.listen === 'function') {
-        vi.mocked(mockReturnedHttpServer.listen).mockImplementation((_port: any, arg2?: any, arg3?: any) => {
-            let callback: (() => void) | undefined;
-            if (typeof arg2 === 'function') callback = arg2;
-            else if (typeof arg3 === 'function') callback = arg3;
+    // Ensure the http.createServer mock used by startProxyServer behaves asynchronously for listen and close
+    vi.mocked(http.createServer).mockImplementation(() => {
+      const serverInstance = {
+        _listeners: {} as Record<string, ((...args: any[]) => void) | undefined>,
+        listen: vi.fn(function(this: any, portOrPathOrOptions: any, arg2?: any, arg3?: any, arg4?: any) {
+          let actualCallback: (() => void) | undefined;
+          if (typeof portOrPathOrOptions === 'object' && portOrPathOrOptions !== null) { actualCallback = arg2 as (() => void); }
+          else if (typeof arg2 === 'function') { actualCallback = arg2; }
+          else if (typeof arg3 === 'function') { actualCallback = arg3; }
+          else if (typeof arg4 === 'function') { actualCallback = arg4; }
 
-            if (callback) {
-                process.nextTick(callback);
+          process.nextTick(() => { // Simulate async listen
+            if (this._listeners && typeof this._listeners.listening === 'function') {
+              this._listeners.listening();
             }
-            return mockReturnedHttpServer; // Return the instance
-        });
-    }
+            if (actualCallback) {
+              actualCallback();
+            }
+          });
+          return this; 
+        }),
+        on: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
+          this._listeners[event] = callback;
+          return this;
+        }),
+        once: vi.fn(function(this: any, event: string, callback: (...args: any[]) => void) {
+          this._listeners[event] = callback; 
+          return this;
+        }),
+        address: vi.fn(() => ({ port: proxyListenPort, address: '127.0.0.1', family: 'IPv4' })),
+        close: vi.fn(function(this: any, cb?: (err?: Error) => void) { 
+          process.nextTick(() => { // Simulate async close
+            if (cb) cb();
+          });
+          return this; 
+        }),
+        removeAllListeners: vi.fn().mockReturnThis(),
+      };
+      return serverInstance as unknown as http.Server; // Cast to http.Server
+    });
   });
 
   afterEach(async () => {
-    if (proxyServerHttpInstance && proxyServerHttpInstance.listening) {
+    if (proxyServerHttpInstance && typeof proxyServerHttpInstance.close === 'function') {
+      // Check if listening before attempting to close, though mock might not track 'listening' state.
+      // The close mock should handle being called even if not "listening".
       await new Promise<void>((resolve, reject) => {
-        proxyServerHttpInstance!.close((err) => {
+        proxyServerHttpInstance!.close((err?: Error) => { // Add optional err param
           if (err) return reject(err);
           resolve();
         });
@@ -1418,25 +1437,16 @@ describe('startProxyServer', () => {
     const findFreePortError = new Error("No free ports available from mock.");
     findFreePortSpy.mockRejectedValueOnce(findFreePortError); // Ensure this mock is active
 
-    // Add a log to confirm the spy is set up
-    // console.log('[TEST_DEBUG] findFreePortSpy is mocked to reject for "should resolve with null if findFreePort fails"');
-
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     
     expect(proxyServerHttpInstance).toBeNull();
     expect(ml.error).toHaveBeenCalledWith(
       `[ProxyServer] Failed to find free port for proxy: ${findFreePortError.message}`,
-      // The SUT logs an object as the second argument if errorDetails are present
-      // This was too strict, as the SUT might not always log the full error object.
-      // Simply checking the message is sufficient.
-      // expect.objectContaining({ errorDetails: findFreePortError }) 
+      expect.objectContaining({ errorDetails: findFreePortError })
     );
   }, 10000); 
 
   it('should start the proxy server, log info, and proxy /api/ping', async () => {
-    // findFreePortSpy is already mocked in beforeEach to resolve with proxyListenPort
-    // The http.createServer().listen() mock in beforeEach should also simulate success.
-
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     
     expect(proxyServerHttpInstance).toBeDefined();
@@ -1452,23 +1462,17 @@ describe('startProxyServer', () => {
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`MCP requests to http://localhost:${actualProxyListenPort}/mcp will be forwarded to http://localhost:${targetExistingServerPort}/mcp`));
     expect(ml.info).toHaveBeenCalledWith(expect.stringContaining(`API endpoints /api/ping and /api/indexing-status are also proxied.`));
 
-
-    // Nock the target server for the /api/ping call
     nock(`http://localhost:${targetExistingServerPort}`)
       .get('/api/ping')
       .reply(200, { service: "CodeCompassTarget", status: "ok_target_ping", version: "1.0.0" });
 
-    // Use realAxiosInstance for the call TO the proxy
-    const response = await realAxiosInstance.get(`http://127.0.0.1:${actualProxyListenPort}/api/ping`); // Use 127.0.0.1 for consistency
+    const response = await realAxiosInstance.get(`http://127.0.0.1:${actualProxyListenPort}/api/ping`);
     expect(response.status).toBe(200);
     expect(response.data).toEqual({ service: "CodeCompassTarget", status: "ok_target_ping", version: "1.0.0" });
-    expect(nock.isDone()).toBe(true); // Nock for targetExistingServerPort should be consumed
-  }, 10000); // Increased timeout
+    expect(nock.isDone()).toBe(true);
+  }, 10000); 
 
   it('should handle target server unreachable for /mcp', async () => {
-    // findFreePortSpy is mocked in beforeEach
-    // http.createServer().listen() mock in beforeEach simulates success
-
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     expect(proxyServerHttpInstance).toBeDefined();
     expect(proxyServerHttpInstance).not.toBeNull(); 
@@ -1476,47 +1480,46 @@ describe('startProxyServer', () => {
     
     nock(`http://localhost:${targetExistingServerPort}`)
       .post('/mcp')
-      .replyWithError({ message: 'connect ECONNREFUSED', code: 'ECONNREFUSED' }); // Simulates network error
+      .replyWithError({ message: 'connect ECONNREFUSED', code: 'ECONNREFUSED' }); 
         
     try {
-      await realAxiosInstance.post(`http://localhost:${actualProxyListenPort}/mcp`, { jsonrpc: "2.0", method: "test" });
+      await realAxiosInstance.post(`http://localhost:${actualProxyListenPort}/mcp`, { jsonrpc: "2.0", method: "test", id: "reqUnreachable" });
       throw new Error("Request should have failed due to target unreachable"); 
     } catch (error: any) {
       expect(realAxiosInstance.isAxiosError(error)).toBe(true);
-      expect(error.response).toBeDefined(); // AxiosError from client will have this for 502
+      expect(error.response).toBeDefined(); 
       expect(error.response?.status).toBe(502); 
-      expect(error.response?.data).toEqual(expect.objectContaining({
-        error: { code: -32001, message: "Proxy: Target server unreachable" }
-      }));
+      expect(error.response?.data).toEqual({
+        jsonrpc: "2.0",
+        error: { code: -32001, message: "Proxy: Target server unreachable" },
+        id: "reqUnreachable" // Ensure ID is part of the error response if present in request
+      });
     }
     
     expect(ml.error).toHaveBeenCalledWith(
       expect.stringContaining(`[ProxyServer] MCP target http://localhost:${targetExistingServerPort}/mcp unreachable`),
-      expect.any(Object) // Or more specific error object matching
+      expect.any(Object) 
     );
     expect(nock.isDone()).toBe(true);
   }, 10000); 
   
   it('should forward target server 500 error for /mcp', async () => {
-    // findFreePortSpy is mocked in beforeEach
-    // http.createServer().listen() mock in beforeEach simulates success
-
     proxyServerHttpInstance = await serverLibModule.startProxyServer(targetInitialPort, targetExistingServerPort, "1.0.0-existing");
     expect(proxyServerHttpInstance).toBeDefined();
     expect(proxyServerHttpInstance).not.toBeNull(); 
     const actualProxyListenPort = (proxyServerHttpInstance!.address() as import('net').AddressInfo).port;
 
-    const targetErrorBody = { jsonrpc: "2.0", error: { code: -32603, message: "Target Server Internal Error" }, id: "req123" };
+    const targetErrorBody = { jsonrpc: "2.0", error: { code: -32603, message: "Target Server Internal Error" }, id: "req500" };
     nock(`http://localhost:${targetExistingServerPort}`)
       .post('/mcp')
       .reply(500, targetErrorBody, { 'Content-Type': 'application/json' });
 
     try {
-      await realAxiosInstance.post(`http://localhost:${actualProxyListenPort}/mcp`, { jsonrpc: "2.0", method: "test", id: "req123" });
+      await realAxiosInstance.post(`http://localhost:${actualProxyListenPort}/mcp`, { jsonrpc: "2.0", method: "test", id: "req500" });
       throw new Error("Request should have failed due to target 500 error");
     } catch (error: any) {
       expect(realAxiosInstance.isAxiosError(error)).toBe(true);
-      expect(error.response).toBeDefined(); // AxiosError from client will have this
+      expect(error.response).toBeDefined(); 
       expect(error.response?.status).toBe(500); 
       expect(error.response?.data).toEqual(targetErrorBody);
     }

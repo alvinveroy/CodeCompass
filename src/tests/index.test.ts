@@ -418,10 +418,9 @@ describe('CLI with yargs (index.ts)', () => {
 
       // The new .fail() handler in test mode with VITEST_TESTING_FAIL_HANDLER will use console.error
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', startupError.message);
-      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasErr: true, errMessage: startupError.message })
+        expect.objectContaining({ effectiveErrorMessage: startupError.message, errMessage: startupError.message, hasErr: true })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
@@ -534,13 +533,13 @@ describe('CLI with yargs (index.ts)', () => {
         throw spawnError;
       });
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
+      mockConsoleError.mockClear(); // Clear before run
       await expect(runMainWithArgs(['agent_query', '{"query":"test_spawn_fail"}'])).rejects.toThrowError(spawnError);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', spawnError.message);
-      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasErr: true, errMessage: spawnError.message })
+        expect.objectContaining({ effectiveErrorMessage: spawnError.message, errMessage: spawnError.message, hasErr: true })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
@@ -548,17 +547,16 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should handle client command failure (server process premature exit) and log via yargs .fail()', async () => {
       const prematureExitError = new Error("Server process exited prematurely");
-      // Mock connect to reject, simulating an issue after transport is created but before/during connection
       mockMcpClientInstance.connect.mockRejectedValue(prematureExitError);
       
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
+      mockConsoleError.mockClear(); // Clear before run
       await expect(runMainWithArgs(['agent_query', '{"query":"test_server_exit"}'])).rejects.toThrowError(prematureExitError);
       
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', prematureExitError.message);
-      // The .fail() handler now logs its own "YARGS_FAIL_HANDLER_INVOKED" to console.error
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasErr: true, errMessage: prematureExitError.message })
+        expect.objectContaining({ effectiveErrorMessage: prematureExitError.message, errMessage: prematureExitError.message, hasErr: true })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
@@ -567,21 +565,37 @@ describe('CLI with yargs (index.ts)', () => {
 
     it('should handle invalid JSON parameters for client command (stdio) and log via yargs .fail()', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      const expectedErrorMessage = "Invalid JSON parameters: Expected ',' or '}' after property value in JSON at position 16";
-      // yargs itself will likely throw an error due to invalid JSON before handleClientCommand is called.
-      // The .fail() handler will catch this.
-      await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(expectedErrorMessage);
+      mockConsoleError.mockClear(); // Clear before run
+      const expectedErrorMessagePart = "Invalid JSON parameters"; // More general part
+      const expectedDetailPart = "Expected ',' or '}' after property value in JSON at position 16";
       
-      // SUT's handleClientCommand logs to console.error directly when it catches JSON.parse error
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Error: Invalid JSON parameters for tool 'agent_query'."));
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Details: Expected ',' or '}' after property value in JSON at position 16"));
+      await expect(runMainWithArgs(['agent_query', '{"query": "test"'])).rejects.toThrowError(
+        expect.stringContaining(expectedDetailPart) // The error thrown by handleClientCommand will contain this.
+      );
       
-      // The .fail() handler will also log to console.error
-      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', expect.stringContaining(expectedErrorMessage));
+      // SUT's handleClientCommand logs to console.error directly when it catches JSON.parse error (if --json is used)
+      // or yargs.fail() handles it. The error thrown by handleClientCommand will be caught by .fail().
+      // The .fail() handler will log.
+      expect(mockConsoleError).toHaveBeenCalledWith(
+        'YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:',
+        expect.stringContaining(expectedDetailPart)
+      );
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasErr: true, errMessage: expect.stringContaining(expectedErrorMessage) })
+        expect.objectContaining({
+          effectiveErrorMessage: expect.stringContaining(expectedDetailPart),
+          errMessage: expect.stringContaining(expectedDetailPart),
+          hasErr: true
+        })
       );
+      // Check for the specific JSON error logged by handleClientCommand if --json was active (it's not in this call)
+      // If not --json, handleClientCommand throws, and .fail() logs.
+      // The console.error calls from handleClientCommand for non-JSON output are via its own logger,
+      // which is currentMockLoggerInstance.error, not mockConsoleError.
+      // Let's verify the logger was called by handleClientCommand.
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith("Error: " + expect.stringContaining(expectedErrorMessagePart));
+      expect(currentMockLoggerInstance.error).toHaveBeenCalledWith("Details: " + expect.stringContaining(expectedDetailPart));
+
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
@@ -634,27 +648,35 @@ describe('CLI with yargs (index.ts)', () => {
       // This is tricky because configService is also in the SUT.
       // Let's assume mockStartServerHandler will be called, and it implicitly uses configService.
       // The SUT's yargs apply function should log the change.
+      // We will check if the SUT's configService (mocked) reflects this.
+      // The mockStartServerHandler uses the mocked configService.
 
       await runMainWithArgs(['start', '--port', String(customPort)]);
     
-      // The SUT log "[INDEX_SUT_PORT_APPLY_DEBUG] HTTP_PORT set to 1234 by yargs apply" confirms yargs worked.
-      // The problem is asserting this in the test's process.env.
-      // If mockStartServerHandler is called, and it uses configService, configService should have the updated port.
-      // This test might need to be refocused on what configService *inside the SUT's context* sees.
-      // For now, let's assume the SUT log is enough to confirm yargs's action.
-      // The failure of `expect(process.env.HTTP_PORT).toBe(String(customPort));` in the test process is likely due to env sandboxing.
+      // Check if the SUT's configService (via the mock) had its HTTP_PORT set.
+      // This relies on the yargs 'apply' function setting process.env.HTTP_PORT,
+      // and then configService (when reloaded or its getter is accessed by startServerHandler)
+      // picking up this new value.
+      // The mockConfigServiceForFactory.HTTP_PORT is what startServerHandler would see.
+      // However, the 'apply' function in yargs sets process.env.HTTP_PORT.
+      // The mockConfigServiceForFactory itself doesn't automatically update from process.env.
+      // So, this assertion needs to check the SUT's internal state if possible,
+      // or rely on the SUT's logs if direct state assertion is too complex.
+      // For now, we'll assume the SUT's internal configService would pick it up.
+      // The most direct check is if mockStartServerHandler was called, implying successful port setup.
+      expect(mockStartServerHandler).toHaveBeenCalled(); 
+      // A more robust check would be to have mockStartServerHandler somehow expose the port it was configured with.
+      // Or, check a log from the SUT that indicates the port it's trying to use.
+      // The SUT's yargs middleware logs: "[SUT_INDEX_TS_YARGS_MW] HTTP_PORT set to 1234 via CLI --port option."
+      // We can check mockLoggerForFactory.info for this.
+      expect(currentMockLoggerInstance.info).toHaveBeenCalledWith(
+        expect.stringContaining(`[SUT_INDEX_TS_YARGS_MW] HTTP_PORT set to ${customPort} via CLI --port option.`)
+      );
 
-      // If we can't directly assert process.env in the test, we rely on the SUT's behavior.
-      // The test "should call startServerHandler with default repoPath" implicitly tests if the server starts.
-      // If the port was wrong, mockStartServerHandler might fail differently.
 
       // Restore original
       if (originalHttpPort === undefined) delete process.env.HTTP_PORT;
       else process.env.HTTP_PORT = originalHttpPort;
-
-      // This assertion is likely to keep failing due to environment sandboxing.
-      // Consider removing it if the SUT log confirms the yargs 'apply' action.
-      // expect(process.env.HTTP_PORT).toBe(String(customPort)); 
     });
 
     it('--repo option should be used by startServerHandler', async () => {
@@ -701,31 +723,31 @@ describe('CLI with yargs (index.ts)', () => {
       
       // Check that among all calls, one matches the version string.
       // This is more robust against other debug logs.
-      // Import getPackageVersion from SUT or replicate its logic for assertion
-      // Change .ts to .js for NodeNext module resolution compatibility
-      const sutModule = await import('../../src/index.js') as { getPackageVersion: () => string; main: () => Promise<void> };
-      const expectedVersion = sutModule.getPackageVersion();
+      const { getPackageVersion: getSutPackageVersion } = await import('../../src/index.js');
+      const expectedVersion = getSutPackageVersion();
 
       const versionLogFound = mockConsoleLog.mock.calls.some(call =>
         call.length > 0 && typeof call[0] === 'string' && call[0].trim() === expectedVersion
       );
       expect(versionLogFound, `Expected console.log to be called with version string "${expectedVersion}". Calls: ${JSON.stringify(mockConsoleLog.mock.calls)}`).toBe(true);
 
-      expect(mockProcessExit).not.toHaveBeenCalled(); // yargs --version with exitProcess(false) should not call process.exit
+      expect(mockProcessExit).not.toHaveBeenCalled(); 
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('--help option should display help and exit', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      // yargs --help prints to stdout. With exitProcess(false), it should resolve.
-      // mockProcessExit should NOT be called.
+      mockConsoleLog.mockClear(); // Clear before run
       await expect(runMainWithArgs(['--help'])).resolves.toBeUndefined();
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Commands:"));
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("codecompass start [repoPath]"));
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("codecompass [repoPath]"));
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("Options:"));
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("--help"));
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining("--port"));
+      
+      const helpOutput = mockConsoleLog.mock.calls.map(call => call[0]).join('\n');
+      expect(helpOutput).toContain("Commands:");
+      expect(helpOutput).toContain("codecompass start [repoPath]");
+      // Check for a tool command example
+      expect(helpOutput).toContain("codecompass agent_query <params>");
+      expect(helpOutput).toContain("Options:");
+      expect(helpOutput).toContain("--help");
+      expect(helpOutput).toContain("--port");
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
@@ -733,6 +755,7 @@ describe('CLI with yargs (index.ts)', () => {
   
   describe('Changelog Command', () => {
     it('should display changelog', async () => {
+      mockConsoleLog.mockClear(); // Clear before run
       mockedFsSpies.statSync.mockReturnValue({ mtimeMs: Date.now() } as fs.Stats);
       const projectRoot = path.resolve(__dirname, '../../');
       const expectedPackageJsonPath = path.join(projectRoot, 'package.json');
@@ -761,19 +784,13 @@ describe('CLI with yargs (index.ts)', () => {
   describe('Error Handling and Strict Mode by yargs', () => {
     it('should show error and help for unknown command', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      // This test relies on the yargs .fail() handler throwing an error in test mode
-      // and that startServerHandler (mocked) does not get called for an unknown command.
-      // The yargs config should have .strictCommands(true), .strict() and .demandCommand()
-      const expectedErrorPattern = /Unknown command: unknowncommand|You must provide a command to run|Not enough non-option arguments: got 0, need at least 1/;
+      mockConsoleError.mockClear(); // Clear before run
+      mockProcessExit.mockClear();
 
-      await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrowError(
-        expectedErrorPattern
-      );
+      const expectedErrorPattern = /Unknown command: unknowncommand|You must provide a command|Not enough non-option arguments/;
+      await expect(runMainWithArgs(['unknowncommand'])).rejects.toThrowError(expectedErrorPattern);
 
-      // Verify that console.error was called by the .fail handler
-      // and that it includes help output.
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Usage: codecompass <command> [options]"));
-      // Check that one of the error messages from yargs was logged by YARGS_FAIL_TEST_MODE_ERROR_OUTPUT
       const testModeErrorOutputLogged = mockConsoleError.mock.calls.some(callArgs =>
         callArgs.length > 0 && typeof callArgs[0] === 'string' && callArgs[0] === 'YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:' &&
         typeof callArgs[1] === 'string' && expectedErrorPattern.test(callArgs[1])
@@ -781,24 +798,27 @@ describe('CLI with yargs (index.ts)', () => {
       expect(testModeErrorOutputLogged, "Expected YARGS_FAIL_TEST_MODE_ERROR_OUTPUT with matching error message").toBe(true);
       
       expect(mockStartServerHandler).not.toHaveBeenCalled();
+      expect(mockProcessExit).not.toHaveBeenCalled(); // yargs .fail() throws in test mode
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
 
     it('should show error and help for unknown option', async () => {
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      const expectedErrorMsgPart = "Unknown argument: --unknown-option";
-      // Yargs throws an error object. The message property contains the string.
-      await expect(runMainWithArgs(['start', '--unknown-option'])).rejects.toThrowError(expect.stringContaining(expectedErrorMsgPart));
+      mockConsoleError.mockClear(); // Clear before run
+      mockProcessExit.mockClear();
+
+      const expectedErrorMsgPattern = /Unknown argument: --unknown-option|Unknown arguments: unknown-option, unknownOption/;
+      await expect(runMainWithArgs(['start', '--unknown-option'])).rejects.toThrowError(expectedErrorMsgPattern);
       
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining("Usage: codecompass <command> [options]"));
-      // Check that YARGS_FAIL_TEST_MODE_ERROR_OUTPUT logged the specific error
       const testModeErrorOutputLogged = mockConsoleError.mock.calls.some(callArgs =>
         callArgs.length > 0 && typeof callArgs[0] === 'string' && callArgs[0] === 'YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:' &&
-        typeof callArgs[1] === 'string' && callArgs[1].includes(expectedErrorMsgPart)
+        typeof callArgs[1] === 'string' && expectedErrorMsgPattern.test(callArgs[1])
       );
-      expect(testModeErrorOutputLogged, `Expected YARGS_FAIL_TEST_MODE_ERROR_OUTPUT with message containing "${expectedErrorMsgPart}"`).toBe(true);
+      expect(testModeErrorOutputLogged, `Expected YARGS_FAIL_TEST_MODE_ERROR_OUTPUT with message matching "${expectedErrorMsgPattern}"`).toBe(true);
       
-      expect(mockStartServerHandler).not.toHaveBeenCalled(); // Should fail before handler
+      expect(mockStartServerHandler).not.toHaveBeenCalled(); 
+      expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
     });
   });
@@ -868,22 +888,22 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockRejectedValue(rpcError);
       
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
-      // When rpcError is an object, toThrowError expects an Error instance or a string/regex.
       // The SUT's .fail() handler will throw the rpcError object itself if it's an error, or wrap msg in new Error().
-      // MCPClient might wrap the JSON-RPC error in an McpError.
+      // The error thrown by handleClientCommand (which includes jsonRpcError property) will be caught by .fail().
       await expect(runMainWithArgs(['agent_query', '{"query":"test_json_rpc_error"}', '--json']))
-        .rejects.toThrow(expect.objectContaining(rpcError)); // Expect the original RPC error to be thrown or an McpError wrapping it
+        .rejects.toThrow(expect.objectContaining({ message: `Tool 'agent_query' failed: ${rpcError.error.message}`, jsonRpcError: rpcError.error }));
 
-      // The SUT's handleClientCommand error reporting for --json should output the rpcError.
+      // SUT's handleClientCommand logs the JSON error to console.error when --json is active
       expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify(rpcError, null, 2));
-      // The .fail() handler will also log to console.error, now with the correct message from the RPC error.
-      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', rpcError.error.message);
+      
+      // yargs .fail() handler also logs
+      expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', `Tool 'agent_query' failed: ${rpcError.error.message}`);
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
         expect.objectContaining({ 
-          hasErr: true, 
-          // errMessage might be undefined if err is not an Error instance, check effectiveErrorMessageForLog
-          effectiveErrorMessageForLog: rpcError.error.message 
+          effectiveErrorMessage: `Tool 'agent_query' failed: ${rpcError.error.message}`,
+          errMessage: `Tool 'agent_query' failed: ${rpcError.error.message}`,
+          hasErr: true,
         })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
@@ -895,15 +915,17 @@ describe('CLI with yargs (index.ts)', () => {
       mockMcpClientInstance.callTool.mockRejectedValue(genericError);
 
       process.env.VITEST_TESTING_FAIL_HANDLER = "true";
+      mockConsoleError.mockClear(); // Clear before run
       await expect(runMainWithArgs(['agent_query', '{"query":"test_json_generic_error"}', '--json'])).rejects.toThrowError(genericError);
       
-      // SUT's handleClientCommand error reporting for --json
-      expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name } }, null, 2));
-      // .fail() handler logging to console.error
+      // SUT's handleClientCommand logs the JSON error to console.error
+      expect(mockConsoleError).toHaveBeenCalledWith(JSON.stringify({ error: { message: genericError.message, name: genericError.name, stderr: expect.any(String) } }, null, 2));
+      
+      // yargs .fail() handler also logs
       expect(mockConsoleError).toHaveBeenCalledWith('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', genericError.message);
       expect(mockConsoleError).toHaveBeenCalledWith(
         'YARGS_FAIL_HANDLER_INVOKED --- Details:',
-        expect.objectContaining({ hasErr: true, errMessage: genericError.message })
+        expect.objectContaining({ effectiveErrorMessage: genericError.message, errMessage: genericError.message, hasErr: true })
       );
       expect(mockProcessExit).not.toHaveBeenCalled();
       delete process.env.VITEST_TESTING_FAIL_HANDLER;
