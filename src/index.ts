@@ -210,13 +210,20 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     } catch (e) {
       logger.error(`Error: Invalid JSON parameters for tool ${toolName}: ${toolParamsString}`);
       logger.error((e as Error).message);
-      console.error(`Error: Invalid JSON parameters for tool '${toolName}'. Please provide a valid JSON string.`);
-      console.error(`Details: ${(e as Error).message}`);
-  // Let yargs handle exit by re-throwing or yargs.fail will catch it if this function is a handler
-        throw new Error(`Invalid JSON parameters: ${(e as Error).message}`); 
+      const errorToThrow = new Error(`Invalid JSON parameters: ${(e as Error).message}`);
+      (errorToThrow as any).details = (e as Error).message; // Attach details
+
+      if (outputJson) {
+        // Log the JSON error to console.error as this is the primary output channel for --json errors
+        console.error(JSON.stringify({
+          error: { message: `Invalid JSON parameters for tool '${toolName}'.`, details: (e as Error).message, name: "ParameterError" }
+        }));
       }
-    } else {
-      logger.info('With no parameters.');
+      // No else for non-JSON logging here, yargs.fail will handle CLI message.
+      throw errorToThrow; // Throw to trigger yargs.fail
+    }
+  } else {
+    logger.info('With no parameters.');
     }
   
   // const isPkg = typeof (process as any).pkg !== 'undefined'; // isPackaged is already defined globally
@@ -317,28 +324,31 @@ async function handleClientCommand(argv: ClientCommandArgs) {
     }
   } catch (error: unknown) {
     logger.error(`Error during client command '${toolName}' (stdio):`, error);
-    const reportError = (errToReport: unknown) => {
-      if (outputJson) {
-        if (isJsonRpcErrorResponse(errToReport)) {
-          console.error(JSON.stringify(errToReport, null, 2));
-        } else if (errToReport instanceof Error) {
-          console.error(JSON.stringify({ error: { message: errToReport.message, name: errToReport.name } }, null, 2));
-        } else {
-          console.error(JSON.stringify({ error: { message: "Unknown client error" } }, null, 2));
+    const err = error instanceof Error ? error : new Error(String(error));
+    
+    if (outputJson) {
+      // If --json, console.error the JSON payload.
+      // This is the primary output channel for errors in JSON mode.
+      const errorPayload: { error: { message: string, name?: string, code?: number | string, data?: unknown, stderr?: string } } = {
+        error: {
+          message: err.message,
+          name: err.name,
+          // stderr: serverStderrOutput.slice(-1000) // serverStderrOutput is not defined here, remove for now or pass it
         }
-      } else {
-        if (isJsonRpcErrorResponse(errToReport)) {
-          console.error(`Error executing tool '${toolName}': ${errToReport.error.message} (Code: ${errToReport.error.code})`);
-          if (errToReport.error.data) console.error(`Details: ${JSON.stringify(errToReport.error.data, null, 2)}`);
-        } else if (errToReport instanceof Error) {
-          console.error(`Error during tool '${toolName}' execution: ${errToReport.message}`);
-        } else {
-          console.error(`An unknown error occurred while executing tool '${toolName}'.`);
-        }
+      };
+      const jsonRpcErr = (err as any).jsonRpcError as import('@modelcontextprotocol/sdk/types').ErrorResponse['error'] | undefined;
+      if (jsonRpcErr) {
+        errorPayload.error.code = jsonRpcErr.code;
+        errorPayload.error.data = jsonRpcErr.data;
+        // Overwrite message and name if they are more specific from JSON-RPC
+        errorPayload.error.message = jsonRpcErr.message || err.message;
+      } else if ((err as any).code) { 
+        errorPayload.error.code = (err as any).code;
       }
-    };
-    reportError(error);
-    throw error; // Re-throw for yargs
+      console.error(JSON.stringify(errorPayload, null, 2));
+    }
+    // Always re-throw. yargs.fail will handle non-JSON CLI presentation.
+    throw err;
   } finally {
     await cleanup();
   }
@@ -641,7 +651,32 @@ export async function main() { // Add export
     // console.error('[SUT_INDEX_TS_YARGS_CONFIG] yargs.exitProcess(false) configured for test environment.');
   }
 
-  cli.option('port', {
+  cli.middleware(async (argv) => {
+      // This middleware runs before command handlers but after initial parsing of global options.
+      // We can use it to set environment variables based on global CLI options
+      // that configService needs to pick up *before* most modules load it.
+      const configServiceModule = await import(path.join(libPath, `config-service${moduleFileExtensionForDynamicImports}`)) as typeof import('./lib/config-service');
+      const { logger: mwLogger } = configServiceModule;
+      failLogger = mwLogger; // Ensure failLogger uses the potentially reconfigured logger
+
+      if (argv.verbose) {
+        process.env.LOG_LEVEL = 'debug'; 
+        mwLogger.level = 'debug'; 
+        mwLogger.info('[SUT_INDEX_TS_YARGS_MW] Verbose logging enabled via CLI.');
+      }
+      // 'port' option's apply function handles process.env.HTTP_PORT
+      // No need to duplicate here, but log if port was seen by middleware.
+      if (argv.port !== undefined) {
+         mwLogger.info(`[SUT_INDEX_TS_YARGS_MW] --port option value at middleware: ${argv.port}`);
+      }
+      if (argv.repo) {
+        mwLogger.info(`[SUT_INDEX_TS_YARGS_MW] Global --repo path specified: ${argv.repo}`);
+      }
+      if (argv.ccIntegrationTestSutMode) {
+        mwLogger.info('[SUT_INDEX_TS_YARGS_MW] --cc-integration-test-sut-mode detected by middleware.');
+      }
+    })
+    .option('port', {
       alias: 'p',
       type: 'number',
       description: 'Specify the HTTP port for the server or spawned client server. Overrides HTTP_PORT env var.',
@@ -771,44 +806,45 @@ export async function main() { // Add export
     .alias('v', 'version')
     .help() // Setup --help
     .alias('h', 'help')
-    .wrap(Math.min(120, yargs(hideBin(process.argv)).terminalWidth())) // Use yargs().terminalWidth()
+    .wrap(Math.min(120, yargs(hideBin(process.argv)).terminalWidth())) 
     .epilogue('For more information, visit: https://github.com/alvinveroy/codecompass')
     .demandCommand(1, 'You must provide a command to run. Use --help to see available commands.')
-    .strictCommands(true) // Report errors for unknown commands
-    .strict() // Error on unknown options
+    .strictCommands(true) 
+    .strict() 
     .fail((msg, err, yargsInstance) => {
-      const isTestEnvForFailHandler = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
-      const isSpecificTestScenarioForThrow = process.env.VITEST_TESTING_FAIL_HANDLER === "true";
+      const isTestEnv = process.env.VITEST_TESTING_FAIL_HANDLER === "true";
+      const errName = err?.name;
+      const errMessage = err?.message;
+      const effectiveErrorMessage = msg || errMessage || "Unknown yargs error";
 
-      let effectiveErrorMessage = msg;
-      if (err) {
-        effectiveErrorMessage = err.message || msg || 'Unknown yargs error';
-      }
+      // Use failLogger for production, console.error for test-specific fail handling
+      const loggerForFail = isTestEnv ? console : failLogger;
 
-      // Log details for debugging yargs failures
-      console.error('YARGS_FAIL_HANDLER_INVOKED --- Details:', {
-        msg, errName: err?.name, errMessage: err?.message, isTestEnvForFailHandler, isSpecificTestScenarioForThrow, effectiveErrorMessage
-      });
-      
-      if (isSpecificTestScenarioForThrow) {
-        // For tests that specifically set VITEST_TESTING_FAIL_HANDLER, always throw.
-        console.error('YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:', effectiveErrorMessage); // Log the error message that will be thrown
-        throw err || new Error(effectiveErrorMessage);
-      } else if (isTestEnvForFailHandler) {
-        // Generic test environment, but not the specific scenario for throwing.
-        // Log the error but don't necessarily throw if yargs itself isn't throwing.
-        // This helps see yargs behavior in tests without forcing a throw if yargs wouldn't normally.
-        console.error('Yargs validation/parse error in generic test context:', effectiveErrorMessage);
-        // If yargs provided an error object, rethrow it. Otherwise, wrap the message.
-        if (err) throw err;
-        // If only a message was provided by yargs, and we are in a test env,
-        // it's often better to throw to make the test fail clearly.
-        throw new Error(effectiveErrorMessage);
+      if (isTestEnv) {
+        loggerForFail.error("YARGS_FAIL_HANDLER_INVOKED --- Details:", {
+          msg: msg,
+          errName: errName,
+          errMessage: errMessage,
+          hasErr: !!err,
+          isTestEnvForFailHandler: true, // Keep this specific flag for tests if needed
+          isSpecificTestScenarioForThrow: true, 
+          effectiveErrorMessage: effectiveErrorMessage
+        });
+        loggerForFail.error("YARGS_FAIL_TEST_MODE_ERROR_OUTPUT:", effectiveErrorMessage);
+        
+        if (err) {
+          throw err; 
+        } else {
+          throw new Error(effectiveErrorMessage);
+        }
       } else {
-        // Production/normal execution
-        console.error(yargsInstance.help());
-        console.error(`\nError: ${effectiveErrorMessage}`);
-        yargsInstance.exit(1, err || new Error(effectiveErrorMessage));
+        // Production/User-facing behavior
+        loggerForFail.error("\n" + yargsInstance.help());
+        loggerForFail.error(`\nError: ${effectiveErrorMessage}\n`);
+        if (err && errMessage !== effectiveErrorMessage) { 
+          loggerForFail.error("Original Error Details:", err);
+        }
+        process.exit(1); // Use process.exit for production failures
       }
     });
     
