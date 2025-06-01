@@ -652,9 +652,10 @@ export async function main() { // Add export
   }
   console.error(`[SUT_INDEX_TS_YARGS_PREP_DEBUG] Final arguments for yargs: ${JSON.stringify(argsForYargs)}`);
 
-  let critLogger = { error: (...args: any[]) => console.error(...args) }; // Default to console.error
-  let failLogger = critLogger; // Initialize failLogger, will be updated by middleware if logger changes
-  let sutIndexLogger = critLogger; // Initialize sutIndexLogger
+  // Initialize loggers using the module-scoped createFallbackLogger
+  let critLogger = createFallbackLogger('[CRIT_FALLBACK]');
+  let failLogger = critLogger; 
+  let sutIndexLogger = critLogger;
 
   try {
     // Dynamic import for logger
@@ -665,6 +666,10 @@ export async function main() { // Add export
     sutIndexLogger.info('[SUT_INDEX_TS_MAIN_DEBUG] Using mainLogger for SUT index operations.');
   } catch (e) {
     console.error('[SUT_INDEX_TS_MAIN_DEBUG] Failed to import logger, defaulting to console.error:', e);
+    // Ensure fallback loggers are still used if import fails
+    critLogger = createFallbackLogger('[CRIT_FALLBACK_IMPORT_FAILED]');
+    failLogger = critLogger;
+    sutIndexLogger = critLogger;
   }
 
   const cli = yargs(argsForYargs);
