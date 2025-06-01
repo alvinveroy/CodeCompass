@@ -1688,7 +1688,7 @@ export async function startProxyServer(
     // findFreePort now takes a server instance as its last argument.
     // Create a temporary server for findFreePort to use for its checks.
     const tempServerForPortCheck = http.createServer();
-    proxyListenPort = await findFreePort(initialPortForProxySearch, initialPortForProxySearch + 50, '127.0.0.1', tempServerForPortCheck);
+    proxyListenPort = await findFreePort(initialPortForProxySearch);
     logger.info(`[PROXY_DEBUG] startProxyServer: Found free port ${proxyListenPort} for proxy.`);
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
