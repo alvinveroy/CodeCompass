@@ -896,6 +896,67 @@ export async function main() { // Add export
 
 // Execute the main function only if this script is run directly
 if (require.main === module) {
-  void main(); // Mark as void to satisfy no-floating-promises
+  main().catch(async error => {
+    // Re-determine paths for logger import in this isolated catch block
+    // These path determinations are copied from the top of the main() function
+    // to ensure consistency, as this catch block is outside main()'s scope.
+    const isPackagedForCatch = !!(process as unknown as { pkg?: unknown }).pkg;
+    const ccIntegrationTestSutModeForCatch = process.argv.includes('--cc-integration-test-sut-mode');
+    const forceSrcPathsForTestingForCatch = process.env.CODECOMPASS_FORCE_SRC_PATHS_FOR_TESTING === 'true';
+    const isEffectiveVitestTestingForCatch = (!!process.env.VITEST_WORKER_ID && !ccIntegrationTestSutModeForCatch) || forceSrcPathsForTestingForCatch;
+
+    let libPathBaseForCatch: string;
+    let moduleFileExtensionForDynamicImportsForCatch: string;
+
+    if (isPackagedForCatch) {
+      libPathBaseForCatch = path.dirname(process.execPath);
+      moduleFileExtensionForDynamicImportsForCatch = '.js';
+    } else if (isEffectiveVitestTestingForCatch || ccIntegrationTestSutModeForCatch) {
+      libPathBaseForCatch = path.resolve(process.cwd(), 'src');
+      moduleFileExtensionForDynamicImportsForCatch = '.ts';
+    } else {
+      // Fallback if __dirname is not available (e.g. ESM in some Node versions without specific flags)
+      const currentFileUrl = import.meta.url;
+      const currentFilePath = new URL(currentFileUrl).pathname;
+      const currentDir = path.dirname(currentFilePath);
+      libPathBaseForCatch = path.resolve(currentDir, '../dist'); // Assuming dist is one level up from src/index.ts if __dirname is not typical
+      if (typeof __dirname !== 'undefined') { // Prefer __dirname if available
+        libPathBaseForCatch = __dirname; // In dist/index.js, __dirname is dist
+      }
+      moduleFileExtensionForDynamicImportsForCatch = '.js';
+    }
+    const libPathForCatch = path.join(libPathBaseForCatch, 'lib');
+    const configServicePathForCatch = path.join(libPathForCatch, `config-service${moduleFileExtensionForDynamicImportsForCatch}`);
+
+    // Fallback logger if main one hasn't initialized or failed
+    // createFallbackLogger should be defined globally or imported if it's in a shared util
+    // For now, assuming createFallbackLogger is accessible or we define a simple one here.
+    const simpleFallbackLogger = (prefix = '[FALLBACK_LOGGER]') => ({
+        error: (...args: any[]) => console.error(prefix, ...args),
+        info: (..._args: any[]) => { /* no-op */ },
+        warn: (..._args: any[]) => { /* no-op */ },
+        debug: (..._args: any[]) => { /* no-op */ },
+    });
+    let finalLogger = simpleFallbackLogger('[FINAL_CATCH_FALLBACK]');
+
+    try {
+      // Dynamically import the config service to get the logger
+      const configServiceModule = await import(configServicePathForCatch) as typeof import('./lib/config-service');
+      finalLogger = configServiceModule.logger;
+    } catch (importErr) {
+      console.error('[SUT_INDEX_TS_FINAL_CATCH_IMPORT_ERROR] Failed to import logger for final catch block:', importErr);
+    }
+
+    finalLogger.error('[SUT_INDEX_TS_FINAL_CATCH_ERROR] Unhandled error in main execution:', error);
+    
+    if (process.env.NODE_ENV === 'test' || process.env.VITEST_WORKER_ID || process.env.VITEST_TESTING_FAIL_HANDLER === "true") {
+      // In test environments, re-throw to allow test runners to catch it.
+      // The .fail() handler should manage throwing for yargs errors.
+      // This catch is for other unhandled promise rejections from main().
+      throw error; // Re-throw to ensure tests capture it.
+    } else {
+      process.exit(1);
+    }
+  });
 }
 // Else, if imported, main is just exported and can be called by the importer.
